@@ -2,7 +2,7 @@
 
 ## Version
 
-0.1
+0.2
 
 ## Date
 
@@ -12,11 +12,9 @@
 
 # Purpose
 
-Dieses Dokument beschreibt die grundlegenden
-Entwicklungsregeln und Arbeitsweisen für NC-PoRe.
+Dieses Dokument beschreibt die grundlegenden Entwicklungsregeln, Arbeitsweisen und die Entwicklungsumgebung für NC-PoRe.
 
-Ziel ist eine nachvollziehbare, wartbare und
-gemeinschaftsfähige Entwicklung.
+Ziel ist eine nachvollziehbare, wartbare und gemeinschaftsfähige Entwicklung.
 
 ---
 
@@ -24,12 +22,12 @@ gemeinschaftsfähige Entwicklung.
 
 NC-PoRe folgt diesen Grundprinzipien:
 
-- Open Source first
-- nachvollziehbare Entscheidungen
-- kleine, überprüfbare Änderungen
-- offene Standards
-- saubere Dokumentation
-- Qualität vor Geschwindigkeit
+* Open Source first
+* nachvollziehbare Entscheidungen
+* kleine, überprüfbare Änderungen
+* offene Standards
+* saubere Dokumentation
+* Qualität vor Geschwindigkeit
 
 ---
 
@@ -64,8 +62,7 @@ nc-pore/
     └── Test Resources
 ```
 
-Die genaue Struktur kann während der Entwicklung
-angepasst werden.
+Die genaue Struktur kann während der Entwicklung angepasst werden.
 
 ---
 
@@ -81,6 +78,8 @@ main
 
 Enthält stabile und getestete Versionen.
 
+Direkte Entwicklung auf `main` soll vermieden werden.
+
 ---
 
 ## Development Branch
@@ -91,13 +90,15 @@ develop
 
 Enthält aktuelle Entwicklungsstände.
 
+Neue Funktionen und technische Änderungen werden zunächst hier entwickelt.
+
 ---
 
 ## Feature Branches
 
 Neue Funktionen werden separat entwickelt.
 
-Beispiel:
+Beispiele:
 
 ```
 feature/audio-recorder
@@ -111,9 +112,9 @@ feature/export-audacity
 
 Commits sollen:
 
-- eine klare Aufgabe beschreiben
-- möglichst klein bleiben
-- nachvollziehbar sein
+* eine klare Aufgabe beschreiben
+* möglichst klein bleiben
+* nachvollziehbar sein
 
 Beispiele:
 
@@ -151,8 +152,8 @@ docs/
 
 Code-Kommentare erklären:
 
-- warum etwas so gelöst wurde
-- nicht nur was der Code macht
+* warum etwas so gelöst wurde
+* nicht nur was der Code macht
 
 ---
 
@@ -160,15 +161,14 @@ Code-Kommentare erklären:
 
 NC-PoRe-Code soll:
 
-- lesbar
-- modular
-- testbar
-- dokumentiert
+* lesbar
+* modular
+* testbar
+* dokumentiert
 
 sein.
 
-Komplexität soll nur entstehen,
-wenn sie einen echten Nutzen bringt.
+Komplexität soll nur entstehen, wenn sie einen echten Nutzen bringt.
 
 ---
 
@@ -184,9 +184,9 @@ Einzelne Funktionen.
 
 Beispiele:
 
-- Audioformatprüfung
-- Metadatenverarbeitung
-- Chunkverwaltung
+* Audioformatprüfung
+* Metadatenverarbeitung
+* Chunkverwaltung
 
 ---
 
@@ -196,9 +196,9 @@ Zusammenspiel von Komponenten.
 
 Beispiele:
 
-- Recorder und Upload
-- Sessionverwaltung
-- Export
+* Recorder und Upload
+* Sessionverwaltung
+* Export
 
 ---
 
@@ -206,26 +206,116 @@ Beispiele:
 
 Praktische Tests:
 
-- lange Aufnahmen
-- unterschiedliche Hardware
-- schlechte Netzwerkbedingungen
+* lange Aufnahmen
+* unterschiedliche Hardware
+* schlechte Netzwerkbedingungen
 
 ---
 
 # Development Environment
 
-Die Entwicklungsumgebung soll bevorzugt auf
-freien Werkzeugen basieren.
+Die Entwicklungsumgebung soll bevorzugt auf freien Werkzeugen basieren.
+
+Referenzumgebung:
+
+```
+Linux Mint
+```
+
+Die Entwicklung erfolgt unter einem separaten Entwicklerkonto:
+
+```
+developer
+```
 
 Grundanforderungen:
 
-- Git
-- Entwicklungseditor
-- Build-Werkzeuge
-- Testumgebung
+* Git
+* Entwicklungseditor
+* Build-Werkzeuge
+* Testumgebung
 
-Die konkreten Technologien werden in separaten
-Architekturentscheidungen festgelegt.
+Die konkreten Technologien werden in separaten Architekturentscheidungen festgelegt.
+
+---
+
+# Developer Setup
+
+## Repository Access
+
+NC-PoRe verwendet Git zur Versionsverwaltung.
+
+Der Zugriff auf das zentrale Repository erfolgt über SSH.
+
+Repository:
+
+```
+git@github.com:pore-project/nc-pore.git
+```
+
+Der private SSH-Schlüssel verbleibt ausschließlich auf dem jeweiligen Entwicklungsrechner.
+
+Nur der öffentliche Schlüssel wird beim Repository-Anbieter hinterlegt.
+
+---
+
+## Local Development Directory
+
+Das Repository kann lokal in einem Entwicklungsverzeichnis liegen.
+
+Beispiel:
+
+```
+/home/developer/projects/nc-pore
+```
+
+---
+
+## Git Configuration
+
+Die lokale Git-Konfiguration verwendet eine Projektidentität.
+
+Beispiel:
+
+```
+PoRe Project
+```
+
+Private Entwicklerdaten werden nicht in der öffentlichen Projektdokumentation veröffentlicht.
+
+---
+
+## Development Workflow
+
+Vor Änderungen sollte der aktuelle Zustand geprüft werden:
+
+```
+git status
+```
+
+Der aktive Branch kann geprüft werden mit:
+
+```
+git branch --show-current
+```
+
+Typischer Ablauf:
+
+```
+Änderung
+   |
+   v
+lokaler Test
+   |
+   v
+Commit
+   |
+   v
+Push nach develop
+   |
+   v
+Review / Integration
+```
 
 ---
 
@@ -233,8 +323,7 @@ Architekturentscheidungen festgelegt.
 
 Aufgaben und Fehler werden nachvollziehbar dokumentiert.
 
-Jede größere Änderung sollte eine klare
-Begründung besitzen.
+Jede größere Änderung sollte eine klare Begründung besitzen.
 
 ---
 
@@ -254,7 +343,7 @@ Experimentelle Entwicklungsstände.
 1.0.0
 ```
 
-erste stabile produktive Version.
+Erste stabile produktive Version.
 
 ---
 
@@ -264,23 +353,22 @@ Beiträge von außen sind erwünscht.
 
 Voraussetzungen:
 
-- nachvollziehbarer Code
-- dokumentierte Änderungen
-- Einhaltung der Projektprinzipien
+* nachvollziehbarer Code
+* dokumentierte Änderungen
+* Einhaltung der Projektprinzipien
 
 ---
 
 # Security Development
 
-Sicherheitsrelevante Änderungen werden besonders
-behandelt.
+Sicherheitsrelevante Änderungen werden besonders behandelt.
 
 Besondere Aufmerksamkeit:
 
-- Zugangsdaten
-- Audiodaten
-- Uploads
-- Berechtigungen
+* Zugangsdaten
+* Audiodaten
+* Uploads
+* Berechtigungen
 
 ---
 
@@ -288,5 +376,4 @@ Besondere Aufmerksamkeit:
 
 NC-PoRe soll nicht nur funktionieren.
 
-Es soll verständlich, überprüfbar und langfristig
-weiterentwickelbar sein.
+Es soll verständlich, überprüfbar und langfristig weiterentwickelbar sein.
