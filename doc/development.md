@@ -1,0 +1,292 @@
+# NC-PoRe Development Guide
+
+## Version
+
+0.1
+
+## Date
+
+2026-07-22
+
+---
+
+# Purpose
+
+Dieses Dokument beschreibt die grundlegenden
+Entwicklungsregeln und Arbeitsweisen für NC-PoRe.
+
+Ziel ist eine nachvollziehbare, wartbare und
+gemeinschaftsfähige Entwicklung.
+
+---
+
+# Development Principles
+
+NC-PoRe folgt diesen Grundprinzipien:
+
+- Open Source first
+- nachvollziehbare Entscheidungen
+- kleine, überprüfbare Änderungen
+- offene Standards
+- saubere Dokumentation
+- Qualität vor Geschwindigkeit
+
+---
+
+# Repository Structure
+
+Die grundlegende Struktur:
+
+```
+nc-pore/
+
+├── README.md
+├── LICENSE
+│
+├── docs/
+│   ├── vision.md
+│   ├── requirements.md
+│   ├── architecture.md
+│   ├── project-status.md
+│   ├── mvp.md
+│   └── development.md
+│
+├── adr/
+│   └── ADR-xxx-description.md
+│
+├── recorder/
+│   └── Recorder Client Source
+│
+├── nextcloud-app/
+│   └── Nextcloud Application Source
+│
+└── tests/
+    └── Test Resources
+```
+
+Die genaue Struktur kann während der Entwicklung
+angepasst werden.
+
+---
+
+# Branch Strategy
+
+NC-PoRe verwendet ein einfaches Branch-Modell.
+
+## Main Branch
+
+```
+main
+```
+
+Enthält stabile und getestete Versionen.
+
+---
+
+## Development Branch
+
+```
+develop
+```
+
+Enthält aktuelle Entwicklungsstände.
+
+---
+
+## Feature Branches
+
+Neue Funktionen werden separat entwickelt.
+
+Beispiel:
+
+```
+feature/audio-recorder
+feature/session-management
+feature/export-audacity
+```
+
+---
+
+# Commit Guidelines
+
+Commits sollen:
+
+- eine klare Aufgabe beschreiben
+- möglichst klein bleiben
+- nachvollziehbar sein
+
+Beispiele:
+
+Gut:
+
+```
+Add local WAV recorder prototype
+```
+
+```
+Implement session metadata structure
+```
+
+Schlecht:
+
+```
+changes
+```
+
+```
+updates
+```
+
+---
+
+# Documentation Rules
+
+Architekturentscheidungen werden als ADR dokumentiert.
+
+Grundlegende Projektinformationen gehören nach:
+
+```
+docs/
+```
+
+Code-Kommentare erklären:
+
+- warum etwas so gelöst wurde
+- nicht nur was der Code macht
+
+---
+
+# Coding Principles
+
+NC-PoRe-Code soll:
+
+- lesbar
+- modular
+- testbar
+- dokumentiert
+
+sein.
+
+Komplexität soll nur entstehen,
+wenn sie einen echten Nutzen bringt.
+
+---
+
+# Testing Strategy
+
+Tests werden Bestandteil der Entwicklung.
+
+Geplante Ebenen:
+
+## Unit Tests
+
+Einzelne Funktionen.
+
+Beispiele:
+
+- Audioformatprüfung
+- Metadatenverarbeitung
+- Chunkverwaltung
+
+---
+
+## Integration Tests
+
+Zusammenspiel von Komponenten.
+
+Beispiele:
+
+- Recorder und Upload
+- Sessionverwaltung
+- Export
+
+---
+
+## Real World Tests
+
+Praktische Tests:
+
+- lange Aufnahmen
+- unterschiedliche Hardware
+- schlechte Netzwerkbedingungen
+
+---
+
+# Development Environment
+
+Die Entwicklungsumgebung soll bevorzugt auf
+freien Werkzeugen basieren.
+
+Grundanforderungen:
+
+- Git
+- Entwicklungseditor
+- Build-Werkzeuge
+- Testumgebung
+
+Die konkreten Technologien werden in separaten
+Architekturentscheidungen festgelegt.
+
+---
+
+# Issue Management
+
+Aufgaben und Fehler werden nachvollziehbar dokumentiert.
+
+Jede größere Änderung sollte eine klare
+Begründung besitzen.
+
+---
+
+# Release Philosophy
+
+NC-PoRe verwendet nachvollziehbare Versionen.
+
+Beispiel:
+
+```
+0.1.x
+```
+
+Experimentelle Entwicklungsstände.
+
+```
+1.0.0
+```
+
+erste stabile produktive Version.
+
+---
+
+# Contribution Philosophy
+
+Beiträge von außen sind erwünscht.
+
+Voraussetzungen:
+
+- nachvollziehbarer Code
+- dokumentierte Änderungen
+- Einhaltung der Projektprinzipien
+
+---
+
+# Security Development
+
+Sicherheitsrelevante Änderungen werden besonders
+behandelt.
+
+Besondere Aufmerksamkeit:
+
+- Zugangsdaten
+- Audiodaten
+- Uploads
+- Berechtigungen
+
+---
+
+# Final Principle
+
+NC-PoRe soll nicht nur funktionieren.
+
+Es soll verständlich, überprüfbar und langfristig
+weiterentwickelbar sein.
