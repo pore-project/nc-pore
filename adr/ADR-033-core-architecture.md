@@ -1,6 +1,6 @@
 # ADR-033 Core Architecture
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-07-24
 
 ---
@@ -163,9 +163,22 @@ des Systems definieren.
 
 ---
 
+## Core als rein technische Infrastruktur-Schicht
+
+Nicht gewählt.
+
+Begründung:
+
+Der Core soll nicht nur technische Dienste bereitstellen,
+sondern die fachlichen Regeln und die Integrität des Systems schützen.
+
+---
+
 # Status
 
 Diese Entscheidung definiert die grundlegende Rolle des Core in NC-PoRe.
+
+Der Core bildet die fachliche Autorität des Systems.
 
 Technische Details der Core-Implementierung werden in späteren Entscheidungen
 behandelt.
@@ -330,9 +343,22 @@ of the system.
 
 ---
 
+## Core as purely technical infrastructure layer
+
+Rejected.
+
+Reason:
+
+The Core must not only provide technical services,
+but protect the domain rules and integrity of the system.
+
+---
+
 # Status
 
 This decision defines the fundamental role of the Core in NC-PoRe.
+
+The Core represents the domain authority of the system.
 
 Technical details of the Core implementation will be addressed in later
 decisions.
