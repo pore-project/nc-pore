@@ -1,6 +1,6 @@
 # NC-PoRe System Components
 
-* Version: 1.0
+* Version: 1.1
 * Date: 2026-07-24
 
 ---
@@ -110,9 +110,11 @@ Der Core verwaltet:
 * Production Sessions
 * Teilnehmer
 * Rollen
-* Zustände
+* fachliche Zustände
 * Berechtigungen
 * fachliche Regeln
+* fachliche Ereignisse
+* Activity History
 
 ---
 
@@ -143,10 +145,10 @@ Der Storage Layer verwaltet dauerhafte Speicherung.
 Verantwortlichkeiten:
 
 * Audio Assets
-* Produktionsdaten
-* Metadaten
-* Session-Daten
-* Versionen und Zustände
+* technische Metadaten
+* persistierte technische Daten
+* gespeicherte Zustandsinformationen
+* Versionen
 
 ---
 
@@ -157,6 +159,9 @@ Der Storage entscheidet nicht über:
 * Geschäftsregeln
 * Berechtigungen
 * Produktionsabläufe
+* fachliche Bedeutung gespeicherter Daten
+
+Die fachliche Bedeutung dieser Daten wird durch den Core definiert.
 
 Speicherung und Bedeutung bleiben getrennt.
 
@@ -209,6 +214,8 @@ Beispiele:
 * Rollen
 * Teilnehmer
 * Produktionsstatus
+* fachliche Zustände
+* fachliche Ereignisse
 
 Verantwortlich:
 
@@ -224,9 +231,11 @@ Beispiele:
 * Assets
 * Exportdateien
 
-Verantwortlich:
+Verantwortlichkeiten:
 
-Storage Layer in Zusammenarbeit mit Clients und Core.
+* Client für die lokale Erzeugung und Verarbeitung
+* Storage Layer für die dauerhafte Speicherung
+* Core für fachliche Zuordnung und Bedeutung
 
 ---
 
@@ -403,9 +412,11 @@ The Core manages:
 * Production Sessions
 * participants
 * roles
-* states
+* domain states
 * permissions
 * domain rules
+* domain events
+* Activity History
 
 ---
 
@@ -436,10 +447,10 @@ The Storage Layer manages persistent storage.
 Responsibilities:
 
 * audio assets
-* production data
-* metadata
-* session data
-* versions and states
+* technical metadata
+* persisted technical data
+* stored state information
+* versions
 
 ---
 
@@ -450,6 +461,9 @@ The Storage Layer does not decide:
 * business rules
 * permissions
 * production workflows
+* domain meaning of stored data
+
+The domain meaning of this data is defined by the Core.
 
 Storage and meaning remain separated.
 
@@ -502,6 +516,8 @@ Examples:
 * roles
 * participants
 * production status
+* domain states
+* domain events
 
 Responsible:
 
@@ -517,9 +533,11 @@ Examples:
 * assets
 * export files
 
-Responsible:
+Responsibilities:
 
-Storage Layer together with Clients and Core.
+* Client for local creation and processing
+* Storage Layer for persistent storage
+* Core for domain assignment and meaning
 
 ---
 
