@@ -1,6 +1,6 @@
 # NC-PoRe Project Status
 
-* Version: 1.1
+* Version: 1.2
 * Date: 2026-07-24
 
 ---
@@ -13,9 +13,11 @@
 
 Current phase:
 
-## Foundation and Architecture Definition Completed
+## Architecture Foundation Completed — Implementation Architecture Defined
 
 NC-PoRe hat die grundlegende Konzeptions- und Architekturphase abgeschlossen.
+
+Die technische Implementierungsarchitektur wurde definiert.
 
 Der Fokus lag auf:
 
@@ -26,10 +28,11 @@ Der Fokus lag auf:
 * FOSS-Grundlagen
 * Verteilung und Zusammenarbeit
 * Sicherheits- und Rollenmodellen
+* technischer Struktur der Implementierung
 
-Die grundlegenden Architekturentscheidungen sind dokumentiert.
+Die grundlegenden Architekturentscheidungen und Implementierungsprinzipien sind dokumentiert.
 
-Die nächste Phase ist die technische Umsetzungsvorbereitung.
+Die nächste Phase ist die technische Umsetzung.
 
 ---
 
@@ -198,6 +201,20 @@ Auditability and Activity History
 
 Definition von nachvollziehbarer Produktionshistorie.
 
+### ADR-033
+
+Core Architecture
+
+Definition des Core als fachliche Autorität
+und Festlegung der Verantwortlichkeiten.
+
+### ADR-034
+
+Implementation Architecture
+
+Definition der grundlegenden Prinzipien
+für die technische Umsetzung.
+
 ---
 
 # Current Architecture Principles
@@ -220,6 +237,9 @@ NC-PoRe folgt diesen Grundsätzen:
 * Identität getrennt von Rollen und Berechtigungen
 * Activity History als Produktionsgedächtnis
 * Zusammenarbeit steht im Mittelpunkt
+* Domain Authority liegt ausschließlich beim Core
+* Implementierungsarchitektur folgt der fachlichen Architektur
+* technische Details bleiben von der Domäne getrennt
 
 ---
 
@@ -227,7 +247,7 @@ NC-PoRe folgt diesen Grundsätzen:
 
 NC-PoRe basiert auf folgenden zentralen Konzepten:
 
-```text
+```
 Production Session
 
         |
@@ -284,16 +304,17 @@ Aktuelle technische Richtung:
 
 # Next Steps
 
-## Implementation Planning
+## Technical Implementation
 
 Geplante nächste Schritte:
 
-* technische Kernarchitektur
-* Repository-Struktur für den Core
-* Technologieentscheidungen
-* erste Modulstruktur
-* erstes vertikales MVP
-* technischer Prototyp
+* technische Projektgrundlage
+* Repository-Struktur definieren
+* Modulstruktur umsetzen
+* Technologieentscheidungen treffen
+* Entwicklungsumgebung vorbereiten
+* erstes vertikales MVP entwickeln
+* technische Prototypen erstellen
 
 ---
 
@@ -301,7 +322,6 @@ Geplante nächste Schritte:
 
 Mögliche nächste ADRs:
 
-* Implementation Architecture
 * Database and Persistence Strategy
 * Client-Core Communication
 * Deployment Architecture
@@ -317,36 +337,41 @@ NC-PoRe verfügt über:
 * definierte Vision
 * dokumentierte Anforderungen
 * grundlegende Architektur
-* 32 dokumentierte Architekturentscheidungen
+* 34 dokumentierte Architekturentscheidungen
 * definiertes Session-Modell
 * verteilte Recording-Strategie
 * Synchronisationsstrategie
 * Identitäts- und Rollenmodell
 * nachvollziehbare Produktionshistorie
+* definierte Implementierungsarchitektur
+* klare technische Architekturprinzipien
 
 Die Architekturphase wurde bewusst abgeschlossen.
 
-Die Implementierungsphase wurde noch nicht begonnen.
+Die Implementierungsphase beginnt auf Basis der definierten Architektur.
 
-Der nächste Schritt ist die technische Umsetzungsvorbereitung.
+Der nächste Schritt ist die technische Umsetzung.
 
 ---
 
 # Current Transition
 
-NC-PoRe befindet sich am Übergang von der Architekturdefinition
-zur technischen Umsetzungsvorbereitung.
+NC-PoRe befindet sich am Übergang von der Architekturphase
+zur technischen Umsetzung.
+
+Die Architektur beschreibt nun sowohl die fachlichen Grundlagen
+als auch die Prinzipien für deren technische Realisierung.
 
 Die nächsten Arbeiten konzentrieren sich auf:
 
 * technische Projektgrundlage
 * Repository- und Modulstruktur
-* Technologieentscheidungen
 * Entwicklungsumgebung
+* konkrete Technologieentscheidungen
 * erste technische Prototypen
 
-Die eigentliche Implementierung produktiver Funktionen wurde bewusst
-noch nicht begonnen.
+Die Entwicklung produktiver Funktionen beginnt schrittweise
+auf Basis der definierten Architektur.
 
 ---
 
@@ -358,12 +383,12 @@ Date:
 
 2026-07-24
 
-NC-PoRe verfügt nun über eine belastbare Grundlage für die nächste Entwicklungsphase.
+NC-PoRe verfügt nun über eine belastbare Grundlage
+für die nächste Entwicklungsphase.
 
 Die Architektur beschreibt nicht nur Softwarekomponenten,
-sondern die Zusammenarbeit von Menschen, Geräten und Produktionsprozessen.
-
----
+sondern die Zusammenarbeit von Menschen, Geräten
+und Produktionsprozessen.
 
 # English Version ([Deutsche Version oben](#deutsch))
 
@@ -373,9 +398,12 @@ sondern die Zusammenarbeit von Menschen, Geräten und Produktionsprozessen.
 
 Current phase:
 
-## Foundation and Architecture Definition Completed
+## Architecture Foundation Completed — Implementation Architecture Defined
 
-NC-PoRe has completed the fundamental concept and architecture definition phase.
+NC-PoRe has completed the fundamental concept
+and architecture definition phase.
+
+The implementation architecture has been defined.
 
 The focus was on:
 
@@ -386,10 +414,12 @@ The focus was on:
 * FOSS foundations
 * distribution and collaboration
 * security and role models
+* technical implementation structure
 
-The fundamental architecture decisions are documented.
+The fundamental architecture decisions and implementation principles
+are documented.
 
-The next phase is technical implementation preparation.
+The next phase is technical implementation.
 
 ---
 
@@ -416,7 +446,7 @@ control over personal data and production workflows.
 
 Completed:
 
-* GitHub repository created
+* GitHub Repository created
 * AGPL-3.0 license selected
 * documentation structure established
 * ADR structure established
@@ -558,6 +588,133 @@ Auditability and Activity History
 
 Definition of traceable production history.
 
+### ADR-033
+
+Core Architecture
+
+Definition of the Core as domain authority
+and responsibility boundaries.
+
+### ADR-034
+
+Implementation Architecture
+
+Definition of fundamental principles
+for technical implementation.
+
+---
+
+# Current Architecture Principles
+
+NC-PoRe follows these principles:
+
+* local recording
+* no dependency of audio production on network availability
+* open formats
+* separate audio tracks
+* transparent consent
+* role-based permissions
+* self-hostable infrastructure
+* extensibility
+* Production Session as central domain entity
+* Core as authority for business logic
+* API- and event-based communication
+* Local Recording First
+* separation of Control Synchronization and Media Synchronization
+* identity separated from roles and permissions
+* Activity History as production memory
+* collaboration as a central principle
+* Domain Authority exclusively located in the Core
+* implementation architecture follows domain architecture
+* technical details remain separated from the domain
+
+---
+
+# Current Architecture Model
+
+NC-PoRe is based on the following central concepts:
+
+```
+Production Session
+
+        |
+        |
+        +-- Participants
+        |
+        +-- Roles
+        |
+        +-- Recordings
+        |
+        +-- Assets
+        |
+        +-- Synchronization Metadata
+        |
+        +-- Activity History
+```
+
+The Production Session forms the domain framework
+for a shared production.
+
+---
+
+# Technical Direction
+
+Current technical direction:
+
+## Clients
+
+* platform-specific clients
+* local recording
+* local processing
+* synchronization with central environment
+
+## Core
+
+* central business logic
+* management of domain states
+* permission validation
+* session management
+
+## Storage
+
+* Nextcloud-based storage
+* self-hostable infrastructure
+* open data handling
+
+## Communication
+
+* API-based communication
+* event-oriented architecture
+* separated control and media data
+
+---
+
+# Next Steps
+
+## Technical Implementation
+
+Planned next steps:
+
+* technical project foundation
+* definition of repository structure
+* implementation of module structure
+* technology decisions
+* preparation of development environment
+* first vertical MVP
+* technical prototypes
+
+---
+
+## Future Architecture Decisions
+
+Possible next ADRs:
+
+* Database and Persistence Strategy
+* Client-Core Communication
+* Deployment Architecture
+* Build and Release Strategy
+* Testing Strategy
+
 ---
 
 # Current Status Summary
@@ -567,36 +724,41 @@ NC-PoRe has:
 * a defined vision
 * documented requirements
 * a fundamental architecture
-* 32 documented architecture decisions
+* 34 documented architecture decisions
 * a defined session model
 * a distributed recording strategy
 * a synchronization strategy
 * an identity and role model
 * a traceable production history
+* a defined implementation architecture
+* clear technical architecture principles
 
 The architecture phase has been deliberately completed.
 
-The implementation phase has not started yet.
+The implementation phase starts based on the defined architecture.
 
-The next step is technical implementation preparation.
+The next step is technical implementation.
 
 ---
 
 # Current Transition
 
 NC-PoRe is transitioning from architecture definition
-to technical implementation preparation.
+to technical implementation.
+
+The architecture now describes both domain foundations
+and principles for their technical realization.
 
 The next activities focus on:
 
 * technical project foundation
 * repository and module structure
-* technology decisions
 * development environment
+* concrete technology decisions
 * first technical prototypes
 
-The actual implementation of production features has deliberately
-not started yet.
+The development of production features starts step by step
+based on the defined architecture.
 
 ---
 
@@ -608,7 +770,9 @@ Date:
 
 2026-07-24
 
-NC-PoRe now has a solid foundation for the next development phase.
+NC-PoRe now has a solid foundation
+for the next development phase.
 
 The architecture describes not only software components,
-but also the collaboration of people, devices and production processes.
+but also collaboration between people, devices
+and production processes.
