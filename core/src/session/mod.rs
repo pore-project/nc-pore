@@ -3,6 +3,7 @@ use crate::identity::ProductionId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
     Created,
+    Active,
 }
 
 #[derive(Debug, Clone)]
@@ -17,5 +18,9 @@ impl ProductionSession {
             id,
             status: ProductionStatus::Created,
         }
+    }
+
+    pub fn start(&mut self) {
+        self.status = ProductionStatus::Active;
     }
 }
