@@ -1,17 +1,17 @@
 use crate::identity::ProductionId;
-use crate::participant::ParticipantId;
 use crate::participation::Participation;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ProductionSessionError {
-    ParticipantAlreadyExists,
-}
+use crate::role::ParticipantRole;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
     Created,
     Active,
     Completed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProductionSessionError {
+    ParticipantAlreadyExists,
 }
 
 #[derive(Debug, Clone)]
@@ -30,16 +30,10 @@ impl ProductionSession {
         }
     }
 
-    /// Starts the production session.
-    ///
-    /// A session becomes active when production work begins.
     pub fn start(&mut self) {
         self.status = ProductionStatus::Active;
     }
 
-    /// Completes the production session.
-    ///
-    /// A completed session is no longer actively produced.
     pub fn complete(&mut self) {
         self.status = ProductionStatus::Completed;
     }
@@ -53,7 +47,11 @@ impl ProductionSession {
         &mut self,
         participation: Participation,
     ) -> Result<(), ProductionSessionError> {
-        if self.has_participant(&participation.participant_id) {
+        if self
+            .participations
+            .iter()
+            .any(|existing| existing.participant_id == participation.participant_id)
+        {
             return Err(ProductionSessionError::ParticipantAlreadyExists);
         }
 
@@ -62,20 +60,16 @@ impl ProductionSession {
         Ok(())
     }
 
-    /// Returns all participations of this production session.
+    /// Checks whether a specific role exists within this production session.
     ///
-    /// The session owns the participation collection.
-    pub fn participations(&self) -> &[Participation] {
-        &self.participations
-    }
-
-    /// Checks whether a participant is already assigned to this session.
+    /// Roles describe responsibility within a production,
+    /// not the identity of a participant.
     ///
-    /// A participant can only have one participation per production session.
-    pub fn has_participant(&self, participant_id: &ParticipantId) -> bool {
+    /// See ADR-031.
+    pub fn has_role(&self, role: ParticipantRole) -> bool {
         self.participations
             .iter()
-            .any(|existing| &existing.participant_id == participant_id)
+            .any(|participation| participation.role == role)
     }
 }
 
@@ -84,17 +78,16 @@ mod tests {
     use super::*;
     use crate::identity::ProductionId;
     use crate::participant::ParticipantId;
-    use crate::participation::Participation;
     use crate::role::ParticipantRole;
 
     fn create_test_session() -> ProductionSession {
-        ProductionSession::new(ProductionId::new("test-production"))
+        ProductionSession::new(ProductionId::new("test-session"))
     }
 
-    fn create_test_participation() -> Participation {
+    fn create_participation(id: &str, role: ParticipantRole) -> Participation {
         Participation {
-            participant_id: ParticipantId::new("participant-1"),
-            role: ParticipantRole::Guest,
+            participant_id: ParticipantId::new(id),
+            role,
         }
     }
 
@@ -118,7 +111,6 @@ mod tests {
     fn completing_session_changes_status_to_completed() {
         let mut session = create_test_session();
 
-        session.start();
         session.complete();
 
         assert_eq!(session.status, ProductionStatus::Completed);
@@ -127,27 +119,38 @@ mod tests {
     #[test]
     fn participation_can_be_added_to_session() {
         let mut session = create_test_session();
-        let participation = create_test_participation();
 
-        let result = session.add_participation(participation);
+        let participation = create_participation("participant-1", ParticipantRole::Participant);
 
-        assert!(result.is_ok());
-        assert_eq!(session.participations().len(), 1);
+        assert!(session.add_participation(participation).is_ok());
+        assert_eq!(session.participations.len(), 1);
     }
 
     #[test]
     fn duplicate_participant_cannot_be_added_to_session() {
         let mut session = create_test_session();
 
-        let first = create_test_participation();
-        let second = create_test_participation();
+        let first = create_participation("participant-1", ParticipantRole::Participant);
 
-        assert!(session.add_participation(first).is_ok());
+        let second = create_participation("participant-1", ParticipantRole::Guest);
+
+        session.add_participation(first).unwrap();
+
         assert_eq!(
             session.add_participation(second),
             Err(ProductionSessionError::ParticipantAlreadyExists)
         );
+    }
 
-        assert_eq!(session.participations().len(), 1);
+    #[test]
+    fn session_can_check_existing_roles() {
+        let mut session = create_test_session();
+
+        session
+            .add_participation(create_participation("owner-1", ParticipantRole::Owner))
+            .unwrap();
+
+        assert!(session.has_role(ParticipantRole::Owner));
+        assert!(!session.has_role(ParticipantRole::Producer));
     }
 }
