@@ -2,6 +2,11 @@ use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProductionSessionError {
+    ParticipantAlreadyExists,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
     Created,
@@ -44,11 +49,12 @@ impl ProductionSession {
     /// A participant can only participate once within the same session.
     ///
     /// See ADR-019 and ADR-031.
-    pub fn add_participation(&mut self, participation: Participation) -> Result<(), String> {
+    pub fn add_participation(
+        &mut self,
+        participation: Participation,
+    ) -> Result<(), ProductionSessionError> {
         if self.has_participant(&participation.participant_id) {
-            return Err(String::from(
-                "Participant already exists in this production session",
-            ));
+            return Err(ProductionSessionError::ParticipantAlreadyExists);
         }
 
         self.participations.push(participation);
@@ -72,6 +78,7 @@ impl ProductionSession {
             .any(|existing| &existing.participant_id == participant_id)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,7 +143,10 @@ mod tests {
         let second = create_test_participation();
 
         assert!(session.add_participation(first).is_ok());
-        assert!(session.add_participation(second).is_err());
+        assert_eq!(
+            session.add_participation(second),
+            Err(ProductionSessionError::ParticipantAlreadyExists)
+        );
 
         assert_eq!(session.participations().len(), 1);
     }
