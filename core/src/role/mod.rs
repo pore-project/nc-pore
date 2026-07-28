@@ -1,20 +1,19 @@
-/// Describes the responsibility of a participant within a production session.
+/// Defines the role of a participant within a production session.
 ///
-/// Roles express responsibilities inside a production,
-/// not the identity of a person.
+/// Roles describe responsibility inside a production context.
 ///
-/// See ADR-031.
+/// See ADR-006 and ADR-031.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParticipantRole {
-    /// Owns the production session.
+    /// Owns and is responsible for the production session.
     Owner,
 
-    /// Coordinates and manages the production.
+    /// Supports production management and coordination.
     Producer,
 
-    /// Regular participant of the production.
+    /// Actively participates in the production.
     Participant,
 
-    /// Limited external participant.
+    /// External participant with limited permissions.
     Guest,
 }
