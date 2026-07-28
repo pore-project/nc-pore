@@ -27,6 +27,13 @@ impl ProductionSession {
         self.status = ProductionStatus::Active;
     }
 
+    /// Adds a participation to the production session.
+    ///
+    /// Domain validation will be introduced incrementally.
+    /// The session is responsible for deciding whether a
+    /// participation may become part of the production.
+    ///
+    /// See ADR-019 and ADR-031.
     pub fn add_participation(&mut self, participation: Participation) {
         self.participations.push(participation);
     }
