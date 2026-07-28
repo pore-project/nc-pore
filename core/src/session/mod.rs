@@ -72,3 +72,38 @@ impl ProductionSession {
             .any(|existing| &existing.participant_id == participant_id)
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::identity::ProductionId;
+
+    fn create_test_session() -> ProductionSession {
+        ProductionSession::new(ProductionId::new("test-production"))
+    }
+
+    #[test]
+    fn new_session_starts_as_created() {
+        let session = create_test_session();
+
+        assert_eq!(session.status, ProductionStatus::Created);
+    }
+
+    #[test]
+    fn starting_session_changes_status_to_active() {
+        let mut session = create_test_session();
+
+        session.start();
+
+        assert_eq!(session.status, ProductionStatus::Active);
+    }
+
+    #[test]
+    fn completing_session_changes_status_to_completed() {
+        let mut session = create_test_session();
+
+        session.start();
+        session.complete();
+
+        assert_eq!(session.status, ProductionStatus::Completed);
+    }
+}
