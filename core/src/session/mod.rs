@@ -6,6 +6,7 @@ use crate::participation::Participation;
 pub enum ProductionStatus {
     Created,
     Active,
+    Completed,
 }
 
 #[derive(Debug, Clone)]
@@ -24,8 +25,18 @@ impl ProductionSession {
         }
     }
 
+    /// Starts the production session.
+    ///
+    /// A session becomes active when production work begins.
     pub fn start(&mut self) {
         self.status = ProductionStatus::Active;
+    }
+
+    /// Completes the production session.
+    ///
+    /// A completed session is no longer actively produced.
+    pub fn complete(&mut self) {
+        self.status = ProductionStatus::Completed;
     }
 
     /// Adds a participation to the production session.
