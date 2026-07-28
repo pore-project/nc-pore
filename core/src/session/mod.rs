@@ -29,12 +29,25 @@ impl ProductionSession {
 
     /// Adds a participation to the production session.
     ///
-    /// Domain validation will be introduced incrementally.
-    /// The session is responsible for deciding whether a
-    /// participation may become part of the production.
+    /// A participant can only participate once within the same session.
     ///
     /// See ADR-019 and ADR-031.
-    pub fn add_participation(&mut self, participation: Participation) {
+    pub fn add_participation(
+        &mut self,
+        participation: Participation,
+    ) -> Result<(), String> {
+        if self
+            .participations
+            .iter()
+            .any(|existing| existing.participant_id == participation.participant_id)
+        {
+            return Err(String::from(
+                "Participant already exists in this production session",
+            ));
+        }
+
         self.participations.push(participation);
+
+        Ok(())
     }
 }
