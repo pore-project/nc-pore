@@ -1,4 +1,5 @@
 use crate::identity::ProductionId;
+use crate::participant::ParticipantId;
 use crate::participation::Participation;
 use crate::role::ParticipantRole;
 
@@ -47,17 +48,24 @@ impl ProductionSession {
         &mut self,
         participation: Participation,
     ) -> Result<(), ProductionSessionError> {
-        if self
-            .participations
-            .iter()
-            .any(|existing| existing.participant_id == participation.participant_id)
-        {
+        if self.has_participant(&participation.participant_id) {
             return Err(ProductionSessionError::ParticipantAlreadyExists);
         }
 
         self.participations.push(participation);
 
         Ok(())
+    }
+
+    /// Checks whether a participant is already part of this production session.
+    ///
+    /// A participant can only have one participation within the same session.
+    ///
+    /// See ADR-031.
+    pub fn has_participant(&self, participant_id: &ParticipantId) -> bool {
+        self.participations
+            .iter()
+            .any(|participation| &participation.participant_id == participant_id)
     }
 
     /// Checks whether a specific role exists within this production session.
@@ -152,5 +160,22 @@ mod tests {
 
         assert!(session.has_role(ParticipantRole::Owner));
         assert!(!session.has_role(ParticipantRole::Producer));
+    }
+
+    #[test]
+    fn session_can_check_existing_participants() {
+        let mut session = create_test_session();
+
+        let participant_id = ParticipantId::new("participant-1");
+
+        session
+            .add_participation(Participation {
+                participant_id: participant_id.clone(),
+                role: ParticipantRole::Participant,
+            })
+            .unwrap();
+
+        assert!(session.has_participant(&participant_id));
+        assert!(!session.has_participant(&ParticipantId::new("unknown")));
     }
 }
