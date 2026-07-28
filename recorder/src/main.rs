@@ -1,8 +1,8 @@
 mod audio;
-mod session;
-mod metadata;
-mod storage;
 mod export;
+mod metadata;
+mod session;
+mod storage;
 
 use session::{RecordingSession, SessionStatus};
 

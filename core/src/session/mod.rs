@@ -32,10 +32,7 @@ impl ProductionSession {
     /// A participant can only participate once within the same session.
     ///
     /// See ADR-019 and ADR-031.
-    pub fn add_participation(
-        &mut self,
-        participation: Participation,
-    ) -> Result<(), String> {
+    pub fn add_participation(&mut self, participation: Participation) -> Result<(), String> {
         if self
             .participations
             .iter()
