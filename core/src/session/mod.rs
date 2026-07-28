@@ -76,9 +76,19 @@ impl ProductionSession {
 mod tests {
     use super::*;
     use crate::identity::ProductionId;
+    use crate::participant::ParticipantId;
+    use crate::participation::Participation;
+    use crate::role::ParticipantRole;
 
     fn create_test_session() -> ProductionSession {
         ProductionSession::new(ProductionId::new("test-production"))
+    }
+
+    fn create_test_participation() -> Participation {
+        Participation {
+            participant_id: ParticipantId::new("participant-1"),
+            role: ParticipantRole::Guest,
+        }
     }
 
     #[test]
@@ -105,5 +115,29 @@ mod tests {
         session.complete();
 
         assert_eq!(session.status, ProductionStatus::Completed);
+    }
+
+    #[test]
+    fn participation_can_be_added_to_session() {
+        let mut session = create_test_session();
+        let participation = create_test_participation();
+
+        let result = session.add_participation(participation);
+
+        assert!(result.is_ok());
+        assert_eq!(session.participations().len(), 1);
+    }
+
+    #[test]
+    fn duplicate_participant_cannot_be_added_to_session() {
+        let mut session = create_test_session();
+
+        let first = create_test_participation();
+        let second = create_test_participation();
+
+        assert!(session.add_participation(first).is_ok());
+        assert!(session.add_participation(second).is_err());
+
+        assert_eq!(session.participations().len(), 1);
     }
 }
