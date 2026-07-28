@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParticipantRole {
-    Host,
+    Owner,
+    Producer,
+    Participant,
     Guest,
-    Moderator,
 }

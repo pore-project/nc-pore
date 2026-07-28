@@ -1,4 +1,5 @@
 use crate::identity::ProductionId;
+use crate::participant::ParticipantId;
 use crate::participation::Participation;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,11 +34,7 @@ impl ProductionSession {
     ///
     /// See ADR-019 and ADR-031.
     pub fn add_participation(&mut self, participation: Participation) -> Result<(), String> {
-        if self
-            .participations
-            .iter()
-            .any(|existing| existing.participant_id == participation.participant_id)
-        {
+        if self.has_participant(&participation.participant_id) {
             return Err(String::from(
                 "Participant already exists in this production session",
             ));
@@ -46,5 +43,21 @@ impl ProductionSession {
         self.participations.push(participation);
 
         Ok(())
+    }
+
+    /// Returns all participations of this production session.
+    ///
+    /// The session owns the participation collection.
+    pub fn participations(&self) -> &[Participation] {
+        &self.participations
+    }
+
+    /// Checks whether a participant is already assigned to this session.
+    ///
+    /// A participant can only have one participation per production session.
+    pub fn has_participant(&self, participant_id: &ParticipantId) -> bool {
+        self.participations
+            .iter()
+            .any(|existing| &existing.participant_id == participant_id)
     }
 }
