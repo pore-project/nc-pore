@@ -1,7 +1,6 @@
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
-use crate::role::ParticipantRole;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
@@ -86,13 +85,14 @@ impl ProductionSession {
     pub fn has_owner(&self) -> bool {
         self.participations
             .iter()
-            .any(|participation| participation.role == ParticipantRole::Owner)
+            .any(|participation| participation.is_owner())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::role::ParticipantRole;
 
     fn create_test_session() -> ProductionSession {
         ProductionSession::new(ProductionId::new("test-session"))
