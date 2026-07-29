@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-* Version: 1.2
-* Date: 2026-07-24
+* Version: 1.3
+* Date: 2026-07-29
 
 ---
 
@@ -131,15 +131,96 @@ Client Architecture
 Modulare Recorder-Architektur mit professionellen
 und vereinfachten Clients.
 
+### ADR-009
+
+Track Synchronisation
+
+Definition der Synchronisation zwischen getrennten Audiospuren.
+
+### ADR-010
+
+Core Data Model
+
+Definition des zentralen Datenmodells.
+
+### ADR-011
+
+Security Model
+
+Definition der grundlegenden Sicherheitsarchitektur.
+
+### ADR-012
+
+Export Architecture
+
+Definition der Exportstruktur und Exportverantwortlichkeiten.
+
+### ADR-013
+
+Technology Stack
+
+Grundsätze zur Auswahl des Technologie-Stacks.
+
+### ADR-014
+
+Development Environment and Toolchain
+
+Definition der Entwicklungsumgebung und Werkzeugkette.
+
+### ADR-015
+
+Initial Architecture of the NC-PoRe Recorder Client
+
+Definition der grundlegenden Architektur des Recorder Clients.
+
+### ADR-016
+
+Audio Layer Technology Selection
+
+Auswahlprinzipien für die Audio-Schicht.
+
+### ADR-017
+
+Audio Backend Library Selection
+
+Auswahlprinzipien für Audio-Backend-Bibliotheken.
+
+### ADR-018
+
+Recorder Data Flow and Processing Pipeline
+
+Definition des Datenflusses und der Verarbeitungspipeline
+des Recorders.
+
+### ADR-019
+
+Recording Session Data Model
+
+Definition des Recording Session Datenmodells.
+
+### ADR-020
+
+Metadata Data Model
+
+Definition des Metadatenmodells.
+
+### ADR-021
+
+Internal Data Structures and Serialization Format
+
+Definition interner Datenstrukturen und
+Serialisierungsformate.
+
 ---
 
 # Extended Architecture Foundation
 
 ### ADR-022
 
-Modular Architecture
+Modular Architecture and Provider Design
 
-Definition einer modularen und erweiterbaren Systemstruktur.
+Definition einer modularen und erweiterbaren Systemstruktur
+sowie Provider-Grenzen.
 
 ### ADR-023
 
@@ -215,6 +296,20 @@ Implementation Architecture
 Definition der grundlegenden Prinzipien
 für die technische Umsetzung.
 
+### ADR-035
+
+Domain Lifecycle and State Transition Management
+
+Definition des Musters für fachliche Lebenszyklen
+und kontrollierte Zustandsübergänge innerhalb des Core.
+
+### ADR-036
+
+Development Workflow and Source of Truth
+
+Definition des nachvollziehbaren Entwicklungsprozesses
+und der Repository-Struktur als technische Quelle der Wahrheit.
+
 ---
 
 # Current Architecture Principles
@@ -240,6 +335,9 @@ NC-PoRe folgt diesen Grundsätzen:
 * Domain Authority liegt ausschließlich beim Core
 * Implementierungsarchitektur folgt der fachlichen Architektur
 * technische Details bleiben von der Domäne getrennt
+* fachliche Lebenszyklen werden explizit modelliert
+* Entwicklungsprozesse folgen einem zustandsorientierten Workflow
+* Repository-Inhalt ist die technische Quelle der Wahrheit
 
 ---
 
@@ -315,6 +413,8 @@ Geplante nächste Schritte:
 * Entwicklungsumgebung vorbereiten
 * erstes vertikales MVP entwickeln
 * technische Prototypen erstellen
+* Persistenz- und Speicherstrategie
+* technische Umsetzung der Core-Struktur
 
 ---
 
@@ -337,13 +437,15 @@ NC-PoRe verfügt über:
 * definierte Vision
 * dokumentierte Anforderungen
 * grundlegende Architektur
-* 34 dokumentierte Architekturentscheidungen
+* 36 dokumentierte Architekturentscheidungen
 * definiertes Session-Modell
 * verteilte Recording-Strategie
 * Synchronisationsstrategie
 * Identitäts- und Rollenmodell
 * nachvollziehbare Produktionshistorie
 * definierte Implementierungsarchitektur
+* definiertes Domain Lifecycle Modell
+* definierten Entwicklungsworkflow
 * klare technische Architekturprinzipien
 
 Die Architekturphase wurde bewusst abgeschlossen.
@@ -369,6 +471,8 @@ Die nächsten Arbeiten konzentrieren sich auf:
 * Entwicklungsumgebung
 * konkrete Technologieentscheidungen
 * erste technische Prototypen
+* Persistenz- und Speicherstrategie
+* technische Umsetzung der Core-Struktur
 
 Die Entwicklung produktiver Funktionen beginnt schrittweise
 auf Basis der definierten Architektur.
@@ -389,6 +493,8 @@ für die nächste Entwicklungsphase.
 Die Architektur beschreibt nicht nur Softwarekomponenten,
 sondern die Zusammenarbeit von Menschen, Geräten
 und Produktionsprozessen.
+
+Die technische Umsetzung beginnt auf Basis dieser Grundlage.
 
 # English Version ([Deutsche Version oben](#deutsch))
 
@@ -602,6 +708,20 @@ Implementation Architecture
 Definition of fundamental principles
 for technical implementation.
 
+### ADR-035
+
+Domain Lifecycle and State Transition Management
+
+Definition of domain lifecycle handling
+and state transition responsibilities.
+
+### ADR-036
+
+Development Workflow and Source of Truth
+
+Definition of the development workflow,
+verification process and repository source of truth.
+
 ---
 
 # Current Architecture Principles
@@ -627,6 +747,9 @@ NC-PoRe follows these principles:
 * Domain Authority exclusively located in the Core
 * implementation architecture follows domain architecture
 * technical details remain separated from the domain
+* domain lifecycles are explicitly modeled
+* development follows a state-oriented workflow
+* repository content is the technical source of truth
 
 ---
 
@@ -634,7 +757,7 @@ NC-PoRe follows these principles:
 
 NC-PoRe is based on the following central concepts:
 
-```
+```text
 Production Session
 
         |
@@ -724,13 +847,15 @@ NC-PoRe has:
 * a defined vision
 * documented requirements
 * a fundamental architecture
-* 34 documented architecture decisions
+* 36 documented architecture decisions
 * a defined session model
 * a distributed recording strategy
 * a synchronization strategy
 * an identity and role model
 * a traceable production history
 * a defined implementation architecture
+* a defined domain lifecycle model
+* a defined development workflow
 * clear technical architecture principles
 
 The architecture phase has been deliberately completed.
@@ -776,3 +901,4 @@ for the next development phase.
 The architecture describes not only software components,
 but also collaboration between people, devices
 and production processes.
+
