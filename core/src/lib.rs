@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod identity;
 pub mod participant;
 pub mod participation;

@@ -1,3 +1,4 @@
+use crate::activity::{ActivityEvent, ActivityType};
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
@@ -21,6 +22,7 @@ pub struct ProductionSession {
     pub id: ProductionId,
     status: ProductionStatus,
     participations: Vec<Participation>,
+    activities: Vec<ActivityEvent>,
 }
 
 impl ProductionSession {
@@ -29,24 +31,31 @@ impl ProductionSession {
             id,
             status: ProductionStatus::Created,
             participations: Vec::new(),
+            activities: vec![ActivityEvent::new(ActivityType::SessionCreated)],
         }
     }
     pub fn start(&mut self) -> Result<(), ProductionSessionError> {
-        if self.status == ProductionStatus::Completed {
+        if self.status != ProductionStatus::Created {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
 
         self.status = ProductionStatus::Active;
 
+        self.activities
+            .push(ActivityEvent::new(ActivityType::SessionStarted));
+
         Ok(())
     }
-
     pub fn status(&self) -> ProductionStatus {
         self.status
     }
 
     pub fn participations(&self) -> &[Participation] {
         &self.participations
+    }
+
+    pub fn activities(&self) -> &[ActivityEvent] {
+        &self.activities
     }
 
     pub fn participant_count(&self) -> usize {
@@ -68,6 +77,9 @@ impl ProductionSession {
         }
 
         self.status = ProductionStatus::Completed;
+
+        self.activities
+            .push(ActivityEvent::new(ActivityType::SessionCompleted));
 
         Ok(())
     }
@@ -273,6 +285,43 @@ mod tests {
         assert_eq!(
             session.participations()[0].participant_id,
             ParticipantId::new("participant-1")
+        );
+    }
+    // TEST-10
+    // Verify: Lifecycle transitions create activity history entries.
+    //
+    // Lifecycle:
+    // Created -> Active -> Completed
+    //
+    // Protects ADR-032 and ADR-035.
+    #[test]
+    fn session_lifecycle_creates_activity_history() {
+        let mut session = create_test_session();
+
+        assert_eq!(session.activities().len(), 1);
+        assert_eq!(
+            session.activities()[0].activity_type,
+            ActivityType::SessionCreated
+        );
+
+        session.start().unwrap();
+
+        session
+            .add_participation(create_participation("owner-1", ParticipantRole::Owner))
+            .unwrap();
+
+        session.complete().unwrap();
+
+        assert_eq!(session.activities().len(), 3);
+
+        assert_eq!(
+            session.activities()[1].activity_type,
+            ActivityType::SessionStarted
+        );
+
+        assert_eq!(
+            session.activities()[2].activity_type,
+            ActivityType::SessionCompleted
         );
     }
 }
