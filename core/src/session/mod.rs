@@ -2,6 +2,7 @@ use crate::activity::{ActivityEvent, ActivityType};
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
+use crate::recording::Recording;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
@@ -22,6 +23,7 @@ pub struct ProductionSession {
     pub id: ProductionId,
     status: ProductionStatus,
     participations: Vec<Participation>,
+    recordings: Vec<Recording>,
     activities: Vec<ActivityEvent>,
 }
 
@@ -31,6 +33,7 @@ impl ProductionSession {
             id,
             status: ProductionStatus::Created,
             participations: Vec::new(),
+            recordings: Vec::new(),
             activities: vec![ActivityEvent::new(ActivityType::SessionCreated)],
         }
     }
@@ -52,6 +55,10 @@ impl ProductionSession {
 
     pub fn participations(&self) -> &[Participation] {
         &self.participations
+    }
+
+    pub fn recordings(&self) -> &[Recording] {
+        &self.recordings
     }
 
     pub fn activities(&self) -> &[ActivityEvent] {
