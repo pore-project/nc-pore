@@ -18,8 +18,8 @@ pub enum ProductionSessionError {
 #[derive(Debug, Clone)]
 pub struct ProductionSession {
     pub id: ProductionId,
-    pub status: ProductionStatus,
-    pub participations: Vec<Participation>,
+    status: ProductionStatus,
+    participations: Vec<Participation>,
 }
 
 impl ProductionSession {
@@ -33,6 +33,18 @@ impl ProductionSession {
 
     pub fn start(&mut self) {
         self.status = ProductionStatus::Active;
+    }
+
+    pub fn status(&self) -> ProductionStatus {
+        self.status
+    }
+
+    pub fn participations(&self) -> &[Participation] {
+        &self.participations
+    }
+
+    pub fn participant_count(&self) -> usize {
+        self.participations.len()
     }
 
     /// Completes a production session.
@@ -109,7 +121,7 @@ mod tests {
     fn new_session_starts_as_created() {
         let session = create_test_session();
 
-        assert_eq!(session.status, ProductionStatus::Created);
+        assert_eq!(session.status(), ProductionStatus::Created);
     }
 
     #[test]
@@ -156,7 +168,7 @@ mod tests {
                 .is_ok()
         );
 
-        assert_eq!(session.participations.len(), 1);
+        assert_eq!(session.participant_count(), 1);
     }
 
     #[test]
