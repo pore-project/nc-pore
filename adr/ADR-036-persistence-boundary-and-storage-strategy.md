@@ -1,4 +1,4 @@
-# ADR-036 Development Workflow and Source of Truth
+# ADR-036 Persistence Boundary and Storage Strategy
 
 * Status: Proposed
 * Date: 2026-07-29
@@ -12,142 +12,153 @@
 
 # Kontext
 
-NC-PoRe befindet sich am Übergang von der Architekturphase
-zur technischen Umsetzung.
+NC-PoRe verwendet den Core als fachliche Autorität
+(Domain Authority).
 
-Während der bisherigen Entwicklung wurde deutlich, dass
-nachvollziehbare Arbeitsabläufe genauso wichtig sind wie
-technische Entscheidungen.
+Die bisherigen Architekturentscheidungen definieren:
 
-Die Architektur definiert:
+* zentrale fachliche Modelle
+* Verantwortlichkeiten des Core
+* Lebenszyklen fachlicher Objekte
+* Trennung zwischen Domäne und technischen Komponenten
 
-* fachliche Verantwortlichkeiten
-* Systemgrenzen
-* technische Prinzipien
+Mit Beginn der technischen Umsetzung entsteht die Frage,
+wie fachliche Objekte dauerhaft gespeichert und wieder geladen
+werden.
 
-Die tägliche Entwicklung benötigt zusätzlich einen
-klar definierten Umgang mit:
+Die Speicherung darf die fachliche Architektur nicht bestimmen.
 
-* aktuellem Projektzustand
-* vorhandenen Dateien
-* Änderungen
-* Tests
-* Entscheidungen
-
-Ohne eine eindeutige Grundlage können Annahmen entstehen,
-die nicht dem tatsächlichen Projektstand entsprechen.
+Insbesondere darf der Core nicht von konkreten technischen
+Speicherlösungen abhängig werden.
 
 ---
 
 # Entscheidung
 
-NC-PoRe verwendet einen zustandsorientierten
-Entwicklungsworkflow.
+NC-PoRe definiert eine klare Grenze zwischen fachlicher Logik
+und Persistenz.
 
-Vor technischen Änderungen wird zunächst der aktuelle
-Projektzustand festgestellt.
+Der Core besitzt keine direkte Abhängigkeit zu:
 
-Der aktuelle Zustand der vorhandenen Dateien und Dokumente
-ist die Grundlage für weitere Entscheidungen.
+* Datenbanken
+* Dateisystemen
+* Nextcloud-Speicherstrukturen
+* externen Speicherprovidern
+* konkreten Serialisierungsformaten
 
-Änderungen werden nicht auf Basis früherer Annahmen,
-sondern auf Basis des tatsächlich vorhandenen Projektstands
-durchgeführt.
-
----
-
-# Source of Truth
-
-Die jeweils aktuelle Projektstruktur und der aktuelle
-Repository-Inhalt bilden die technische Wahrheit.
-
-Dazu gehören insbesondere:
-
-* vorhandene Dateien
-* aktuelle Dokumentation
-* aktueller Git-Status
-* aktueller Branch
-* vorhandener Quellcode
-
-Frühere Diskussionen oder Annahmen ersetzen nicht den
-aktuellen Projektstand.
+Persistenz wird über definierte Schnittstellen angebunden.
 
 ---
 
-# Development Process
+# Architectural Principle
 
-Der Entwicklungsablauf folgt grundsätzlich diesem Muster:
+Die Domäne beschreibt:
+
+* welche Daten fachlich existieren
+* welche Regeln gelten
+* welche Zustände erlaubt sind
+
+Die Persistenz beschreibt:
+
+* wie Daten gespeichert werden
+* wo Daten gespeichert werden
+* wie Daten technisch übertragen werden
+
+Diese Verantwortlichkeiten bleiben getrennt.
+
+---
+
+# Persistence Boundary
+
+Die Grenze zwischen Core und Speicherung wird explizit
+modelliert.
+
+Beispiel:
 
 ```text
-Aktuellen Zustand prüfen
+Core
 
-↓
+ProductionSession
 
-Bestehende Struktur verstehen
+        |
+        |
+        v
 
-↓
+Persistence Boundary
 
-Kleinste notwendige Änderung definieren
+        |
+        |
+        v
 
-↓
-
-Änderung durchführen
-
-↓
-
-Tests oder Prüfungen ausführen
-
-↓
-
-Änderung dokumentieren
-
-↓
-
-Commit erstellen
+Storage Implementation
 ```
 
+Der Core kennt die fachliche Operation.
+
+Die konkrete Speicherung bleibt austauschbar.
+
 ---
 
-# Verification Before Change
+# Repository Responsibility
 
-Vor Änderungen werden relevante Informationen geprüft.
+Persistenzkomponenten sind verantwortlich für:
 
-Beispiele:
+* Speichern fachlicher Objekte
+* Laden fachlicher Objekte
+* technische Fehlerbehandlung der Speicherung
 
-```bash
-git status
+Sie sind nicht verantwortlich für:
 
-git branch --show-current
+* fachliche Regeln
+* Lifecycle-Entscheidungen
+* Berechtigungen
+* Validierung fachlicher Zustände
 
-Dateistruktur prüfen
+Diese Verantwortung bleibt im Core.
 
-relevante Dateien lesen
+---
+
+# Technology Independence
+
+Die Auswahl konkreter Speichertechnologien erfolgt
+unabhängig von der Domänenarchitektur.
+
+Mögliche Implementierungen können sein:
+
+* lokale Dateien
+* relationale Datenbanken
+* objektbasierte Speicher
+* Nextcloud-basierte Speicherung
+
+Die Auswahl einer Technologie darf keine Änderung
+an fachlichen Modellen erzwingen.
+
+---
+
+# Lifecycle and Persistence
+
+Persistenz speichert Zustände.
+
+Sie entscheidet jedoch nicht über gültige Zustandsübergänge.
+
+Beispiel:
+
+```text
+Created
+
+↓
+
+Active
+
+↓
+
+Completed
 ```
 
-Die Prüfung soll verhindern, dass Änderungen auf falschen
-Annahmen basieren.
+Die Entscheidung, ob ein Übergang erlaubt ist,
+bleibt Bestandteil der Core-Logik.
 
----
-
-# Small Controlled Changes
-
-Änderungen sollen:
-
-* möglichst klein bleiben
-* eine klare fachliche oder technische Absicht besitzen
-* nachvollziehbar überprüfbar sein
-
-Große nicht überprüfbare Änderungen sollen vermieden werden.
-
----
-
-# Documentation Synchronization
-
-Dokumentation und Implementierung müssen konsistent bleiben.
-
-Wenn eine technische Änderung Architekturprinzipien,
-Modulgrenzen oder langfristige Entscheidungen betrifft,
-wird geprüft, ob ein ADR erforderlich ist.
+Die Speicherung hält lediglich den gültigen Zustand fest.
 
 ---
 
@@ -155,47 +166,49 @@ wird geprüft, ob ein ADR erforderlich ist.
 
 ## Positive Consequences
 
-* weniger Fehlannahmen während der Entwicklung
-* nachvollziehbare Änderungen
-* bessere Zusammenarbeit
-* geringeres Risiko durch veraltete Informationen
-* reproduzierbare Entwicklungsabläufe
+* Domänenlogik bleibt unabhängig von Infrastruktur
+* Speichertechnologien können ausgetauscht werden
+* Tests können ohne reale Infrastruktur durchgeführt werden
+* Architekturgrenzen bleiben nachvollziehbar
+* zukünftige Skalierungsmöglichkeiten bleiben offen
 
 ---
 
 ## Negative Consequences
 
-* zusätzlicher Prüfaufwand vor Änderungen
-* weniger spontane Änderungen ohne Analyse
+* zusätzliche Schnittstellen notwendig
+* mehr initialer Modellierungsaufwand
+* einfache direkte Speicherung wird vermieden
 
 Diese Nachteile werden bewusst akzeptiert.
 
-Die zusätzliche Prüfung reduziert langfristig Fehler und
-vermeidbare Rückarbeiten.
+Die langfristige Wartbarkeit und Erweiterbarkeit
+überwiegt den zusätzlichen Anfangsaufwand.
 
 ---
 
 # Alternatives Considered
 
-## Development Based on Previous Context
+## Direct Storage Access from Core
 
 Nicht gewählt.
 
 Begründung:
 
-Frühere Diskussionen können unvollständig oder veraltet sein.
-Der tatsächliche Projektzustand muss entscheidend bleiben.
+Eine direkte Abhängigkeit des Core von Speichertechnologien
+würde die fachliche Architektur mit Infrastrukturdetails
+vermischen.
 
 ---
 
-## Large Batch Changes
+## Storage-driven Domain Model
 
 Nicht gewählt.
 
 Begründung:
 
-Große Änderungspakete erschweren Fehleranalyse,
-Review und Rückverfolgbarkeit.
+Das Datenmodell der Speicherung darf nicht die fachlichen
+Modelle bestimmen.
 
 ---
 
@@ -203,18 +216,40 @@ Review und Rückverfolgbarkeit.
 
 Diese Entscheidung erweitert:
 
+* ADR-026 Session Data and Storage Architecture
+* ADR-027 Core Architecture and Module Boundaries
+* ADR-033 Core Architecture
 * ADR-034 Implementation Architecture
 * ADR-035 Domain Lifecycle and State Transition Management
 
-Sie definiert den praktischen Entwicklungsprozess,
-der die technische Umsetzung der Architektur unterstützt.
+Sie konkretisiert insbesondere die Trennung zwischen
+fachlicher Logik und technischer Infrastruktur.
+
+---
+
+# Future Considerations
+
+Konkrete Persistenzimplementierungen werden separat betrachtet.
+
+Mögliche zukünftige Entscheidungen:
+
+* Datenbankauswahl
+* Serialisierungsformat
+* Repository-Implementierungen
+* Synchronisationsspeicher
+
+Diese Entscheidungen erfolgen erst,
+wenn konkrete technische Anforderungen bestehen.
 
 ---
 
 # Status
 
-Diese Entscheidung definiert den grundlegenden Workflow
-für die weitere technische Entwicklung von NC-PoRe.
+Diese Entscheidung definiert die grundlegende Grenze
+zwischen Core und Persistenz innerhalb von NC-PoRe.
+
+Die konkrete technische Speicherung wird durch spätere
+Implementierungen und Entscheidungen festgelegt.
 
 ---
 
@@ -224,137 +259,150 @@ für die weitere technische Entwicklung von NC-PoRe.
 
 # Context
 
-NC-PoRe is transitioning from the architecture phase
-to technical implementation.
+NC-PoRe uses the Core as the Domain Authority.
 
-During previous development it became clear that
-traceable workflows are as important as technical decisions.
+Previous architecture decisions define:
 
-The architecture defines:
+* central domain models
+* Core responsibilities
+* lifecycles of domain objects
+* separation between domain and technical components
 
-* domain responsibilities
-* system boundaries
-* technical principles
+With the beginning of technical implementation,
+the question arises how domain objects are stored
+and restored.
 
-Daily development additionally requires a clear handling of:
+Persistence must not define the domain architecture.
 
-* current project state
-* existing files
-* changes
-* tests
-* decisions
-
-Without a defined foundation, assumptions may diverge from
-the actual project state.
+The Core must not depend on specific storage technologies.
 
 ---
 
 # Decision
 
-NC-PoRe uses a state-oriented development workflow.
+NC-PoRe defines a clear boundary between domain logic
+and persistence.
 
-Before technical changes, the current project state is
-determined.
+The Core has no direct dependency on:
 
-The actual content of existing files and documentation is
-the basis for further decisions.
+* databases
+* file systems
+* Nextcloud storage structures
+* external storage providers
+* concrete serialization formats
 
-Changes are not performed based on previous assumptions,
-but based on the actual current project state.
-
----
-
-# Source of Truth
-
-The current repository content and project structure define
-the technical source of truth.
-
-This includes:
-
-* existing files
-* current documentation
-* current Git status
-* current branch
-* existing source code
-
-Previous discussions or assumptions do not replace the
-current project state.
+Persistence is connected through defined interfaces.
 
 ---
 
-# Development Process
+# Architectural Principle
 
-The development workflow follows this pattern:
+The domain defines:
+
+* which data exists
+* which rules apply
+* which states are valid
+
+Persistence defines:
+
+* how data is stored
+* where data is stored
+* how data is technically transferred
+
+These responsibilities remain separated.
+
+---
+
+# Persistence Boundary
+
+The boundary between Core and storage is explicitly modeled.
+
+Example:
 
 ```text
-Inspect current state
+Core
 
-↓
+ProductionSession
 
-Understand existing structure
+        |
+        |
+        v
 
-↓
+Persistence Boundary
 
-Define smallest required change
+        |
+        |
+        v
 
-↓
-
-Apply change
-
-↓
-
-Run tests or checks
-
-↓
-
-Document change
-
-↓
-
-Create commit
+Storage Implementation
 ```
 
+The Core knows domain operations.
+
+The concrete storage remains replaceable.
+
 ---
 
-# Verification Before Change
+# Repository Responsibility
 
-Relevant information is checked before changes.
+Persistence components are responsible for:
 
-Examples:
+* storing domain objects
+* loading domain objects
+* technical storage error handling
 
-```bash
-git status
+They are not responsible for:
 
-git branch --show-current
+* domain rules
+* lifecycle decisions
+* permissions
+* validation of domain states
 
-inspect file structure
+These responsibilities remain in the Core.
 
-read relevant files
+---
+
+# Technology Independence
+
+The selection of concrete storage technologies
+is independent from domain architecture.
+
+Possible implementations include:
+
+* local files
+* relational databases
+* object storage
+* Nextcloud-based storage
+
+Technology choices must not require changes
+to domain models.
+
+---
+
+# Lifecycle and Persistence
+
+Persistence stores states.
+
+It does not decide valid state transitions.
+
+Example:
+
+```text
+Created
+
+↓
+
+Active
+
+↓
+
+Completed
 ```
 
-This prevents changes based on incorrect assumptions.
+The decision whether a transition is allowed
+remains part of Core logic.
 
----
-
-# Small Controlled Changes
-
-Changes should:
-
-* remain as small as possible
-* have a clear technical or domain purpose
-* be verifiable
-
-Large unverified changes should be avoided.
-
----
-
-# Documentation Synchronization
-
-Documentation and implementation must remain consistent.
-
-When a technical change affects architecture principles,
-module boundaries or long-term decisions, an ADR is created
-when required.
+Persistence only stores the valid state.
 
 ---
 
@@ -362,44 +410,47 @@ when required.
 
 ## Positive Consequences
 
-* fewer incorrect assumptions
-* traceable changes
-* improved collaboration
-* reduced risk from outdated information
-* reproducible development workflow
+* domain logic remains independent from infrastructure
+* storage technologies can be replaced
+* tests can run without real infrastructure
+* architecture boundaries remain traceable
+* future scalability options remain open
 
 ---
 
 ## Negative Consequences
 
-* additional verification effort before changes
-* fewer spontaneous unreviewed modifications
+* additional interfaces are required
+* more initial modeling effort
+* direct simple storage is avoided
 
 These disadvantages are consciously accepted.
+
+Long-term maintainability and extensibility
+outweigh the additional initial effort.
 
 ---
 
 # Alternatives Considered
 
-## Development Based on Previous Context
+## Direct Storage Access from Core
 
 Rejected.
 
 Reason:
 
-Previous discussions may be incomplete or outdated.
-The actual project state must remain authoritative.
+Direct Core dependencies on storage technologies
+would mix domain architecture with infrastructure details.
 
 ---
 
-## Large Batch Changes
+## Storage-driven Domain Model
 
 Rejected.
 
 Reason:
 
-Large change sets make review, debugging and traceability
-more difficult.
+Storage models must not define domain models.
 
 ---
 
@@ -407,15 +458,38 @@ more difficult.
 
 This decision extends:
 
+* ADR-026 Session Data and Storage Architecture
+* ADR-027 Core Architecture and Module Boundaries
+* ADR-033 Core Architecture
 * ADR-034 Implementation Architecture
 * ADR-035 Domain Lifecycle and State Transition Management
 
-It defines the practical development workflow supporting
-the technical implementation of the architecture.
+It further defines the separation between
+domain logic and technical infrastructure.
+
+---
+
+# Future Considerations
+
+Concrete persistence implementations are considered separately.
+
+Possible future decisions:
+
+* database selection
+* serialization format
+* repository implementations
+* synchronization storage
+
+These decisions are made only when concrete
+technical requirements exist.
 
 ---
 
 # Status
 
-This decision defines the fundamental workflow for the
-continued technical development of NC-PoRe.
+This decision defines the fundamental boundary
+between Core and Persistence within NC-PoRe.
+
+The concrete technical storage implementation
+will be defined through later implementations
+and decisions.
