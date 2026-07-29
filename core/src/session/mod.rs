@@ -13,6 +13,7 @@ pub enum ProductionStatus {
 pub enum ProductionSessionError {
     ParticipantAlreadyExists,
     MissingOwner,
+    InvalidStateTransition,
 }
 
 #[derive(Debug, Clone)]
@@ -30,9 +31,14 @@ impl ProductionSession {
             participations: Vec::new(),
         }
     }
+    pub fn start(&mut self) -> Result<(), ProductionSessionError> {
+        if self.status == ProductionStatus::Completed {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
 
-    pub fn start(&mut self) {
         self.status = ProductionStatus::Active;
+
+        Ok(())
     }
 
     pub fn status(&self) -> ProductionStatus {
@@ -128,9 +134,25 @@ mod tests {
     fn starting_session_changes_status_to_active() {
         let mut session = create_test_session();
 
-        session.start();
+        session.start().unwrap();
 
         assert_eq!(session.status, ProductionStatus::Active);
+    }
+
+    #[test]
+    fn completed_session_cannot_be_started_again() {
+        let mut session = create_test_session();
+
+        session
+            .add_participation(create_participation("owner-1", ParticipantRole::Owner))
+            .unwrap();
+
+        session.complete().unwrap();
+
+        assert_eq!(
+            session.start(),
+            Err(ProductionSessionError::InvalidStateTransition)
+        );
     }
 
     #[test]
