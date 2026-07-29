@@ -447,6 +447,10 @@ NC-PoRe verfügt über:
 * definiertes Domain Lifecycle Modell
 * definierten Entwicklungsworkflow
 * klare technische Architekturprinzipien
+* erste Core-Implementierung vorhanden
+* ProductionSession Lifecycle implementiert
+* Recording Lifecycle implementiert
+* Core-Modulstruktur technisch umgesetzt
 
 Die Architekturphase wurde bewusst abgeschlossen.
 
@@ -472,7 +476,9 @@ Die nächsten Arbeiten konzentrieren sich auf:
 * konkrete Technologieentscheidungen
 * erste technische Prototypen
 * Persistenz- und Speicherstrategie
-* technische Umsetzung der Core-Struktur
+* Erweiterung der Core-Domänenmodelle
+* Verknüpfung weiterer Produktionsobjekte
+* Vorbereitung der Persistenzintegration
 
 Die Entwicklung produktiver Funktionen beginnt schrittweise
 auf Basis der definierten Architektur.
@@ -857,6 +863,10 @@ NC-PoRe has:
 * a defined domain lifecycle model
 * a defined development workflow
 * clear technical architecture principles
+* first Core implementation available
+* ProductionSession lifecycle implemented
+* Recording lifecycle implemented
+* Core module structure technically implemented
 
 The architecture phase has been deliberately completed.
 
@@ -881,6 +891,9 @@ The next activities focus on:
 * development environment
 * concrete technology decisions
 * first technical prototypes
+* extension of Core domain models
+* integration of additional production objects
+* preparation for persistence integration
 
 The development of production features starts step by step
 based on the defined architecture.
