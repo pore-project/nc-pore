@@ -59,6 +59,10 @@ impl ProductionSession {
     ///
     /// See ADR-031.
     pub fn complete(&mut self) -> Result<(), ProductionSessionError> {
+        if self.status != ProductionStatus::Active {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+
         if !self.has_owner() {
             return Err(ProductionSessionError::MissingOwner);
         }
@@ -67,7 +71,6 @@ impl ProductionSession {
 
         Ok(())
     }
-
     /// Adds a participation to the production session.
     ///
     /// A participant can only participate once within the same session.
@@ -123,6 +126,8 @@ mod tests {
         }
     }
 
+    // TEST-01
+    // Verify: A new production session starts in Created state.
     #[test]
     fn new_session_starts_as_created() {
         let session = create_test_session();
@@ -130,18 +135,27 @@ mod tests {
         assert_eq!(session.status(), ProductionStatus::Created);
     }
 
+    // TEST-02
+    // Verify: Starting a created session changes the state to Active.
     #[test]
     fn starting_session_changes_status_to_active() {
         let mut session = create_test_session();
 
         session.start().unwrap();
 
-        assert_eq!(session.status, ProductionStatus::Active);
+        assert_eq!(session.status(), ProductionStatus::Active);
     }
 
+    // TEST-03
+    // Verify: A completed session cannot transition back into Active state.
+    //
+    // Lifecycle:
+    // Created -> Active -> Completed
     #[test]
     fn completed_session_cannot_be_started_again() {
         let mut session = create_test_session();
+
+        session.start().unwrap();
 
         session
             .add_participation(create_participation("owner-1", ParticipantRole::Owner))
@@ -155,9 +169,13 @@ mod tests {
         );
     }
 
+    // TEST-04
+    // Verify: An active session cannot be completed without an owner.
     #[test]
-    fn completing_session_without_owner_fails() {
+    fn completing_active_session_without_owner_fails() {
         let mut session = create_test_session();
+
+        session.start().unwrap();
 
         assert_eq!(
             session.complete(),
@@ -165,18 +183,24 @@ mod tests {
         );
     }
 
+    // TEST-05
+    // Verify: An active session with an owner can be completed.
     #[test]
     fn completing_session_with_owner_changes_status_to_completed() {
         let mut session = create_test_session();
+
+        session.start().unwrap();
 
         session
             .add_participation(create_participation("owner-1", ParticipantRole::Owner))
             .unwrap();
 
         assert!(session.complete().is_ok());
-        assert_eq!(session.status, ProductionStatus::Completed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
     }
 
+    // TEST-06
+    // Verify: A participation can be added to a production session.
     #[test]
     fn participation_can_be_added_to_session() {
         let mut session = create_test_session();
@@ -193,6 +217,8 @@ mod tests {
         assert_eq!(session.participant_count(), 1);
     }
 
+    // TEST-07
+    // Verify: A participant cannot be added twice to the same session.
     #[test]
     fn duplicate_participant_cannot_be_added_to_session() {
         let mut session = create_test_session();
@@ -213,6 +239,8 @@ mod tests {
         );
     }
 
+    // TEST-08
+    // Verify: Owner responsibility can be detected inside a session.
     #[test]
     fn session_can_check_owner() {
         let mut session = create_test_session();
@@ -224,5 +252,27 @@ mod tests {
             .unwrap();
 
         assert!(session.has_owner());
+    }
+
+    // TEST-09
+    // Verify: The public participation accessor exposes stored participations.
+    //
+    // This protects the read-only access boundary.
+    #[test]
+    fn session_exposes_participations_read_only() {
+        let mut session = create_test_session();
+
+        session
+            .add_participation(create_participation(
+                "participant-1",
+                ParticipantRole::Participant,
+            ))
+            .unwrap();
+
+        assert_eq!(session.participations().len(), 1);
+        assert_eq!(
+            session.participations()[0].participant_id,
+            ParticipantId::new("participant-1")
+        );
     }
 }
