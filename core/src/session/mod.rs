@@ -37,6 +37,7 @@ impl ProductionSession {
             activities: vec![ActivityEvent::new(ActivityType::SessionCreated)],
         }
     }
+
     pub fn start(&mut self) -> Result<(), ProductionSessionError> {
         if self.status != ProductionStatus::Created {
             return Err(ProductionSessionError::InvalidStateTransition);
@@ -49,6 +50,7 @@ impl ProductionSession {
 
         Ok(())
     }
+
     pub fn status(&self) -> ProductionStatus {
         self.status
     }
@@ -90,6 +92,7 @@ impl ProductionSession {
 
         Ok(())
     }
+
     /// Adds a participation to the production session.
     ///
     /// A participant can only participate once within the same session.
@@ -106,6 +109,16 @@ impl ProductionSession {
         self.participations.push(participation);
 
         Ok(())
+    }
+
+    /// Adds a recording to the production session.
+    ///
+    /// The production session owns the relationship between
+    /// production and recordings.
+    ///
+    /// See ADR-038.
+    pub fn add_recording(&mut self, recording: Recording) {
+        self.recordings.push(recording);
     }
 
     /// Checks whether a participant is already part of this production session.
@@ -166,7 +179,7 @@ mod tests {
     }
 
     // TEST-03
-    // Verify: A completed session cannot transition back into Active state.
+    // Verify: A completed session cannot be started again.
     //
     // Lifecycle:
     // Created -> Active -> Completed
@@ -294,7 +307,22 @@ mod tests {
             ParticipantId::new("participant-1")
         );
     }
+
     // TEST-10
+    // Verify: A recording can be added to a production session.
+    //
+    // This protects the relationship between production sessions
+    // and recordings.
+    #[test]
+    fn recording_can_be_added_to_session() {
+        let mut session = create_test_session();
+
+        session.add_recording(Recording::new());
+
+        assert_eq!(session.recordings().len(), 1);
+    }
+
+    // TEST-11
     // Verify: Lifecycle transitions create activity history entries.
     //
     // Lifecycle:
