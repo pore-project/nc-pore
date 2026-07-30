@@ -323,11 +323,15 @@ NC-PoRe vermeidet bewusst:
 
 Status:
 
-## Nicht begonnen
+## Technische Umsetzung gestartet
 
 Die Architekturgrundlage ist abgeschlossen.
 
-Der nächste Schritt ist die technische Umsetzungsvorbereitung.
+Die ersten fachlichen Core-Modelle wurden implementiert
+und durch automatisierte Tests validiert.
+
+Die nächsten Schritte konzentrieren sich auf die Erweiterung
+der Domänenmodelle, Persistenz und technische Integration.
 
 ---
 
@@ -423,8 +427,12 @@ Technical documentation is not marketing material.
 
 Status:
 
-## Not started
+## Technical Implementation Started
 
 The architecture foundation is complete.
 
-The next step is technical implementation preparation.
+The first Core domain models have been implemented
+and validated through automated tests.
+
+The next steps focus on extending domain models,
+persistence and technical integration.
