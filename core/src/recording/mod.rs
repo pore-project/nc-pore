@@ -44,10 +44,21 @@ impl Recording {
     }
 }
 
+impl Default for Recording {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // TEST-11
+    // Verify: A new recording starts in Prepared state.
+    //
+    // Recording lifecycle:
+    // Prepared -> Recording -> Completed
     #[test]
     fn new_recording_starts_as_prepared() {
         let recording = Recording::new();
@@ -55,6 +66,10 @@ mod tests {
         assert_eq!(recording.status(), RecordingStatus::Prepared);
     }
 
+    // TEST-12
+    // Verify: A prepared recording can transition into Recording state.
+    //
+    // Protects the recording lifecycle model.
     #[test]
     fn recording_can_transition_to_recording() {
         let mut recording = Recording::new();
@@ -64,6 +79,11 @@ mod tests {
         assert_eq!(recording.status(), RecordingStatus::Recording);
     }
 
+    // TEST-13
+    // Verify: A recording can transition from Recording to Completed state.
+    //
+    // Lifecycle:
+    // Prepared -> Recording -> Completed
     #[test]
     fn recording_can_be_completed() {
         let mut recording = Recording::new();
@@ -72,5 +92,16 @@ mod tests {
         recording.complete();
 
         assert_eq!(recording.status(), RecordingStatus::Completed);
+    }
+
+    // TEST-14
+    // Verify: Default construction creates the same initial state as new().
+    //
+    // Protects the default initialization contract.
+    #[test]
+    fn default_recording_starts_as_prepared() {
+        let recording = Recording::default();
+
+        assert_eq!(recording.status(), RecordingStatus::Prepared);
     }
 }
