@@ -4,15 +4,12 @@ mod metadata;
 mod session;
 mod storage;
 
-use session::{RecordingSession, SessionStatus};
+use session::RecordingSession;
 
 fn main() {
     println!("NC-PoRe Recorder starting...");
 
-    let session = RecordingSession {
-        id: String::from("test-session-001"),
-        status: SessionStatus::Created,
-    };
+    let session = RecordingSession::new("test-session-001");
 
     println!("{:?}", session);
 }
