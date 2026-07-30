@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-* Version: 1.3
-* Date: 2026-07-29
+* Version: 1.4
+* Date: 2026-07-30
 
 ---
 
@@ -11,481 +11,191 @@
 
 # Project Phase
 
-Current phase:
+## Technical Implementation Started
 
-## Architecture Foundation Completed — Implementation Architecture Defined
+NC-PoRe hat die Architekturphase abgeschlossen und befindet sich in der technischen Umsetzung.
 
-NC-PoRe hat die grundlegende Konzeptions- und Architekturphase abgeschlossen.
+Die Architekturgrundlagen, Implementierungsprinzipien und Entwicklungsprozesse sind dokumentiert.
 
-Die technische Implementierungsarchitektur wurde definiert.
-
-Der Fokus lag auf:
-
-* Architekturentscheidungen
-* Anforderungen
-* Datenmodell und Session-Konzept
-* Projektstruktur
-* FOSS-Grundlagen
-* Verteilung und Zusammenarbeit
-* Sicherheits- und Rollenmodellen
-* technischer Struktur der Implementierung
-
-Die grundlegenden Architekturentscheidungen und Implementierungsprinzipien sind dokumentiert.
-
-Die nächste Phase ist die technische Umsetzung.
-
----
-
-# Project Vision
-
-NC-PoRe ist eine selbsthostbare Open-Source-Plattform
-für professionelle Podcast-Aufnahmen und Produktion.
-
-Zentrales Prinzip:
-
-> Meine Daten gehören mir.
-
-Audioaufnahmen werden lokal erzeugt und erst anschließend
-zum eigenen Server übertragen.
-
-NC-PoRe ermöglicht verteilte Zusammenarbeit, ohne die Kontrolle
-über eigene Daten und Produktionsabläufe abzugeben.
+Die ersten fachlichen Core-Modelle wurden implementiert und durch Tests abgesichert.
 
 ---
 
 # Completed
 
-## Project Setup
+## Architecture Foundation
 
-Completed:
+Abgeschlossen:
 
-* GitHub Repository erstellt
-* AGPL-3.0 Lizenz gewählt
-* Dokumentationsstruktur eingerichtet
-* ADR-Struktur etabliert
+- Projektvision
+- Anforderungen
+- Architekturmodell
+- ADR-Struktur
+- 36 dokumentierte Architekturentscheidungen
+- Session-Modell
+- Recording-Strategie
+- Synchronisationsstrategie
+- Rollen- und Identitätsmodell
+- Activity History Konzept
+- Implementierungsarchitektur
+- Domain Lifecycle Modell
+- Entwicklungsworkflow
 
 ---
 
-## Vision and Requirements
+## Documentation Structure
 
-Completed:
+Die Dokumentation wurde in kleinere thematische Bereiche aufgeteilt.
 
-* Projektvision dokumentiert
-* funktionale Anforderungen definiert
-* zentrale Benutzergruppen und Nutzungsszenarien beschrieben
+Aktuelle Struktur:
+
+```
+docs/
+
+├── architecture/
+│   ├── overview.md
+│   ├── principles.md
+│   ├── domain-model.md
+│   ├── domain-rules.md
+│   ├── components.md
+│   └── adr-index.md
+│
+├── implementation/
+│   ├── plan.md
+│   ├── development.md
+│   ├── setup.md
+│   ├── technical-decisions.md
+│   └── technology-evaluation.md
+│
+├── project/
+│   ├── vision.md
+│   ├── requirements.md
+│   ├── roadmap.md
+│   └── mvp.md
+│
+├── milestones/
+│
+└── reference/
+```
+
+Die frühere große Statusdatei wurde in kleinere Dokumente aufgeteilt.
 
 ---
 
-# Architecture Decisions
-
-Die Architekturgrundlagen wurden durch folgende ADRs definiert:
-
-## Early Architecture Foundation
-
-### ADR-001
-
-Local Recording
-
-Grundentscheidung für lokale Aufnahme.
-
-### ADR-002
-
-Audio Format and Track Concept
-
-Getrennte hochwertige Monospuren als Produktionsbasis.
-
-### ADR-003
-
-Local Chunk Storage
-
-Chunk-basierte lokale Speicherung.
-
-### ADR-004
-
-Upload After Recording
-
-Upload erst nach Abschluss der Aufnahme.
-
-### ADR-005
-
-Consent and Recording Transparency
-
-Transparente Aufnahme und dokumentierte Zustimmung.
-
-### ADR-006
-
-Role-Based Access Control
-
-Rollenmodell für unterschiedliche Nutzergruppen.
-
-### ADR-007
-
-Open Formats and Interoperability
-
-Offene Formate und freie Werkzeugwahl.
-
-### ADR-008
-
-Client Architecture
-
-Modulare Recorder-Architektur mit professionellen
-und vereinfachten Clients.
-
-### ADR-009
-
-Track Synchronisation
-
-Definition der Synchronisation zwischen getrennten Audiospuren.
-
-### ADR-010
-
-Core Data Model
-
-Definition des zentralen Datenmodells.
-
-### ADR-011
-
-Security Model
-
-Definition der grundlegenden Sicherheitsarchitektur.
-
-### ADR-012
-
-Export Architecture
-
-Definition der Exportstruktur und Exportverantwortlichkeiten.
-
-### ADR-013
-
-Technology Stack
-
-Grundsätze zur Auswahl des Technologie-Stacks.
-
-### ADR-014
-
-Development Environment and Toolchain
-
-Definition der Entwicklungsumgebung und Werkzeugkette.
-
-### ADR-015
-
-Initial Architecture of the NC-PoRe Recorder Client
-
-Definition der grundlegenden Architektur des Recorder Clients.
-
-### ADR-016
-
-Audio Layer Technology Selection
-
-Auswahlprinzipien für die Audio-Schicht.
-
-### ADR-017
-
-Audio Backend Library Selection
-
-Auswahlprinzipien für Audio-Backend-Bibliotheken.
-
-### ADR-018
-
-Recorder Data Flow and Processing Pipeline
-
-Definition des Datenflusses und der Verarbeitungspipeline
-des Recorders.
-
-### ADR-019
-
-Recording Session Data Model
-
-Definition des Recording Session Datenmodells.
-
-### ADR-020
-
-Metadata Data Model
-
-Definition des Metadatenmodells.
-
-### ADR-021
-
-Internal Data Structures and Serialization Format
-
-Definition interner Datenstrukturen und
-Serialisierungsformate.
+# Current Implementation Status
+
+## Core
+
+Implementiert:
+
+- Core Modulstruktur
+- ProductionSession Modell
+- ProductionSession Lifecycle
+- Recording Modell
+- Recording Lifecycle
+- Participant Modell
+- Participation Modell
+- Activity History Grundstruktur
 
 ---
 
-# Extended Architecture Foundation
+## Tests
 
-### ADR-022
+Aktueller Stand:
 
-Modular Architecture and Provider Design
+```
+core tests: 17 passed
+recorder tests: 5 passed
+```
 
-Definition einer modularen und erweiterbaren Systemstruktur
-sowie Provider-Grenzen.
+Implementierte Tests prüfen unter anderem:
 
-### ADR-023
+- Session-Erstellung
+- Lifecycle-Übergänge
+- Rollenprüfung
+- Participant-Verwaltung
+- Recording-Verknüpfung
+- Activity History
+- Recording Lifecycle
 
-Internationalization and Localization Strategy
+---
 
-Strategie für Mehrsprachigkeit und Lokalisierung.
+## Recorder
 
-### ADR-024
+Grundstruktur vorhanden:
 
-Client Architecture and Platform Strategy
+- Session Modul
+- Statusmodell
+- Lifecycle-Methoden
 
-Strategie für plattformübergreifende Clients.
-
-### ADR-025
-
-Product Identity and Naming
-
-Definition der Produktidentität und Namensstrategie.
-
-### ADR-026
-
-Session Data and Storage Architecture
-
-Definition von Production Sessions und Storage-Strukturen.
-
-### ADR-027
-
-Core Architecture and Module Boundaries
-
-Definition der Core-Verantwortung und Modulgrenzen.
-
-### ADR-028
-
-API Design Principles
-
-Grundsätze für Kommunikation zwischen Systemkomponenten.
-
-### ADR-029
-
-Distributed Recording Architecture
-
-Definition des Local Recording First Prinzips.
-
-### ADR-030
-
-Synchronization Strategy for Distributed Recordings
-
-Trennung von Control Synchronization und Media Synchronization.
-
-### ADR-031
-
-Identity, Authentication and User Roles
-
-Definition von Identität, Authentifizierung und Rollenmodell.
-
-### ADR-032
-
-Auditability and Activity History
-
-Definition von nachvollziehbarer Produktionshistorie.
-
-### ADR-033
-
-Core Architecture
-
-Definition des Core als fachliche Autorität
-und Festlegung der Verantwortlichkeiten.
-
-### ADR-034
-
-Implementation Architecture
-
-Definition der grundlegenden Prinzipien
-für die technische Umsetzung.
-
-### ADR-035
-
-Domain Lifecycle and State Transition Management
-
-Definition des Musters für fachliche Lebenszyklen
-und kontrollierte Zustandsübergänge innerhalb des Core.
-
-### ADR-036
-
-Development Workflow and Source of Truth
-
-Definition des nachvollziehbaren Entwicklungsprozesses
-und der Repository-Struktur als technische Quelle der Wahrheit.
+Aktuell noch ohne vollständige Audioaufnahme.
 
 ---
 
 # Current Architecture Principles
 
-NC-PoRe folgt diesen Grundsätzen:
+NC-PoRe folgt weiterhin diesen Prinzipien:
 
-* lokale Aufnahme
-* keine Audioabhängigkeit vom Netzwerk
-* offene Formate
-* getrennte Audiospuren
-* transparente Zustimmung
-* rollenbasierte Rechte
-* selbsthostbare Infrastruktur
-* Erweiterbarkeit
-* Production Session als zentrale fachliche Einheit
-* Core als Autorität für Geschäftslogik
-* API- und Event-basierte Kommunikation
-* Local Recording First
-* Trennung von Control Synchronization und Media Synchronization
-* Identität getrennt von Rollen und Berechtigungen
-* Activity History als Produktionsgedächtnis
-* Zusammenarbeit steht im Mittelpunkt
-* Domain Authority liegt ausschließlich beim Core
-* Implementierungsarchitektur folgt der fachlichen Architektur
-* technische Details bleiben von der Domäne getrennt
-* fachliche Lebenszyklen werden explizit modelliert
-* Entwicklungsprozesse folgen einem zustandsorientierten Workflow
-* Repository-Inhalt ist die technische Quelle der Wahrheit
+- lokale Aufnahme
+- keine Audioabhängigkeit vom Netzwerk
+- offene Formate
+- getrennte Audiospuren
+- transparente Zustimmung
+- rollenbasierte Rechte
+- selbsthostbare Infrastruktur
+- Production Session als zentrale fachliche Einheit
+- Core als Autorität für Geschäftslogik
+- API- und Event-basierte Kommunikation
+- Trennung von Control Synchronization und Media Synchronization
+- Activity History als Produktionsgedächtnis
+- technische Details bleiben von der Domäne getrennt
+- fachliche Lebenszyklen werden explizit modelliert
+- Repository-Inhalt ist die technische Quelle der Wahrheit
 
 ---
 
-# Current Architecture Model
-
-NC-PoRe basiert auf folgenden zentralen Konzepten:
-
-```
-Production Session
-
-        |
-        |
-        +-- Participants
-        |
-        +-- Roles
-        |
-        +-- Recordings
-        |
-        +-- Assets
-        |
-        +-- Synchronization Metadata
-        |
-        +-- Activity History
-```
-
-Die Production Session bildet die fachliche Klammer
-für eine gemeinsame Produktion.
-
----
-
-# Technical Direction
-
-Aktuelle technische Richtung:
-
-## Clients
-
-* plattformspezifische Clients
-* lokale Aufnahme
-* lokale Verarbeitung
-* Synchronisation mit zentraler Umgebung
+# Current Technical Direction
 
 ## Core
 
-* zentrale Geschäftslogik
-* Verwaltung fachlicher Zustände
-* Berechtigungsprüfung
-* Session-Management
+Verantwortlich für:
+
+- Geschäftslogik
+- fachliche Zustände
+- Validierung
+- Domänenregeln
+
+## Clients
+
+Verantwortlich für:
+
+- Benutzerinteraktion
+- lokale Aufnahme
+- lokale Verarbeitung
 
 ## Storage
 
-* Nextcloud-basierte Speicherung
-* selbsthostbare Infrastruktur
-* offene Datenhaltung
+Geplant:
 
-## Communication
-
-* API-basierte Kommunikation
-* Event-orientierte Architektur
-* getrennte Steuerungs- und Mediendaten
+- selbsthostbare Speicherung
+- offene Datenhaltung
+- Synchronisationsintegration
 
 ---
 
 # Next Steps
 
-## Technical Implementation
+Geplante nächste Arbeiten:
 
-Geplante nächste Schritte:
-
-* technische Projektgrundlage
-* Repository-Struktur definieren
-* Modulstruktur umsetzen
-* Technologieentscheidungen treffen
-* Entwicklungsumgebung vorbereiten
-* erstes vertikales MVP entwickeln
-* technische Prototypen erstellen
-* Persistenz- und Speicherstrategie
-* technische Umsetzung der Core-Struktur
+- Erweiterung der Core-Domänenmodelle
+- Persistenzstrategie definieren
+- Storage-Anbindung vorbereiten
+- weitere Produktionsobjekte modellieren
+- erste vertikale technische Abläufe implementieren
 
 ---
 
-## Future Architecture Decisions
-
-Mögliche nächste ADRs:
-
-* Database and Persistence Strategy
-* Client-Core Communication
-* Deployment Architecture
-* Build and Release Strategy
-* Testing Strategy
-
----
-
-# Current Status Summary
-
-NC-PoRe verfügt über:
-
-* definierte Vision
-* dokumentierte Anforderungen
-* grundlegende Architektur
-* 36 dokumentierte Architekturentscheidungen
-* definiertes Session-Modell
-* verteilte Recording-Strategie
-* Synchronisationsstrategie
-* Identitäts- und Rollenmodell
-* nachvollziehbare Produktionshistorie
-* definierte Implementierungsarchitektur
-* definiertes Domain Lifecycle Modell
-* definierten Entwicklungsworkflow
-* klare technische Architekturprinzipien
-* erste Core-Implementierung vorhanden
-* ProductionSession Lifecycle implementiert
-* Recording Lifecycle implementiert
-* Core-Modulstruktur technisch umgesetzt
-
-Die Architekturphase wurde bewusst abgeschlossen.
-
-Die Implementierungsphase beginnt auf Basis der definierten Architektur.
-
-Der nächste Schritt ist die technische Umsetzung.
-
----
-
-# Current Transition
-
-NC-PoRe befindet sich am Übergang von der Architekturphase
-zur technischen Umsetzung.
-
-Die Architektur beschreibt nun sowohl die fachlichen Grundlagen
-als auch die Prinzipien für deren technische Realisierung.
-
-Die nächsten Arbeiten konzentrieren sich auf:
-
-* technische Projektgrundlage
-* Repository- und Modulstruktur
-* Entwicklungsumgebung
-* konkrete Technologieentscheidungen
-* erste technische Prototypen
-* Persistenz- und Speicherstrategie
-* Erweiterung der Core-Domänenmodelle
-* Verknüpfung weiterer Produktionsobjekte
-* Vorbereitung der Persistenzintegration
-
-Die Entwicklung produktiver Funktionen beginnt schrittweise
-auf Basis der definierten Architektur.
-
----
-
-# Milestone
+# Milestones
 
 ## Architecture Foundation Complete
 
@@ -493,14 +203,39 @@ Date:
 
 2026-07-24
 
-NC-PoRe verfügt nun über eine belastbare Grundlage
-für die nächste Entwicklungsphase.
+Die Architekturgrundlage wurde abgeschlossen.
 
-Die Architektur beschreibt nicht nur Softwarekomponenten,
-sondern die Zusammenarbeit von Menschen, Geräten
-und Produktionsprozessen.
+Die Architektur, ADRs und Implementierungsprinzipien bilden die Grundlage
+für die technische Umsetzung.
 
-Die technische Umsetzung beginnt auf Basis dieser Grundlage.
+Details:
+
+- `docs/architecture/`
+- `docs/architecture/adr-index.md`
+
+---
+
+## First Core Implementation
+
+Date:
+
+2026-07-30
+
+Die erste technische Umsetzung der Core-Domänenmodelle wurde abgeschlossen.
+
+Implementiert:
+
+- ProductionSession Lifecycle
+- Recording Lifecycle
+- Participation Modell
+- Activity History Integration
+- erste Recorder Session-Struktur
+
+Details:
+
+- `docs/milestones/2026-07-30-first-core-implementation.md`
+
+---
 
 # English Version ([Deutsche Version oben](#deutsch))
 
@@ -508,399 +243,172 @@ Die technische Umsetzung beginnt auf Basis dieser Grundlage.
 
 # Project Phase
 
-Current phase:
+## Technical Implementation Started
 
-## Architecture Foundation Completed — Implementation Architecture Defined
+NC-PoRe has completed the architecture phase and entered technical implementation.
 
-NC-PoRe has completed the fundamental concept
-and architecture definition phase.
+The architectural foundation, implementation principles and development workflow are documented.
 
-The implementation architecture has been defined.
-
-The focus was on:
-
-* architecture decisions
-* requirements
-* data model and session concept
-* project structure
-* FOSS foundations
-* distribution and collaboration
-* security and role models
-* technical implementation structure
-
-The fundamental architecture decisions and implementation principles
-are documented.
-
-The next phase is technical implementation.
-
----
-
-# Project Vision
-
-NC-PoRe is a self-hostable open-source platform
-for professional podcast recording and production.
-
-Central principle:
-
-> My data belongs to me.
-
-Audio recordings are created locally and transferred
-to the user's own server afterwards.
-
-NC-PoRe enables distributed collaboration without giving up
-control over personal data and production workflows.
+The first domain Core models have been implemented and verified through tests.
 
 ---
 
 # Completed
 
-## Project Setup
+## Architecture Foundation
 
 Completed:
 
-* GitHub Repository created
-* AGPL-3.0 license selected
-* documentation structure established
-* ADR structure established
+- project vision
+- requirements
+- architecture model
+- ADR structure
+- 36 documented architecture decisions
+- session model
+- recording strategy
+- synchronization strategy
+- identity and role model
+- activity history concept
+- implementation architecture
+- domain lifecycle model
+- development workflow
 
 ---
 
-## Vision and Requirements
+## Documentation Structure
 
-Completed:
+The documentation was reorganized into smaller thematic documents.
 
-* project vision documented
-* functional requirements defined
-* user groups and usage scenarios described
+Current structure:
 
----
+```
+docs/
 
-# Architecture Decisions
+├── architecture/
+├── implementation/
+├── project/
+├── milestones/
+└── reference/
+```
 
-The architectural foundation was defined through the following ADRs:
-
-## Early Architecture Foundation
-
-### ADR-001
-
-Local Recording
-
-Fundamental decision for local recording.
-
-### ADR-002
-
-Audio Format and Track Concept
-
-High-quality separate mono tracks as production basis.
-
-### ADR-003
-
-Local Chunk Storage
-
-Chunk-based local storage.
-
-### ADR-004
-
-Upload After Recording
-
-Upload only after recording completion.
-
-### ADR-005
-
-Consent and Recording Transparency
-
-Transparent recording and documented consent.
-
-### ADR-006
-
-Role-Based Access Control
-
-Role model for different user groups.
-
-### ADR-007
-
-Open Formats and Interoperability
-
-Open formats and free tool choice.
-
-### ADR-008
-
-Client Architecture
-
-Modular recorder architecture with professional
-and simplified clients.
+The former large status document was split into smaller documents.
 
 ---
 
-# Extended Architecture Foundation
+# Current Implementation Status
 
-### ADR-022
+## Core
 
-Modular Architecture
+Implemented:
 
-Definition of a modular and extensible system structure.
+- Core module structure
+- ProductionSession model
+- ProductionSession lifecycle
+- Recording model
+- Recording lifecycle
+- Participant model
+- Participation model
+- Activity History foundation
 
-### ADR-023
+---
 
-Internationalization and Localization Strategy
+## Tests
 
-Strategy for multilingual support and localization.
+Current status:
 
-### ADR-024
+```
+core tests: 17 passed
+recorder tests: 5 passed
+```
 
-Client Architecture and Platform Strategy
+Implemented tests verify:
 
-Strategy for cross-platform clients.
+- session creation
+- lifecycle transitions
+- role validation
+- participant management
+- recording relationships
+- activity history
+- recording lifecycle
 
-### ADR-025
+---
 
-Product Identity and Naming
+## Recorder
 
-Definition of product identity and naming strategy.
+Basic structure available:
 
-### ADR-026
+- session module
+- status model
+- lifecycle methods
 
-Session Data and Storage Architecture
-
-Definition of Production Sessions and storage structures.
-
-### ADR-027
-
-Core Architecture and Module Boundaries
-
-Definition of Core responsibilities and module boundaries.
-
-### ADR-028
-
-API Design Principles
-
-Principles for communication between system components.
-
-### ADR-029
-
-Distributed Recording Architecture
-
-Definition of the Local Recording First principle.
-
-### ADR-030
-
-Synchronization Strategy for Distributed Recordings
-
-Separation of Control Synchronization and Media Synchronization.
-
-### ADR-031
-
-Identity, Authentication and User Roles
-
-Definition of identity, authentication and role model.
-
-### ADR-032
-
-Auditability and Activity History
-
-Definition of traceable production history.
-
-### ADR-033
-
-Core Architecture
-
-Definition of the Core as domain authority
-and responsibility boundaries.
-
-### ADR-034
-
-Implementation Architecture
-
-Definition of fundamental principles
-for technical implementation.
-
-### ADR-035
-
-Domain Lifecycle and State Transition Management
-
-Definition of domain lifecycle handling
-and state transition responsibilities.
-
-### ADR-036
-
-Development Workflow and Source of Truth
-
-Definition of the development workflow,
-verification process and repository source of truth.
+Currently without complete audio recording functionality.
 
 ---
 
 # Current Architecture Principles
 
-NC-PoRe follows these principles:
+NC-PoRe continues to follow these principles:
 
-* local recording
-* no dependency of audio production on network availability
-* open formats
-* separate audio tracks
-* transparent consent
-* role-based permissions
-* self-hostable infrastructure
-* extensibility
-* Production Session as central domain entity
-* Core as authority for business logic
-* API- and event-based communication
-* Local Recording First
-* separation of Control Synchronization and Media Synchronization
-* identity separated from roles and permissions
-* Activity History as production memory
-* collaboration as a central principle
-* Domain Authority exclusively located in the Core
-* implementation architecture follows domain architecture
-* technical details remain separated from the domain
-* domain lifecycles are explicitly modeled
-* development follows a state-oriented workflow
-* repository content is the technical source of truth
+- local recording
+- no dependency of audio production on network availability
+- open formats
+- separate audio tracks
+- transparent consent
+- role-based permissions
+- self-hostable infrastructure
+- Production Session as central domain entity
+- Core as authority for business logic
+- API- and event-based communication
+- separation of Control Synchronization and Media Synchronization
+- Activity History as production memory
+- technical details remain separated from the domain
+- domain lifecycles are explicitly modeled
+- repository content is the technical source of truth
 
 ---
 
-# Current Architecture Model
-
-NC-PoRe is based on the following central concepts:
-
-```text
-Production Session
-
-        |
-        |
-        +-- Participants
-        |
-        +-- Roles
-        |
-        +-- Recordings
-        |
-        +-- Assets
-        |
-        +-- Synchronization Metadata
-        |
-        +-- Activity History
-```
-
-The Production Session forms the domain framework
-for a shared production.
-
----
-
-# Technical Direction
-
-Current technical direction:
-
-## Clients
-
-* platform-specific clients
-* local recording
-* local processing
-* synchronization with central environment
+# Current Technical Direction
 
 ## Core
 
-* central business logic
-* management of domain states
-* permission validation
-* session management
+Responsible for:
+
+- business logic
+- domain states
+- validation
+- domain rules
+
+## Clients
+
+Responsible for:
+
+- user interaction
+- local recording
+- local processing
 
 ## Storage
 
-* Nextcloud-based storage
-* self-hostable infrastructure
-* open data handling
+Planned:
 
-## Communication
-
-* API-based communication
-* event-oriented architecture
-* separated control and media data
+- self-hostable storage
+- open data handling
+- synchronization integration
 
 ---
 
 # Next Steps
 
-## Technical Implementation
+Planned next activities:
 
-Planned next steps:
-
-* technical project foundation
-* definition of repository structure
-* implementation of module structure
-* technology decisions
-* preparation of development environment
-* first vertical MVP
-* technical prototypes
+- extend Core domain models
+- define persistence strategy
+- prepare storage integration
+- model additional production objects
+- implement first vertical technical workflows
 
 ---
 
-## Future Architecture Decisions
-
-Possible next ADRs:
-
-* Database and Persistence Strategy
-* Client-Core Communication
-* Deployment Architecture
-* Build and Release Strategy
-* Testing Strategy
-
----
-
-# Current Status Summary
-
-NC-PoRe has:
-
-* a defined vision
-* documented requirements
-* a fundamental architecture
-* 36 documented architecture decisions
-* a defined session model
-* a distributed recording strategy
-* a synchronization strategy
-* an identity and role model
-* a traceable production history
-* a defined implementation architecture
-* a defined domain lifecycle model
-* a defined development workflow
-* clear technical architecture principles
-* first Core implementation available
-* ProductionSession lifecycle implemented
-* Recording lifecycle implemented
-* Core module structure technically implemented
-
-The architecture phase has been deliberately completed.
-
-The implementation phase starts based on the defined architecture.
-
-The next step is technical implementation.
-
----
-
-# Current Transition
-
-NC-PoRe is transitioning from architecture definition
-to technical implementation.
-
-The architecture now describes both domain foundations
-and principles for their technical realization.
-
-The next activities focus on:
-
-* technical project foundation
-* repository and module structure
-* development environment
-* concrete technology decisions
-* first technical prototypes
-* extension of Core domain models
-* integration of additional production objects
-* preparation for persistence integration
-
-The development of production features starts step by step
-based on the defined architecture.
-
----
-
-# Milestone
+# Milestones
 
 ## Architecture Foundation Complete
 
@@ -908,10 +416,40 @@ Date:
 
 2026-07-24
 
-NC-PoRe now has a solid foundation
-for the next development phase.
+The architecture foundation has been completed.
 
-The architecture describes not only software components,
-but also collaboration between people, devices
-and production processes.
+The architecture, ADRs and implementation principles
+provide the foundation for technical implementation.
 
+Details:
+
+- `docs/architecture/`
+- `docs/architecture/adr-index.md`
+
+---
+
+## First Core Implementation
+
+Date:
+
+2026-07-30
+
+The first technical implementation of the Core domain models
+has been completed and validated through automated tests.
+
+Implemented:
+
+- ProductionSession lifecycle
+- Recording lifecycle
+- Participation model
+- Activity History integration
+- initial Recorder session structure
+
+Validation:
+
+- Core tests: 17 passed
+- Recorder tests: 5 passed
+
+Details:
+
+- `docs/milestones/2026-07-30-first-core-implementation.md`
