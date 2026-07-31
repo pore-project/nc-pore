@@ -42,6 +42,39 @@ NC-PoRe folgt diesen Grundprinzipien:
 
 ---
 
+## Code-Kommentare
+
+Code-Kommentare sind Teil der technischen Projektdokumentation.
+
+Der Quellcode erklärt **was** passiert.
+
+Kommentare erklären **warum** es passiert.
+
+Gute Kommentare dokumentieren:
+
+- Architekturgrenzen
+- fachliche Regeln
+- Lifecycle-Beschränkungen
+- bewusst gewählte Einschränkungen
+- nicht offensichtliche Designentscheidungen
+- Verweise auf relevante ADRs
+
+Vermeide Kommentare, die lediglich die Implementierung wiederholen.
+Kommentare müssen zusammen mit dem Code gepflegt werden.
+Ein veralteter Kommentar ist schädlicher als ein fehlender Kommentar,
+da er eine falsche technische Erklärung liefert.
+
+Bevorzugt:
+
+```rust
+// Eine Production Session benötigt vor dem Abschluss
+// einen Owner.
+//
+// Siehe ADR-031.
+```
+
+---
+
 # Repository Struktur
 
 Die grundlegende Struktur:
@@ -473,6 +506,46 @@ NC-PoRe follows these principles:
 * open standards
 * clean documentation
 * quality over speed
+
+---
+
+## Code Comments
+
+Code comments are part of the project's technical documentation.
+
+The source code explains **what** happens.
+
+Comments explain **why** it happens.
+
+Good comments document:
+
+- architectural boundaries
+- domain rules
+- lifecycle constraints
+- intentional limitations
+- non-obvious design decisions
+- references to relevant ADRs
+
+Avoid comments that simply repeat the implementation.
+Comments must be maintained together with the code.
+An outdated comment is worse than no comment,
+because it provides incorrect technical information.
+
+Prefer:
+
+```rust
+// A production session requires an owner
+// before completion.
+//
+// See ADR-031.
+```
+
+Instead of:
+
+```rust
+// Complete the session.
+session.complete();
+```
 
 ---
 
