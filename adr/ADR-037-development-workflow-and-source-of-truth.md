@@ -1,7 +1,7 @@
 # ADR-037 Development Workflow and Source of Truth
 
-* Status: Proposed
-* Date: 2026-07-29
+* Status: Accepted
+* Date: 2026-07-31
 * Decision Type: Architecture
 
 ---

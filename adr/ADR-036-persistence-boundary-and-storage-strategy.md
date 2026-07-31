@@ -1,7 +1,7 @@
 # ADR-036 Persistence Boundary and Storage Strategy
 
-* Status: Proposed
-* Date: 2026-07-29
+* Status: Accepted
+* Date: 2026-07-31
 * Decision Type: Architecture
 
 ---

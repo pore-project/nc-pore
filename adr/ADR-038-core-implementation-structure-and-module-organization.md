@@ -1,7 +1,7 @@
 # ADR-038 Core Implementation Structure and Module Organization
 
-* Status: Proposed
-* Date: 2026-07-29
+* Status: Accepted
+* Date: 2026-07-31
 * Decision Type: Architecture
 
 ---
