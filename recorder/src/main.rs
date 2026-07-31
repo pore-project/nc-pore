@@ -3,6 +3,7 @@ mod export;
 mod metadata;
 mod session;
 mod storage;
+mod workflow;
 
 use session::RecordingSession;
 
