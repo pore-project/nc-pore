@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-* Version: 1.4
-* Date: 2026-07-30
+* Version: 1.5
+* Date: 2026-07-31
 
 ---
 
@@ -31,7 +31,7 @@ Abgeschlossen:
 - Anforderungen
 - Architekturmodell
 - ADR-Struktur
-- 36 dokumentierte Architekturentscheidungen
+- 41 dokumentierte Architekturentscheidungen
 - Session-Modell
 - Recording-Strategie
 - Synchronisationsstrategie
@@ -40,6 +40,9 @@ Abgeschlossen:
 - Implementierungsarchitektur
 - Domain Lifecycle Modell
 - Entwicklungsworkflow
+- Recording Capture Boundary
+- Recorder Workflow Architecture
+- Local Recording Artifact and Storage Boundary
 
 ---
 
@@ -127,8 +130,10 @@ Grundstruktur vorhanden:
 - Session Modul
 - Statusmodell
 - Lifecycle-Methoden
+- Capture Boundary Interface
+- Workflow Coordination Layer
 
-Aktuell noch ohne vollständige Audioaufnahme.
+Aktuell noch ohne konkrete Audioaufnahme-Implementierung.
 
 ---
 
@@ -151,6 +156,8 @@ NC-PoRe folgt weiterhin diesen Prinzipien:
 - technische Details bleiben von der Domäne getrennt
 - fachliche Lebenszyklen werden explizit modelliert
 - Repository-Inhalt ist die technische Quelle der Wahrheit
+- Recording Artifacts bleiben von Domainobjekten getrennt
+- Capture und Storage werden über technische Grenzen abstrahiert
 
 ---
 
@@ -175,10 +182,15 @@ Verantwortlich für:
 
 ## Storage
 
+Architektur definiert:
+
+- Storage Boundary
+- Trennung zwischen Recording Artifact und Speicherung
+
 Geplant:
 
-- selbsthostbare Speicherung
-- offene Datenhaltung
+- konkrete Storage Implementation
+- lokale Artefaktverwaltung
 - Synchronisationsintegration
 
 ---
@@ -188,8 +200,8 @@ Geplant:
 Geplante nächste Arbeiten:
 
 - Erweiterung der Core-Domänenmodelle
-- Persistenzstrategie definieren
-- Storage-Anbindung vorbereiten
+- konkrete Storage Implementation definieren
+- lokale Artefaktverwaltung implementieren
 - weitere Produktionsobjekte modellieren
 - erste vertikale technische Abläufe implementieren
 
@@ -237,6 +249,29 @@ Details:
 
 ---
 
+---
+
+## Recorder Architecture Foundation
+
+Date:
+
+2026-07-31
+
+Die technische Grundlage für den lokalen Recorder-Workflow wurde erweitert.
+
+Implementiert:
+
+- Capture Boundary Interface
+- Recorder Workflow Coordination Layer
+
+Dokumentiert:
+
+- ADR-039 Recording Architecture and Capture Boundary
+- ADR-040 Recorder Workflow and Capture Lifecycle Coordination
+- ADR-041 Local Recording Artifact and Storage Boundary
+
+---
+
 # English Version ([Deutsche Version oben](#deutsch))
 
 ---
@@ -263,7 +298,7 @@ Completed:
 - requirements
 - architecture model
 - ADR structure
-- 36 documented architecture decisions
+- 41 documented architecture decisions
 - session model
 - recording strategy
 - synchronization strategy
@@ -272,6 +307,9 @@ Completed:
 - implementation architecture
 - domain lifecycle model
 - development workflow
+- Recording Capture Boundary
+- Recorder Workflow Architecture
+- Local Recording Artifact and Storage Boundary
 
 ---
 
@@ -340,8 +378,10 @@ Basic structure available:
 - session module
 - status model
 - lifecycle methods
+- capture boundary interface
+- workflow coordination layer
 
-Currently without complete audio recording functionality.
+Currently without concrete audio recording implementation.
 
 ---
 
@@ -364,6 +404,8 @@ NC-PoRe continues to follow these principles:
 - technical details remain separated from the domain
 - domain lifecycles are explicitly modeled
 - repository content is the technical source of truth
+- recording artifacts remain separated from domain objects
+- capture and storage are abstracted through technical boundaries
 
 ---
 
@@ -388,10 +430,15 @@ Responsible for:
 
 ## Storage
 
+Architecture defined:
+
+- storage boundary
+- separation between recording artifacts and storage
+
 Planned:
 
-- self-hostable storage
-- open data handling
+- concrete storage implementation
+- local artifact management
 - synchronization integration
 
 ---
@@ -401,8 +448,8 @@ Planned:
 Planned next activities:
 
 - extend Core domain models
-- define persistence strategy
-- prepare storage integration
+- define concrete storage implementation
+- implement local artifact management
 - model additional production objects
 - implement first vertical technical workflows
 
@@ -453,3 +500,24 @@ Validation:
 Details:
 
 - `docs/milestones/2026-07-30-first-core-implementation.md`
+
+---
+
+## Recorder Architecture Foundation
+
+Date:
+
+2026-07-31
+
+The technical foundation for the local recorder workflow has been extended.
+
+Implemented:
+
+- Capture Boundary Interface
+- Recorder Workflow Coordination Layer
+
+Documented:
+
+- ADR-039 Recording Architecture and Capture Boundary
+- ADR-040 Recorder Workflow and Capture Lifecycle Coordination
+- ADR-041 Local Recording Artifact and Storage Boundary
