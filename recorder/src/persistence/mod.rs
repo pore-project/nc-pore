@@ -1,27 +1,38 @@
+//! Persistence boundary implementations.
+//!
+//! The Recorder interacts with persistence only through the
+//! PersistenceProvider interface.
+//!
+//! See:
+//! - ADR-043 Local Recording Persistence Boundary
+//! - ADR-044 Persistence Provider Interface
+
+mod provider;
+
+pub use provider::PersistenceProvider;
+
 use crate::artifact::RecordingArtifact;
 
-/// Technical persistence boundary for Recording Artifacts.
+/// Reference implementation used for development and tests.
 ///
-/// This trait intentionally abstracts persistence from the recorder workflow.
-/// The first implementation is in-memory only to validate the architectural
-/// boundary without introducing a storage technology decision.
-///
-/// Future implementations may provide filesystem, database or other storage
-/// mechanisms without changing the recorder workflow.
-pub trait PersistenceProvider {
-    fn store(&mut self, artifact: RecordingArtifact);
-    fn get_all(&self) -> Vec<RecordingArtifact>;
-}
-
-/// Temporary technical implementation of the persistence boundary.
-///
-/// This implementation validates the interaction between
-/// Recording Artifact lifecycle and persistence handling.
-///
-/// It deliberately does not represent the final storage solution.
-#[derive(Debug, Default)]
+/// This implementation validates the persistence boundary without
+/// committing NC-PoRe to a specific storage technology.
 pub struct InMemoryPersistenceProvider {
     artifacts: Vec<RecordingArtifact>,
+}
+
+impl InMemoryPersistenceProvider {
+    pub fn new() -> Self {
+        Self {
+            artifacts: Vec::new(),
+        }
+    }
+}
+
+impl Default for InMemoryPersistenceProvider {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PersistenceProvider for InMemoryPersistenceProvider {
@@ -29,57 +40,82 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
         self.artifacts.push(artifact);
     }
 
-    fn get_all(&self) -> Vec<RecordingArtifact> {
+    fn load(&self, id: &str) -> Option<RecordingArtifact> {
+        self.artifacts
+            .iter()
+            .find(|artifact| artifact.id == id)
+            .cloned()
+    }
+
+    fn list(&self) -> Vec<RecordingArtifact> {
         self.artifacts.clone()
+    }
+
+    fn remove(&mut self, id: &str) {
+        self.artifacts.retain(|artifact| artifact.id != id);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifact::RecordingArtifact;
 
-    // Test-01:
-    // Verify that a Recording Artifact can cross the persistence boundary.
+    // TEST-12
     //
-    // This validates the basic contract between the recorder workflow
-    // and the persistence layer.
+    // Protects ADR-044:
+    // Recording persistence is accessed through the provider boundary.
     #[test]
-    fn test_01_artifact_can_be_persisted_in_memory() {
-        let artifact = RecordingArtifact::new(
-            "artifact-001".to_string(),
-            "session-001".to_string(),
-        );
+    fn test_12_provider_can_store_artifact() {
+        let mut provider = InMemoryPersistenceProvider::new();
 
-        let mut provider = InMemoryPersistenceProvider::default();
+        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
 
-        provider.store(artifact);
-
-        assert_eq!(provider.get_all().len(), 1);
+        assert_eq!(provider.list().len(), 1);
     }
 
-    // Test-02:
-    // Verify that a persisted Recording Artifact can be retrieved again.
+    // TEST-13
     //
-    // This validates that persistence keeps the technical identity
-    // and session reference of the stored artifact.
+    // Protects ADR-044:
+    // Persisted artifacts are retrieved through the provider contract.
     #[test]
-    fn test_02_persisted_artifact_can_be_retrieved() {
-        let artifact = RecordingArtifact::new(
-            "artifact-002".to_string(),
-            "session-002".to_string(),
-        );
+    fn test_13_provider_can_load_artifact() {
+        let mut provider = InMemoryPersistenceProvider::new();
 
-        let mut provider = InMemoryPersistenceProvider::default();
+        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
 
-        provider.store(artifact);
+        let artifact = provider.load("artifact-001");
 
-        let stored_artifacts = provider.get_all();
+        assert!(artifact.is_some());
+        assert_eq!(artifact.unwrap().id, "artifact-001");
+    }
 
-        assert_eq!(stored_artifacts[0].id, "artifact-002");
-        assert_eq!(
-            stored_artifacts[0].recording_session_id,
-            "session-002"
-        );
+    // TEST-14
+    //
+    // Protects ADR-044:
+    // The provider boundary supports retrieving persisted artifacts.
+    #[test]
+    fn test_14_provider_can_list_artifacts() {
+        let mut provider = InMemoryPersistenceProvider::new();
+
+        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
+
+        provider.store(RecordingArtifact::new("artifact-002", "session-001"));
+
+        assert_eq!(provider.list().len(), 2);
+    }
+
+    // TEST-15
+    //
+    // Protects ADR-044:
+    // Removal is part of the persistence contract.
+    #[test]
+    fn test_15_provider_can_remove_artifact() {
+        let mut provider = InMemoryPersistenceProvider::new();
+
+        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
+
+        provider.remove("artifact-001");
+
+        assert!(provider.load("artifact-001").is_none());
     }
 }
