@@ -1,6 +1,6 @@
 # NC-PoRe Project Status
 
-* Version: 1.6
+* Version: 1.7
 * Date: 2026-08-01
 
 ---
@@ -31,7 +31,7 @@ Abgeschlossen:
 - Anforderungen
 - Architekturmodell
 - ADR-Struktur
-- 42 dokumentierte Architekturentscheidungen
+- 43 dokumentierte Architekturentscheidungen
 - Session-Modell
 - Recording-Strategie
 - Synchronisationsstrategie
@@ -44,6 +44,7 @@ Abgeschlossen:
 - Recorder Workflow Architecture
 - Local Recording Artifact and Storage Boundary
 - Recording Artifact Model and Lifecycle Boundary
+- Local Recording Persistence Boundary
 
 ---
 
@@ -109,7 +110,7 @@ Aktueller Stand:
 
 ```
 core tests: 17 passed
-recorder tests: 11 passed
+recorder tests: 13 passed
 ```
 
 Implementierte Tests prüfen unter anderem:
@@ -135,6 +136,8 @@ Grundstruktur vorhanden:
 - Workflow Coordination Layer
 - Recording Artifact Model
 - Artifact Lifecycle Management
+- Persistence Boundary
+- In-Memory Persistence Provider
 
 Aktuell noch ohne konkrete Audioaufnahme-Implementierung.
 
@@ -162,6 +165,8 @@ NC-PoRe folgt weiterhin diesen Prinzipien:
 - Recording Artifacts bleiben von Domainobjekten getrennt
 - Capture und Storage werden über technische Grenzen abstrahiert
 - Recording Artifacts besitzen einen eigenen technischen Lebenszyklus
+- local persistence is separated from artifact creation
+- persistence providers remain replaceable
 
 ---
 
@@ -205,7 +210,8 @@ Geplante nächste Arbeiten:
 
 - Erweiterung der Core-Domänenmodelle
 - konkrete Storage Implementation definieren
-- lokale Artefaktverwaltung implementieren
+- lokale Artefaktverwaltung erweitern
+- Wiederherstellungsmechanismen definieren
 - weitere Produktionsobjekte modellieren
 - erste vertikale technische Abläufe implementieren
 
@@ -253,8 +259,6 @@ Details:
 
 ---
 
----
-
 ## Recorder Architecture Foundation
 
 Date:
@@ -276,6 +280,30 @@ Dokumentiert:
 - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 - ADR-041 Local Recording Artifact and Storage Boundary
 - ADR-042 Recording Artifact Model and Lifecycle Boundary
+
+---
+
+## Local Recording Persistence Foundation
+
+Date:
+
+2026-08-01
+
+The technical foundation for local Recording Artifact persistence has been implemented.
+
+Implemented:
+
+- Persistence Boundary
+- In-Memory Persistence Provider
+- Persistence integration tests
+
+Validation:
+
+- Recorder tests: 13 passed
+
+Details:
+
+- ADR-043 Local Recording Persistence Boundary
 
 ---
 
@@ -305,7 +333,7 @@ Completed:
 - requirements
 - architecture model
 - ADR structure
-- 42 documented architecture decisions
+- 43 documented architecture decisions
 - session model
 - recording strategy
 - synchronization strategy
@@ -318,6 +346,7 @@ Completed:
 - Recorder Workflow Architecture
 - Local Recording Artifact and Storage Boundary
 - Recording Artifact Model and Lifecycle Boundary
+- Local Recording Persistence Boundary
 
 ---
 
@@ -364,7 +393,7 @@ Current status:
 
 ```
 core tests: 17 passed
-recorder tests: 11 passed
+recorder tests: 13 passed
 ```
 
 Implemented tests verify:
@@ -390,9 +419,11 @@ Basic structure available:
 - workflow coordination layer
 - recording artifact model
 - artifact lifecycle management
+- persistence boundary
+- in-memory persistence provider
 
 Currently without concrete audio recording implementation
-and without persistent storage implementation.
+and without a production storage backend implementation.
 
 ---
 
@@ -418,6 +449,8 @@ NC-PoRe continues to follow these principles:
 - recording artifacts remain separated from domain objects
 - capture and storage are abstracted through technical boundaries
 - recording artifacts have their own technical lifecycle
+- local persistence is separated from artifact creation
+- persistence providers remain replaceable
 
 ---
 
@@ -461,7 +494,8 @@ Planned next activities:
 
 - extend Core domain models
 - define concrete storage implementation
-- implement local artifact management
+- extend local artifact management
+- define recovery mechanisms
 - model additional production objects
 - implement first vertical technical workflows
 
@@ -507,7 +541,7 @@ Implemented:
 Validation:
 
 - Core tests: 17 passed
-- Recorder tests: 11 passed
+- Recorder tests: 13 passed
 
 Details:
 
@@ -519,7 +553,7 @@ Details:
 
 Date:
 
-2026-08-01
+2026-07-31
 
 The technical foundation for the local recorder workflow has been extended.
 
@@ -536,3 +570,27 @@ Documented:
 - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 - ADR-041 Local Recording Artifact and Storage Boundary
 - ADR-042 Recording Artifact Model and Lifecycle Boundary
+
+---
+
+## Local Recording Persistence Foundation
+
+Date:
+
+2026-08-01
+
+The technical foundation for local Recording Artifact persistence has been implemented.
+
+Implemented:
+
+- Persistence Boundary
+- In-Memory Persistence Provider
+- Persistence integration tests
+
+Validation:
+
+- Recorder tests: 13 passed
+
+Details:
+
+- ADR-043 Local Recording Persistence Boundary
