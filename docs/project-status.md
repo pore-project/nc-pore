@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-* Version: 1.5
-* Date: 2026-07-31
+* Version: 1.6
+* Date: 2026-08-01
 
 ---
 
@@ -31,7 +31,7 @@ Abgeschlossen:
 - Anforderungen
 - Architekturmodell
 - ADR-Struktur
-- 41 dokumentierte Architekturentscheidungen
+- 42 dokumentierte Architekturentscheidungen
 - Session-Modell
 - Recording-Strategie
 - Synchronisationsstrategie
@@ -43,6 +43,7 @@ Abgeschlossen:
 - Recording Capture Boundary
 - Recorder Workflow Architecture
 - Local Recording Artifact and Storage Boundary
+- Recording Artifact Model and Lifecycle Boundary
 
 ---
 
@@ -108,7 +109,7 @@ Aktueller Stand:
 
 ```
 core tests: 17 passed
-recorder tests: 5 passed
+recorder tests: 11 passed
 ```
 
 Implementierte Tests prüfen unter anderem:
@@ -132,6 +133,8 @@ Grundstruktur vorhanden:
 - Lifecycle-Methoden
 - Capture Boundary Interface
 - Workflow Coordination Layer
+- Recording Artifact Model
+- Artifact Lifecycle Management
 
 Aktuell noch ohne konkrete Audioaufnahme-Implementierung.
 
@@ -158,6 +161,7 @@ NC-PoRe folgt weiterhin diesen Prinzipien:
 - Repository-Inhalt ist die technische Quelle der Wahrheit
 - Recording Artifacts bleiben von Domainobjekten getrennt
 - Capture und Storage werden über technische Grenzen abstrahiert
+- Recording Artifacts besitzen einen eigenen technischen Lebenszyklus
 
 ---
 
@@ -263,12 +267,15 @@ Implementiert:
 
 - Capture Boundary Interface
 - Recorder Workflow Coordination Layer
+- Recording Artifact Model
+- Artifact Lifecycle Management
 
 Dokumentiert:
 
 - ADR-039 Recording Architecture and Capture Boundary
 - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 - ADR-041 Local Recording Artifact and Storage Boundary
+- ADR-042 Recording Artifact Model and Lifecycle Boundary
 
 ---
 
@@ -298,7 +305,7 @@ Completed:
 - requirements
 - architecture model
 - ADR structure
-- 41 documented architecture decisions
+- 42 documented architecture decisions
 - session model
 - recording strategy
 - synchronization strategy
@@ -310,6 +317,7 @@ Completed:
 - Recording Capture Boundary
 - Recorder Workflow Architecture
 - Local Recording Artifact and Storage Boundary
+- Recording Artifact Model and Lifecycle Boundary
 
 ---
 
@@ -356,7 +364,7 @@ Current status:
 
 ```
 core tests: 17 passed
-recorder tests: 5 passed
+recorder tests: 11 passed
 ```
 
 Implemented tests verify:
@@ -380,8 +388,11 @@ Basic structure available:
 - lifecycle methods
 - capture boundary interface
 - workflow coordination layer
+- recording artifact model
+- artifact lifecycle management
 
-Currently without concrete audio recording implementation.
+Currently without concrete audio recording implementation
+and without persistent storage implementation.
 
 ---
 
@@ -406,6 +417,7 @@ NC-PoRe continues to follow these principles:
 - repository content is the technical source of truth
 - recording artifacts remain separated from domain objects
 - capture and storage are abstracted through technical boundaries
+- recording artifacts have their own technical lifecycle
 
 ---
 
@@ -495,7 +507,7 @@ Implemented:
 Validation:
 
 - Core tests: 17 passed
-- Recorder tests: 5 passed
+- Recorder tests: 11 passed
 
 Details:
 
@@ -507,7 +519,7 @@ Details:
 
 Date:
 
-2026-07-31
+2026-08-01
 
 The technical foundation for the local recorder workflow has been extended.
 
@@ -515,9 +527,12 @@ Implemented:
 
 - Capture Boundary Interface
 - Recorder Workflow Coordination Layer
+- Recording Artifact Model
+- Artifact Lifecycle Management
 
 Documented:
 
 - ADR-039 Recording Architecture and Capture Boundary
 - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 - ADR-041 Local Recording Artifact and Storage Boundary
+- ADR-042 Recording Artifact Model and Lifecycle Boundary
