@@ -1,4 +1,5 @@
 mod audio;
+mod artifact;
 mod export;
 mod metadata;
 mod session;
