@@ -2,6 +2,7 @@ mod audio;
 mod artifact;
 mod export;
 mod metadata;
+mod persistence;
 mod session;
 mod storage;
 mod workflow;

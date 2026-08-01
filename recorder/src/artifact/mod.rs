@@ -11,14 +11,14 @@
 //! See:
 //! - ADR-042 Recording Artifact Model and Lifecycle Boundary
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArtifactStatus {
     Created,
     Available,
     Stored,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RecordingArtifact {
     pub id: String,
     pub recording_session_id: String,
