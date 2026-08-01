@@ -1,5 +1,5 @@
-mod audio;
 mod artifact;
+mod audio;
 mod export;
 mod metadata;
 mod persistence;

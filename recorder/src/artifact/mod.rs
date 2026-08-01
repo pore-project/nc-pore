@@ -30,10 +30,7 @@ impl RecordingArtifact {
     ///
     /// A new artifact represents a technical recording result
     /// that has been created but is not yet available or stored.
-    pub fn new(
-        id: impl Into<String>,
-        recording_session_id: impl Into<String>,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, recording_session_id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             recording_session_id: recording_session_id.into(),
@@ -69,10 +66,7 @@ mod tests {
     // independent from domain recording states.
     #[test]
     fn new_artifact_starts_as_created() {
-        let artifact = RecordingArtifact::new(
-            "artifact-001",
-            "session-001",
-        );
+        let artifact = RecordingArtifact::new("artifact-001", "session-001");
 
         assert_eq!(artifact.status(), &ArtifactStatus::Created);
     }
@@ -81,10 +75,7 @@ mod tests {
     // Verify: Artifact lifecycle can progress from Created to Available.
     #[test]
     fn artifact_can_become_available() {
-        let mut artifact = RecordingArtifact::new(
-            "artifact-001",
-            "session-001",
-        );
+        let mut artifact = RecordingArtifact::new("artifact-001", "session-001");
 
         artifact.make_available();
 
@@ -95,10 +86,7 @@ mod tests {
     // Verify: Available artifacts can be stored.
     #[test]
     fn artifact_can_be_stored() {
-        let mut artifact = RecordingArtifact::new(
-            "artifact-001",
-            "session-001",
-        );
+        let mut artifact = RecordingArtifact::new("artifact-001", "session-001");
 
         artifact.make_available();
         artifact.store();
