@@ -59,7 +59,7 @@ where
     /// - capture provider shutdown
     /// - recorder session state transition
     pub fn stop(&mut self) {
-        self.capture.stop_capture();
+        let _capture_result = self.capture.stop_capture();
         self.session.stop();
     }
 
@@ -88,8 +88,10 @@ mod tests {
             self.active = true;
         }
 
-        fn stop_capture(&mut self) {
+        fn stop_capture(&mut self) -> crate::audio::CaptureResult {
             self.active = false;
+
+            crate::audio::CaptureResult::new("workflow-test-capture")
         }
     }
 

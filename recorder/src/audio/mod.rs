@@ -12,6 +12,10 @@
 //! See:
 //! - ADR-039 Recording Architecture and Capture Boundary
 
+mod result;
+
+pub use result::CaptureResult;
+
 /// Defines the interface between recorder workflow
 /// and audio capture implementations.
 ///
@@ -21,8 +25,8 @@ pub trait CaptureProvider {
     /// Starts audio capture.
     fn start_capture(&mut self);
 
-    /// Stops audio capture.
-    fn stop_capture(&mut self);
+    /// Stops audio capture and returns the capture result.
+    fn stop_capture(&mut self) -> CaptureResult;
 }
 
 #[cfg(test)]
@@ -44,8 +48,10 @@ mod tests {
             self.started = true;
         }
 
-        fn stop_capture(&mut self) {
+        fn stop_capture(&mut self) -> CaptureResult {
             self.started = false;
+
+            CaptureResult::new("test-capture")
         }
     }
 
@@ -63,8 +69,9 @@ mod tests {
 
         assert!(capture.started);
 
-        capture.stop_capture();
+        let result = capture.stop_capture();
 
+        assert_eq!(result.id(), "test-capture");
         assert!(!capture.started);
     }
 }
