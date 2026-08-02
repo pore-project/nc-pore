@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-* Version: 1.8
-* Date: 2026-08-01
+* Version: 1.9
+* Date: 2026-08-02
 
 ---
 
@@ -49,6 +49,16 @@ Implementiert:
 - Workflow Coordination Layer
 - Recording Artifact Model
 - Artifact Lifecycle Management
+- Local Artifact Registry
+- Artifact Coordination Boundary
+
+Relevante Architekturentscheidungen:
+
+- [ADR-039 Recording Architecture and Capture Boundary](../adr/ADR-039-recording-architecture-and-capture-boundary.md)
+- [ADR-040 Recorder Workflow and Capture Lifecycle Coordination](../adr/ADR-040-recorder-workflow-and-capture-lifecycle-coordination.md)
+- [ADR-042 Recording Artifact Model and Lifecycle Boundary](../adr/ADR-042-recording-artifact-model-and-lifecycle-boundary.md)
+- [ADR-047 Local Artifact Registry and Discovery Strategy](../adr/ADR-047-local-artifact-registry-and-discovery-strategy.md)
+- [ADR-049 Artifact Creation and Workflow Integration](../adr/ADR-049-artifact-creation-and-workflow-integration.md)
 
 ---
 
@@ -63,16 +73,19 @@ Implementiert:
 
 Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
 
+Relevante Architekturentscheidungen:
+
+- [ADR-044 Persistence Provider Interface](../adr/ADR-044-persistence-provider-interface.md)
+- [ADR-048 Artifact Registry and Persistence Coordination](../adr/ADR-048-artifact-registry-and-persistence-coordination.md)
+
 ---
 
 # Validation
 
 Aktueller Teststand:
 
-```text
-core tests: 17 passed
-recorder tests: 13 passed
-```
+    core tests: 17 passed
+    recorder tests: 19 passed
 
 Die Tests validieren unter anderem:
 
@@ -80,7 +93,9 @@ Die Tests validieren unter anderem:
 - Rollen- und Zustandslogik
 - Recording-Verknüpfungen
 - Artifact Lifecycle
+- Artifact Registry Verhalten
 - Persistence Provider Verhalten
+- Workflow Coordination
 
 ---
 
@@ -93,6 +108,7 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - technische Details bleiben von der Domäne getrennt
 - Recording Artifacts bleiben von Domainobjekten getrennt
 - Capture und Storage werden über technische Grenzen abstrahiert
+- Artifact Registry und Persistence bleiben getrennte Verantwortlichkeiten
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
@@ -107,6 +123,7 @@ Die historische Entwicklung wird in einzelnen Milestones dokumentiert:
 - `docs/milestones/2026-07-30-first-core-implementation.md`
 - `docs/milestones/2026-07-31-recorder-architecture-foundation.md`
 - `docs/milestones/2026-08-01-local-recording-persistence-foundation.md`
+- `docs/milestones/2026-08-02-artifact-management-foundation.md`
 
 ---
 
@@ -114,11 +131,11 @@ Die historische Entwicklung wird in einzelnen Milestones dokumentiert:
 
 Wichtige Einstiegspunkte:
 
-- `docs/architecture/`
-- `docs/implementation/`
-- `docs/project/`
-- `docs/milestones/`
-- `docs/architecture/adr-index.md`
+- [docs/architecture/](../architecture/)
+- [docs/implementation/](../implementation/)
+- [docs/project/](../project/)
+- [docs/milestones/](../milestones/)
+- [docs/architecture/adr-index.md](../architecture/adr-index.md)
 
 ---
 
@@ -126,7 +143,7 @@ Wichtige Einstiegspunkte:
 
 Geplante nächste Arbeiten:
 
-- lokale Artefaktverwaltung erweitern
+- lokale Artefaktverwaltung weiter ausbauen
 - Recovery- und Konsistenzmechanismen implementieren
 - konkrete Storage-Strategien definieren
 - weitere Produktionsobjekte modellieren
@@ -172,12 +189,22 @@ Implemented:
 Implemented:
 
 - Session module
-- status model
+- Status model
 - lifecycle methods
 - Capture Boundary Interface
 - Workflow Coordination Layer
 - Recording Artifact Model
 - Artifact Lifecycle Management
+- Local Artifact Registry
+- Artifact Coordination Boundary
+
+Relevant architecture decisions:
+
+- [ADR-039 Recording Architecture and Capture Boundary](../adr/ADR-039-recording-architecture-and-capture-boundary.md)
+- [ADR-040 Recorder Workflow and Capture Lifecycle Coordination](../adr/ADR-040-recorder-workflow-and-capture-lifecycle-coordination.md)
+- [ADR-042 Recording Artifact Model and Lifecycle Boundary](../adr/ADR-042-recording-artifact-model-and-lifecycle-boundary.md)
+- [ADR-047 Local Artifact Registry and Discovery Strategy](../adr/ADR-047-local-artifact-registry-and-discovery-strategy.md)
+- [ADR-049 Artifact Creation and Workflow Integration](../adr/ADR-049-artifact-creation-and-workflow-integration.md)
 
 ---
 
@@ -192,16 +219,19 @@ Implemented:
 
 The persistence architecture remains independent from concrete storage technologies.
 
+Relevant architecture decisions:
+
+- [ADR-044 Persistence Provider Interface](../adr/ADR-044-persistence-provider-interface.md)
+- [ADR-048 Artifact Registry and Persistence Coordination](../adr/ADR-048-artifact-registry-and-persistence-coordination.md)
+
 ---
 
 # Validation
 
 Current test status:
 
-```text
-core tests: 17 passed
-recorder tests: 13 passed
-```
+    core tests: 17 passed
+    recorder tests: 19 passed
 
 The tests validate among other things:
 
@@ -209,7 +239,9 @@ The tests validate among other things:
 - role and state logic
 - recording relationships
 - artifact lifecycle
-- Persistence Provider behavior
+- artifact registry behavior
+- persistence provider behavior
+- workflow coordination
 
 ---
 
@@ -222,6 +254,7 @@ NC-PoRe currently follows these architecture principles:
 - technical details remain separated from the domain
 - Recording Artifacts remain separated from domain objects
 - Capture and Storage are abstracted through technical boundaries
+- Artifact Registry and Persistence remain separate responsibilities
 - Persistence remains replaceable
 - local recording remains independent from network availability
 - repository content is the technical source of truth
@@ -236,6 +269,7 @@ Historical development is documented in individual milestones:
 - `docs/milestones/2026-07-30-first-core-implementation.md`
 - `docs/milestones/2026-07-31-recorder-architecture-foundation.md`
 - `docs/milestones/2026-08-01-local-recording-persistence-foundation.md`
+- `docs/milestones/2026-08-02-artifact-management-foundation.md`
 
 ---
 
@@ -243,11 +277,11 @@ Historical development is documented in individual milestones:
 
 Important entry points:
 
-- `docs/architecture/`
-- `docs/implementation/`
-- `docs/project/`
-- `docs/milestones/`
-- `docs/architecture/adr-index.md`
+- [docs/architecture/](../architecture/)
+- [docs/implementation/](../implementation/)
+- [docs/project/](../project/)
+- [docs/milestones/](../milestones/)
+- [docs/architecture/adr-index.md](../architecture/adr-index.md)
 
 ---
 
