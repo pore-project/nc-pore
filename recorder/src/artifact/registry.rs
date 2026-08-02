@@ -51,6 +51,12 @@ impl LocalArtifactRegistry {
             .cloned()
     }
 
+    pub fn contains(&self, artifact_id: &str) -> bool {
+        self.entries
+            .iter()
+            .any(|entry| entry.artifact_id == artifact_id)
+    }
+
     pub fn list(&self) -> Vec<ArtifactRegistryEntry> {
         self.entries.clone()
     }
@@ -113,5 +119,19 @@ mod tests {
         registry.remove("artifact-001");
 
         assert!(registry.find("artifact-001").is_none());
+    }
+
+    // TEST-19
+    //
+    // Protects ADR-047:
+    // The registry can determine whether an artifact reference exists.
+    #[test]
+    fn registry_can_check_artifact_existence() {
+        let mut registry = LocalArtifactRegistry::new();
+
+        registry.register(ArtifactRegistryEntry::new("artifact-001", "session-001"));
+
+        assert!(registry.contains("artifact-001"));
+        assert!(!registry.contains("artifact-999"));
     }
 }
