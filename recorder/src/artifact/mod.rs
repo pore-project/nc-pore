@@ -11,6 +11,7 @@
 //! See:
 //! - ADR-042 Recording Artifact Model and Lifecycle Boundary
 
+pub mod coordination;
 pub mod registry;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
