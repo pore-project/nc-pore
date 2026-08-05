@@ -1,3 +1,4 @@
+mod application;
 mod artifact;
 mod audio;
 mod export;
