@@ -14,7 +14,7 @@
 //! See:
 //! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 
-use crate::audio::CaptureProvider;
+use crate::audio::{CaptureProvider, CaptureResult};
 use crate::session::RecordingSession;
 
 /// Coordinates the local recorder workflow.
@@ -58,9 +58,15 @@ where
     /// The workflow coordinates:
     /// - capture provider shutdown
     /// - recorder session state transition
-    pub fn stop(&mut self) {
-        let _capture_result = self.capture.stop_capture();
+    ///
+    /// The completed CaptureResult is returned to the caller,
+    /// allowing downstream processing to remain outside the workflow.
+    pub fn stop(&mut self) -> CaptureResult {
+        let capture_result = self.capture.stop_capture();
+
         self.session.stop();
+
+        capture_result
     }
 
     /// Provides read-only access to the recorder session.
@@ -88,10 +94,10 @@ mod tests {
             self.active = true;
         }
 
-        fn stop_capture(&mut self) -> crate::audio::CaptureResult {
+        fn stop_capture(&mut self) -> CaptureResult {
             self.active = false;
 
-            crate::audio::CaptureResult::new("workflow-test-capture")
+            CaptureResult::new("workflow-test-capture")
         }
     }
 
@@ -120,9 +126,10 @@ mod tests {
     // Verify: Workflow start and stop operations coordinate
     // session lifecycle and capture lifecycle.
     //
-    // Protects ADR-040:
-    // Recorder workflow remains responsible for coordination,
-    // while capture implementation remains behind its boundary.
+    // Protects ADR-040 and ADR-051:
+    // The workflow coordinates capture and session state,
+    // while returning the CaptureResult for downstream
+    // artifact processing.
     #[test]
     fn workflow_coordinates_session_and_capture() {
         let session = RecordingSession::new("workflow-test");
@@ -138,7 +145,9 @@ mod tests {
             &crate::session::SessionStatus::Recording
         );
 
-        workflow.stop();
+        let result = workflow.stop();
+
+        assert_eq!(result.id(), "workflow-test-capture");
 
         assert_eq!(
             workflow.session().status(),
