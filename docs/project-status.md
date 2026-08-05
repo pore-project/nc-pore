@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-* Version: 1.9
-* Date: 2026-08-02
+* Version: 2.0
+* Date: 2026-08-05
 
 ---
 
@@ -51,14 +51,18 @@ Implementiert:
 - Artifact Lifecycle Management
 - Local Artifact Registry
 - Artifact Coordination Boundary
+- Artifact Processing Boundary
+- Recorder Application Boundary
+- vollständiger lokaler Recording Artifact Flow
 
 Relevante Architekturentscheidungen:
 
-- [ADR-039 Recording Architecture and Capture Boundary](../adr/ADR-039-recording-architecture-and-capture-boundary.md)
-- [ADR-040 Recorder Workflow and Capture Lifecycle Coordination](../adr/ADR-040-recorder-workflow-and-capture-lifecycle-coordination.md)
-- [ADR-042 Recording Artifact Model and Lifecycle Boundary](../adr/ADR-042-recording-artifact-model-and-lifecycle-boundary.md)
-- [ADR-047 Local Artifact Registry and Discovery Strategy](../adr/ADR-047-local-artifact-registry-and-discovery-strategy.md)
-- [ADR-049 Artifact Creation and Workflow Integration](../adr/ADR-049-artifact-creation-and-workflow-integration.md)
+- ADR-039 Recording Architecture and Capture Boundary
+- ADR-040 Recorder Workflow and Capture Lifecycle Coordination
+- ADR-042 Recording Artifact Model and Lifecycle Boundary
+- ADR-047 Local Artifact Registry and Discovery Strategy
+- ADR-049 Artifact Creation and Workflow Integration
+- ADR-051 Recording Artifact Processing Boundary
 
 ---
 
@@ -75,8 +79,8 @@ Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
 
 Relevante Architekturentscheidungen:
 
-- [ADR-044 Persistence Provider Interface](../adr/ADR-044-persistence-provider-interface.md)
-- [ADR-048 Artifact Registry and Persistence Coordination](../adr/ADR-048-artifact-registry-and-persistence-coordination.md)
+- ADR-044 Persistence Provider Interface
+- ADR-048 Artifact Registry and Persistence Coordination
 
 ---
 
@@ -85,7 +89,7 @@ Relevante Architekturentscheidungen:
 Aktueller Teststand:
 
     core tests: 17 passed
-    recorder tests: 19 passed
+    recorder tests: 25 passed
 
 Die Tests validieren unter anderem:
 
@@ -96,6 +100,9 @@ Die Tests validieren unter anderem:
 - Artifact Registry Verhalten
 - Persistence Provider Verhalten
 - Workflow Coordination
+- vollständiger Recorder Application Flow
+- Recording Artifact Creation and Storage Flow
+- Artifact Processing Coordination
 
 ---
 
@@ -109,6 +116,7 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Recording Artifacts bleiben von Domainobjekten getrennt
 - Capture und Storage werden über technische Grenzen abstrahiert
 - Artifact Registry und Persistence bleiben getrennte Verantwortlichkeiten
+- Application Flow verbindet Workflow, Artifact Processing und Persistence über definierte Grenzen
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
@@ -131,11 +139,11 @@ Die historische Entwicklung wird in einzelnen Milestones dokumentiert:
 
 Wichtige Einstiegspunkte:
 
-- [docs/architecture/](../architecture/)
-- [docs/implementation/](../implementation/)
-- [docs/project/](../project/)
-- [docs/milestones/](../milestones/)
-- [docs/architecture/adr-index.md](../architecture/adr-index.md)
+- `docs/architecture/`
+- `docs/implementation/`
+- `docs/project/`
+- `docs/milestones/`
+- `docs/architecture/adr-index.md`
 
 ---
 
@@ -147,7 +155,7 @@ Geplante nächste Arbeiten:
 - Recovery- und Konsistenzmechanismen implementieren
 - konkrete Storage-Strategien definieren
 - weitere Produktionsobjekte modellieren
-- erste vollständige technische Workflows umsetzen
+- weitere technische Workflows auf Basis der bestehenden Grenzen umsetzen
 
 ---
 
@@ -159,9 +167,9 @@ Geplante nächste Arbeiten:
 
 ## Technical Implementation Started
 
-After completing the architecture phase, NC-PoRe is currently in technical implementation.
+NC-PoRe is in technical implementation after completion of the architecture phase.
 
-The fundamental architecture decisions, development principles and technical boundaries have been defined.
+The fundamental architecture decisions, development principles and technical boundaries are defined.
 
 The first Core and Recorder components have been implemented and validated through tests.
 
@@ -190,21 +198,25 @@ Implemented:
 
 - Session module
 - Status model
-- lifecycle methods
+- Lifecycle methods
 - Capture Boundary Interface
 - Workflow Coordination Layer
 - Recording Artifact Model
 - Artifact Lifecycle Management
 - Local Artifact Registry
 - Artifact Coordination Boundary
+- Artifact Processing Boundary
+- Recorder Application Boundary
+- complete local Recording Artifact Flow
 
 Relevant architecture decisions:
 
-- [ADR-039 Recording Architecture and Capture Boundary](../adr/ADR-039-recording-architecture-and-capture-boundary.md)
-- [ADR-040 Recorder Workflow and Capture Lifecycle Coordination](../adr/ADR-040-recorder-workflow-and-capture-lifecycle-coordination.md)
-- [ADR-042 Recording Artifact Model and Lifecycle Boundary](../adr/ADR-042-recording-artifact-model-and-lifecycle-boundary.md)
-- [ADR-047 Local Artifact Registry and Discovery Strategy](../adr/ADR-047-local-artifact-registry-and-discovery-strategy.md)
-- [ADR-049 Artifact Creation and Workflow Integration](../adr/ADR-049-artifact-creation-and-workflow-integration.md)
+- ADR-039 Recording Architecture and Capture Boundary
+- ADR-040 Recorder Workflow and Capture Lifecycle Coordination
+- ADR-042 Recording Artifact Model and Lifecycle Boundary
+- ADR-047 Local Artifact Registry and Discovery Strategy
+- ADR-049 Artifact Creation and Workflow Integration
+- ADR-051 Recording Artifact Processing Boundary
 
 ---
 
@@ -221,8 +233,8 @@ The persistence architecture remains independent from concrete storage technolog
 
 Relevant architecture decisions:
 
-- [ADR-044 Persistence Provider Interface](../adr/ADR-044-persistence-provider-interface.md)
-- [ADR-048 Artifact Registry and Persistence Coordination](../adr/ADR-048-artifact-registry-and-persistence-coordination.md)
+- ADR-044 Persistence Provider Interface
+- ADR-048 Artifact Registry and Persistence Coordination
 
 ---
 
@@ -231,17 +243,20 @@ Relevant architecture decisions:
 Current test status:
 
     core tests: 17 passed
-    recorder tests: 19 passed
+    recorder tests: 25 passed
 
 The tests validate among other things:
 
 - lifecycle transitions
 - role and state logic
 - recording relationships
-- artifact lifecycle
-- artifact registry behavior
-- persistence provider behavior
-- workflow coordination
+- Artifact Lifecycle
+- Artifact Registry behavior
+- Persistence Provider behavior
+- Workflow Coordination
+- complete Recorder Application Flow
+- Recording Artifact Creation and Storage Flow
+- Artifact Processing Coordination
 
 ---
 
@@ -255,9 +270,10 @@ NC-PoRe currently follows these architecture principles:
 - Recording Artifacts remain separated from domain objects
 - Capture and Storage are abstracted through technical boundaries
 - Artifact Registry and Persistence remain separate responsibilities
+- Application Flow connects Workflow, Artifact Processing and Persistence through defined boundaries
 - Persistence remains replaceable
 - local recording remains independent from network availability
-- repository content is the technical source of truth
+- Repository content is the technical source of truth
 
 ---
 
@@ -277,11 +293,11 @@ Historical development is documented in individual milestones:
 
 Important entry points:
 
-- [docs/architecture/](../architecture/)
-- [docs/implementation/](../implementation/)
-- [docs/project/](../project/)
-- [docs/milestones/](../milestones/)
-- [docs/architecture/adr-index.md](../architecture/adr-index.md)
+- `docs/architecture/`
+- `docs/implementation/`
+- `docs/project/`
+- `docs/milestones/`
+- `docs/architecture/adr-index.md`
 
 ---
 
@@ -293,4 +309,4 @@ Planned next activities:
 - implement recovery and consistency mechanisms
 - define concrete storage strategies
 - model additional production objects
-- implement first complete technical workflows
+- implement further technical workflows based on the existing boundaries
