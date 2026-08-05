@@ -43,13 +43,17 @@ where
         }
     }
 
-    pub fn register_and_store(&mut self, artifact: RecordingArtifact) {
+    pub fn register_and_store(&mut self, mut artifact: RecordingArtifact) -> RecordingArtifact {
         self.registry.register(ArtifactRegistryEntry::new(
             artifact.id.clone(),
             artifact.recording_session_id.clone(),
         ));
 
-        self.persistence.store(artifact);
+        self.persistence.store(artifact.clone());
+
+        artifact.store();
+
+        artifact
     }
 
     pub fn registry(&self) -> &LocalArtifactRegistry {
@@ -64,13 +68,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::ArtifactStatus;
     use crate::persistence::InMemoryPersistenceProvider;
 
-    // TEST-20
-    //
-    // Protects ADR-047:
-    // Artifact coordination registers technical references
-    // independently from artifact storage.
     #[test]
     fn coordinator_registers_artifact_reference() {
         let persistence = InMemoryPersistenceProvider::new();
@@ -84,10 +84,6 @@ mod tests {
         assert!(coordinator.registry().contains("artifact-001"));
     }
 
-    // TEST-21
-    //
-    // Protects ADR-043 and ADR-044:
-    // Artifact coordination stores artifacts through the persistence boundary.
     #[test]
     fn coordinator_persists_artifact() {
         let persistence = InMemoryPersistenceProvider::new();
@@ -96,7 +92,9 @@ mod tests {
 
         let artifact = RecordingArtifact::new("artifact-001", "session-001");
 
-        coordinator.register_and_store(artifact);
+        let stored_artifact = coordinator.register_and_store(artifact);
+
+        assert_eq!(stored_artifact.status(), &ArtifactStatus::Stored);
 
         assert!(coordinator.persistence().load("artifact-001").is_some());
     }
