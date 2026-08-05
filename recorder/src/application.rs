@@ -101,4 +101,30 @@ mod tests {
         assert_eq!(artifact.id, "application-test-capture");
         assert_eq!(artifact.recording_session_id, "session-001");
     }
+
+    // TEST-25
+    //
+    // Verify: Complete application flow creates and stores
+    // a recording artifact.
+    #[test]
+    fn application_stores_processed_artifact() {
+        let session = RecordingSession::new("session-002");
+
+        let capture = TestCaptureProvider;
+
+        let persistence = InMemoryPersistenceProvider::new();
+
+        let coordinator = ArtifactCoordinator::new(persistence);
+
+        let processor = RecordingArtifactProcessor::new(coordinator);
+
+        let mut application = RecorderApplication::new(session, capture, processor);
+
+        application.start();
+
+        let artifact = application.stop();
+
+        assert_eq!(artifact.id, "application-test-capture");
+        assert_eq!(artifact.recording_session_id, "session-002");
+    }
 }
