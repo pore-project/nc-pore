@@ -48,7 +48,9 @@ where
         capture_result: CaptureResult,
         recording_session_id: impl Into<String>,
     ) -> crate::artifact::RecordingArtifact {
-        let artifact = RecordingArtifactFactory::create(capture_result, recording_session_id);
+        let mut artifact = RecordingArtifactFactory::create(capture_result, recording_session_id);
+
+        artifact.make_available();
 
         self.coordinator.register_and_store(artifact.clone());
 
@@ -59,6 +61,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::ArtifactStatus;
     use crate::persistence::InMemoryPersistenceProvider;
 
     // TEST-23
@@ -79,6 +82,7 @@ mod tests {
         let artifact = processor.process(capture_result, "session-001");
 
         assert_eq!(artifact.id, "capture-001");
+        assert_eq!(artifact.status(), &ArtifactStatus::Available);
 
         assert!(
             processor
