@@ -47,10 +47,12 @@ where
         &mut self,
         capture_result: CaptureResult,
         recording_session_id: impl Into<String>,
-    ) {
+    ) -> crate::artifact::RecordingArtifact {
         let artifact = RecordingArtifactFactory::create(capture_result, recording_session_id);
 
-        self.coordinator.register_and_store(artifact);
+        self.coordinator.register_and_store(artifact.clone());
+
+        artifact
     }
 }
 
@@ -74,7 +76,9 @@ mod tests {
 
         let capture_result = CaptureResult::new("capture-001");
 
-        processor.process(capture_result, "session-001");
+        let artifact = processor.process(capture_result, "session-001");
+
+        assert_eq!(artifact.id, "capture-001");
 
         assert!(
             processor

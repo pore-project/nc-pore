@@ -46,13 +46,55 @@ where
         self.workflow.start();
     }
 
-    pub fn stop(&mut self, recording_session_id: impl Into<String>) {
+    pub fn stop(
+        &mut self,
+        recording_session_id: impl Into<String>,
+    ) -> crate::artifact::RecordingArtifact {
         let capture_result = self.workflow.stop();
 
-        self.processor.process(capture_result, recording_session_id);
+        self.processor.process(capture_result, recording_session_id)
     }
 
     pub fn session(&self) -> &RecordingSession {
         self.workflow.session()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::artifact::coordination::ArtifactCoordinator;
+    use crate::audio::{CaptureProvider, CaptureResult};
+    use crate::persistence::InMemoryPersistenceProvider;
+
+    struct TestCaptureProvider;
+
+    impl CaptureProvider for TestCaptureProvider {
+        fn start_capture(&mut self) {}
+
+        fn stop_capture(&mut self) -> CaptureResult {
+            CaptureResult::new("application-test-capture")
+        }
+    }
+
+    #[test]
+    fn application_processes_recording_flow() {
+        let session = RecordingSession::new("session-001");
+
+        let capture = TestCaptureProvider;
+
+        let persistence = InMemoryPersistenceProvider::new();
+
+        let coordinator = ArtifactCoordinator::new(persistence);
+
+        let processor = RecordingArtifactProcessor::new(coordinator);
+
+        let mut application = RecorderApplication::new(session, capture, processor);
+
+        application.start();
+
+        let artifact = application.stop("session-001");
+
+        assert_eq!(artifact.id, "application-test-capture");
     }
 }
