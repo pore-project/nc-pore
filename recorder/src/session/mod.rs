@@ -25,7 +25,7 @@ pub enum SessionStatus {
 
 #[derive(Debug)]
 pub struct RecordingSession {
-    pub id: String,
+    id: String,
     status: SessionStatus,
 }
 
@@ -43,6 +43,11 @@ impl RecordingSession {
     /// Returns the current session status.
     pub fn status(&self) -> &SessionStatus {
         &self.status
+    }
+
+    /// Returns the session identifier.
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     /// Starts the recording process.

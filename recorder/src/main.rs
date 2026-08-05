@@ -56,7 +56,7 @@ fn main() {
 
     let _ = application.session();
 
-    application.stop("test-session-001");
+    application.stop();
 
     println!("NC-PoRe Recorder flow completed.");
 }

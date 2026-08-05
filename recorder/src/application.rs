@@ -46,10 +46,9 @@ where
         self.workflow.start();
     }
 
-    pub fn stop(
-        &mut self,
-        recording_session_id: impl Into<String>,
-    ) -> crate::artifact::RecordingArtifact {
+    pub fn stop(&mut self) -> crate::artifact::RecordingArtifact {
+        let recording_session_id = self.workflow.session().id().to_string();
+
         let capture_result = self.workflow.stop();
 
         self.processor.process(capture_result, recording_session_id)
@@ -77,6 +76,10 @@ mod tests {
         }
     }
 
+    // TEST-24
+    //
+    // Verify: Application flow uses the recording session
+    // as source for artifact session association.
     #[test]
     fn application_processes_recording_flow() {
         let session = RecordingSession::new("session-001");
@@ -93,8 +96,9 @@ mod tests {
 
         application.start();
 
-        let artifact = application.stop("session-001");
+        let artifact = application.stop();
 
         assert_eq!(artifact.id, "application-test-capture");
+        assert_eq!(artifact.recording_session_id, "session-001");
     }
 }
