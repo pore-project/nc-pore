@@ -3,12 +3,17 @@
 //! The Recorder interacts with persistence only through the
 //! PersistenceProvider interface.
 //!
+//! Concrete persistence technologies remain behind this boundary.
+//!
 //! See:
 //! - ADR-043 Local Recording Persistence Boundary
 //! - ADR-044 Persistence Provider Interface
+//! - ADR-052 Local Filesystem Persistence Provider
 
+mod filesystem;
 mod provider;
 
+pub use filesystem::FilesystemPersistenceProvider;
 pub use provider::PersistenceProvider;
 
 use crate::artifact::RecordingArtifact;
@@ -59,6 +64,8 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::RecordingArtifact;
+    use crate::persistence::FilesystemPersistenceProvider;
 
     // TEST-12
     //
@@ -117,5 +124,21 @@ mod tests {
         provider.remove("artifact-001");
 
         assert!(provider.load("artifact-001").is_none());
+    }
+
+    // TEST-20
+    //
+    // Protects ADR-052:
+    // The filesystem persistence implementation is exposed
+    // through the persistence boundary.
+    #[test]
+    fn test_20_filesystem_provider_is_available_through_boundary() {
+        let path = std::env::temp_dir().join("nc-pore-test-20");
+
+        let provider = FilesystemPersistenceProvider::new(&path);
+
+        drop(provider);
+
+        let _ = std::fs::remove_dir_all(path);
     }
 }
