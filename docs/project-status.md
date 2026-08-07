@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-* Version: 2.0
-* Date: 2026-08-05
+- Version: 2.1
+- Date: 2026-08-07
 
 ---
 
@@ -53,7 +53,8 @@ Implementiert:
 - Artifact Coordination Boundary
 - Artifact Processing Boundary
 - Recorder Application Boundary
-- vollständiger lokaler Recording Artifact Flow
+- Local Recording Artifact Flow
+- Artifact Recovery Boundary
 
 Relevante Architekturentscheidungen:
 
@@ -63,6 +64,7 @@ Relevante Architekturentscheidungen:
 - ADR-047 Local Artifact Registry and Discovery Strategy
 - ADR-049 Artifact Creation and Workflow Integration
 - ADR-051 Recording Artifact Processing Boundary
+- ADR-053 Artifact Recovery and Consistency Boundary
 
 ---
 
@@ -73,6 +75,7 @@ Implementiert:
 - Local Recording Persistence Boundary
 - Persistence Provider Interface
 - In-Memory Persistence Provider
+- Filesystem Persistence Provider
 - Persistence Integration Tests
 
 Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
@@ -81,6 +84,7 @@ Relevante Architekturentscheidungen:
 
 - ADR-044 Persistence Provider Interface
 - ADR-048 Artifact Registry and Persistence Coordination
+- ADR-052 Local Filesystem Persistence Provider
 
 ---
 
@@ -88,8 +92,8 @@ Relevante Architekturentscheidungen:
 
 Aktueller Teststand:
 
-    core tests: 17 passed
-    recorder tests: 25 passed
+core tests: 17 passed
+recorder tests: 33 passed
 
 Die Tests validieren unter anderem:
 
@@ -99,10 +103,12 @@ Die Tests validieren unter anderem:
 - Artifact Lifecycle
 - Artifact Registry Verhalten
 - Persistence Provider Verhalten
+- Filesystem Persistence Verhalten
 - Workflow Coordination
 - vollständiger Recorder Application Flow
 - Recording Artifact Creation and Storage Flow
 - Artifact Processing Coordination
+- Artifact Recovery aus persistierten Daten
 
 ---
 
@@ -117,6 +123,7 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Capture und Storage werden über technische Grenzen abstrahiert
 - Artifact Registry und Persistence bleiben getrennte Verantwortlichkeiten
 - Application Flow verbindet Workflow, Artifact Processing und Persistence über definierte Grenzen
+- Recovery stellt technische Konsistenz zwischen Persistence und Registry her
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
@@ -132,6 +139,7 @@ Die historische Entwicklung wird in einzelnen Milestones dokumentiert:
 - `docs/milestones/2026-07-31-recorder-architecture-foundation.md`
 - `docs/milestones/2026-08-01-local-recording-persistence-foundation.md`
 - `docs/milestones/2026-08-02-artifact-management-foundation.md`
+- `docs/milestones/2026-08-07-artifact-recovery-foundation.md`
 
 ---
 
@@ -152,7 +160,7 @@ Wichtige Einstiegspunkte:
 Geplante nächste Arbeiten:
 
 - lokale Artefaktverwaltung weiter ausbauen
-- Recovery- und Konsistenzmechanismen implementieren
+- Recovery- und Konsistenzmechanismen erweitern
 - konkrete Storage-Strategien definieren
 - weitere Produktionsobjekte modellieren
 - weitere technische Workflows auf Basis der bestehenden Grenzen umsetzen
@@ -207,7 +215,8 @@ Implemented:
 - Artifact Coordination Boundary
 - Artifact Processing Boundary
 - Recorder Application Boundary
-- complete local Recording Artifact Flow
+- Local Recording Artifact Flow
+- Artifact Recovery Boundary
 
 Relevant architecture decisions:
 
@@ -217,6 +226,7 @@ Relevant architecture decisions:
 - ADR-047 Local Artifact Registry and Discovery Strategy
 - ADR-049 Artifact Creation and Workflow Integration
 - ADR-051 Recording Artifact Processing Boundary
+- ADR-053 Artifact Recovery and Consistency Boundary
 
 ---
 
@@ -227,6 +237,7 @@ Implemented:
 - Local Recording Persistence Boundary
 - Persistence Provider Interface
 - In-Memory Persistence Provider
+- Filesystem Persistence Provider
 - Persistence Integration Tests
 
 The persistence architecture remains independent from concrete storage technologies.
@@ -235,6 +246,7 @@ Relevant architecture decisions:
 
 - ADR-044 Persistence Provider Interface
 - ADR-048 Artifact Registry and Persistence Coordination
+- ADR-052 Local Filesystem Persistence Provider
 
 ---
 
@@ -242,8 +254,8 @@ Relevant architecture decisions:
 
 Current test status:
 
-    core tests: 17 passed
-    recorder tests: 25 passed
+core tests: 17 passed
+recorder tests: 33 passed
 
 The tests validate among other things:
 
@@ -253,10 +265,12 @@ The tests validate among other things:
 - Artifact Lifecycle
 - Artifact Registry behavior
 - Persistence Provider behavior
+- Filesystem Persistence behavior
 - Workflow Coordination
 - complete Recorder Application Flow
 - Recording Artifact Creation and Storage Flow
 - Artifact Processing Coordination
+- Artifact Recovery from persisted data
 
 ---
 
@@ -271,6 +285,7 @@ NC-PoRe currently follows these architecture principles:
 - Capture and Storage are abstracted through technical boundaries
 - Artifact Registry and Persistence remain separate responsibilities
 - Application Flow connects Workflow, Artifact Processing and Persistence through defined boundaries
+- Recovery establishes technical consistency between Persistence and Registry
 - Persistence remains replaceable
 - local recording remains independent from network availability
 - Repository content is the technical source of truth
@@ -286,6 +301,7 @@ Historical development is documented in individual milestones:
 - `docs/milestones/2026-07-31-recorder-architecture-foundation.md`
 - `docs/milestones/2026-08-01-local-recording-persistence-foundation.md`
 - `docs/milestones/2026-08-02-artifact-management-foundation.md`
+- `docs/milestones/2026-08-07-artifact-recovery-foundation.md`
 
 ---
 
@@ -306,7 +322,7 @@ Important entry points:
 Planned next activities:
 
 - extend local artifact management
-- implement recovery and consistency mechanisms
+- extend recovery and consistency mechanisms
 - define concrete storage strategies
 - model additional production objects
 - implement further technical workflows based on the existing boundaries
