@@ -14,6 +14,7 @@
 pub mod coordination;
 pub mod factory;
 pub mod processing;
+pub mod recovery;
 pub mod registry;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
