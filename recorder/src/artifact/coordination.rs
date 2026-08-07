@@ -49,9 +49,9 @@ where
             artifact.recording_session_id.clone(),
         ));
 
-        self.persistence.store(artifact.clone());
-
         artifact.store();
+
+        self.persistence.store(artifact.clone());
 
         artifact
     }
@@ -97,5 +97,30 @@ mod tests {
         assert_eq!(stored_artifact.status(), &ArtifactStatus::Stored);
 
         assert!(coordinator.persistence().load("artifact-001").is_some());
+    }
+
+    // TEST-26
+    //
+    // Protects ADR-047 and ADR-052:
+    //
+    // Artifact coordination works with a concrete filesystem
+    // persistence implementation through the persistence boundary.
+    #[test]
+    fn coordinator_persists_artifact_with_filesystem_provider() {
+        let path = std::env::temp_dir().join("nc-pore-test-26");
+
+        let persistence = crate::persistence::FilesystemPersistenceProvider::new(&path);
+
+        let mut coordinator = ArtifactCoordinator::new(persistence);
+
+        let artifact = RecordingArtifact::new("artifact-026", "session-026");
+
+        let stored_artifact = coordinator.register_and_store(artifact);
+
+        assert_eq!(stored_artifact.status(), &ArtifactStatus::Stored);
+
+        assert!(coordinator.persistence().load("artifact-026").is_some());
+
+        let _ = std::fs::remove_dir_all(path);
     }
 }
