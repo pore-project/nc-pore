@@ -1,3 +1,5 @@
+pub mod repository;
+
 use crate::activity::{ActivityEvent, ActivityType};
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
