@@ -52,6 +52,7 @@ Die Architekturgrundlagen wurden bewusst vor Beginn der Implementierung definier
 
 Die Umsetzung folgt dieser Struktur:
 
+```text
 Architektur
 
 ↓
@@ -65,6 +66,7 @@ Technische Entscheidungen
 ↓
 
 Code
+```
 
 ---
 
@@ -76,6 +78,7 @@ Ein kleiner vollständiger Ablauf ist wertvoller als viele isolierte Komponenten
 
 Beispiel:
 
+```text
 Production Session erzeugen
 
 ↓
@@ -89,6 +92,7 @@ Session über API verfügbar machen
 ↓
 
 Session im Client anzeigen
+```
 
 ---
 
@@ -165,24 +169,60 @@ Der Core ist die erste ausführbare Umsetzung der Architektur.
 
 ---
 
-# Phase 3: Kommunikationsschicht
+# Phase 3: API- und Kommunikationsgrundlage
 
 ## Ziel
 
-Definierte Schnittstellen zwischen Systemkomponenten schaffen.
+Die fachlichen Fähigkeiten des bestehenden Core als stabile Kommunikationsgrenze beschreiben.
+
+Die Phase definiert zunächst die API als architektonischen Vertrag.
+
+Ein konkretes Kommunikationsprotokoll wird in dieser Phase noch nicht festgelegt.
 
 ## Ergebnis
 
-* Core-Funktionalität ist über Schnittstellen erreichbar
-* Clients können mit dem System kommunizieren
-* API-Prinzipien aus ADR-028 werden umgesetzt
+* fachliche Fähigkeiten des Core sind als API-Fähigkeiten beschrieben
+* API-Grenzen orientieren sich an den Domänenobjekten und Produktionsabläufen
+* Eingaben und Ergebnisse der wesentlichen Operationen sind definiert
+* API und interne Implementierung bleiben getrennt
+* Anforderungen an Versionierung und Erweiterbarkeit sind dokumentiert
+* spätere Kommunikationsprotokolle können auf diesem Vertrag aufbauen
 
 ## Schwerpunkt
 
-* API-Design
-* Fehlerbehandlung
-* Authentifizierung
-* Ereignisse und Zustandsänderungen
+* Domain-orientierte API
+* Session-bezogene Operationen
+* Teilnehmerverwaltung
+* Recording-bezogene Operationen
+* Asset-bezogene Operationen
+* Zustandsänderungen
+* Fehler- und Ergebnissemantik
+* API-Versionierung
+* Dokumentation
+
+## Bewusste Abgrenzung
+
+Diese Phase implementiert noch kein konkretes externes Kommunikationsprotokoll.
+
+Insbesondere werden noch nicht ohne konkreten Bedarf festgelegt:
+
+* REST
+* WebSocket
+* gRPC
+* konkrete Netzwerkarchitektur
+* vollständige Authentifizierungsinfrastruktur
+* externe Entwickler-API
+
+Die technische Umsetzung der Kommunikationsgrenze wird erst festgelegt, wenn ein konkreter Client oder ein anderes externes System diese Grenze benötigt.
+
+## Bezug
+
+* ADR-028 API Design Principles
+* ADR-034 Implementation Architecture
+
+Die bereits implementierten internen technischen Schnittstellen bleiben davon unberührt.
+
+Sie bilden die technischen Grenzen innerhalb des Systems und sind nicht mit der späteren externen API gleichzusetzen.
 
 ---
 
@@ -190,15 +230,18 @@ Definierte Schnittstellen zwischen Systemkomponenten schaffen.
 
 ## Ziel
 
-Die Architektur durch einen realen Client validieren.
+Die API- und Kommunikationsgrenze durch einen realen Client validieren.
 
 Der erste Client muss nicht vollständig sein.
 
 Er soll zeigen, dass:
 
-* Kommunikation funktioniert
-* Sessions verwaltet werden können
-* die Trennung zwischen Client und Core funktioniert
+* ein Client definierte Core-Fähigkeiten nutzen kann
+* Sessions über die vorgesehene Kommunikationsgrenze verwaltet werden können
+* die Trennung zwischen Client und Core erhalten bleibt
+* interne Implementierungsdetails des Core nicht Teil des Clients werden
+
+Die konkrete technische Form der Kommunikation wird dabei nur soweit festgelegt, wie sie für den ersten Client erforderlich ist.
 
 ---
 
@@ -252,6 +295,7 @@ Die einzelnen Komponenten zu einem vollständigen Arbeitsablauf verbinden.
 
 Ein vollständiger Produktionsablauf:
 
+```text
 Production Session erstellen
 
 ↓
@@ -273,6 +317,7 @@ Produktionsstatus prüfen
 ↓
 
 Ergebnis exportieren
+```
 
 ---
 
@@ -310,6 +355,7 @@ NC-PoRe vermeidet bewusst:
 * technische Komplexität ohne Bedarf
 * Ersatz bestehender Werkzeuge ohne Grund
 * Lösungen für hypothetische Probleme
+* Festlegung eines Kommunikationsprotokolls ohne konkreten Bedarf
 
 ---
 
@@ -317,20 +363,31 @@ NC-PoRe vermeidet bewusst:
 
 Status:
 
-## Technische Umsetzung gestartet
+## Technische Umsetzung läuft
 
 Die Architekturgrundlage ist abgeschlossen.
 
-Die ersten fachlichen Core-Modelle wurden implementiert
-und durch automatisierte Tests validiert.
+Die ersten fachlichen Core-Modelle sowie zentrale Recorder- und Persistenzkomponenten wurden implementiert und durch automatisierte Tests validiert.
 
-Die nächsten Schritte konzentrieren sich auf die Erweiterung
-der Domänenmodelle, Persistenz und technische Integration.
+Der Recorder unterstützt inzwischen:
+
+* Recording-Lifecycle
+* Capture Boundary
+* Workflow Coordination
+* Recording Artifacts
+* Artifact Registry
+* Artifact Processing
+* Persistence Provider
+* Filesystem Persistence
+* Artifact Recovery
+
+Die nächsten Schritte konzentrieren sich auf die Definition der API- und Kommunikationsgrundlage sowie auf weitere fachliche und technische Workflows.
 
 ---
 
 # Beziehung zu anderen Dokumenten
 
+```text
 README.md
 
 ↓
@@ -348,6 +405,7 @@ ADR-Dokumente
 ↓
 
 Source Code
+```
 
 Die Dokumente haben unterschiedliche Aufgaben:
 
@@ -421,6 +479,7 @@ The architectural foundation was deliberately created before implementation star
 
 Implementation follows this structure:
 
+```text
 Architecture
 
 ↓
@@ -434,6 +493,7 @@ Technical Decisions
 ↓
 
 Code
+```
 
 ---
 
@@ -445,6 +505,7 @@ A small complete workflow is more valuable than many isolated components.
 
 Example:
 
+```text
 Create Production Session
 
 ↓
@@ -458,6 +519,7 @@ Expose Session through API
 ↓
 
 Display Session in Client
+```
 
 ---
 
@@ -534,24 +596,60 @@ The Core is the first executable implementation of the architecture.
 
 ---
 
-# Phase 3: Communication Layer
+# Phase 3: API and Communication Foundation
 
 ## Goal
 
-Create defined interfaces between system components.
+Describe the capabilities of the existing Core as a stable communication boundary.
+
+This phase initially defines the API as an architectural contract.
+
+A concrete communication protocol is not selected during this phase.
 
 ## Result
 
-* Core functionality is accessible through defined interfaces
-* clients can communicate with the system
-* the API principles defined by ADR-028 are implemented
+* Core capabilities are described as API capabilities
+* API boundaries follow domain objects and production workflows
+* inputs and results of essential operations are defined
+* API and internal implementation remain separated
+* versioning and extensibility requirements are documented
+* future communication protocols can build on this contract
 
 ## Focus
 
-* API design
-* error handling
-* authentication
-* events and state changes
+* domain-oriented API
+* session-related operations
+* participant management
+* recording-related operations
+* asset-related operations
+* state changes
+* error and result semantics
+* API versioning
+* documentation
+
+## Explicit Scope Boundary
+
+This phase does not implement a concrete external communication protocol.
+
+In particular, the following are not selected without a concrete requirement:
+
+* REST
+* WebSocket
+* gRPC
+* concrete network architecture
+* complete authentication infrastructure
+* external developer API
+
+The technical implementation of the communication boundary is selected only when a concrete client or another external system requires it.
+
+## References
+
+* ADR-028 API Design Principles
+* ADR-034 Implementation Architecture
+
+Existing internal technical interfaces remain unaffected.
+
+They define technical boundaries within the system and must not be confused with the later external API.
 
 ---
 
@@ -559,15 +657,18 @@ Create defined interfaces between system components.
 
 ## Goal
 
-Validate the architecture through a real client.
+Validate the API and communication boundary through a real client.
 
 The first client does not need to be complete.
 
 It should demonstrate that:
 
-* communication works
-* sessions can be managed
-* the separation between client and Core works
+* a client can use defined Core capabilities
+* sessions can be managed through the intended communication boundary
+* the separation between client and Core remains intact
+* internal Core implementation details do not become part of the client
+
+The concrete technical form of communication is selected only to the extent required by the first client.
 
 ---
 
@@ -621,6 +722,7 @@ Connect the individual components into a complete workflow.
 
 A complete production workflow:
 
+```text
 Create Production Session
 
 ↓
@@ -642,6 +744,7 @@ Check production status
 ↓
 
 Export result
+```
 
 ---
 
@@ -679,6 +782,7 @@ NC-PoRe deliberately avoids:
 * technical complexity without a concrete need
 * replacing existing tools without a reason
 * solutions for hypothetical problems
+* selecting a communication protocol without a concrete requirement
 
 ---
 
@@ -686,20 +790,31 @@ NC-PoRe deliberately avoids:
 
 Status:
 
-## Technical Implementation Started
+## Technical Implementation In Progress
 
 The architecture foundation is complete.
 
-The first Core domain models have been implemented
-and validated through automated tests.
+The first Core domain models as well as central Recorder and persistence components have been implemented and validated through automated tests.
 
-The next steps focus on extending the domain models,
-persistence and technical integration.
+The Recorder now supports:
+
+* recording lifecycle
+* capture boundary
+* workflow coordination
+* Recording Artifacts
+* Artifact Registry
+* artifact processing
+* Persistence Provider
+* filesystem persistence
+* artifact recovery
+
+The next steps focus on defining the API and communication foundation and on implementing further domain and technical workflows.
 
 ---
 
 # Relationship to Other Documents
 
+```text
 README.md
 
 ↓
@@ -717,6 +832,7 @@ ADR documents
 ↓
 
 Source Code
+```
 
 The documents have different purposes:
 
