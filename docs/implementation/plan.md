@@ -1,6 +1,6 @@
 # NC-PoRe Implementation Plan
 
-## Deutsche Version (english version below)
+## Deutsche Version ([English version below](#english-version))
 
 ---
 
@@ -52,7 +52,6 @@ Die Architekturgrundlagen wurden bewusst vor Beginn der Implementierung definier
 
 Die Umsetzung folgt dieser Struktur:
 
-```text
 Architektur
 
 ↓
@@ -66,7 +65,6 @@ Technische Entscheidungen
 ↓
 
 Code
-```
 
 ---
 
@@ -78,7 +76,6 @@ Ein kleiner vollständiger Ablauf ist wertvoller als viele isolierte Komponenten
 
 Beispiel:
 
-```text
 Production Session erzeugen
 
 ↓
@@ -92,7 +89,6 @@ Session über API verfügbar machen
 ↓
 
 Session im Client anzeigen
-```
 
 ---
 
@@ -256,7 +252,6 @@ Die einzelnen Komponenten zu einem vollständigen Arbeitsablauf verbinden.
 
 Ein vollständiger Produktionsablauf:
 
-```text
 Production Session erstellen
 
 ↓
@@ -278,7 +273,6 @@ Produktionsstatus prüfen
 ↓
 
 Ergebnis exportieren
-```
 
 ---
 
@@ -337,7 +331,6 @@ der Domänenmodelle, Persistenz und technische Integration.
 
 # Beziehung zu anderen Dokumenten
 
-```text
 README.md
 
 ↓
@@ -355,7 +348,6 @@ ADR-Dokumente
 ↓
 
 Source Code
-```
 
 Die Dokumente haben unterschiedliche Aufgaben:
 
@@ -377,7 +369,7 @@ Diese Entscheidungen werden anschließend in zuverlässige Software umgesetzt.
 
 ---
 
-# English Version (german version above)
+# English Version ([Deutsche Version oben](#deutsche-version))
 
 ---
 
@@ -423,6 +415,273 @@ Technical documentation is not marketing material.
 
 ---
 
+## Architecture First, Code Second
+
+The architectural foundation was deliberately created before implementation started.
+
+Implementation follows this structure:
+
+Architecture
+
+↓
+
+Implementation Plan
+
+↓
+
+Technical Decisions
+
+↓
+
+Code
+
+---
+
+## Small Complete Steps
+
+NC-PoRe prefers complete vertical steps over isolated components.
+
+A small complete workflow is more valuable than many isolated components.
+
+Example:
+
+Create Production Session
+
+↓
+
+Store Session
+
+↓
+
+Expose Session through API
+
+↓
+
+Display Session in Client
+
+---
+
+## Keep Responsibilities Separate
+
+The architectural principles remain valid during implementation:
+
+* The Core contains domain logic.
+* Clients handle user interaction.
+* APIs define communication boundaries.
+* Storage handles persistent data.
+
+---
+
+## Avoid Premature Complexity
+
+Complexity is introduced only when there is a concrete need.
+
+NC-PoRe avoids:
+
+* optimization without measurement
+* abstractions without purpose
+* scalability mechanisms without requirements
+* technical solutions without a concrete use case
+
+---
+
+# Phase 1: Technical Project Foundation
+
+## Goal
+
+Create a reproducible development environment.
+
+## Result
+
+* repository structure defined
+* development environment documented
+* build process established
+* automated checks available
+* development workflow documented
+
+## Decisions to Clarify
+
+* programming languages
+* build system
+* workspace structure
+* development tools
+
+---
+
+# Phase 2: Core Implementation
+
+## Goal
+
+Implement the domain foundation of NC-PoRe.
+
+The Core is the first executable implementation of the architecture.
+
+## Result
+
+* Production Sessions can be created
+* central domain objects exist
+* business rules can be tested
+* the Core operates independently of clients
+
+## Focus
+
+* Production Session
+* Participants
+* Roles
+* Recordings
+* Assets
+* Activity History
+
+---
+
+# Phase 3: Communication Layer
+
+## Goal
+
+Create defined interfaces between system components.
+
+## Result
+
+* Core functionality is accessible through defined interfaces
+* clients can communicate with the system
+* the API principles defined by ADR-028 are implemented
+
+## Focus
+
+* API design
+* error handling
+* authentication
+* events and state changes
+
+---
+
+# Phase 4: First Client
+
+## Goal
+
+Validate the architecture through a real client.
+
+The first client does not need to be complete.
+
+It should demonstrate that:
+
+* communication works
+* sessions can be managed
+* the separation between client and Core works
+
+---
+
+# Phase 5: Local Recording
+
+## Goal
+
+Implement the central NC-PoRe principle technically:
+
+> Record locally. Synchronize afterwards.
+
+## Result
+
+* local audio recording
+* local storage
+* recording metadata
+* preparation for synchronization
+
+## Principle
+
+Recording must not depend on an active network connection.
+
+---
+
+# Phase 6: Synchronization
+
+## Goal
+
+Connect local production data with the central environment.
+
+## Result
+
+* assets can be transferred
+* synchronization states are traceable
+* conflicts can be handled
+
+## References
+
+* ADR-029 Distributed Recording Architecture
+* ADR-030 Synchronization Strategy
+
+---
+
+# Phase 7: Production Workflow
+
+## Goal
+
+Connect the individual components into a complete workflow.
+
+## Result
+
+A complete production workflow:
+
+Create Production Session
+
+↓
+
+Manage participants
+
+↓
+
+Record locally
+
+↓
+
+Synchronize assets
+
+↓
+
+Check production status
+
+↓
+
+Export result
+
+---
+
+# Phase 8: First Usable Version
+
+## Goal
+
+Create a version that can be used for real podcast production.
+
+## Result
+
+* stable recording process
+* reliable synchronization
+* usable clients
+* documented installation
+
+---
+
+# Decision Points
+
+During implementation, new decisions are documented as ADRs when they:
+
+* affect multiple components
+* have long-term consequences
+* change established architectural principles
+
+---
+
+# What We Deliberately Do Not Do Yet
+
+NC-PoRe deliberately avoids:
+
+* complete user interfaces before stable core logic
+* optimization before real-world use
+* technical complexity without a concrete need
+* replacing existing tools without a reason
+* solutions for hypothetical problems
+
+---
+
 # Current Implementation Status
 
 Status:
@@ -434,5 +693,45 @@ The architecture foundation is complete.
 The first Core domain models have been implemented
 and validated through automated tests.
 
-The next steps focus on extending domain models,
+The next steps focus on extending the domain models,
 persistence and technical integration.
+
+---
+
+# Relationship to Other Documents
+
+README.md
+
+↓
+
+project-status.md
+
+↓
+
+implementation-plan.md
+
+↓
+
+ADR documents
+
+↓
+
+Source Code
+
+The documents have different purposes:
+
+* README describes the project.
+* project-status describes the current state.
+* implementation-plan describes the path to implementation.
+* ADRs explain decisions.
+* Source Code implements the results.
+
+---
+
+# Guiding Principle
+
+NC-PoRe is not developed by writing code as quickly as possible.
+
+NC-PoRe is developed through traceable decisions.
+
+These decisions are then implemented as reliable software.
