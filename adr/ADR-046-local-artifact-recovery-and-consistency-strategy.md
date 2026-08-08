@@ -1,8 +1,8 @@
 # ADR-046 Local Artifact Recovery Strategy
 
-* Status: Proposed
-* Date: 2026-08-01
-* Decision Type: Architecture
+- Status: Proposed
+- Date: 2026-08-01
+- Decision Type: Architecture
 
 ---
 
@@ -44,11 +44,11 @@ Es besteht jedoch noch keine definierte Strategie für den Fall, dass ein lokale
 
 Mögliche Situationen:
 
-* ein lokales Artifact wurde erzeugt, aber nicht vollständig gespeichert
-* ein Persistenzvorgang wurde unterbrochen
-* ein Client wurde während eines technischen Vorgangs beendet
-* ein Artifact befindet sich in einem unvollständigen Zustand
-* gespeicherte Metadaten stimmen nicht mit dem erwarteten Lifecycle-Zustand überein
+- ein lokales Artifact wurde erzeugt, aber nicht vollständig gespeichert
+- ein Persistenzvorgang wurde unterbrochen
+- ein Client wurde während eines technischen Vorgangs beendet
+- ein Artifact befindet sich in einem unvollständigen Zustand
+- gespeicherte Metadaten stimmen nicht mit dem erwarteten Lifecycle-Zustand überein
 
 NC-PoRe benötigt daher eine technische Strategie zur Behandlung solcher Zustände.
 
@@ -92,15 +92,15 @@ Lokale Wiederherstellung ist eine technische Konsistenzaufgabe.
 
 Sie entscheidet nicht:
 
-* ob eine Produktion fachlich gültig ist
-* ob eine Aufnahme stattfinden darf
-* welche Rolle ein Teilnehmer besitzt
+- ob eine Produktion fachlich gültig ist
+- ob eine Aufnahme stattfinden darf
+- welche Rolle ein Teilnehmer besitzt
 
 Sie entscheidet ausschließlich:
 
-* ob technische Artefakte konsistent verwaltet werden können
-* ob unvollständige Zustände erkannt werden
-* ob eine Wiederherstellung möglich ist
+- ob technische Artefakte konsistent verwaltet werden können
+- ob unvollständige Zustände erkannt werden
+- ob eine Wiederherstellung möglich ist
 
 ---
 
@@ -110,15 +110,15 @@ Sie entscheidet ausschließlich:
 
 Verantwortlich für:
 
-* Verwaltung lokaler Recording Artifacts
-* Erkennung technischer Zustandsabweichungen
-* Übergabe von Recovery-Anforderungen
+- Verwaltung lokaler Recording Artifacts
+- Erkennung technischer Zustandsabweichungen
+- Übergabe von Recovery-Anforderungen
 
 Nicht verantwortlich für:
 
-* fachliche Produktionsentscheidungen
-* Benutzerentscheidungen
-* Synchronisationsstrategie
+- fachliche Produktionsentscheidungen
+- Benutzerentscheidungen
+- Synchronisationsstrategie
 
 ---
 
@@ -126,9 +126,9 @@ Nicht verantwortlich für:
 
 Verantwortlich für:
 
-* Erkennen unvollständiger Zustände
-* Wiederherstellung technisch möglicher Zustände
-* Markierung nicht wiederherstellbarer Artifacts
+- Erkennen unvollständiger Zustände
+- Wiederherstellung technisch möglicher Zustände
+- Markierung nicht wiederherstellbarer Artifacts
 
 Recovery erstellt keine neuen fachlichen Zustände.
 
@@ -138,10 +138,10 @@ Recovery erstellt keine neuen fachlichen Zustände.
 
 Der Persistence Provider bleibt ausschließlich verantwortlich für:
 
-* Speichern
-* Laden
-* Auflisten
-* Entfernen
+- Speichern
+- Laden
+- Auflisten
+- Entfernen
 
 Er enthält keine Recovery-Entscheidungen.
 
@@ -169,9 +169,9 @@ Recovery evaluation
 
 Unterstützt werden zunächst:
 
-* Erkennen fehlender Persistenzdaten
-* erneutes Laden gespeicherter Artifacts
-* Validierung technischer Artifact-Zustände
+- Erkennen fehlender Persistenzdaten
+- erneutes Laden gespeicherter Artifacts
+- Validierung technischer Artifact-Zustände
 
 Automatische Reparatur komplexer Fälle ist nicht Bestandteil dieser Entscheidung.
 
@@ -213,11 +213,11 @@ Diese Entscheidung definiert keine konkrete Recovery-Technologie.
 
 Nicht Bestandteil dieser ADR:
 
-* Datenbank-Recovery
-* Dateisystem-Reparatur
-* Backup-Systeme
-* Cloud Recovery
-* Verschlüsselungswiederherstellung
+- Datenbank-Recovery
+- Dateisystem-Reparatur
+- Backup-Systeme
+- Cloud Recovery
+- Verschlüsselungswiederherstellung
 
 Diese Entscheidungen werden später getroffen.
 
@@ -227,19 +227,19 @@ Diese Entscheidungen werden später getroffen.
 
 ## Positive Consequences
 
-* technische Zustände werden explizit behandelt
-* lokale Artefakte können sicherer verwaltet werden
-* Persistence Boundary bleibt klar getrennt
-* zukünftige Storage-Lösungen werden nicht eingeschränkt
-* Fehlerfälle werden Teil der Architektur
+- technische Zustände werden explizit behandelt
+- lokale Artefakte können sicherer verwaltet werden
+- Persistence Boundary bleibt klar getrennt
+- zukünftige Storage-Lösungen werden nicht eingeschränkt
+- Fehlerfälle werden Teil der Architektur
 
 ---
 
 ## Negative Consequences
 
-* zusätzliche technische Zustandslogik
-* weiterer Modellierungsaufwand
-* Recovery benötigt spätere konkrete Implementierungen
+- zusätzliche technische Zustandslogik
+- weiterer Modellierungsaufwand
+- Recovery benötigt spätere konkrete Implementierungen
 
 Diese Nachteile werden bewusst akzeptiert.
 
@@ -275,13 +275,20 @@ Dies würde die Trennung zwischen Workflow und Infrastruktur verletzen.
 
 Diese Entscheidung erweitert:
 
-* ADR-041 Local Recording Artifact and Storage Boundary
-* ADR-042 Recording Artifact Model and Lifecycle Boundary
-* ADR-043 Local Recording Persistence Boundary
-* ADR-044 Persistence Provider Interface
-* ADR-045 Local Artifact Management Foundation
+- ADR-041 Local Recording Artifact and Storage Boundary
+- ADR-042 Recording Artifact Model and Lifecycle Boundary
+- ADR-043 Local Recording Persistence Boundary
+- ADR-044 Persistence Provider Interface
+- ADR-045 Local Artifact Management Foundation
 
 Sie definiert die technische Grundlage für den Umgang mit lokalen inkonsistenten Artifact-Zuständen.
+Die in dieser ADR definierte Recovery-Strategie wird durch ADR-053 Artifact Recovery and Consistency Boundary konkretisiert.
+
+---
+
+# Subsequent Refinements
+
+ADR-053 konkretisiert die in dieser ADR definierte Recovery-Strategie durch die technische Definition der Artifact Recovery and Consistency Boundary.
 
 ---
 
@@ -289,11 +296,11 @@ Sie definiert die technische Grundlage für den Umgang mit lokalen inkonsistente
 
 Spätere Entscheidungen behandeln:
 
-* konkrete Recovery-Mechanismen
-* Backup-Strategien
-* Wiederaufnahme unterbrochener Aufnahmen
-* Synchronisations-Recovery
-* automatische Reparaturverfahren
+- konkrete Recovery-Mechanismen
+- Backup-Strategien
+- Wiederaufnahme unterbrochener Aufnahmen
+- Synchronisations-Recovery
+- automatische Reparaturverfahren
 
 ---
 
@@ -341,11 +348,11 @@ However, no strategy currently exists for situations where a local Recording Art
 
 Possible situations include:
 
-* a local artifact was created but not fully stored
-* a persistence operation was interrupted
-* a client terminated during a technical operation
-* an artifact remains in an incomplete state
-* stored metadata does not match the expected lifecycle state
+- a local artifact was created but not fully stored
+- a persistence operation was interrupted
+- a client terminated during a technical operation
+- an artifact remains in an incomplete state
+- stored metadata does not match the expected lifecycle state
 
 NC-PoRe therefore requires a technical strategy for handling such states.
 
@@ -389,15 +396,15 @@ Local recovery is a technical consistency responsibility.
 
 It does not decide:
 
-* whether a production is valid
-* whether recording is allowed
-* which role a participant has
+- whether a production is valid
+- whether recording is allowed
+- which role a participant has
 
 It only decides:
 
-* whether technical artifacts can be managed consistently
-* whether incomplete states can be detected
-* whether recovery is technically possible
+- whether technical artifacts can be managed consistently
+- whether incomplete states can be detected
+- whether recovery is technically possible
 
 ---
 
@@ -407,15 +414,15 @@ It only decides:
 
 Responsible for:
 
-* managing local Recording Artifacts
-* detecting technical state inconsistencies
-* forwarding recovery requirements
+- managing local Recording Artifacts
+- detecting technical state inconsistencies
+- forwarding recovery requirements
 
 Not responsible for:
 
-* production decisions
-* user decisions
-* synchronization strategy
+- production decisions
+- user decisions
+- synchronization strategy
 
 ---
 
@@ -423,9 +430,9 @@ Not responsible for:
 
 Responsible for:
 
-* detecting incomplete states
-* restoring technically possible states
-* marking non-recoverable artifacts
+- detecting incomplete states
+- restoring technically possible states
+- marking non-recoverable artifacts
 
 Recovery does not create new domain states.
 
@@ -435,10 +442,10 @@ Recovery does not create new domain states.
 
 The Persistence Provider remains responsible only for:
 
-* storing
-* loading
-* listing
-* removing
+- storing
+- loading
+- listing
+- removing
 
 It contains no recovery decisions.
 
@@ -466,9 +473,9 @@ Recovery evaluation
 
 Initially supported:
 
-* detecting missing persistence data
-* reloading stored artifacts
-* validating technical artifact states
+- detecting missing persistence data
+- reloading stored artifacts
+- validating technical artifact states
 
 Automatic repair of complex cases is not part of this decision.
 
@@ -510,11 +517,11 @@ This decision does not define a concrete recovery technology.
 
 Not part of this ADR:
 
-* database recovery
-* filesystem repair
-* backup systems
-* cloud recovery
-* encryption recovery
+- database recovery
+- filesystem repair
+- backup systems
+- cloud recovery
+- encryption recovery
 
 These decisions will be addressed later.
 
@@ -524,19 +531,19 @@ These decisions will be addressed later.
 
 ## Positive Consequences
 
-* technical states are explicitly handled
-* local artifacts can be managed more safely
-* Persistence Boundary remains clearly separated
-* future storage solutions remain unrestricted
-* failure scenarios become part of the architecture
+- technical states are explicitly handled
+- local artifacts can be managed more safely
+- Persistence Boundary remains clearly separated
+- future storage solutions remain unrestricted
+- failure scenarios become part of the architecture
 
 ---
 
 ## Negative Consequences
 
-* additional technical state logic
-* additional modeling effort
-* recovery requires later concrete implementations
+- additional technical state logic
+- additional modeling effort
+- recovery requires later concrete implementations
 
 These disadvantages are consciously accepted.
 
@@ -572,13 +579,20 @@ This would violate separation between workflow and infrastructure.
 
 This decision extends:
 
-* ADR-041 Local Recording Artifact and Storage Boundary
-* ADR-042 Recording Artifact Model and Lifecycle Boundary
-* ADR-043 Local Recording Persistence Boundary
-* ADR-044 Persistence Provider Interface
-* ADR-045 Local Artifact Management Foundation
+- ADR-041 Local Recording Artifact and Storage Boundary
+- ADR-042 Recording Artifact Model and Lifecycle Boundary
+- ADR-043 Local Recording Persistence Boundary
+- ADR-044 Persistence Provider Interface
+- ADR-045 Local Artifact Management Foundation
 
 It defines the technical foundation for handling inconsistent local Recording Artifact states.
+The recovery strategy defined by this ADR is refined by ADR-053 Artifact Recovery and Consistency Boundary.
+
+---
+
+# Subsequent Refinements
+
+ADR-053 refines the recovery strategy defined by this ADR by establishing the concrete Artifact Recovery and Consistency Boundary.
 
 ---
 
@@ -586,11 +600,11 @@ It defines the technical foundation for handling inconsistent local Recording Ar
 
 Future decisions will address:
 
-* concrete recovery mechanisms
-* backup strategies
-* interrupted recording continuation
-* synchronization recovery
-* automated repair procedures
+- concrete recovery mechanisms
+- backup strategies
+- interrupted recording continuation
+- synchronization recovery
+- automated repair procedures
 
 ---
 

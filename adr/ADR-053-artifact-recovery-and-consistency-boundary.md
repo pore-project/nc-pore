@@ -1,7 +1,7 @@
 # ADR-053: Artifact Recovery and Consistency Boundary
 
-* Status: Accepted
-* Date: 2026-08-08
+- Status: Accepted
+- Date: 2026-08-08
 
 ---
 
@@ -17,8 +17,8 @@ Die Registry enthält jedoch nicht die eigentlichen Artefaktdaten. Sie enthält 
 
 Damit entsteht eine mögliche Inkonsistenz zwischen:
 
-* persistierten Recording Artifacts
-* dem lokalen Artifact Registry
+- persistierten Recording Artifacts
+- dem lokalen Artifact Registry
 
 Eine solche Inkonsistenz kann beispielsweise entstehen, wenn ein Artifact bereits persistiert wurde, die Registry jedoch nicht mehr den entsprechenden Eintrag enthält.
 
@@ -77,11 +77,11 @@ Der ArtifactRecoveryService verbindet Persistenz und lokale Discovery.
 
 Er entscheidet nicht über:
 
-* Artifact-Lifecycle
-* Artifact-Erzeugung
-* Speicherungstechnologie
-* Synchronisation
-* Produktionsworkflow
+- Artifact-Lifecycle
+- Artifact-Erzeugung
+- Speicherungstechnologie
+- Synchronisation
+- Produktionsworkflow
 
 Seine Aufgabe ist ausschließlich die Wiederherstellung fehlender Registry-Kenntnis.
 
@@ -157,8 +157,8 @@ Sie ist keine unabhängige Quelle für die dauerhafte Existenz eines Artifacts.
 
 Damit wird zwischen:
 
-* persistierten Daten
-* lokalem Discovery-Zustand
+- persistierten Daten
+- lokalem Discovery-Zustand
 
 unterschieden.
 
@@ -172,9 +172,9 @@ Dadurch bleibt die Recovery unabhängig von der konkreten Persistenzimplementier
 
 Die gleiche Recovery-Logik kann daher beispielsweise mit:
 
-* InMemoryPersistenceProvider
-* FilesystemPersistenceProvider
-* zukünftigen Persistence Providern
+- InMemoryPersistenceProvider
+- FilesystemPersistenceProvider
+- zukünftigen Persistence Providern
 
 verwendet werden.
 
@@ -262,17 +262,17 @@ Solche Konsistenzregeln bleiben einer zukünftigen, ausdrücklich dafür vorgese
 
 ## Vorteile
 
-* Persistenz und lokale Discovery bleiben getrennt.
-* Recovery ist unabhängig von der konkreten Speichertechnologie.
-* Ein Verlust lokaler Registry-Kenntnis kann aus der Persistenz rekonstruiert werden.
-* Der normale Artifact-Workflow bleibt von Recovery-Logik getrennt.
-* Die bestehende Persistence Boundary wird wiederverwendet.
+- Persistenz und lokale Discovery bleiben getrennt.
+- Recovery ist unabhängig von der konkreten Speichertechnologie.
+- Ein Verlust lokaler Registry-Kenntnis kann aus der Persistenz rekonstruiert werden.
+- Der normale Artifact-Workflow bleibt von Recovery-Logik getrennt.
+- Die bestehende Persistence Boundary wird wiederverwendet.
 
 ## Nachteile
 
-* Recovery benötigt Zugriff auf die persistierten Artifacts.
-* Die Registry kann nach einer Recovery zusätzliche Einträge enthalten, die vorher nicht vorhanden waren.
-* Die Recovery ist bewusst nicht für vollständige Konsistenzprüfung oder Bereinigung verantwortlich.
+- Recovery benötigt Zugriff auf die persistierten Artifacts.
+- Die Registry kann nach einer Recovery zusätzliche Einträge enthalten, die vorher nicht vorhanden waren.
+- Die Recovery ist bewusst nicht für vollständige Konsistenzprüfung oder Bereinigung verantwortlich.
 
 ---
 
@@ -280,13 +280,13 @@ Solche Konsistenzregeln bleiben einer zukünftigen, ausdrücklich dafür vorgese
 
 Diese ADR definiert ausdrücklich nicht:
 
-* Synchronisation zwischen Geräten
-* Konfliktauflösung
-* verteilte Artifact-Verwaltung
-* Datenintegrität der eigentlichen Artifact-Dateien
-* Garbage Collection
-* automatische Entfernung veralteter Registry-Einträge
-* Recovery beschädigter oder unlesbarer Artefaktdaten
+- Synchronisation zwischen Geräten
+- Konfliktauflösung
+- verteilte Artifact-Verwaltung
+- Datenintegrität der eigentlichen Artifact-Dateien
+- Garbage Collection
+- automatische Entfernung veralteter Registry-Einträge
+- Recovery beschädigter oder unlesbarer Artefaktdaten
 
 Diese Themen können durch spätere ADRs behandelt werden.
 
@@ -298,9 +298,9 @@ Die Recovery Boundary wird durch Tests abgesichert.
 
 Die Tests stellen insbesondere sicher, dass:
 
-* persistierte Artifacts in die Registry übernommen werden,
-* fehlende persistierte Artifacts keine Registry-Einträge erzeugen,
-* vorhandene Registry-Einträge erhalten bleiben.
+- persistierte Artifacts in die Registry übernommen werden,
+- fehlende persistierte Artifacts keine Registry-Einträge erzeugen,
+- vorhandene Registry-Einträge erhalten bleiben.
 
 Damit wird die in dieser ADR definierte Recovery-Verantwortung explizit gegen unbeabsichtigte Erweiterungen geschützt.
 
@@ -310,15 +310,18 @@ Damit wird die in dieser ADR definierte Recovery-Verantwortung explizit gegen un
 
 Diese ADR baut insbesondere auf folgenden Entscheidungen auf:
 
-* ADR-047 Local Artifact Registry and Discovery Strategy
-* ADR-051 Recording Artifact Processing Boundary
-* ADR-052 Local Filesystem Persistence Provider
+- ADR-047 Local Artifact Registry and Discovery Strategy
+- ADR-051 Recording Artifact Processing Boundary
+- ADR-052 Local Filesystem Persistence Provider
+- ADR-046 Local Artifact Recovery and Consistency Strategy
 
 ADR-047 definiert die lokale Artifact Registry.
 
 ADR-051 definiert die Grenze für die Verarbeitung von Capture Results zu Recording Artifacts.
 
 ADR-052 definiert einen konkreten Persistence Provider für lokale Speicherung.
+
+ADR-046 definiert die übergeordnete Recovery-Strategie für lokale Recording Artifacts.
 
 ADR-053 definiert die technische Grenze für die Wiederherstellung der lokalen Registry aus persistierten Artifacts.
 
@@ -330,10 +333,10 @@ Die Recovery Boundary ist implementiert.
 
 Die Implementierung besteht aus:
 
-* ArtifactRecoveryService
-* Verwendung von PersistenceProvider
-* Wiederaufbau fehlender LocalArtifactRegistry-Einträge
-* automatisierten Tests für das definierte Recovery-Verhalten
+- ArtifactRecoveryService
+- Verwendung von PersistenceProvider
+- Wiederaufbau fehlender LocalArtifactRegistry-Einträge
+- automatisierten Tests für das definierte Recovery-Verhalten
 
 ---
 
@@ -357,8 +360,8 @@ However, the registry does not contain the actual artifact data. It only contain
 
 This creates a possible inconsistency between:
 
-* persisted Recording Artifacts
-* the local Artifact Registry
+- persisted Recording Artifacts
+- the local Artifact Registry
 
 Such an inconsistency can occur, for example, when an artifact has already been persisted but the registry no longer contains the corresponding entry.
 
@@ -417,11 +420,11 @@ The ArtifactRecoveryService connects persistence and local discovery.
 
 It does not decide:
 
-* artifact lifecycle
-* artifact creation
-* storage technology
-* synchronization
-* production workflow
+- artifact lifecycle
+- artifact creation
+- storage technology
+- synchronization
+- production workflow
 
 Its sole responsibility is restoring missing registry knowledge.
 
@@ -497,8 +500,8 @@ It is not an independent source for the durable existence of an artifact.
 
 This distinguishes between:
 
-* persisted data
-* local discovery state
+- persisted data
+- local discovery state
 
 ---
 
@@ -510,9 +513,9 @@ This keeps recovery independent of the concrete persistence implementation.
 
 The same recovery logic can therefore be used with, for example:
 
-* InMemoryPersistenceProvider
-* FilesystemPersistenceProvider
-* future Persistence Providers
+- InMemoryPersistenceProvider
+- FilesystemPersistenceProvider
+- future Persistence Providers
 
 Recovery knows neither file paths nor file formats nor concrete storage technologies.
 
@@ -598,17 +601,17 @@ Such consistency rules remain the responsibility of a future function explicitly
 
 ## Advantages
 
-* Persistence and local discovery remain separated.
-* Recovery is independent of the concrete storage technology.
-* Lost local registry knowledge can be reconstructed from persistence.
-* The normal artifact workflow remains separate from recovery logic.
-* The existing Persistence Boundary is reused.
+- Persistence and local discovery remain separated.
+- Recovery is independent of the concrete storage technology.
+- Lost local registry knowledge can be reconstructed from persistence.
+- The normal artifact workflow remains separate from recovery logic.
+- The existing Persistence Boundary is reused.
 
 ## Disadvantages
 
-* Recovery requires access to persisted artifacts.
-* The registry may contain additional entries after recovery that were not present before.
-* Recovery deliberately does not perform complete consistency validation or cleanup.
+- Recovery requires access to persisted artifacts.
+- The registry may contain additional entries after recovery that were not present before.
+- Recovery deliberately does not perform complete consistency validation or cleanup.
 
 ---
 
@@ -616,13 +619,13 @@ Such consistency rules remain the responsibility of a future function explicitly
 
 This ADR explicitly does not define:
 
-* synchronization between devices
-* conflict resolution
-* distributed artifact management
-* data integrity of the actual artifact files
-* garbage collection
-* automatic removal of outdated registry entries
-* recovery of damaged or unreadable artifact data
+- synchronization between devices
+- conflict resolution
+- distributed artifact management
+- data integrity of the actual artifact files
+- garbage collection
+- automatic removal of outdated registry entries
+- recovery of damaged or unreadable artifact data
 
 These topics may be addressed by future ADRs.
 
@@ -634,9 +637,9 @@ The Recovery Boundary is protected by tests.
 
 The tests specifically ensure that:
 
-* persisted artifacts are added to the registry,
-* missing persisted artifacts do not create registry entries,
-* existing registry entries are preserved.
+- persisted artifacts are added to the registry,
+- missing persisted artifacts do not create registry entries,
+- existing registry entries are preserved.
 
 This explicitly protects the recovery responsibility defined by this ADR against unintended extensions.
 
@@ -646,15 +649,18 @@ This explicitly protects the recovery responsibility defined by this ADR against
 
 This ADR builds in particular on the following decisions:
 
-* ADR-047 Local Artifact Registry and Discovery Strategy
-* ADR-051 Recording Artifact Processing Boundary
-* ADR-052 Local Filesystem Persistence Provider
+- ADR-047 Local Artifact Registry and Discovery Strategy
+- ADR-051 Recording Artifact Processing Boundary
+- ADR-052 Local Filesystem Persistence Provider
+- ADR-046 Local Artifact Recovery and Consistency Strategy
 
 ADR-047 defines the local Artifact Registry.
 
 ADR-051 defines the boundary for processing Capture Results into Recording Artifacts.
 
 ADR-052 defines a concrete Persistence Provider for local storage.
+
+ADR-046 defines the overarching recovery strategy for local Recording Artifacts.
 
 ADR-053 defines the technical boundary for restoring the local registry from persisted artifacts.
 
@@ -666,10 +672,10 @@ The Recovery Boundary is implemented.
 
 The implementation consists of:
 
-* ArtifactRecoveryService
-* use of PersistenceProvider
-* rebuilding missing LocalArtifactRegistry entries
-* automated tests for the defined recovery behavior
+- ArtifactRecoveryService
+- use of PersistenceProvider
+- rebuilding missing LocalArtifactRegistry entries
+- automated tests for the defined recovery behavior
 
 ---
 
