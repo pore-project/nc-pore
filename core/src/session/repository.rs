@@ -41,9 +41,12 @@ mod tests {
     }
 
     impl ProductionSessionRepository for InMemory {
-        type Error = ();
+        type Error = &'static str;
 
         fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            if self.sessions.iter().any(|s| s.id == session.id) {
+                return Err("session already exists");
+            }
             self.sessions.push(session.clone());
             Ok(())
         }
@@ -59,6 +62,17 @@ mod tests {
         let id = ProductionId::new("session-001");
         repo.store(&ProductionSession::new(id.clone())).unwrap();
         assert!(repo.get(&id).unwrap().is_some());
+    }
+
+    #[test]
+    fn repository_rejects_duplicate_session_id() {
+        let mut repo = InMemory { sessions: vec![] };
+        let id = ProductionId::new("session-001");
+
+        repo.store(&ProductionSession::new(id.clone())).unwrap();
+        let result = repo.store(&ProductionSession::new(id));
+
+        assert_eq!(result, Err("session already exists"));
     }
 
     #[test]
