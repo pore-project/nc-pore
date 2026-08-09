@@ -57,6 +57,7 @@ mod tests {
     }
 
     #[test]
+    // TEST 01: repository can store and get a session
     fn repository_can_store_and_get_session() {
         let mut repo = InMemory { sessions: vec![] };
         let id = ProductionId::new("session-001");
@@ -65,6 +66,7 @@ mod tests {
     }
 
     #[test]
+    // TEST 02: repository rejects duplicate session ID
     fn repository_rejects_duplicate_session_id() {
         let mut repo = InMemory { sessions: vec![] };
         let id = ProductionId::new("session-001");
@@ -76,6 +78,7 @@ mod tests {
     }
 
     #[test]
+    // TEST 03: repository returns None for an unknown session
     fn repository_returns_none_for_unknown_session() {
         let repo = InMemory { sessions: vec![] };
         assert!(repo.get(&ProductionId::new("unknown")).unwrap().is_none());
