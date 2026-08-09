@@ -26,7 +26,7 @@ Es definiert keinen Kommunikationsmechanismus.
 | Capability                              | Defined |       Implemented | Exposed | Status                    |
 | --------------------------------------- | ------: | ----------------: | ------: | ------------------------- |
 | Create Production Session               |     Yes |               Yes |      No | Implemented internally    |
-| Get Production Session                  |     Yes |                No |      No | Domain capability defined |
+| Get Production Session                  |     Yes |               Yes |      No | Repository capability implemented |
 | Start Production Session                |     Yes |               Yes |      No | Implemented internally    |
 | Complete Production Session             |     Yes |               Yes |      No | Implemented internally    |
 | Add Participant                         |     Yes |               Yes |      No | Implemented internally    |
@@ -61,13 +61,18 @@ A newly created session starts in the `Created` state and contains an initial `S
 
 **Defined:** Yes
 
-**Implemented:** No
+**Implemented:** Yes
 
-The domain API defines retrieval of an existing Production Session.
+The Core provides `ProductionSessionRepository` with `store(...)` and `get(...)`.
 
-The current Core does not yet provide a repository or persistence boundary for `ProductionSession` instances.
+The repository contract is implemented and validated by tests for:
 
-Therefore, the capability is currently defined at the API level but not implemented as a retrievable persistent domain object.
+- storing and retrieving a Production Session
+- rejecting duplicate Production Session identifiers
+- returning no result for unknown identifiers
+
+The repository currently provides an in-memory reference implementation.
+A production persistence adapter has not yet been implemented.
 
 **Exposed:** No
 
@@ -353,7 +358,7 @@ It does not define a communication mechanism.
 | Capability                              | Defined |       Implemented | Exposed | Status                    |
 | --------------------------------------- | ------: | ----------------: | ------: | ------------------------- |
 | Create Production Session               |     Yes |               Yes |      No | Implemented internally    |
-| Get Production Session                  |     Yes |                No |      No | Domain capability defined |
+| Get Production Session                  |     Yes |               Yes |      No | Repository capability implemented |
 | Start Production Session                |     Yes |               Yes |      No | Implemented internally    |
 | Complete Production Session             |     Yes |               Yes |      No | Implemented internally    |
 | Add Participant                         |     Yes |               Yes |      No | Implemented internally    |
@@ -388,13 +393,18 @@ A newly created session starts in the `Created` state and contains an initial `S
 
 **Defined:** Yes
 
-**Implemented:** No
+**Implemented:** Yes
 
-The domain API defines retrieval of an existing Production Session.
+The Core provides `ProductionSessionRepository` with `store(...)` and `get(...)`.
 
-The current Core does not yet provide a repository or persistence boundary for `ProductionSession` instances.
+The repository contract is implemented and validated by tests for:
 
-Therefore, the capability is currently defined at the API level but not implemented as a retrievable persistent domain object.
+- storing and retrieving a Production Session
+- rejecting duplicate Production Session identifiers
+- returning no result for unknown identifiers
+
+The repository currently provides an in-memory reference implementation.
+A production persistence adapter has not yet been implemented.
 
 **Exposed:** No
 
