@@ -1,6 +1,6 @@
 # ADR-045 Local Artifact Management
 
-* Status: Proposed
+* Status: Accepted
 * Date: 2026-08-01
 * Decision Type: Architecture
 

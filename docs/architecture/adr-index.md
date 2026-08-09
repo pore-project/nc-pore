@@ -50,6 +50,26 @@ This document provides an overview and navigation entry.
 - ADR-035 Domain Lifecycle and State Transition Management
 - ADR-036 Development Workflow and Source of Truth
 
+# Current Implementation Architecture
+
+- ADR-037 Development Workflow and Source of Truth
+- ADR-038 Core Implementation Structure and Module Organization
+- ADR-039 Recording Architecture and Capture Boundary
+- ADR-040 Recorder Workflow and Capture Lifecycle Coordination
+- ADR-041 Local Recording Artifact and Storage Boundary
+- ADR-042 Recording Artifact Model and Lifecycle Boundary
+- ADR-043 Local Recording Persistence Boundary
+- ADR-044 Persistence Provider Interface
+- ADR-045 Local Artifact Management
+- ADR-046 Local Artifact Recovery Strategy
+- ADR-047 Local Artifact Registry and Discovery Strategy
+- ADR-048 Artifact Registry and Persistence Coordination Boundary
+- ADR-049 Artifact Creation and Workflow Integration
+- ADR-050 Recording Artifact Factory
+- ADR-051 Recording Artifact Processing Boundary
+- ADR-052 Local Filesystem Persistence Provider
+- ADR-053 Artifact Recovery and Consistency Boundary
+
 ---
 
 # Purpose

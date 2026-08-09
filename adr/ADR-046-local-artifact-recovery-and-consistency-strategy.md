@@ -1,6 +1,6 @@
 # ADR-046 Local Artifact Recovery Strategy
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-01
 - Decision Type: Architecture
 
