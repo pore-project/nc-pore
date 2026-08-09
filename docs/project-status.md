@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
 - Version: 2.1
-- Date: 2026-08-07
+- Date: 2026-08-09
 
 ---
 
@@ -48,6 +48,9 @@ Implementiert:
 - Capture Boundary Interface
 - Workflow Coordination Layer
 - Recording Artifact Model
+- Recording Artifact Track and Chunk Model
+- Capture Result Track and Chunk Model
+- Capture-to-Artifact Data Boundary
 - Artifact Lifecycle Management
 - Local Artifact Registry
 - Artifact Coordination Boundary
@@ -65,6 +68,9 @@ Relevante Architekturentscheidungen:
 - ADR-049 Artifact Creation and Workflow Integration
 - ADR-051 Recording Artifact Processing Boundary
 - ADR-053 Artifact Recovery and Consistency Boundary
+- ADR-054 Recording Artifact and Local Recording Data Association
+- ADR-055 Filesystem Persistence Layout
+- ADR-056 Capture Result and Recording Artifact Data Boundary
 
 ---
 
@@ -92,8 +98,8 @@ Relevante Architekturentscheidungen:
 
 Aktueller Teststand:
 
-core tests: 17 passed
-recorder tests: 33 passed
+core tests: 20 passed
+recorder tests: 40 passed
 
 Die Tests validieren unter anderem:
 
@@ -124,6 +130,8 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Artifact Registry und Persistence bleiben getrennte Verantwortlichkeiten
 - Application Flow verbindet Workflow, Artifact Processing und Persistence über definierte Grenzen
 - Recovery stellt technische Konsistenz zwischen Persistence und Registry her
+- CaptureResult und RecordingArtifact besitzen getrennte technische Datenmodelle
+- RecordingArtifact strukturiert Tracks und Chunks unabhängig von der physischen Persistenz
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
@@ -160,6 +168,7 @@ Wichtige Einstiegspunkte:
 Geplante nächste Arbeiten:
 
 - lokale Artefaktverwaltung weiter ausbauen
+- Capture- und Artifact-Datenmodell weiter in den Produktionsworkflow integrieren
 - Recovery- und Konsistenzmechanismen erweitern
 - konkrete Storage-Strategien definieren
 - weitere Produktionsobjekte modellieren
@@ -210,6 +219,9 @@ Implemented:
 - Capture Boundary Interface
 - Workflow Coordination Layer
 - Recording Artifact Model
+- Recording Artifact Track and Chunk Model
+- Capture Result Track and Chunk Model
+- Capture-to-Artifact Data Boundary
 - Artifact Lifecycle Management
 - Local Artifact Registry
 - Artifact Coordination Boundary
@@ -227,6 +239,9 @@ Relevant architecture decisions:
 - ADR-049 Artifact Creation and Workflow Integration
 - ADR-051 Recording Artifact Processing Boundary
 - ADR-053 Artifact Recovery and Consistency Boundary
+- ADR-054 Recording Artifact and Local Recording Data Association
+- ADR-055 Filesystem Persistence Layout
+- ADR-056 Capture Result and Recording Artifact Data Boundary
 
 ---
 
@@ -254,8 +269,8 @@ Relevant architecture decisions:
 
 Current test status:
 
-core tests: 17 passed
-recorder tests: 33 passed
+core tests: 20 passed
+recorder tests: 40 passed
 
 The tests validate among other things:
 
