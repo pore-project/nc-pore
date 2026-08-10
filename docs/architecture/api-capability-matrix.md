@@ -271,14 +271,15 @@ Production Session     Yes          Yes          No
 Participants           Yes          Yes          No
 Recordings             Yes          Yes          No
 Activity History       Yes          Yes          No
-Session Retrieval      Yes          No           No
+Session Retrieval      Yes          Yes          No
 Recorder Internals     No           Yes          No
 External API           —            No           No
 ```
 
-The most important current gap is **Production Session retrieval**.
+Production Session retrieval is implemented through the in-memory
+`ProductionSessionRepository`.
 
-Before an external API can reliably expose `Get Production Session`, the system requires a persistent or otherwise defined mechanism for retrieving Production Sessions.
+A production persistence adapter has not yet been implemented.
 
 ---
 
@@ -603,14 +604,15 @@ Production Session     Yes          Yes          No
 Participants           Yes          Yes          No
 Recordings             Yes          Yes          No
 Activity History       Yes          Yes          No
-Session Retrieval      Yes          No           No
+Session Retrieval      Yes          Yes          No
 Recorder Internals     No           Yes          No
 External API           —            No           No
 ```
 
-The most important current gap is **Production Session retrieval**.
+Production Session retrieval is implemented through the in-memory
+`ProductionSessionRepository`.
 
-Before an external API can reliably expose `Get Production Session`, the system requires a persistent or otherwise defined mechanism for retrieving Production Sessions.
+A production persistence adapter has not yet been implemented.
 
 ---
 
