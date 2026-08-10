@@ -117,6 +117,34 @@ where
     Ok(session)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum AddRecordingToProductionSessionError<E> {
+    SessionNotFound,
+    Repository(E),
+}
+
+pub fn add_recording_to_production_session<R>(
+    repository: &mut R,
+    id: &ProductionId,
+    recording: crate::recording::Recording,
+) -> Result<ProductionSession, AddRecordingToProductionSessionError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    let mut session = repository
+        .get(id)
+        .map_err(AddRecordingToProductionSessionError::Repository)?
+        .ok_or(AddRecordingToProductionSessionError::SessionNotFound)?;
+
+    session.add_recording(recording);
+
+    repository
+        .update(&session)
+        .map_err(AddRecordingToProductionSessionError::Repository)?;
+
+    Ok(session)
+}
+
 pub fn create_production_session<R>(
     repository: &mut R,
     id: ProductionId,
@@ -404,4 +432,44 @@ mod tests {
             Err(CreateProductionSessionError::Repository("storage failed"))
         ));
     }
+// TEST-12
+// Verify: Adding a recording through the API boundary updates the session.
+#[test]
+fn add_recording_to_production_session_updates_session() {
+    let id = ProductionId::new("session-001");
+    let session = ProductionSession::new(id.clone());
+
+    let mut repository = InMemory {
+        sessions: vec![session],
+    };
+
+    let recording = crate::recording::Recording::new();
+
+    let result =
+        add_recording_to_production_session(&mut repository, &id, recording);
+
+    assert!(result.is_ok());
+    assert_eq!(
+        repository.get(&id).unwrap().unwrap().recordings().len(),
+        1
+    );
+}
+
+// TEST-13
+// Verify: Adding a recording to an unknown Production Session is reported as not found.
+#[test]
+fn add_recording_to_production_session_reports_missing_session() {
+    let mut repository = InMemory { sessions: vec![] };
+    let id = ProductionId::new("unknown");
+
+    let recording = crate::recording::Recording::new();
+
+    let result =
+        add_recording_to_production_session(&mut repository, &id, recording);
+
+    assert!(matches!(
+        result,
+        Err(AddRecordingToProductionSessionError::SessionNotFound)
+    ));
+}
 }
