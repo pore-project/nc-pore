@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 2.1
-- Date: 2026-08-09
+- Version: 2.2
+- Date: 2026-08-10
 
 ---
 
@@ -35,6 +35,7 @@ Implementiert:
 - Participant Modell
 - Participation Modell
 - Activity History Grundstruktur
+- API Operationen für ProductionSession Lifecycle
 
 ---
 
@@ -98,12 +99,13 @@ Relevante Architekturentscheidungen:
 
 Aktueller Teststand:
 
-core tests: 20 passed
+core tests: 26 passed
 recorder tests: 40 passed
 
 Die Tests validieren unter anderem:
 
 - Lifecycle-Übergänge
+- API Boundary Operationen für ProductionSession
 - Rollen- und Zustandslogik
 - Recording-Verknüpfungen
 - Artifact Lifecycle
@@ -172,6 +174,7 @@ Geplante nächste Arbeiten:
 - Recovery- und Konsistenzmechanismen erweitern
 - konkrete Storage-Strategien definieren
 - weitere Produktionsobjekte modellieren
+- weitere API Operationen für ProductionSession Lifecycle ergänzen
 - weitere technische Workflows auf Basis der bestehenden Grenzen umsetzen
 
 ---
@@ -206,6 +209,7 @@ Implemented:
 - Participant model
 - Participation model
 - Activity History foundation
+- ProductionSession lifecycle API operations
 
 ---
 
@@ -269,11 +273,12 @@ Relevant architecture decisions:
 
 Current test status:
 
-core tests: 20 passed
+core tests: 26 passed
 recorder tests: 40 passed
 
 The tests validate among other things:
 
+- ProductionSession API boundary operations
 - lifecycle transitions
 - role and state logic
 - recording relationships
@@ -339,5 +344,6 @@ Planned next activities:
 - extend local artifact management
 - extend recovery and consistency mechanisms
 - define concrete storage strategies
+- extend ProductionSession lifecycle API operations
 - model additional production objects
 - implement further technical workflows based on the existing boundaries
