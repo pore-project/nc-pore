@@ -26,7 +26,7 @@ Es definiert keinen Kommunikationsmechanismus.
 | Capability                              | Defined |       Implemented | Exposed | Status                    |
 | --------------------------------------- | ------: | ----------------: | ------: | ------------------------- |
 | Create Production Session               |     Yes |               Yes |      No | Implemented internally    |
-| Get Production Session                  |     Yes |               Yes |      No | Repository capability implemented |
+| Get Production Session                  |     Yes |               Yes |      No | Core API implemented |
 | Start Production Session                |     Yes |               Yes |      No | Implemented internally    |
 | Complete Production Session             |     Yes |               Yes |      No | Implemented internally    |
 | Add Participant                         |     Yes |               Yes |      No | Implemented internally    |
@@ -359,7 +359,7 @@ It does not define a communication mechanism.
 | Capability                              | Defined |       Implemented | Exposed | Status                    |
 | --------------------------------------- | ------: | ----------------: | ------: | ------------------------- |
 | Create Production Session               |     Yes |               Yes |      No | Implemented internally    |
-| Get Production Session                  |     Yes |               Yes |      No | Repository capability implemented |
+| Get Production Session                  |     Yes |               Yes |      No | Core API implemented |
 | Start Production Session                |     Yes |               Yes |      No | Implemented internally    |
 | Complete Production Session             |     Yes |               Yes |      No | Implemented internally    |
 | Add Participant                         |     Yes |               Yes |      No | Implemented internally    |
