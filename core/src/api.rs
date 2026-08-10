@@ -56,6 +56,36 @@ where
     Ok(session)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum CompleteProductionSessionError<E> {
+    SessionNotFound,
+    Repository(E),
+    Session(crate::session::ProductionSessionError),
+}
+
+pub fn complete_production_session<R>(
+    repository: &mut R,
+    id: &ProductionId,
+) -> Result<ProductionSession, CompleteProductionSessionError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    let mut session = repository
+        .get(id)
+        .map_err(CompleteProductionSessionError::Repository)?
+        .ok_or(CompleteProductionSessionError::SessionNotFound)?;
+
+    session
+        .complete()
+        .map_err(CompleteProductionSessionError::Session)?;
+
+    repository
+        .update(&session)
+        .map_err(CompleteProductionSessionError::Repository)?;
+
+    Ok(session)
+}
+
 pub fn create_production_session<R>(
     repository: &mut R,
     id: ProductionId,
@@ -166,6 +196,74 @@ mod tests {
             repository.get(&id).unwrap().unwrap().status(),
             crate::session::ProductionStatus::Active
         );
+    }
+
+    // TEST-06
+    // Verify: Completing a Production Session updates the repository through the API boundary.
+    #[test]
+    fn complete_production_session_updates_session() {
+        let id = ProductionId::new("session-001");
+        let mut session = ProductionSession::new(id.clone());
+
+        session
+            .add_participation(crate::participation::Participation {
+                participant_id: crate::participant::ParticipantId::new("owner-1"),
+                role: crate::role::ParticipantRole::Owner,
+            })
+            .unwrap();
+
+        session.start().unwrap();
+
+        let mut repository = InMemory {
+            sessions: vec![session],
+        };
+
+        let result = complete_production_session(&mut repository, &id);
+
+        assert!(result.is_ok());
+        assert_eq!(
+            repository.get(&id).unwrap().unwrap().status(),
+            crate::session::ProductionStatus::Completed
+        );
+    }
+
+    // TEST-07
+    // Verify: Completing an active Production Session without an owner
+    // returns the domain error through the API boundary.
+    #[test]
+    fn complete_production_session_reports_missing_owner() {
+        let id = ProductionId::new("session-001");
+        let mut session = ProductionSession::new(id.clone());
+
+        session.start().unwrap();
+
+        let mut repository = InMemory {
+            sessions: vec![session],
+        };
+
+        let result = complete_production_session(&mut repository, &id);
+
+        assert!(matches!(
+            result,
+            Err(CompleteProductionSessionError::Session(
+                crate::session::ProductionSessionError::MissingOwner
+            ))
+        ));
+    }
+
+    // TEST-08
+    // Verify: Completing an unknown Production Session is reported as not found.
+    #[test]
+    fn complete_production_session_reports_missing_session() {
+        let mut repository = InMemory { sessions: vec![] };
+        let id = ProductionId::new("unknown");
+
+        let result = complete_production_session(&mut repository, &id);
+
+        assert!(matches!(
+            result,
+            Err(CompleteProductionSessionError::SessionNotFound)
+        ));
     }
 
     // TEST-04
