@@ -5,3 +5,5 @@ pub mod participation;
 pub mod recording;
 pub mod role;
 pub mod session;
+
+pub mod api;
