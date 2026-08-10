@@ -24,12 +24,18 @@ pub trait ProductionSessionRepository {
     /// Stores a Production Session.
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error>;
 
+    /// Updates an existing Production Session.
+    ///
+    /// The session must already exist.
+    fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error>;
+
     /// Retrieves a Production Session by its Production Identifier.
     ///
     /// `Ok(None)` means that no session with the given identifier exists.
     /// Technical retrieval failures are represented by the implementation's
     /// associated error type.
     fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error>;
+
 }
 
 #[cfg(test)]
@@ -51,7 +57,18 @@ mod tests {
             Ok(())
         }
 
-        fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
+        fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+        let existing = self.sessions.iter_mut().find(|s| s.id == session.id);
+        match existing {
+            Some(existing) => {
+                *existing = session.clone();
+                Ok(())
+            }
+            None => Err("session not found"),
+        }
+    }
+
+    fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
             Ok(self.sessions.iter().find(|s| &s.id == id).cloned())
         }
     }
@@ -86,4 +103,25 @@ mod tests {
         let repo = InMemory { sessions: vec![] };
         assert!(repo.get(&ProductionId::new("unknown")).unwrap().is_none());
     }
+
+#[test]
+// TEST-04
+// Verify: An existing ProductionSession can be updated.
+fn repository_can_update_existing_session() {
+    let mut repo = InMemory { sessions: vec![] };
+    let id = ProductionId::new("session-001");
+
+    repo.store(&ProductionSession::new(id.clone())).unwrap();
+
+    let mut updated = ProductionSession::new(id.clone());
+    updated.start().unwrap();
+
+    repo.update(&updated).unwrap();
+
+    assert_eq!(
+        repo.get(&id).unwrap().unwrap().status(),
+        updated.status()
+    );
+}
+
 }

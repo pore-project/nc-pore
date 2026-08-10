@@ -52,6 +52,12 @@ mod tests {
     }
 
     impl ProductionSessionRepository for InMemory {
+        fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            self.sessions.retain(|s| s.id != session.id);
+            self.sessions.push(session.clone());
+            Ok(())
+        }
+
         type Error = &'static str;
 
         fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
@@ -115,6 +121,10 @@ mod tests {
         struct FailingRepository;
 
         impl ProductionSessionRepository for FailingRepository {
+            fn update(&mut self, _session: &ProductionSession) -> Result<(), Self::Error> {
+                Err("storage failed")
+            }
+
             type Error = &'static str;
 
             fn store(&mut self, _session: &ProductionSession) -> Result<(), Self::Error> {
