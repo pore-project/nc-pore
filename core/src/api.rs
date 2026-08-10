@@ -1,6 +1,6 @@
 use crate::identity::ProductionId;
-use crate::session::repository::ProductionSessionRepository;
 use crate::session::ProductionSession;
+use crate::session::repository::ProductionSessionRepository;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GetProductionSessionError<E> {
@@ -24,6 +24,36 @@ where
 #[derive(Debug, PartialEq, Eq)]
 pub enum CreateProductionSessionError<E> {
     Repository(E),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum StartProductionSessionError<E> {
+    SessionNotFound,
+    Repository(E),
+    Session(crate::session::ProductionSessionError),
+}
+
+pub fn start_production_session<R>(
+    repository: &mut R,
+    id: &ProductionId,
+) -> Result<ProductionSession, StartProductionSessionError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    let mut session = repository
+        .get(id)
+        .map_err(StartProductionSessionError::Repository)?
+        .ok_or(StartProductionSessionError::SessionNotFound)?;
+
+    session
+        .start()
+        .map_err(StartProductionSessionError::Session)?;
+
+    repository
+        .update(&session)
+        .map_err(StartProductionSessionError::Repository)?;
+
+    Ok(session)
 }
 
 pub fn create_production_session<R>(
@@ -65,11 +95,12 @@ mod tests {
             Ok(())
         }
 
-        fn get(
-            &self,
-            id: &ProductionId,
-        ) -> Result<Option<ProductionSession>, Self::Error> {
-            Ok(self.sessions.iter().find(|session| &session.id == id).cloned())
+        fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
+            Ok(self
+                .sessions
+                .iter()
+                .find(|session| &session.id == id)
+                .cloned())
         }
     }
 
@@ -99,7 +130,10 @@ mod tests {
 
         let result = get_production_session(&repository, &id);
 
-        assert!(matches!(result, Err(GetProductionSessionError::SessionNotFound)));
+        assert!(matches!(
+            result,
+            Err(GetProductionSessionError::SessionNotFound)
+        ));
     }
     // TEST-03
     // Verify: Creating a Production Session stores it in the repository.
@@ -112,6 +146,26 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(repository.get(&id).unwrap().is_some());
+    }
+
+    // TEST-05
+    // Verify: Starting a Production Session updates the repository through the API boundary.
+    #[test]
+    fn start_production_session_updates_session() {
+        let id = ProductionId::new("session-001");
+        let session = ProductionSession::new(id.clone());
+
+        let mut repository = InMemory {
+            sessions: vec![session],
+        };
+
+        let result = start_production_session(&mut repository, &id);
+
+        assert!(result.is_ok());
+        assert_eq!(
+            repository.get(&id).unwrap().unwrap().status(),
+            crate::session::ProductionStatus::Active
+        );
     }
 
     // TEST-04
@@ -131,10 +185,7 @@ mod tests {
                 Err("storage failed")
             }
 
-            fn get(
-                &self,
-                _id: &ProductionId,
-            ) -> Result<Option<ProductionSession>, Self::Error> {
+            fn get(&self, _id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
                 Ok(None)
             }
         }
@@ -149,5 +200,4 @@ mod tests {
             Err(CreateProductionSessionError::Repository("storage failed"))
         ));
     }
-
 }
