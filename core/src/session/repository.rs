@@ -35,7 +35,6 @@ pub trait ProductionSessionRepository {
     /// Technical retrieval failures are represented by the implementation's
     /// associated error type.
     fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error>;
-
 }
 
 #[cfg(test)]
@@ -58,17 +57,17 @@ mod tests {
         }
 
         fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        let existing = self.sessions.iter_mut().find(|s| s.id == session.id);
-        match existing {
-            Some(existing) => {
-                *existing = session.clone();
-                Ok(())
+            let existing = self.sessions.iter_mut().find(|s| s.id == session.id);
+            match existing {
+                Some(existing) => {
+                    *existing = session.clone();
+                    Ok(())
+                }
+                None => Err("session not found"),
             }
-            None => Err("session not found"),
         }
-    }
 
-    fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
+        fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
             Ok(self.sessions.iter().find(|s| &s.id == id).cloned())
         }
     }
@@ -104,24 +103,20 @@ mod tests {
         assert!(repo.get(&ProductionId::new("unknown")).unwrap().is_none());
     }
 
-#[test]
-// TEST-04
-// Verify: An existing ProductionSession can be updated.
-fn repository_can_update_existing_session() {
-    let mut repo = InMemory { sessions: vec![] };
-    let id = ProductionId::new("session-001");
+    #[test]
+    // TEST-04
+    // Verify: An existing ProductionSession can be updated.
+    fn repository_can_update_existing_session() {
+        let mut repo = InMemory { sessions: vec![] };
+        let id = ProductionId::new("session-001");
 
-    repo.store(&ProductionSession::new(id.clone())).unwrap();
+        repo.store(&ProductionSession::new(id.clone())).unwrap();
 
-    let mut updated = ProductionSession::new(id.clone());
-    updated.start().unwrap();
+        let mut updated = ProductionSession::new(id.clone());
+        updated.start().unwrap();
 
-    repo.update(&updated).unwrap();
+        repo.update(&updated).unwrap();
 
-    assert_eq!(
-        repo.get(&id).unwrap().unwrap().status(),
-        updated.status()
-    );
-}
-
+        assert_eq!(repo.get(&id).unwrap().unwrap().status(), updated.status());
+    }
 }
