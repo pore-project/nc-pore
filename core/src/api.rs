@@ -86,6 +86,37 @@ where
     Ok(session)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum AddParticipationToProductionSessionError<E> {
+    SessionNotFound,
+    Repository(E),
+    Session(crate::session::ProductionSessionError),
+}
+
+pub fn add_participation_to_production_session<R>(
+    repository: &mut R,
+    id: &ProductionId,
+    participation: crate::participation::Participation,
+) -> Result<ProductionSession, AddParticipationToProductionSessionError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    let mut session = repository
+        .get(id)
+        .map_err(AddParticipationToProductionSessionError::Repository)?
+        .ok_or(AddParticipationToProductionSessionError::SessionNotFound)?;
+
+    session
+        .add_participation(participation)
+        .map_err(AddParticipationToProductionSessionError::Session)?;
+
+    repository
+        .update(&session)
+        .map_err(AddParticipationToProductionSessionError::Repository)?;
+
+    Ok(session)
+}
+
 pub fn create_production_session<R>(
     repository: &mut R,
     id: ProductionId,
@@ -263,6 +294,81 @@ mod tests {
         assert!(matches!(
             result,
             Err(CompleteProductionSessionError::SessionNotFound)
+        ));
+    }
+
+    // TEST-09
+    // Verify: Adding a participation through the API boundary updates the session.
+    #[test]
+    fn add_participation_to_production_session_updates_session() {
+        let id = ProductionId::new("session-001");
+        let session = ProductionSession::new(id.clone());
+
+        let mut repository = InMemory {
+            sessions: vec![session],
+        };
+
+        let participation = crate::participation::Participation {
+            participant_id: crate::participant::ParticipantId::new("participant-1"),
+            role: crate::role::ParticipantRole::Participant,
+        };
+
+        let result = add_participation_to_production_session(&mut repository, &id, participation);
+
+        assert!(result.is_ok());
+        assert_eq!(repository.get(&id).unwrap().unwrap().participant_count(), 1);
+    }
+
+    // TEST-10
+    // Verify: A duplicate participation is reported through the API boundary.
+    #[test]
+    fn add_participation_to_production_session_reports_duplicate_participant() {
+        let id = ProductionId::new("session-001");
+        let mut session = ProductionSession::new(id.clone());
+
+        session
+            .add_participation(crate::participation::Participation {
+                participant_id: crate::participant::ParticipantId::new("participant-1"),
+                role: crate::role::ParticipantRole::Participant,
+            })
+            .unwrap();
+
+        let mut repository = InMemory {
+            sessions: vec![session],
+        };
+
+        let participation = crate::participation::Participation {
+            participant_id: crate::participant::ParticipantId::new("participant-1"),
+            role: crate::role::ParticipantRole::Guest,
+        };
+
+        let result = add_participation_to_production_session(&mut repository, &id, participation);
+
+        assert!(matches!(
+            result,
+            Err(AddParticipationToProductionSessionError::Session(
+                crate::session::ProductionSessionError::ParticipantAlreadyExists
+            ))
+        ));
+    }
+
+    // TEST-11
+    // Verify: Adding a participation to an unknown session is reported as not found.
+    #[test]
+    fn add_participation_to_production_session_reports_missing_session() {
+        let mut repository = InMemory { sessions: vec![] };
+        let id = ProductionId::new("unknown");
+
+        let participation = crate::participation::Participation {
+            participant_id: crate::participant::ParticipantId::new("participant-1"),
+            role: crate::role::ParticipantRole::Participant,
+        };
+
+        let result = add_participation_to_production_session(&mut repository, &id, participation);
+
+        assert!(matches!(
+            result,
+            Err(AddParticipationToProductionSessionError::SessionNotFound)
         ));
     }
 
