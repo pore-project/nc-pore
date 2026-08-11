@@ -60,6 +60,8 @@ Implementiert:
 - Recorder Application Boundary
 - Local Recording Artifact Flow
 - Artifact Recovery Boundary
+- RecordingSessionId Value Object für technische Session-Referenzen
+- ArtifactId und RecordingSessionId als explizite Identitätstypen an Artifact-Grenzen
 
 Relevante Architekturentscheidungen:
 
@@ -138,6 +140,7 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
+- Identitäten innerhalb technischer Grenzen werden nicht mehr über primitive Strings modelliert, sondern über explizite Value Objects
 
 ---
 
@@ -235,6 +238,8 @@ Implemented:
 - Recorder Application Boundary
 - Local Recording Artifact Flow
 - Artifact Recovery Boundary
+- RecordingSessionId value object for technical session references
+- ArtifactId and RecordingSessionId as explicit identity types at artifact boundaries
 
 Relevant architecture decisions:
 
@@ -313,6 +318,7 @@ NC-PoRe currently follows these architecture principles:
 - Persistence remains replaceable
 - local recording remains independent from network availability
 - Repository content is the technical source of truth
+- Identities within technical boundaries are no longer modeled as primitive strings but as explicit value objects
 
 ---
 
