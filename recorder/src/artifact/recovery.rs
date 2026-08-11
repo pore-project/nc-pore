@@ -87,6 +87,37 @@ mod tests {
         assert!(registry.contains(&ArtifactId::new("artifact-001")));
     }
 
+    // TEST-31
+    //
+    // Recovery preserves existing registry knowledge.
+    #[test]
+    fn recovery_preserves_existing_registry_entry() {
+        let mut persistence = InMemoryPersistenceProvider::new();
+        persistence.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
+
+        let mut registry = LocalArtifactRegistry::new();
+        registry.register(ArtifactRegistryEntry::new(
+            "artifact-001".to_string(),
+            RecordingSessionId::new("existing-session"),
+        ));
+
+        let recovery = ArtifactRecoveryService::new();
+        recovery.recover(&persistence, &mut registry);
+
+        assert!(registry.contains(&ArtifactId::new("artifact-001")));
+        assert_eq!(
+            registry
+                .find(&ArtifactId::new("artifact-001"))
+                .unwrap()
+                .recording_session_id
+                .value(),
+            "existing-session"
+        );
+    }
+
     // TEST-27
     //
     // Protects ADR-053:
