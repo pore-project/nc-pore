@@ -41,10 +41,8 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
 
 impl PersistedRecordingArtifact {
     fn into_recording_artifact(self) -> RecordingArtifact {
-        let mut artifact = RecordingArtifact::new(
-        self.id,
-        RecordingSessionId::new(self.recording_session_id),
-    );
+        let mut artifact =
+            RecordingArtifact::new(self.id, RecordingSessionId::new(self.recording_session_id));
 
         match self.status.as_str() {
             "Available" => artifact.make_available(),
@@ -153,7 +151,10 @@ mod tests {
 
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
-        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
+        provider.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
         assert!(provider.load("artifact-001").is_some());
 
@@ -170,12 +171,18 @@ mod tests {
 
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
-        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
+        provider.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
         let artifact = provider.load("artifact-001");
 
         assert!(artifact.is_some());
-        assert_eq!(artifact.unwrap().recording_session_id.value(), "session-001");
+        assert_eq!(
+            artifact.unwrap().recording_session_id.value(),
+            "session-001"
+        );
 
         let _ = fs::remove_dir_all(path);
     }
@@ -190,9 +197,15 @@ mod tests {
 
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
-        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
+        provider.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
-        provider.store(RecordingArtifact::new("artifact-002", RecordingSessionId::new("session-001")));
+        provider.store(RecordingArtifact::new(
+            "artifact-002",
+            RecordingSessionId::new("session-001"),
+        ));
 
         assert_eq!(provider.list().len(), 2);
 
@@ -209,7 +222,10 @@ mod tests {
 
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
-        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
+        provider.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
         provider.remove("artifact-001");
 
