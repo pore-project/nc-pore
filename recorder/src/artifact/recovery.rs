@@ -41,7 +41,7 @@ impl ArtifactRecoveryService {
         registry: &mut LocalArtifactRegistry,
     ) {
         for artifact in persistence.list() {
-            if !registry.contains(artifact.id.value()) {
+            if !registry.contains(&artifact.id) {
                 registry.register(ArtifactRegistryEntry::new(
                     artifact.id.value().to_string(),
                     artifact.recording_session_id,
@@ -59,10 +59,10 @@ impl Default for ArtifactRecoveryService {
 
 #[cfg(test)]
 mod tests {
-use crate::session::RecordingSessionId;
     use super::*;
-    use crate::artifact::RecordingArtifact;
+    use crate::artifact::{ArtifactId, RecordingArtifact};
     use crate::persistence::InMemoryPersistenceProvider;
+    use crate::session::RecordingSessionId;
 
     // TEST-26
     //
@@ -73,7 +73,10 @@ use crate::session::RecordingSessionId;
     fn recovery_rebuilds_registry_from_persisted_artifacts() {
         let mut persistence = InMemoryPersistenceProvider::new();
 
-        persistence.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
+        persistence.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
         let mut registry = LocalArtifactRegistry::new();
 
@@ -81,7 +84,7 @@ use crate::session::RecordingSessionId;
 
         recovery.recover(&persistence, &mut registry);
 
-        assert!(registry.contains("artifact-001"));
+        assert!(registry.contains(&ArtifactId::new("artifact-001")));
     }
 
     // TEST-27
@@ -98,6 +101,6 @@ use crate::session::RecordingSessionId;
 
         recovery.recover(&persistence, &mut registry);
 
-        assert!(!registry.contains("artifact-001"));
+        assert!(!registry.contains(&ArtifactId::new("artifact-001")));
     }
 }

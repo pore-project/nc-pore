@@ -16,8 +16,8 @@
 //! See:
 //! - ADR-047 Local Artifact Registry and Discovery Strategy
 
-use crate::artifact::RecordingArtifact;
 use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
+use crate::artifact::{ArtifactId, RecordingArtifact};
 use crate::persistence::PersistenceProvider;
 
 /// Coordinates artifact registration and persistence.
@@ -67,10 +67,10 @@ where
 
 #[cfg(test)]
 mod tests {
-use crate::session::RecordingSessionId;
     use super::*;
     use crate::artifact::ArtifactStatus;
     use crate::persistence::InMemoryPersistenceProvider;
+    use crate::session::RecordingSessionId;
 
     #[test]
     fn coordinator_registers_artifact_reference() {
@@ -78,11 +78,16 @@ use crate::session::RecordingSessionId;
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
 
-        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+        let artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         coordinator.register_and_store(artifact);
 
-        assert!(coordinator.registry().contains("artifact-001"));
+        assert!(
+            coordinator
+                .registry()
+                .contains(&ArtifactId::new("artifact-001"))
+        );
     }
 
     #[test]
@@ -91,7 +96,8 @@ use crate::session::RecordingSessionId;
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
 
-        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+        let artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         let stored_artifact = coordinator.register_and_store(artifact);
 
@@ -114,7 +120,8 @@ use crate::session::RecordingSessionId;
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
 
-        let artifact = RecordingArtifact::new("artifact-026", RecordingSessionId::new("session-026"));
+        let artifact =
+            RecordingArtifact::new("artifact-026", RecordingSessionId::new("session-026"));
 
         let stored_artifact = coordinator.register_and_store(artifact);
 

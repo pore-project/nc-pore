@@ -6,6 +6,7 @@
 //! See:
 //! - ADR-047 Local Artifact Registry and Discovery Strategy
 
+use crate::artifact::ArtifactId;
 use crate::session::RecordingSessionId;
 
 /// Technical reference entry for a locally known artifact.
@@ -14,14 +15,14 @@ use crate::session::RecordingSessionId;
 /// not the artifact data itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactRegistryEntry {
-    pub artifact_id: String,
+    pub artifact_id: ArtifactId,
     pub recording_session_id: RecordingSessionId,
 }
 
 impl ArtifactRegistryEntry {
     pub fn new(artifact_id: impl Into<String>, recording_session_id: RecordingSessionId) -> Self {
         Self {
-            artifact_id: artifact_id.into(),
+            artifact_id: ArtifactId::new(artifact_id),
             recording_session_id,
         }
     }
@@ -46,26 +47,26 @@ impl LocalArtifactRegistry {
         self.entries.push(entry);
     }
 
-    pub fn find(&self, artifact_id: &str) -> Option<ArtifactRegistryEntry> {
+    pub fn find(&self, artifact_id: &ArtifactId) -> Option<ArtifactRegistryEntry> {
         self.entries
             .iter()
-            .find(|entry| entry.artifact_id == artifact_id)
+            .find(|entry| entry.artifact_id == *artifact_id)
             .cloned()
     }
 
-    pub fn contains(&self, artifact_id: &str) -> bool {
+    pub fn contains(&self, artifact_id: &ArtifactId) -> bool {
         self.entries
             .iter()
-            .any(|entry| entry.artifact_id == artifact_id)
+            .any(|entry| entry.artifact_id == *artifact_id)
     }
 
     pub fn list(&self) -> Vec<ArtifactRegistryEntry> {
         self.entries.clone()
     }
 
-    pub fn remove(&mut self, artifact_id: &str) {
+    pub fn remove(&mut self, artifact_id: &ArtifactId) {
         self.entries
-            .retain(|entry| entry.artifact_id != artifact_id);
+            .retain(|entry| entry.artifact_id != *artifact_id);
     }
 }
 
@@ -87,7 +88,10 @@ mod tests {
     fn registry_can_register_artifact() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
+        registry.register(ArtifactRegistryEntry::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
         assert_eq!(registry.list().len(), 1);
     }
@@ -100,12 +104,15 @@ mod tests {
     fn registry_can_find_artifact() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
+        registry.register(ArtifactRegistryEntry::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
-        let entry = registry.find("artifact-001");
+        let entry = registry.find(&ArtifactId::new("artifact-001"));
 
         assert!(entry.is_some());
-        assert_eq!(entry.unwrap().artifact_id, "artifact-001");
+        assert_eq!(entry.unwrap().artifact_id.value(), "artifact-001");
     }
 
     // TEST-18
@@ -116,11 +123,14 @@ mod tests {
     fn registry_can_remove_artifact() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
+        registry.register(ArtifactRegistryEntry::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
-        registry.remove("artifact-001");
+        registry.remove(&ArtifactId::new("artifact-001"));
 
-        assert!(registry.find("artifact-001").is_none());
+        assert!(registry.find(&ArtifactId::new("artifact-001")).is_none());
     }
 
     // TEST-19
@@ -131,9 +141,12 @@ mod tests {
     fn registry_can_check_artifact_existence() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
+        registry.register(ArtifactRegistryEntry::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
 
-        assert!(registry.contains("artifact-001"));
-        assert!(!registry.contains("artifact-999"));
+        assert!(registry.contains(&ArtifactId::new("artifact-001")));
+        assert!(!registry.contains(&ArtifactId::new("artifact-999")));
     }
 }
