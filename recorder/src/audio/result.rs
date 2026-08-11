@@ -51,7 +51,7 @@ impl CaptureTrackId {
 /// It does not represent a domain participant or role.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureTrack {
-    pub id: String,
+    pub id: CaptureTrackId,
     chunks: Vec<CaptureChunk>,
 }
 
@@ -59,7 +59,7 @@ impl CaptureTrack {
     /// Creates an empty capture track.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
-            id: id.into(),
+            id: CaptureTrackId::new(id),
             chunks: Vec::new(),
         }
     }
@@ -132,8 +132,8 @@ mod tests {
         result.add_track(CaptureTrack::new("track-guest"));
 
         assert_eq!(result.tracks().len(), 2);
-        assert_eq!(result.tracks()[0].id, "track-host");
-        assert_eq!(result.tracks()[1].id, "track-guest");
+        assert_eq!(result.tracks()[0].id.value(), "track-host");
+        assert_eq!(result.tracks()[1].id.value(), "track-guest");
     }
 
     // TEST-32

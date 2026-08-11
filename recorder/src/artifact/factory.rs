@@ -13,8 +13,8 @@
 //! - ADR-050 Recording Artifact Factory
 
 use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
-use crate::session::RecordingSessionId;
 use crate::audio::CaptureResult;
+use crate::session::RecordingSessionId;
 
 /// Creates RecordingArtifact instances.
 ///
@@ -31,7 +31,7 @@ impl RecordingArtifactFactory {
         let mut artifact = RecordingArtifact::new(capture_result.id(), recording_session_id);
 
         for capture_track in capture_result.tracks() {
-            let mut recording_track = RecordingTrack::new(&capture_track.id);
+            let mut recording_track = RecordingTrack::new(capture_track.id.value());
 
             for capture_chunk in capture_track.chunks() {
                 recording_track.add_chunk(RecordingChunk::new(capture_chunk.sequence));
@@ -57,7 +57,10 @@ mod tests {
     fn factory_creates_artifact_from_capture_result() {
         let capture_result = CaptureResult::new("capture-001");
 
-        let artifact = RecordingArtifactFactory::create(capture_result, RecordingSessionId::new("session-001"));
+        let artifact = RecordingArtifactFactory::create(
+            capture_result,
+            RecordingSessionId::new("session-001"),
+        );
 
         assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.recording_session_id.value(), "session-001");
@@ -78,7 +81,8 @@ mod tests {
         capture.add_track(host);
         capture.add_track(guest);
 
-        let artifact = RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
+        let artifact =
+            RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
 
         assert_eq!(artifact.tracks().len(), 2);
         assert_eq!(artifact.tracks()[0].id.value(), "track-host");
