@@ -12,6 +12,10 @@
 //! - ADR-039 Recording Architecture and Capture Boundary (future)
 //! - ADR-038 Core Implementation Structure and Module Organization
 
+pub mod id;
+
+pub use id::RecordingId;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecordingStatus {
     Prepared,
@@ -21,14 +25,20 @@ pub enum RecordingStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recording {
+    id: RecordingId,
     status: RecordingStatus,
 }
 
 impl Recording {
-    pub fn new() -> Self {
+    pub fn new(id: impl Into<String>) -> Self {
         Self {
+            id: RecordingId::new(id),
             status: RecordingStatus::Prepared,
         }
+    }
+
+    pub fn id(&self) -> &RecordingId {
+        &self.id
     }
 
     pub fn status(&self) -> RecordingStatus {
@@ -44,12 +54,6 @@ impl Recording {
     }
 }
 
-impl Default for Recording {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,7 +65,7 @@ mod tests {
     // Prepared -> Recording -> Completed
     #[test]
     fn new_recording_starts_as_prepared() {
-        let recording = Recording::new();
+        let recording = Recording::new("recording-test-01");
 
         assert_eq!(recording.status(), RecordingStatus::Prepared);
     }
@@ -72,7 +76,7 @@ mod tests {
     // Protects the recording lifecycle model.
     #[test]
     fn recording_can_transition_to_recording() {
-        let mut recording = Recording::new();
+        let mut recording = Recording::new("recording-test-02");
 
         recording.start();
 
@@ -86,22 +90,11 @@ mod tests {
     // Prepared -> Recording -> Completed
     #[test]
     fn recording_can_be_completed() {
-        let mut recording = Recording::new();
+        let mut recording = Recording::new("recording-test-03");
 
         recording.start();
         recording.complete();
 
         assert_eq!(recording.status(), RecordingStatus::Completed);
-    }
-
-    // TEST-14
-    // Verify: Default construction creates the same initial state as new().
-    //
-    // Protects the default initialization contract.
-    #[test]
-    fn default_recording_starts_as_prepared() {
-        let recording = Recording::default();
-
-        assert_eq!(recording.status(), RecordingStatus::Prepared);
     }
 }

@@ -319,7 +319,7 @@ mod tests {
     fn recording_can_be_added_to_session() {
         let mut session = create_test_session();
 
-        session.add_recording(Recording::new());
+        session.add_recording(Recording::new("recording-session-test"));
 
         assert_eq!(session.recordings().len(), 1);
     }

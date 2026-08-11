@@ -432,44 +432,39 @@ mod tests {
             Err(CreateProductionSessionError::Repository("storage failed"))
         ));
     }
-// TEST-12
-// Verify: Adding a recording through the API boundary updates the session.
-#[test]
-fn add_recording_to_production_session_updates_session() {
-    let id = ProductionId::new("session-001");
-    let session = ProductionSession::new(id.clone());
+    // TEST-12
+    // Verify: Adding a recording through the API boundary updates the session.
+    #[test]
+    fn add_recording_to_production_session_updates_session() {
+        let id = ProductionId::new("session-001");
+        let session = ProductionSession::new(id.clone());
 
-    let mut repository = InMemory {
-        sessions: vec![session],
-    };
+        let mut repository = InMemory {
+            sessions: vec![session],
+        };
 
-    let recording = crate::recording::Recording::new();
+        let recording = crate::recording::Recording::new("recording-001");
 
-    let result =
-        add_recording_to_production_session(&mut repository, &id, recording);
+        let result = add_recording_to_production_session(&mut repository, &id, recording);
 
-    assert!(result.is_ok());
-    assert_eq!(
-        repository.get(&id).unwrap().unwrap().recordings().len(),
-        1
-    );
-}
+        assert!(result.is_ok());
+        assert_eq!(repository.get(&id).unwrap().unwrap().recordings().len(), 1);
+    }
 
-// TEST-13
-// Verify: Adding a recording to an unknown Production Session is reported as not found.
-#[test]
-fn add_recording_to_production_session_reports_missing_session() {
-    let mut repository = InMemory { sessions: vec![] };
-    let id = ProductionId::new("unknown");
+    // TEST-13
+    // Verify: Adding a recording to an unknown Production Session is reported as not found.
+    #[test]
+    fn add_recording_to_production_session_reports_missing_session() {
+        let mut repository = InMemory { sessions: vec![] };
+        let id = ProductionId::new("unknown");
 
-    let recording = crate::recording::Recording::new();
+        let recording = crate::recording::Recording::new("recording-missing");
 
-    let result =
-        add_recording_to_production_session(&mut repository, &id, recording);
+        let result = add_recording_to_production_session(&mut repository, &id, recording);
 
-    assert!(matches!(
-        result,
-        Err(AddRecordingToProductionSessionError::SessionNotFound)
-    ));
-}
+        assert!(matches!(
+            result,
+            Err(AddRecordingToProductionSessionError::SessionNotFound)
+        ));
+    }
 }
