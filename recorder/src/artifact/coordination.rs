@@ -16,6 +16,7 @@
 //! See:
 //! - ADR-047 Local Artifact Registry and Discovery Strategy
 
+use crate::artifact::recovery::ArtifactRecoveryService;
 use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
 use crate::artifact::{ArtifactId, RecordingArtifact};
 use crate::persistence::PersistenceProvider;
@@ -37,13 +38,17 @@ where
     P: PersistenceProvider,
 {
     pub fn new(persistence: P) -> Self {
-        Self {
-            registry: LocalArtifactRegistry::new(),
-            persistence,
-        }
-    }
+    let mut registry = LocalArtifactRegistry::new();
 
-    pub fn register_and_store(&mut self, mut artifact: RecordingArtifact) -> RecordingArtifact {
+    ArtifactRecoveryService::new().recover(&persistence, &mut registry);
+
+    Self {
+        registry,
+        persistence,
+    }
+}
+
+pub fn register_and_store(&mut self, mut artifact: RecordingArtifact) -> RecordingArtifact {
         self.registry.register(ArtifactRegistryEntry::new(
             artifact.id.value().to_string(),
             artifact.recording_session_id.clone(),
@@ -90,8 +95,31 @@ mod tests {
         );
     }
 
-    #[test]
-    fn coordinator_persists_artifact() {
+// TEST-33
+//
+// Protects ADR-053:
+// Artifact coordination restores registry knowledge
+// from already persisted artifacts during initialization.
+#[test]
+fn coordinator_recovers_persisted_artifact_registry_entries() {
+    let mut persistence = InMemoryPersistenceProvider::new();
+
+    persistence.store(RecordingArtifact::new(
+        "artifact-033",
+        RecordingSessionId::new("session-033"),
+    ));
+
+    let coordinator = ArtifactCoordinator::new(persistence);
+
+    assert!(
+        coordinator
+            .registry()
+            .contains(&ArtifactId::new("artifact-033"))
+    );
+}
+
+#[test]
+fn coordinator_persists_artifact() {
         let persistence = InMemoryPersistenceProvider::new();
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
