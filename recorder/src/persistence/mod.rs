@@ -63,6 +63,7 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
 
 #[cfg(test)]
 mod tests {
+use crate::session::RecordingSessionId;
     use super::*;
     use crate::artifact::RecordingArtifact;
     use crate::persistence::FilesystemPersistenceProvider;
@@ -75,7 +76,7 @@ mod tests {
     fn test_12_provider_can_store_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
+        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
 
         assert_eq!(provider.list().len(), 1);
     }
@@ -88,7 +89,7 @@ mod tests {
     fn test_13_provider_can_load_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
+        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
 
         let artifact = provider.load("artifact-001");
 
@@ -104,9 +105,9 @@ mod tests {
     fn test_14_provider_can_list_artifacts() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
+        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
 
-        provider.store(RecordingArtifact::new("artifact-002", "session-001"));
+        provider.store(RecordingArtifact::new("artifact-002", RecordingSessionId::new("session-001")));
 
         assert_eq!(provider.list().len(), 2);
     }
@@ -119,7 +120,7 @@ mod tests {
     fn test_15_provider_can_remove_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new("artifact-001", "session-001"));
+        provider.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
 
         provider.remove("artifact-001");
 

@@ -21,6 +21,8 @@ pub mod registry;
 
 pub use id::ArtifactId;
 
+use crate::session::RecordingSessionId;
+
 /// Technical lifecycle state of a Recording Artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArtifactStatus {
@@ -89,7 +91,7 @@ impl RecordingTrack {
 #[derive(Debug, Clone)]
 pub struct RecordingArtifact {
     pub id: ArtifactId,
-    pub recording_session_id: String,
+    pub recording_session_id: RecordingSessionId,
     status: ArtifactStatus,
     tracks: Vec<RecordingTrack>,
 }
@@ -99,10 +101,13 @@ impl RecordingArtifact {
     ///
     /// A new artifact represents a technical recording result
     /// that has been created but is not yet available or stored.
-    pub fn new(id: impl Into<String>, recording_session_id: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        recording_session_id: RecordingSessionId,
+    ) -> Self {
         Self {
             id: ArtifactId::new(id),
-            recording_session_id: recording_session_id.into(),
+            recording_session_id,
             status: ArtifactStatus::Created,
             tracks: Vec::new(),
         }
@@ -147,7 +152,7 @@ mod tests {
     // independent from domain recording states.
     #[test]
     fn new_artifact_starts_as_created() {
-        let artifact = RecordingArtifact::new("artifact-001", "session-001");
+        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         assert_eq!(artifact.status(), &ArtifactStatus::Created);
     }
@@ -157,7 +162,7 @@ mod tests {
     // Verify: Artifact lifecycle can progress from Created to Available.
     #[test]
     fn artifact_can_become_available() {
-        let mut artifact = RecordingArtifact::new("artifact-001", "session-001");
+        let mut artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         artifact.make_available();
 
@@ -169,7 +174,7 @@ mod tests {
     // Verify: Available artifacts can be stored.
     #[test]
     fn artifact_can_be_stored() {
-        let mut artifact = RecordingArtifact::new("artifact-001", "session-001");
+        let mut artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         artifact.make_available();
         artifact.store();
@@ -183,7 +188,7 @@ mod tests {
     // A RecordingArtifact can contain technical recording tracks.
     #[test]
     fn artifact_can_contain_tracks() {
-        let mut artifact = RecordingArtifact::new("artifact-001", "session-001");
+        let mut artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         artifact.add_track(RecordingTrack::new("track-001"));
 
@@ -215,7 +220,7 @@ mod tests {
     // Tracks are independent technical structures.
     #[test]
     fn artifact_can_contain_multiple_independent_tracks() {
-        let mut artifact = RecordingArtifact::new("artifact-001", "session-001");
+        let mut artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         let mut host_track = RecordingTrack::new("track-host");
         host_track.add_chunk(RecordingChunk::new(1));

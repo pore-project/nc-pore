@@ -21,6 +21,7 @@ use crate::artifact::coordination::ArtifactCoordinator;
 use crate::artifact::factory::RecordingArtifactFactory;
 use crate::audio::CaptureResult;
 use crate::persistence::PersistenceProvider;
+use crate::session::RecordingSessionId;
 
 /// Processes completed capture results into recording artifacts.
 ///
@@ -46,7 +47,7 @@ where
     pub fn process(
         &mut self,
         capture_result: CaptureResult,
-        recording_session_id: impl Into<String>,
+        recording_session_id: RecordingSessionId,
     ) -> crate::artifact::RecordingArtifact {
         let mut artifact = RecordingArtifactFactory::create(capture_result, recording_session_id);
 
@@ -79,7 +80,7 @@ mod tests {
 
         let capture_result = CaptureResult::new("capture-001");
 
-        let artifact = processor.process(capture_result, "session-001");
+        let artifact = processor.process(capture_result, RecordingSessionId::new("session-001"));
 
         assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.status(), &ArtifactStatus::Available);

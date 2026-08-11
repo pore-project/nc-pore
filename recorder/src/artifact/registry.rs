@@ -6,6 +6,8 @@
 //! See:
 //! - ADR-047 Local Artifact Registry and Discovery Strategy
 
+use crate::session::RecordingSessionId;
+
 /// Technical reference entry for a locally known artifact.
 ///
 /// The registry stores knowledge about artifacts,
@@ -13,14 +15,14 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactRegistryEntry {
     pub artifact_id: String,
-    pub recording_session_id: String,
+    pub recording_session_id: RecordingSessionId,
 }
 
 impl ArtifactRegistryEntry {
-    pub fn new(artifact_id: impl Into<String>, recording_session_id: impl Into<String>) -> Self {
+    pub fn new(artifact_id: impl Into<String>, recording_session_id: RecordingSessionId) -> Self {
         Self {
             artifact_id: artifact_id.into(),
-            recording_session_id: recording_session_id.into(),
+            recording_session_id,
         }
     }
 }
@@ -85,7 +87,7 @@ mod tests {
     fn registry_can_register_artifact() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", "session-001"));
+        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
 
         assert_eq!(registry.list().len(), 1);
     }
@@ -98,7 +100,7 @@ mod tests {
     fn registry_can_find_artifact() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", "session-001"));
+        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
 
         let entry = registry.find("artifact-001");
 
@@ -114,7 +116,7 @@ mod tests {
     fn registry_can_remove_artifact() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", "session-001"));
+        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
 
         registry.remove("artifact-001");
 
@@ -129,7 +131,7 @@ mod tests {
     fn registry_can_check_artifact_existence() {
         let mut registry = LocalArtifactRegistry::new();
 
-        registry.register(ArtifactRegistryEntry::new("artifact-001", "session-001"));
+        registry.register(ArtifactRegistryEntry::new("artifact-001", RecordingSessionId::new("session-001")));
 
         assert!(registry.contains("artifact-001"));
         assert!(!registry.contains("artifact-999"));

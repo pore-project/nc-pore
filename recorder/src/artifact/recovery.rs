@@ -59,6 +59,7 @@ impl Default for ArtifactRecoveryService {
 
 #[cfg(test)]
 mod tests {
+use crate::session::RecordingSessionId;
     use super::*;
     use crate::artifact::RecordingArtifact;
     use crate::persistence::InMemoryPersistenceProvider;
@@ -72,7 +73,7 @@ mod tests {
     fn recovery_rebuilds_registry_from_persisted_artifacts() {
         let mut persistence = InMemoryPersistenceProvider::new();
 
-        persistence.store(RecordingArtifact::new("artifact-001", "session-001"));
+        persistence.store(RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001")));
 
         let mut registry = LocalArtifactRegistry::new();
 

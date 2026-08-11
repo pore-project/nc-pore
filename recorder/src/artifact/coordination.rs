@@ -67,6 +67,7 @@ where
 
 #[cfg(test)]
 mod tests {
+use crate::session::RecordingSessionId;
     use super::*;
     use crate::artifact::ArtifactStatus;
     use crate::persistence::InMemoryPersistenceProvider;
@@ -77,7 +78,7 @@ mod tests {
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
 
-        let artifact = RecordingArtifact::new("artifact-001", "session-001");
+        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         coordinator.register_and_store(artifact);
 
@@ -90,7 +91,7 @@ mod tests {
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
 
-        let artifact = RecordingArtifact::new("artifact-001", "session-001");
+        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         let stored_artifact = coordinator.register_and_store(artifact);
 
@@ -113,7 +114,7 @@ mod tests {
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
 
-        let artifact = RecordingArtifact::new("artifact-026", "session-026");
+        let artifact = RecordingArtifact::new("artifact-026", RecordingSessionId::new("session-026"));
 
         let stored_artifact = coordinator.register_and_store(artifact);
 

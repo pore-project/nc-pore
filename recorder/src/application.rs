@@ -14,7 +14,7 @@
 use crate::artifact::processing::RecordingArtifactProcessor;
 use crate::audio::CaptureProvider;
 use crate::persistence::PersistenceProvider;
-use crate::session::RecordingSession;
+use crate::session::{RecordingSession, RecordingSessionId};
 use crate::workflow::RecorderWorkflow;
 
 pub struct RecorderApplication<C, P>
@@ -47,7 +47,7 @@ where
     }
 
     pub fn stop(&mut self) -> crate::artifact::RecordingArtifact {
-        let recording_session_id = self.workflow.session().id().to_string();
+        let recording_session_id = RecordingSessionId::new(self.workflow.session().id());
 
         let capture_result = self.workflow.stop();
 
@@ -99,7 +99,7 @@ mod tests {
         let artifact = application.stop();
 
         assert_eq!(artifact.id.value(), "application-test-capture");
-        assert_eq!(artifact.recording_session_id, "session-001");
+        assert_eq!(artifact.recording_session_id.value(), "session-001");
     }
 
     // TEST-25
@@ -125,6 +125,6 @@ mod tests {
         let artifact = application.stop();
 
         assert_eq!(artifact.id.value(), "application-test-capture");
-        assert_eq!(artifact.recording_session_id, "session-002");
+        assert_eq!(artifact.recording_session_id.value(), "session-002");
     }
 }
