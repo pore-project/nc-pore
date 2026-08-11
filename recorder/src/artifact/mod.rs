@@ -13,10 +13,13 @@
 //! - ADR-054 Recording Artifact and Local Recording Data Association
 
 pub mod coordination;
+pub mod id;
 pub mod factory;
 pub mod processing;
 pub mod recovery;
 pub mod registry;
+
+pub use id::ArtifactId;
 
 /// Technical lifecycle state of a Recording Artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,7 +56,7 @@ impl RecordingChunk {
 /// See ADR-002 and ADR-054.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingTrack {
-    pub id: String,
+    pub id: ArtifactId,
     chunks: Vec<RecordingChunk>,
 }
 
@@ -61,7 +64,7 @@ impl RecordingTrack {
     /// Creates an empty recording track.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
-            id: id.into(),
+            id: ArtifactId::new(id),
             chunks: Vec::new(),
         }
     }
@@ -85,7 +88,7 @@ impl RecordingTrack {
 /// See ADR-042 and ADR-054.
 #[derive(Debug, Clone)]
 pub struct RecordingArtifact {
-    pub id: String,
+    pub id: ArtifactId,
     pub recording_session_id: String,
     status: ArtifactStatus,
     tracks: Vec<RecordingTrack>,
@@ -98,7 +101,7 @@ impl RecordingArtifact {
     /// that has been created but is not yet available or stored.
     pub fn new(id: impl Into<String>, recording_session_id: impl Into<String>) -> Self {
         Self {
-            id: id.into(),
+            id: ArtifactId::new(id),
             recording_session_id: recording_session_id.into(),
             status: ArtifactStatus::Created,
             tracks: Vec::new(),
@@ -185,7 +188,7 @@ mod tests {
         artifact.add_track(RecordingTrack::new("track-001"));
 
         assert_eq!(artifact.tracks().len(), 1);
-        assert_eq!(artifact.tracks()[0].id, "track-001");
+        assert_eq!(artifact.tracks()[0].id.value(), "track-001");
     }
 
     // TEST-29

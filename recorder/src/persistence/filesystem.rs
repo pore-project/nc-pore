@@ -27,7 +27,7 @@ struct PersistedRecordingArtifact {
 impl From<&RecordingArtifact> for PersistedRecordingArtifact {
     fn from(artifact: &RecordingArtifact) -> Self {
         Self {
-            id: artifact.id.clone(),
+            id: artifact.id.value().to_string(),
             recording_session_id: artifact.recording_session_id.clone(),
             status: match artifact.status() {
                 ArtifactStatus::Created => "Created".to_string(),

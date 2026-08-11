@@ -81,7 +81,7 @@ mod tests {
 
         let artifact = processor.process(capture_result, "session-001");
 
-        assert_eq!(artifact.id, "capture-001");
+        assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.status(), &ArtifactStatus::Available);
 
         assert!(

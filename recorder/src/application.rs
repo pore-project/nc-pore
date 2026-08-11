@@ -98,7 +98,7 @@ mod tests {
 
         let artifact = application.stop();
 
-        assert_eq!(artifact.id, "application-test-capture");
+        assert_eq!(artifact.id.value(), "application-test-capture");
         assert_eq!(artifact.recording_session_id, "session-001");
     }
 
@@ -124,7 +124,7 @@ mod tests {
 
         let artifact = application.stop();
 
-        assert_eq!(artifact.id, "application-test-capture");
+        assert_eq!(artifact.id.value(), "application-test-capture");
         assert_eq!(artifact.recording_session_id, "session-002");
     }
 }

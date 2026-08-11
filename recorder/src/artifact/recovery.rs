@@ -41,9 +41,9 @@ impl ArtifactRecoveryService {
         registry: &mut LocalArtifactRegistry,
     ) {
         for artifact in persistence.list() {
-            if !registry.contains(&artifact.id) {
+            if !registry.contains(artifact.id.value()) {
                 registry.register(ArtifactRegistryEntry::new(
-                    artifact.id,
+                    artifact.id.value().to_string(),
                     artifact.recording_session_id,
                 ));
             }

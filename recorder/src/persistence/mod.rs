@@ -48,7 +48,7 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
     fn load(&self, id: &str) -> Option<RecordingArtifact> {
         self.artifacts
             .iter()
-            .find(|artifact| artifact.id == id)
+            .find(|artifact| artifact.id.value() == id)
             .cloned()
     }
 
@@ -57,7 +57,7 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
     }
 
     fn remove(&mut self, id: &str) {
-        self.artifacts.retain(|artifact| artifact.id != id);
+        self.artifacts.retain(|artifact| artifact.id.value() != id);
     }
 }
 
@@ -93,7 +93,7 @@ mod tests {
         let artifact = provider.load("artifact-001");
 
         assert!(artifact.is_some());
-        assert_eq!(artifact.unwrap().id, "artifact-001");
+        assert_eq!(artifact.unwrap().id.value(), "artifact-001");
     }
 
     // TEST-14

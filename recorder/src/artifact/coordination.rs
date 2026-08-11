@@ -45,7 +45,7 @@ where
 
     pub fn register_and_store(&mut self, mut artifact: RecordingArtifact) -> RecordingArtifact {
         self.registry.register(ArtifactRegistryEntry::new(
-            artifact.id.clone(),
+            artifact.id.value().to_string(),
             artifact.recording_session_id.clone(),
         ));
 

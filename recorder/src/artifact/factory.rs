@@ -58,7 +58,7 @@ mod tests {
 
         let artifact = RecordingArtifactFactory::create(capture_result, "session-001");
 
-        assert_eq!(artifact.id, "capture-001");
+        assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.recording_session_id, "session-001");
     }
     #[test]
@@ -80,11 +80,11 @@ mod tests {
         let artifact = RecordingArtifactFactory::create(capture, "session-001");
 
         assert_eq!(artifact.tracks().len(), 2);
-        assert_eq!(artifact.tracks()[0].id, "track-host");
+        assert_eq!(artifact.tracks()[0].id.value(), "track-host");
         assert_eq!(artifact.tracks()[0].chunks()[0].sequence, 1);
         assert_eq!(artifact.tracks()[0].chunks()[1].sequence, 2);
 
-        assert_eq!(artifact.tracks()[1].id, "track-guest");
+        assert_eq!(artifact.tracks()[1].id.value(), "track-guest");
         assert_eq!(artifact.tracks()[1].chunks()[0].sequence, 1);
         assert_eq!(artifact.tracks()[1].chunks()[1].sequence, 2);
         assert_eq!(artifact.tracks()[1].chunks()[2].sequence, 3);
