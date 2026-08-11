@@ -25,6 +25,26 @@ impl CaptureChunk {
     }
 }
 
+/// Capture Track identity.
+///
+/// CaptureTrackId represents the technical identity
+/// of a CaptureTrack and is intentionally distinct
+/// from RecordingTrackId.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureTrackId(String);
+
+impl CaptureTrackId {
+    /// Creates a new capture track identifier.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// Returns the raw identifier value.
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Technical recording track produced by the capture layer.
 ///
 /// A capture track represents one technical audio stream.
@@ -164,5 +184,17 @@ mod tests {
         assert_eq!(result.tracks()[1].chunks()[0].sequence, 1);
         assert_eq!(result.tracks()[1].chunks()[1].sequence, 2);
         assert_eq!(result.tracks()[1].chunks()[2].sequence, 3);
+    }
+}
+
+#[cfg(test)]
+mod capture_track_id_tests {
+    use super::*;
+
+    #[test]
+    fn capture_track_id_preserves_value() {
+        let id = CaptureTrackId::new("track-001");
+
+        assert_eq!(id.value(), "track-001");
     }
 }
