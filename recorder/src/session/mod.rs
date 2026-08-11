@@ -14,6 +14,10 @@
 //! - ADR-038 Core Implementation Structure and Module Organization
 //! - ADR-039 Recording Architecture and Capture Boundary (future)
 
+pub mod id;
+
+pub use id::RecordingSessionId;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SessionStatus {
     Created,
@@ -25,7 +29,7 @@ pub enum SessionStatus {
 
 #[derive(Debug)]
 pub struct RecordingSession {
-    id: String,
+    id: RecordingSessionId,
     status: SessionStatus,
 }
 
@@ -35,7 +39,7 @@ impl RecordingSession {
     /// A new recorder session always starts in Created state.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
-            id: id.into(),
+            id: RecordingSessionId::new(id),
             status: SessionStatus::Created,
         }
     }
@@ -47,7 +51,7 @@ impl RecordingSession {
 
     /// Returns the session identifier.
     pub fn id(&self) -> &str {
-        &self.id
+        self.id.value()
     }
 
     /// Starts the recording process.
