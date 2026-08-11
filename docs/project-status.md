@@ -1,11 +1,11 @@
 # NC-PoRe Project Status
 
-- Version: 2.2
-- Date: 2026-08-10
+- Version: 2.3
+- Date: 2026-08-11
 
 ---
 
-# Deutsch ([English version below](#english-version))
+# Deutsch (English version below)
 
 ---
 
@@ -36,6 +36,7 @@ Implementiert:
 - Participation Modell
 - Activity History Grundstruktur
 - API Operationen für ProductionSession Lifecycle
+- API Operationen für ProductionSession-Verwaltung und Recording-Verknüpfung
 
 ---
 
@@ -99,7 +100,7 @@ Relevante Architekturentscheidungen:
 
 Aktueller Teststand:
 
-core tests: 26 passed
+core tests: 34 passed
 recorder tests: 40 passed
 
 Die Tests validieren unter anderem:
@@ -179,7 +180,7 @@ Geplante nächste Arbeiten:
 
 ---
 
-# English Version ([Deutsche Version oben](#deutsch))
+# English Version (Deutsche Version oben)
 
 ---
 
@@ -210,6 +211,7 @@ Implemented:
 - Participation model
 - Activity History foundation
 - ProductionSession lifecycle API operations
+- ProductionSession management and recording association API operations
 
 ---
 
@@ -273,7 +275,7 @@ Relevant architecture decisions:
 
 Current test status:
 
-core tests: 26 passed
+core tests: 34 passed
 recorder tests: 40 passed
 
 The tests validate among other things:
@@ -306,6 +308,8 @@ NC-PoRe currently follows these architecture principles:
 - Artifact Registry and Persistence remain separate responsibilities
 - Application Flow connects Workflow, Artifact Processing and Persistence through defined boundaries
 - Recovery establishes technical consistency between Persistence and Registry
+- CaptureResult and RecordingArtifact use separate technical data models
+- RecordingArtifact structures tracks and chunks independently from physical persistence
 - Persistence remains replaceable
 - local recording remains independent from network availability
 - Repository content is the technical source of truth
