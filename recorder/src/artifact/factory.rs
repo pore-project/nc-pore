@@ -125,7 +125,10 @@ mod tests {
             RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
 
         let chunk = &artifact.tracks()[0].chunks()[0];
-        assert_eq!(chunk.payload().reference().value(), "track-host/chunk-000001");
+        assert_eq!(
+            chunk.payload().reference().value(),
+            "track-host/chunk-000001"
+        );
         assert_eq!(chunk.payload().data(), &[10, 20, 30]);
         assert_eq!(chunk.payload().size_bytes(), 3);
     }
