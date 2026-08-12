@@ -344,7 +344,7 @@ mod tests {
             artifact.tracks()[0].chunks()[0].payload().data(),
             &[1, 2, 3]
         );
-        assert_eq!(artifact.tracks()[0].chunks()[1].payload().data(), &[4, 5]);
+        assert_eq!(artifact.tracks()[1].chunks()[1].payload().data(), &[4, 5]);
 
         let _ = fs::remove_dir_all(path);
     }
@@ -390,10 +390,8 @@ mod tests {
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
         provider.store(test_artifact());
-        fs::remove_file(
-            path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"),
-        )
-        .unwrap();
+        fs::remove_file(path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"))
+            .unwrap();
 
         assert!(provider.load("artifact-001").is_none());
         assert!(provider.list().is_empty());
