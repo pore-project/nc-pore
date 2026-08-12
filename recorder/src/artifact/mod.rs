@@ -11,6 +11,7 @@
 //! See:
 //! - ADR-042 Recording Artifact Model and Lifecycle Boundary
 //! - ADR-054 Recording Artifact and Local Recording Data Association
+//! - ADR-058 Recording Payload Representation
 
 pub mod coordination;
 pub mod factory;
@@ -58,22 +59,91 @@ impl RecordingArtifactAssociation {
     }
 }
 
+/// Storage-provider-independent logical identity of one payload segment.
+///
+/// The reference identifies the payload within the artifact without encoding
+/// an absolute filesystem path or another concrete storage location.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordingPayloadReference(String);
+
+impl RecordingPayloadReference {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Technical payload belonging to one RecordingChunk.
+///
+/// The payload bytes remain technical recording data. The logical reference
+/// is intentionally independent of the physical persistence provider.
+///
+/// Integrity validation is deliberately deferred to the recovery work in #8.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordingPayload {
+    reference: RecordingPayloadReference,
+    data: Vec<u8>,
+}
+
+impl RecordingPayload {
+    pub fn new(reference: impl Into<String>, data: impl Into<Vec<u8>>) -> Self {
+        Self {
+            reference: RecordingPayloadReference::new(reference),
+            data: data.into(),
+        }
+    }
+
+    pub fn reference(&self) -> &RecordingPayloadReference {
+        &self.reference
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn size_bytes(&self) -> u64 {
+        self.data.len() as u64
+    }
+}
+
 /// A technical chunk of recording data.
 ///
 /// The chunk deliberately contains no filesystem-specific information.
 /// Its position belongs to the track and is represented by its sequence
-/// number.
+/// number. The physical payload location is decided by the persistence
+/// provider.
 ///
-/// See ADR-003 and ADR-054.
+/// See ADR-003, ADR-054 and ADR-058.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingChunk {
     pub sequence: u32,
+    payload: RecordingPayload,
 }
 
 impl RecordingChunk {
-    /// Creates a recording chunk at the given sequence position.
+    /// Creates a recording chunk without payload data.
     pub fn new(sequence: u32) -> Self {
-        Self { sequence }
+        Self::with_payload(sequence, format!("chunk-{sequence:06}"), Vec::new())
+    }
+
+    /// Creates a recording chunk with its logical payload reference and data.
+    pub fn with_payload(
+        sequence: u32,
+        reference: impl Into<String>,
+        data: impl Into<Vec<u8>>,
+    ) -> Self {
+        Self {
+            sequence,
+            payload: RecordingPayload::new(reference, data),
+        }
+    }
+
+    /// Returns the technical payload belonging to this chunk.
+    pub fn payload(&self) -> &RecordingPayload {
+        &self.payload
     }
 }
 
@@ -98,7 +168,7 @@ impl RecordingTrack {
         }
     }
 
-    /// Adds a chunk to this track.
+    /// Adds a technical recording chunk.
     pub fn add_chunk(&mut self, chunk: RecordingChunk) {
         self.chunks.push(chunk);
     }
@@ -114,7 +184,7 @@ impl RecordingTrack {
 /// A RecordingArtifact is not itself a file. It represents the technical
 /// recording result and associates its tracks and recording data.
 ///
-/// See ADR-042 and ADR-054.
+/// See ADR-042, ADR-054 and ADR-058.
 #[derive(Debug, Clone)]
 pub struct RecordingArtifact {
     pub id: ArtifactId,
@@ -310,5 +380,23 @@ mod tests {
 
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-017"));
+    }
+
+    // TEST-35
+    //
+    // Protects ADR-058:
+    // A RecordingChunk can carry actual technical payload bytes
+    // while exposing only a storage-provider-independent reference.
+    #[test]
+    fn recording_chunk_can_contain_payload() {
+        let chunk = RecordingChunk::with_payload(1, "track-host/chunk-000001", vec![1, 2, 3]);
+
+        assert_eq!(chunk.sequence, 1);
+        assert_eq!(
+            chunk.payload().reference().value(),
+            "track-host/chunk-000001"
+        );
+        assert_eq!(chunk.payload().data(), &[1, 2, 3]);
+        assert_eq!(chunk.payload().size_bytes(), 3);
     }
 }

@@ -11,6 +11,7 @@
 //!
 //! See:
 //! - ADR-050 Recording Artifact Factory
+//! - ADR-058 Recording Payload Representation
 
 use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
 use crate::audio::CaptureResult;
@@ -34,7 +35,19 @@ impl RecordingArtifactFactory {
             let mut recording_track = RecordingTrack::new(capture_track.id.value());
 
             for capture_chunk in capture_track.chunks() {
-                recording_track.add_chunk(RecordingChunk::new(capture_chunk.sequence));
+                // The logical reference remains independent from the concrete
+                // filesystem path used later by the persistence provider.
+                let reference = format!(
+                    "{}/chunk-{sequence:06}",
+                    capture_track.id.value(),
+                    sequence = capture_chunk.sequence
+                );
+
+                recording_track.add_chunk(RecordingChunk::with_payload(
+                    capture_chunk.sequence,
+                    reference,
+                    capture_chunk.payload().to_vec(),
+                ));
             }
 
             artifact.add_track(recording_track);
@@ -65,6 +78,7 @@ mod tests {
         assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.recording_session_id.value(), "session-001");
     }
+
     #[test]
     fn factory_transfers_tracks_and_chunks() {
         let mut capture = CaptureResult::new("capture-001");
@@ -93,5 +107,29 @@ mod tests {
         assert_eq!(artifact.tracks()[1].chunks()[0].sequence, 1);
         assert_eq!(artifact.tracks()[1].chunks()[1].sequence, 2);
         assert_eq!(artifact.tracks()[1].chunks()[2].sequence, 3);
+    }
+
+    // TEST-36
+    //
+    // Protects ADR-056 and ADR-058:
+    // The factory transfers technical payload data without coupling
+    // the capture types to artifact or persistence types.
+    #[test]
+    fn factory_transfers_chunk_payload_and_assigns_logical_reference() {
+        let mut capture = CaptureResult::new("capture-001");
+        let mut track = CaptureTrack::new("track-host");
+        track.add_chunk(CaptureChunk::with_payload(1, vec![10, 20, 30]));
+        capture.add_track(track);
+
+        let artifact =
+            RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
+
+        let chunk = &artifact.tracks()[0].chunks()[0];
+        assert_eq!(
+            chunk.payload().reference().value(),
+            "track-host/chunk-000001"
+        );
+        assert_eq!(chunk.payload().data(), &[10, 20, 30]);
+        assert_eq!(chunk.payload().size_bytes(), 3);
     }
 }

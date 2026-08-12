@@ -16,12 +16,29 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureChunk {
     pub sequence: u32,
+    payload: Vec<u8>,
 }
 
 impl CaptureChunk {
-    /// Creates a capture chunk at the given sequence position.
+    /// Creates a capture chunk without payload data.
     pub fn new(sequence: u32) -> Self {
-        Self { sequence }
+        Self {
+            sequence,
+            payload: Vec::new(),
+        }
+    }
+
+    /// Creates a capture chunk with the technical payload bytes produced by capture.
+    pub fn with_payload(sequence: u32, payload: impl Into<Vec<u8>>) -> Self {
+        Self {
+            sequence,
+            payload: payload.into(),
+        }
+    }
+
+    /// Returns the payload bytes produced by the capture layer.
+    pub fn payload(&self) -> &[u8] {
+        &self.payload
     }
 }
 
@@ -64,12 +81,12 @@ impl CaptureTrack {
         }
     }
 
-    /// Adds a chunk to this capture track.
+    /// Adds a technical capture chunk.
     pub fn add_chunk(&mut self, chunk: CaptureChunk) {
         self.chunks.push(chunk);
     }
 
-    /// Returns the chunks belonging to this capture track.
+    /// Returns the chunks belonging to the capture track.
     pub fn chunks(&self) -> &[CaptureChunk] {
         &self.chunks
     }
@@ -184,6 +201,19 @@ mod tests {
         assert_eq!(result.tracks()[1].chunks()[0].sequence, 1);
         assert_eq!(result.tracks()[1].chunks()[1].sequence, 2);
         assert_eq!(result.tracks()[1].chunks()[2].sequence, 3);
+    }
+
+    // TEST-34
+    //
+    // Protects the payload part of the capture boundary:
+    // CaptureChunk can carry technical payload bytes without
+    // depending on artifact model types.
+    #[test]
+    fn capture_chunk_can_carry_payload_bytes() {
+        let chunk = CaptureChunk::with_payload(1, vec![1, 2, 3, 4]);
+
+        assert_eq!(chunk.sequence, 1);
+        assert_eq!(chunk.payload(), &[1, 2, 3, 4]);
     }
 }
 
