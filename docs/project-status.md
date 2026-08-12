@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 2.3
-- Date: 2026-08-11
+- Version: 2.4
+- Date: 2026-08-12
 
 ---
 
@@ -37,6 +37,7 @@ Implementiert:
 - Activity History Grundstruktur
 - API Operationen für ProductionSession Lifecycle
 - API Operationen für ProductionSession-Verwaltung und Recording-Verknüpfung
+- Read-API-Operationen für Participants, Recordings und Activity History
 
 ---
 
@@ -102,8 +103,8 @@ Relevante Architekturentscheidungen:
 
 Aktueller Teststand:
 
-core tests: 34 passed
-recorder tests: 40 passed
+core tests: 40 passed
+recorder tests: 46 passed
 
 Die Tests validieren unter anderem:
 
@@ -215,6 +216,7 @@ Implemented:
 - Activity History foundation
 - ProductionSession lifecycle API operations
 - ProductionSession management and recording association API operations
+- Read API operations for participants, recordings and activity history
 
 ---
 
