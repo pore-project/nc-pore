@@ -344,7 +344,7 @@ mod tests {
             artifact.tracks()[0].chunks()[0].payload().data(),
             &[1, 2, 3]
         );
-        assert_eq!(artifact.tracks()[1].chunks()[1].payload().data(), &[4, 5]);
+        assert_eq!(artifact.tracks()[0].chunks()[1].payload().data(), &[4, 5]);
 
         let _ = fs::remove_dir_all(path);
     }
