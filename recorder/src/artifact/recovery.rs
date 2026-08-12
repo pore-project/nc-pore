@@ -119,43 +119,49 @@ mod tests {
     }
 
     // TEST-32
-//
-// Recovery adds missing registry knowledge without overwriting existing entries.
-#[test]
-fn recovery_adds_missing_entry_and_preserves_existing_registry_entry() {
-    let mut persistence = InMemoryPersistenceProvider::new();
+    //
+    // Recovery adds missing registry knowledge without overwriting existing entries.
+    #[test]
+    fn recovery_adds_missing_entry_and_preserves_existing_registry_entry() {
+        let mut persistence = InMemoryPersistenceProvider::new();
 
-    persistence.store(RecordingArtifact::new(
-        "artifact-001",
-        RecordingSessionId::new("persisted-session-001"),
-    ));
-    persistence.store(RecordingArtifact::new(
-        "artifact-002",
-        RecordingSessionId::new("persisted-session-002"),
-    ));
+        persistence.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("persisted-session-001"),
+        ));
+        persistence.store(RecordingArtifact::new(
+            "artifact-002",
+            RecordingSessionId::new("persisted-session-002"),
+        ));
 
-    let mut registry = LocalArtifactRegistry::new();
-    registry.register(ArtifactRegistryEntry::new(
-        "artifact-001".to_string(),
-        RecordingSessionId::new("existing-session"),
-    ));
+        let mut registry = LocalArtifactRegistry::new();
+        registry.register(ArtifactRegistryEntry::new(
+            "artifact-001".to_string(),
+            RecordingSessionId::new("existing-session"),
+        ));
 
-    let recovery = ArtifactRecoveryService::new();
-    recovery.recover(&persistence, &mut registry);
+        let recovery = ArtifactRecoveryService::new();
+        recovery.recover(&persistence, &mut registry);
 
-    assert_eq!(
-        registry.find(&ArtifactId::new("artifact-001")).unwrap()
-            .recording_session_id.value(),
-        "existing-session"
-    );
-    assert_eq!(
-        registry.find(&ArtifactId::new("artifact-002")).unwrap()
-            .recording_session_id.value(),
-        "persisted-session-002"
-    );
-}
+        assert_eq!(
+            registry
+                .find(&ArtifactId::new("artifact-001"))
+                .unwrap()
+                .recording_session_id
+                .value(),
+            "existing-session"
+        );
+        assert_eq!(
+            registry
+                .find(&ArtifactId::new("artifact-002"))
+                .unwrap()
+                .recording_session_id
+                .value(),
+            "persisted-session-002"
+        );
+    }
 
-// TEST-27
+    // TEST-27
     //
     // Protects ADR-053:
     // Recovery does not create entries for missing persistence data.

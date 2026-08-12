@@ -125,23 +125,18 @@ impl FilesystemPersistenceProvider {
     }
 
     fn validate_id(id: &str) -> bool {
-        !id.is_empty()
-            && id != "."
-            && id != ".."
-            && !id.contains('/')
-            && !id.contains('\\')
+        !id.is_empty() && id != "." && id != ".." && !id.contains('/') && !id.contains('\\')
     }
 
     fn artifact_dir(&self, id: &str) -> PathBuf {
         self.root.join(id)
     }
 
-    fn artifact_metadata_path(&self, id: &str) -> PathBuf {
-        self.artifact_dir(id).join("artifact.json")
-    }
-
     fn write_artifact(&self, artifact: &RecordingArtifact) {
-        assert!(Self::validate_id(artifact.id.value()), "invalid artifact id");
+        assert!(
+            Self::validate_id(artifact.id.value()),
+            "invalid artifact id"
+        );
 
         for track in artifact.tracks() {
             assert!(Self::validate_id(track.id.value()), "invalid track id");
