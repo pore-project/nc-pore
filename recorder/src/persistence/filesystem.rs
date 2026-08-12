@@ -1,15 +1,18 @@
 //! Filesystem persistence provider.
 //!
-//! The provider persists one complete RecordingArtifact below one
-//! artifact directory. Metadata and payload bytes are written into a
-//! temporary artifact directory first; only the completed directory is
-//! published under its final artifact ID.
+//! This module provides the concrete local filesystem implementation
+//! of the PersistenceProvider boundary.
+//!
+//! The physical layout follows ADR-055. Actual chunk payload bytes are
+//! stored as opaque `.payload` files because this issue does not decide
+//! an audio codec or container format.
 //!
 //! See:
 //! - ADR-052 Local Filesystem Persistence Provider
 //! - ADR-054 Recording Artifact and Local Recording Data Association
 //! - ADR-055 Filesystem Persistence Layout
 //! - ADR-058 Recording Payload Representation
+//! - ADR-059 Recording Payload Filesystem Persistence
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -125,11 +128,17 @@ impl PersistedRecordingArtifact {
     }
 }
 
+/// Filesystem based PersistenceProvider implementation.
+///
+/// Each RecordingArtifact owns one directory below the persistence root.
 pub struct FilesystemPersistenceProvider {
     root: PathBuf,
 }
 
 impl FilesystemPersistenceProvider {
+    /// Creates a filesystem persistence provider.
+    ///
+    /// The directory is created if it does not exist.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         let root = path.into();
         fs::create_dir_all(&root).expect("failed to create persistence directory");
@@ -293,6 +302,8 @@ mod tests {
         artifact
     }
 
+    // TEST-16
+    // Protects ADR-055: artifacts are stored below their own directory.
     #[test]
     fn test_16_filesystem_provider_can_store_artifact() {
         let path = test_directory("test-16");
@@ -301,16 +312,21 @@ mod tests {
         provider.store(test_artifact());
 
         assert!(path.join("artifact-001/artifact.json").is_file());
-        assert!(path
-            .join("artifact-001/tracks/track-host/chunks/chunk-000001.payload")
-            .is_file());
-        assert!(path
-            .join("artifact-001/tracks/track-host/chunks/chunk-000002.payload")
-            .is_file());
+        assert!(
+            path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload")
+                .is_file()
+        );
+        assert!(
+            path.join("artifact-001/tracks/track-host/chunks/chunk-000002.payload")
+                .is_file()
+        );
 
         let _ = fs::remove_dir_all(path);
     }
 
+    // TEST-17
+    // Protects ADR-054/055 and ADR-059: persisted tracks, chunks,
+    // payloads and the domain association can be restored.
     #[test]
     fn test_17_filesystem_provider_can_load_artifact_and_payload() {
         let path = test_directory("test-17");
@@ -324,14 +340,19 @@ mod tests {
         assert_eq!(artifact.recording_id(), Some("recording-017"));
         assert_eq!(artifact.tracks().len(), 1);
         assert_eq!(artifact.tracks()[0].chunks().len(), 2);
-        assert_eq!(artifact.tracks()[0].chunks()[0].payload().data(), &[1, 2, 3]);
+        assert_eq!(
+            artifact.tracks()[0].chunks()[0].payload().data(),
+            &[1, 2, 3]
+        );
         assert_eq!(artifact.tracks()[0].chunks()[1].payload().data(), &[4, 5]);
 
         let _ = fs::remove_dir_all(path);
     }
 
+    // TEST-18
+    // Protects ADR-053/055: incomplete temporary directories are ignored.
     #[test]
-    fn test_18_filesystem_provider_can_list_complete_artifacts_and_ignore_temporary_state() {
+    fn test_18_filesystem_provider_can_list_artifacts() {
         let path = test_directory("test-18");
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
@@ -344,6 +365,8 @@ mod tests {
         let _ = fs::remove_dir_all(path);
     }
 
+    // TEST-19
+    // Protects ADR-055: removal removes the complete artifact directory.
     #[test]
     fn test_19_filesystem_provider_can_remove_artifact() {
         let path = test_directory("test-19");
@@ -358,15 +381,18 @@ mod tests {
         let _ = fs::remove_dir_all(path);
     }
 
+    // TEST-37
+    // Protects ADR-059: an incomplete payload cannot be restored as a
+    // complete artifact.
     #[test]
     fn missing_payload_makes_artifact_unloadable() {
         let path = test_directory("missing-payload");
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
         provider.store(test_artifact());
-        fs::remove_file(
-            path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"),
-        )
+        fs::remove_file(path.join(
+            "artifact-001/tracks/track-host/chunks/chunk-000001.payload",
+        ))
         .unwrap();
 
         assert!(provider.load("artifact-001").is_none());
