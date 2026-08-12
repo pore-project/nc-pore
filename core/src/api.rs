@@ -574,7 +574,7 @@ mod tests {
         let result = list_recordings(&repository, &id).unwrap();
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].id.value(), "recording-001");
+        assert_eq!(result[0].id().value(), "recording-001");
     }
 
     // TEST-16
@@ -591,7 +591,10 @@ mod tests {
         let result = list_activity_history(&repository, &id).unwrap();
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].activity_type, crate::activity::ActivityType::SessionCreated);
+        assert_eq!(
+            result[0].activity_type,
+            crate::activity::ActivityType::SessionCreated
+        );
     }
 
     // TEST-17
@@ -618,10 +621,7 @@ mod tests {
 
         let result = list_recordings(&repository, &id);
 
-        assert!(matches!(
-            result,
-            Err(ListRecordingsError::SessionNotFound)
-        ));
+        assert!(matches!(result, Err(ListRecordingsError::SessionNotFound)));
     }
 
     // TEST-19
