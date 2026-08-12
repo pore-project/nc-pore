@@ -7,16 +7,19 @@
 //! - CaptureResult
 //! - RecordingArtifactFactory
 //! - ArtifactCoordinator
+//! - originating domain recording association
 //!
 //! It intentionally does not contain:
 //! - audio capture logic
 //! - workflow coordination
 //! - persistence implementation
 //! - registry implementation
+//! - domain rules
 //!
 //! See:
 //! - ADR-051 Recording Artifact Processing Boundary
 
+use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::coordination::ArtifactCoordinator;
 use crate::artifact::factory::RecordingArtifactFactory;
 use crate::audio::CaptureResult;
@@ -43,14 +46,17 @@ where
         Self { coordinator }
     }
 
-    /// Processes a completed capture result.
+    /// Processes a completed capture result and preserves its originating
+    /// domain recording association on the resulting artifact.
     pub fn process(
         &mut self,
         capture_result: CaptureResult,
         recording_session_id: RecordingSessionId,
+        association: RecordingArtifactAssociation,
     ) -> crate::artifact::RecordingArtifact {
         let mut artifact = RecordingArtifactFactory::create(capture_result, recording_session_id);
 
+        artifact.set_domain_association(association.production_id(), association.recording_id());
         artifact.make_available();
 
         self.coordinator.register_and_store(artifact.clone());
@@ -80,17 +86,24 @@ mod tests {
 
         let capture_result = CaptureResult::new("capture-001");
 
-        let artifact = processor.process(capture_result, RecordingSessionId::new("session-001"));
+        let artifact = processor.process(
+            capture_result,
+            RecordingSessionId::new("session-001"),
+            RecordingArtifactAssociation::new("production-001", "recording-017"),
+        );
 
         assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.status(), &ArtifactStatus::Available);
+        assert_eq!(artifact.production_id(), Some("production-001"));
+        assert_eq!(artifact.recording_id(), Some("recording-017"));
 
-        assert!(
-            processor
-                .coordinator
-                .persistence()
-                .load("capture-001")
-                .is_some()
-        );
+        let persisted = processor
+            .coordinator
+            .persistence()
+            .load("capture-001")
+            .expect("processed artifact must be persisted");
+
+        assert_eq!(persisted.production_id(), Some("production-001"));
+        assert_eq!(persisted.recording_id(), Some("recording-017"));
     }
 }

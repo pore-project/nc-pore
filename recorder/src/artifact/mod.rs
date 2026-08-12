@@ -31,6 +31,33 @@ pub enum ArtifactStatus {
     Stored,
 }
 
+/// Opaque reference to the domain recording context that produced an artifact.
+///
+/// The recorder crate deliberately does not depend on the core crate. The
+/// identifiers are therefore stored as opaque values at this boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordingArtifactAssociation {
+    production_id: String,
+    recording_id: String,
+}
+
+impl RecordingArtifactAssociation {
+    pub fn new(production_id: impl Into<String>, recording_id: impl Into<String>) -> Self {
+        Self {
+            production_id: production_id.into(),
+            recording_id: recording_id.into(),
+        }
+    }
+
+    pub fn production_id(&self) -> &str {
+        &self.production_id
+    }
+
+    pub fn recording_id(&self) -> &str {
+        &self.recording_id
+    }
+}
+
 /// A technical chunk of recording data.
 ///
 /// The chunk deliberately contains no filesystem-specific information.
@@ -76,7 +103,7 @@ impl RecordingTrack {
         self.chunks.push(chunk);
     }
 
-    /// Returns the chunks belonging to this track.
+    /// Returns the chunks belonging to this recording track.
     pub fn chunks(&self) -> &[RecordingChunk] {
         &self.chunks
     }
@@ -94,6 +121,7 @@ pub struct RecordingArtifact {
     pub recording_session_id: RecordingSessionId,
     status: ArtifactStatus,
     tracks: Vec<RecordingTrack>,
+    association: Option<RecordingArtifactAssociation>,
 }
 
 impl RecordingArtifact {
@@ -107,6 +135,7 @@ impl RecordingArtifact {
             recording_session_id,
             status: ArtifactStatus::Created,
             tracks: Vec::new(),
+            association: None,
         }
     }
 
@@ -133,6 +162,37 @@ impl RecordingArtifact {
     /// Returns the tracks belonging to this artifact.
     pub fn tracks(&self) -> &[RecordingTrack] {
         &self.tracks
+    }
+
+    /// Associates the artifact with its originating domain recording context.
+    pub fn set_domain_association(
+        &mut self,
+        production_id: impl Into<String>,
+        recording_id: impl Into<String>,
+    ) {
+        self.association = Some(RecordingArtifactAssociation::new(
+            production_id,
+            recording_id,
+        ));
+    }
+
+    /// Returns the originating domain association, if one was supplied.
+    pub fn association(&self) -> Option<&RecordingArtifactAssociation> {
+        self.association.as_ref()
+    }
+
+    /// Returns the originating production identifier, if one was supplied.
+    pub fn production_id(&self) -> Option<&str> {
+        self.association
+            .as_ref()
+            .map(RecordingArtifactAssociation::production_id)
+    }
+
+    /// Returns the originating domain recording identifier, if one was supplied.
+    pub fn recording_id(&self) -> Option<&str> {
+        self.association
+            .as_ref()
+            .map(RecordingArtifactAssociation::recording_id)
     }
 }
 
@@ -239,5 +299,16 @@ mod tests {
         assert_eq!(artifact.tracks().len(), 2);
         assert_eq!(artifact.tracks()[0].chunks().len(), 2);
         assert_eq!(artifact.tracks()[1].chunks().len(), 3);
+    }
+
+    #[test]
+    fn artifact_can_preserve_domain_association() {
+        let mut artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+
+        artifact.set_domain_association("production-001", "recording-017");
+
+        assert_eq!(artifact.production_id(), Some("production-001"));
+        assert_eq!(artifact.recording_id(), Some("recording-017"));
     }
 }

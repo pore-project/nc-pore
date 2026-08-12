@@ -34,6 +34,10 @@ use crate::session::RecordingSessionId;
 struct PersistedRecordingArtifact {
     id: String,
     recording_session_id: String,
+    #[serde(default)]
+    production_id: Option<String>,
+    #[serde(default)]
+    recording_id: Option<String>,
     status: String,
     tracks: Vec<PersistedRecordingTrack>,
 }
@@ -54,6 +58,8 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
         Self {
             id: artifact.id.value().to_string(),
             recording_session_id: artifact.recording_session_id.value().to_string(),
+            production_id: artifact.production_id().map(str::to_string),
+            recording_id: artifact.recording_id().map(str::to_string),
             status: match artifact.status() {
                 ArtifactStatus::Created => "Created".to_string(),
                 ArtifactStatus::Available => "Available".to_string(),
@@ -81,6 +87,10 @@ impl PersistedRecordingArtifact {
     fn into_recording_artifact(self) -> RecordingArtifact {
         let mut artifact =
             RecordingArtifact::new(self.id, RecordingSessionId::new(self.recording_session_id));
+
+        if let (Some(production_id), Some(recording_id)) = (self.production_id, self.recording_id) {
+            artifact.set_domain_association(production_id, recording_id);
+        }
 
         for persisted_track in self.tracks {
             let mut track = RecordingTrack::new(persisted_track.id);
@@ -140,6 +150,20 @@ impl FilesystemPersistenceProvider {
 
         for track in artifact.tracks() {
             assert!(Self::validate_id(track.id.value()), "invalid track id");
+        }
+
+        if let Some(production_id) = artifact.production_id() {
+            assert!(
+                Self::validate_id(production_id),
+                "invalid production id in artifact association"
+            );
+        }
+
+        if let Some(recording_id) = artifact.recording_id() {
+            assert!(
+                Self::validate_id(recording_id),
+                "invalid recording id in artifact association"
+            );
         }
 
         let persisted = PersistedRecordingArtifact::from(artifact);
@@ -230,6 +254,8 @@ mod tests {
         let mut artifact =
             RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
+        artifact.set_domain_association("production-001", "recording-017");
+
         let mut host = RecordingTrack::new("track-host");
         host.add_chunk(RecordingChunk::new(1));
         host.add_chunk(RecordingChunk::new(2));
@@ -256,7 +282,8 @@ mod tests {
     }
 
     // TEST-17
-    // Protects ADR-054/055: persisted tracks and chunks can be restored.
+    // Protects ADR-054/055: persisted tracks, chunks and the domain
+    // association can be restored.
     #[test]
     fn test_17_filesystem_provider_can_load_artifact() {
         let path = test_directory("test-17");
@@ -266,6 +293,8 @@ mod tests {
         let artifact = provider.load("artifact-001").expect("artifact missing");
 
         assert_eq!(artifact.recording_session_id.value(), "session-001");
+        assert_eq!(artifact.production_id(), Some("production-001"));
+        assert_eq!(artifact.recording_id(), Some("recording-017"));
         assert_eq!(artifact.tracks().len(), 1);
         assert_eq!(artifact.tracks()[0].chunks().len(), 2);
         assert_eq!(artifact.tracks()[0].chunks()[1].sequence, 2);

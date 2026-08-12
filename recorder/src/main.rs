@@ -9,6 +9,7 @@ mod storage;
 mod workflow;
 
 use application::RecorderApplication;
+use artifact::RecordingArtifactAssociation;
 use artifact::coordination::ArtifactCoordinator;
 use artifact::processing::RecordingArtifactProcessor;
 use audio::{CaptureProvider, CaptureResult};
@@ -56,7 +57,10 @@ fn main() {
 
     let _ = application.session();
 
-    application.stop();
+    let _artifact = application.stop(RecordingArtifactAssociation::new(
+        "production-test-001",
+        "recording-test-001",
+    ));
 
     println!("NC-PoRe Recorder flow completed.");
 }
