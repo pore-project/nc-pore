@@ -390,9 +390,9 @@ mod tests {
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
         provider.store(test_artifact());
-        fs::remove_file(path.join(
-            "artifact-001/tracks/track-host/chunks/chunk-000001.payload",
-        ))
+        fs::remove_file(
+            path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"),
+        )
         .unwrap();
 
         assert!(provider.load("artifact-001").is_none());
