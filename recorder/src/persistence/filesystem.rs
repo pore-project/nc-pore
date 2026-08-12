@@ -136,10 +136,6 @@ impl FilesystemPersistenceProvider {
         self.root.join(id)
     }
 
-    fn artifact_metadata_path(&self, id: &str) -> PathBuf {
-        self.artifact_dir(id).join("artifact.json")
-    }
-
     fn write_artifact(&self, artifact: &RecordingArtifact) {
         assert!(Self::validate_id(artifact.id.value()), "invalid artifact id");
 
