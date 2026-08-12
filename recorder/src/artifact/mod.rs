@@ -392,7 +392,10 @@ mod tests {
         let chunk = RecordingChunk::with_payload(1, "track-host/chunk-000001", vec![1, 2, 3]);
 
         assert_eq!(chunk.sequence, 1);
-        assert_eq!(chunk.payload().reference().value(), "track-host/chunk-000001");
+        assert_eq!(
+            chunk.payload().reference().value(),
+            "track-host/chunk-000001"
+        );
         assert_eq!(chunk.payload().data(), &[1, 2, 3]);
         assert_eq!(chunk.payload().size_bytes(), 3);
     }
