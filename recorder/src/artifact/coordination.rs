@@ -38,17 +38,17 @@ where
     P: PersistenceProvider,
 {
     pub fn new(persistence: P) -> Self {
-    let mut registry = LocalArtifactRegistry::new();
+        let mut registry = LocalArtifactRegistry::new();
 
-    ArtifactRecoveryService::new().recover(&persistence, &mut registry);
+        ArtifactRecoveryService::new().recover(&persistence, &mut registry);
 
-    Self {
-        registry,
-        persistence,
+        Self {
+            registry,
+            persistence,
+        }
     }
-}
 
-pub fn register_and_store(&mut self, mut artifact: RecordingArtifact) -> RecordingArtifact {
+    pub fn register_and_store(&mut self, mut artifact: RecordingArtifact) -> RecordingArtifact {
         self.registry.register(ArtifactRegistryEntry::new(
             artifact.id.value().to_string(),
             artifact.recording_session_id.clone(),
@@ -95,31 +95,31 @@ mod tests {
         );
     }
 
-// TEST-33
-//
-// Protects ADR-053:
-// Artifact coordination restores registry knowledge
-// from already persisted artifacts during initialization.
-#[test]
-fn coordinator_recovers_persisted_artifact_registry_entries() {
-    let mut persistence = InMemoryPersistenceProvider::new();
+    // TEST-33
+    //
+    // Protects ADR-053:
+    // Artifact coordination restores registry knowledge
+    // from already persisted artifacts during initialization.
+    #[test]
+    fn coordinator_recovers_persisted_artifact_registry_entries() {
+        let mut persistence = InMemoryPersistenceProvider::new();
 
-    persistence.store(RecordingArtifact::new(
-        "artifact-033",
-        RecordingSessionId::new("session-033"),
-    ));
+        persistence.store(RecordingArtifact::new(
+            "artifact-033",
+            RecordingSessionId::new("session-033"),
+        ));
 
-    let coordinator = ArtifactCoordinator::new(persistence);
+        let coordinator = ArtifactCoordinator::new(persistence);
 
-    assert!(
-        coordinator
-            .registry()
-            .contains(&ArtifactId::new("artifact-033"))
-    );
-}
+        assert!(
+            coordinator
+                .registry()
+                .contains(&ArtifactId::new("artifact-033"))
+        );
+    }
 
-#[test]
-fn coordinator_persists_artifact() {
+    #[test]
+    fn coordinator_persists_artifact() {
         let persistence = InMemoryPersistenceProvider::new();
 
         let mut coordinator = ArtifactCoordinator::new(persistence);
