@@ -161,69 +161,6 @@ where
     Ok(session)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ListParticipantsError<E> {
-    SessionNotFound,
-    Repository(E),
-}
-
-pub fn list_participants<R>(
-    repository: &R,
-    id: &ProductionId,
-) -> Result<Vec<crate::participation::Participation>, ListParticipantsError<R::Error>>
-where
-    R: ProductionSessionRepository,
-{
-    let session = repository
-        .get(id)
-        .map_err(ListParticipantsError::Repository)?
-        .ok_or(ListParticipantsError::SessionNotFound)?;
-
-    Ok(session.participations().to_vec())
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ListRecordingsError<E> {
-    SessionNotFound,
-    Repository(E),
-}
-
-pub fn list_recordings<R>(
-    repository: &R,
-    id: &ProductionId,
-) -> Result<Vec<crate::recording::Recording>, ListRecordingsError<R::Error>>
-where
-    R: ProductionSessionRepository,
-{
-    let session = repository
-        .get(id)
-        .map_err(ListRecordingsError::Repository)?
-        .ok_or(ListRecordingsError::SessionNotFound)?;
-
-    Ok(session.recordings().to_vec())
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ListActivityHistoryError<E> {
-    SessionNotFound,
-    Repository(E),
-}
-
-pub fn list_activity_history<R>(
-    repository: &R,
-    id: &ProductionId,
-) -> Result<Vec<crate::activity::ActivityEvent>, ListActivityHistoryError<R::Error>>
-where
-    R: ProductionSessionRepository,
-{
-    let session = repository
-        .get(id)
-        .map_err(ListActivityHistoryError::Repository)?
-        .ok_or(ListActivityHistoryError::SessionNotFound)?;
-
-    Ok(session.activities().to_vec())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,7 +432,6 @@ mod tests {
             Err(CreateProductionSessionError::Repository("storage failed"))
         ));
     }
-
     // TEST-12
     // Verify: Adding a recording through the API boundary updates the session.
     #[test]
@@ -529,113 +465,6 @@ mod tests {
         assert!(matches!(
             result,
             Err(AddRecordingToProductionSessionError::SessionNotFound)
-        ));
-    }
-
-    // TEST-14
-    // Verify: Participants can be listed through the API boundary.
-    #[test]
-    fn list_participants_returns_session_participants() {
-        let id = ProductionId::new("session-001");
-        let mut session = ProductionSession::new(id.clone());
-
-        session
-            .add_participation(crate::participation::Participation {
-                participant_id: crate::participant::ParticipantId::new("participant-1"),
-                role: crate::role::ParticipantRole::Participant,
-            })
-            .unwrap();
-
-        let repository = InMemory {
-            sessions: vec![session],
-        };
-
-        let result = list_participants(&repository, &id).unwrap();
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0].participant_id,
-            crate::participant::ParticipantId::new("participant-1")
-        );
-    }
-
-    // TEST-15
-    // Verify: Recordings can be listed through the API boundary.
-    #[test]
-    fn list_recordings_returns_session_recordings() {
-        let id = ProductionId::new("session-001");
-        let mut session = ProductionSession::new(id.clone());
-        session.add_recording(crate::recording::Recording::new("recording-001"));
-
-        let repository = InMemory {
-            sessions: vec![session],
-        };
-
-        let result = list_recordings(&repository, &id).unwrap();
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].id.value(), "recording-001");
-    }
-
-    // TEST-16
-    // Verify: Activity history can be listed through the API boundary.
-    #[test]
-    fn list_activity_history_returns_session_history() {
-        let id = ProductionId::new("session-001");
-        let session = ProductionSession::new(id.clone());
-
-        let repository = InMemory {
-            sessions: vec![session],
-        };
-
-        let result = list_activity_history(&repository, &id).unwrap();
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].activity_type, crate::activity::ActivityType::SessionCreated);
-    }
-
-    // TEST-17
-    // Verify: Listing participants for an unknown session is reported as not found.
-    #[test]
-    fn list_participants_reports_missing_session() {
-        let repository = InMemory { sessions: vec![] };
-        let id = ProductionId::new("unknown");
-
-        let result = list_participants(&repository, &id);
-
-        assert!(matches!(
-            result,
-            Err(ListParticipantsError::SessionNotFound)
-        ));
-    }
-
-    // TEST-18
-    // Verify: Listing recordings for an unknown session is reported as not found.
-    #[test]
-    fn list_recordings_reports_missing_session() {
-        let repository = InMemory { sessions: vec![] };
-        let id = ProductionId::new("unknown");
-
-        let result = list_recordings(&repository, &id);
-
-        assert!(matches!(
-            result,
-            Err(ListRecordingsError::SessionNotFound)
-        ));
-    }
-
-    // TEST-19
-    // Verify: Listing activity history for an unknown session is reported as not found.
-    #[test]
-    fn list_activity_history_reports_missing_session() {
-        let repository = InMemory { sessions: vec![] };
-        let id = ProductionId::new("unknown");
-
-        let result = list_activity_history(&repository, &id);
-
-        assert!(matches!(
-            result,
-            Err(ListActivityHistoryError::SessionNotFound)
         ));
     }
 }
