@@ -74,6 +74,7 @@ This document provides an overview and navigation entry.
 - ADR-056 Capture Result and Recording Artifact Data Boundary
 - ADR-057 Domain Recording to Recording Artifact Association Boundary
 - ADR-058 Recording Payload Representation
+- ADR-059 Recording Payload Filesystem Persistence
 
 ---
 
