@@ -17,9 +17,14 @@ use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
 use crate::audio::CaptureResult;
 use crate::session::RecordingSessionId;
 
+/// Creates RecordingArtifact instances.
+///
+/// The factory encapsulates artifact construction
+/// and keeps creation logic separate from workflow coordination.
 pub struct RecordingArtifactFactory;
 
 impl RecordingArtifactFactory {
+    /// Creates a new RecordingArtifact from a capture result.
     pub fn create(
         capture_result: CaptureResult,
         recording_session_id: RecordingSessionId,
@@ -30,6 +35,8 @@ impl RecordingArtifactFactory {
             let mut recording_track = RecordingTrack::new(capture_track.id.value());
 
             for capture_chunk in capture_track.chunks() {
+                // The logical reference remains independent from the concrete
+                // filesystem path used later by the persistence provider.
                 let reference = format!(
                     "{}/chunk-{sequence:06}",
                     capture_track.id.value(),
@@ -55,6 +62,10 @@ mod tests {
     use super::*;
     use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack};
 
+    // TEST-22
+    //
+    // Protects ADR-050:
+    // Artifact creation is encapsulated in the factory.
     #[test]
     fn factory_creates_artifact_from_capture_result() {
         let capture_result = CaptureResult::new("capture-001");
@@ -91,12 +102,18 @@ mod tests {
         assert_eq!(artifact.tracks()[0].id.value(), "track-host");
         assert_eq!(artifact.tracks()[0].chunks()[0].sequence, 1);
         assert_eq!(artifact.tracks()[0].chunks()[1].sequence, 2);
+
         assert_eq!(artifact.tracks()[1].id.value(), "track-guest");
         assert_eq!(artifact.tracks()[1].chunks()[0].sequence, 1);
         assert_eq!(artifact.tracks()[1].chunks()[1].sequence, 2);
         assert_eq!(artifact.tracks()[1].chunks()[2].sequence, 3);
     }
 
+    // TEST-36
+    //
+    // Protects ADR-056 and ADR-058:
+    // The factory transfers technical payload data without coupling
+    // the capture types to artifact or persistence types.
     #[test]
     fn factory_transfers_chunk_payload_and_assigns_logical_reference() {
         let mut capture = CaptureResult::new("capture-001");
