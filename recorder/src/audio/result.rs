@@ -203,6 +203,11 @@ mod tests {
         assert_eq!(result.tracks()[1].chunks()[2].sequence, 3);
     }
 
+    // TEST-34
+    //
+    // Protects the payload part of the capture boundary:
+    // CaptureChunk can carry technical payload bytes without
+    // depending on artifact model types.
     #[test]
     fn capture_chunk_can_carry_payload_bytes() {
         let chunk = CaptureChunk::with_payload(1, vec![1, 2, 3, 4]);
