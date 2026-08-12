@@ -1,25 +1,15 @@
 //! Filesystem persistence provider.
 //!
-//! This module provides the concrete local filesystem implementation
-//! of the PersistenceProvider boundary.
-//!
-//! The physical layout follows ADR-055:
-//!
-//! <root>/
-//!   <artifact-id>/
-//!     artifact.json
-//!     tracks/
-//!       <track-id>/
-//!         chunks/
-//!
-//! RecordingChunk currently contains only its technical sequence number.
-//! Therefore this implementation persists chunk metadata, but does not
-//! invent audio payload files that the capture model cannot provide yet.
+//! The provider persists one complete RecordingArtifact below one
+//! artifact directory. Metadata and payload bytes are written into a
+//! temporary artifact directory first; only the completed directory is
+//! published under its final artifact ID.
 //!
 //! See:
 //! - ADR-052 Local Filesystem Persistence Provider
 //! - ADR-054 Recording Artifact and Local Recording Data Association
 //! - ADR-055 Filesystem Persistence Layout
+//! - ADR-058 Recording Payload Representation
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -51,6 +41,8 @@ struct PersistedRecordingTrack {
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedRecordingChunk {
     sequence: u32,
+    payload_reference: String,
+    payload_size_bytes: u64,
 }
 
 impl From<&RecordingArtifact> for PersistedRecordingArtifact {
@@ -75,6 +67,8 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
                         .iter()
                         .map(|chunk| PersistedRecordingChunk {
                             sequence: chunk.sequence,
+                            payload_reference: chunk.payload().reference().value().to_string(),
+                            payload_size_bytes: chunk.payload().size_bytes(),
                         })
                         .collect(),
                 })
@@ -84,7 +78,7 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
 }
 
 impl PersistedRecordingArtifact {
-    fn into_recording_artifact(self) -> RecordingArtifact {
+    fn into_recording_artifact(self, artifact_dir: &Path) -> Option<RecordingArtifact> {
         let mut artifact =
             RecordingArtifact::new(self.id, RecordingSessionId::new(self.recording_session_id));
 
@@ -93,10 +87,25 @@ impl PersistedRecordingArtifact {
         }
 
         for persisted_track in self.tracks {
-            let mut track = RecordingTrack::new(persisted_track.id);
+            let mut track = RecordingTrack::new(persisted_track.id.clone());
 
             for persisted_chunk in persisted_track.chunks {
-                track.add_chunk(RecordingChunk::new(persisted_chunk.sequence));
+                let payload_path = FilesystemPersistenceProvider::payload_path(
+                    artifact_dir,
+                    &persisted_track.id,
+                    persisted_chunk.sequence,
+                );
+                let payload = fs::read(payload_path).ok()?;
+
+                if payload.len() as u64 != persisted_chunk.payload_size_bytes {
+                    return None;
+                }
+
+                track.add_chunk(RecordingChunk::with_payload(
+                    persisted_chunk.sequence,
+                    persisted_chunk.payload_reference,
+                    payload,
+                ));
             }
 
             artifact.add_track(track);
@@ -108,29 +117,22 @@ impl PersistedRecordingArtifact {
                 artifact.make_available();
                 artifact.store();
             }
-            _ => {}
+            "Created" => {}
+            _ => return None,
         }
 
-        artifact
+        Some(artifact)
     }
 }
 
-/// Filesystem based PersistenceProvider implementation.
-///
-/// Each RecordingArtifact owns one directory below the persistence root.
 pub struct FilesystemPersistenceProvider {
     root: PathBuf,
 }
 
 impl FilesystemPersistenceProvider {
-    /// Creates a filesystem persistence provider.
-    ///
-    /// The directory is created if it does not exist.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         let root = path.into();
-
         fs::create_dir_all(&root).expect("failed to create persistence directory");
-
         Self { root }
     }
 
@@ -140,6 +142,14 @@ impl FilesystemPersistenceProvider {
 
     fn artifact_dir(&self, id: &str) -> PathBuf {
         self.root.join(id)
+    }
+
+    fn payload_path(artifact_dir: &Path, track_id: &str, sequence: u32) -> PathBuf {
+        artifact_dir
+            .join("tracks")
+            .join(track_id)
+            .join("chunks")
+            .join(format!("chunk-{sequence:06}.payload"))
     }
 
     fn write_artifact(&self, artifact: &RecordingArtifact) {
@@ -179,9 +189,19 @@ impl FilesystemPersistenceProvider {
         fs::write(temp_dir.join("artifact.json"), content)
             .expect("failed to write artifact metadata");
 
-        for track in &persisted.tracks {
-            let chunks_dir = temp_dir.join("tracks").join(&track.id).join("chunks");
-            fs::create_dir_all(&chunks_dir).expect("failed to create chunk directory");
+        for track in artifact.tracks() {
+            for chunk in track.chunks() {
+                let payload_path = Self::payload_path(&temp_dir, track.id.value(), chunk.sequence);
+                if let Some(parent) = payload_path.parent() {
+                    fs::create_dir_all(parent).expect("failed to create payload directory");
+                }
+
+                let temp_payload = payload_path.with_extension("payload.tmp");
+                fs::write(&temp_payload, chunk.payload().data())
+                    .expect("failed to write recording payload");
+                fs::rename(&temp_payload, &payload_path)
+                    .expect("failed to publish recording payload");
+            }
         }
 
         let _ = fs::remove_dir_all(&artifact_dir);
@@ -192,8 +212,7 @@ impl FilesystemPersistenceProvider {
         let metadata_path = path.join("artifact.json");
         let content = fs::read_to_string(metadata_path).ok()?;
         let persisted: PersistedRecordingArtifact = serde_json::from_str(&content).ok()?;
-
-        Some(persisted.into_recording_artifact())
+        persisted.into_recording_artifact(path)
     }
 }
 
@@ -257,8 +276,16 @@ mod tests {
         artifact.set_domain_association("production-001", "recording-017");
 
         let mut host = RecordingTrack::new("track-host");
-        host.add_chunk(RecordingChunk::new(1));
-        host.add_chunk(RecordingChunk::new(2));
+        host.add_chunk(RecordingChunk::with_payload(
+            1,
+            "track-host/chunk-000001",
+            vec![1, 2, 3],
+        ));
+        host.add_chunk(RecordingChunk::with_payload(
+            2,
+            "track-host/chunk-000002",
+            vec![4, 5],
+        ));
         artifact.add_track(host);
         artifact.make_available();
         artifact.store();
@@ -266,8 +293,6 @@ mod tests {
         artifact
     }
 
-    // TEST-16
-    // Protects ADR-055: artifacts are stored below their own directory.
     #[test]
     fn test_16_filesystem_provider_can_store_artifact() {
         let path = test_directory("test-16");
@@ -276,16 +301,18 @@ mod tests {
         provider.store(test_artifact());
 
         assert!(path.join("artifact-001/artifact.json").is_file());
-        assert!(path.join("artifact-001/tracks/track-host/chunks").is_dir());
+        assert!(path
+            .join("artifact-001/tracks/track-host/chunks/chunk-000001.payload")
+            .is_file());
+        assert!(path
+            .join("artifact-001/tracks/track-host/chunks/chunk-000002.payload")
+            .is_file());
 
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-17
-    // Protects ADR-054/055: persisted tracks, chunks and the domain
-    // association can be restored.
     #[test]
-    fn test_17_filesystem_provider_can_load_artifact() {
+    fn test_17_filesystem_provider_can_load_artifact_and_payload() {
         let path = test_directory("test-17");
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
@@ -297,15 +324,14 @@ mod tests {
         assert_eq!(artifact.recording_id(), Some("recording-017"));
         assert_eq!(artifact.tracks().len(), 1);
         assert_eq!(artifact.tracks()[0].chunks().len(), 2);
-        assert_eq!(artifact.tracks()[0].chunks()[1].sequence, 2);
+        assert_eq!(artifact.tracks()[0].chunks()[0].payload().data(), &[1, 2, 3]);
+        assert_eq!(artifact.tracks()[0].chunks()[1].payload().data(), &[4, 5]);
 
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-18
-    // Protects ADR-053/055: incomplete temporary directories are ignored.
     #[test]
-    fn test_18_filesystem_provider_can_list_artifacts() {
+    fn test_18_filesystem_provider_can_list_complete_artifacts_and_ignore_temporary_state() {
         let path = test_directory("test-18");
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
@@ -318,8 +344,6 @@ mod tests {
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-19
-    // Protects ADR-055: removal removes the complete artifact directory.
     #[test]
     fn test_19_filesystem_provider_can_remove_artifact() {
         let path = test_directory("test-19");
@@ -335,13 +359,30 @@ mod tests {
     }
 
     #[test]
+    fn missing_payload_makes_artifact_unloadable() {
+        let path = test_directory("missing-payload");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+
+        provider.store(test_artifact());
+        fs::remove_file(
+            path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"),
+        )
+        .unwrap();
+
+        assert!(provider.load("artifact-001").is_none());
+        assert!(provider.list().is_empty());
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[test]
     fn invalid_ids_cannot_escape_persistence_root() {
         let path = test_directory("invalid-id");
         let provider = FilesystemPersistenceProvider::new(&path);
 
         assert!(provider.load("../outside").is_none());
         assert!(provider.load("nested/id").is_none());
-        assert!(provider.load(r"nested\\id").is_none());
+        assert!(provider.load(r"nested\id").is_none());
 
         let _ = fs::remove_dir_all(path);
     }
