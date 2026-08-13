@@ -262,6 +262,27 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
         Self::read_artifact(&self.artifact_dir(id))
     }
 
+    fn list_ids(&self) -> Vec<String> {
+        let Ok(entries) = fs::read_dir(&self.root) else {
+            return Vec::new();
+        };
+
+        entries
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false))
+            .filter_map(|entry| {
+                let name = entry.file_name();
+                let name = name.to_str()?;
+
+                if name.starts_with('.') || !Self::validate_id(name) {
+                    return None;
+                }
+
+                Some(name.to_owned())
+            })
+            .collect()
+    }
+
     fn list(&self) -> Vec<RecordingArtifact> {
         let Ok(entries) = fs::read_dir(&self.root) else {
             return Vec::new();
@@ -393,6 +414,23 @@ mod tests {
         fs::write(path.join(".artifact-002.tmp/partial"), "incomplete").unwrap();
 
         assert_eq!(provider.list().len(), 1);
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn provider_can_list_artifact_ids() {
+        let path = test_directory("list-ids");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+
+        provider.store(test_artifact());
+        fs::create_dir_all(path.join(".artifact-002.tmp")).unwrap();
+        fs::create_dir_all(path.join("artifact-003")).unwrap();
+
+        let ids = provider.list_ids();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"artifact-001".to_owned()));
+        assert!(ids.contains(&"artifact-003".to_owned()));
 
         let _ = fs::remove_dir_all(path);
     }
