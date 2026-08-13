@@ -1,5 +1,4 @@
 //! Persistence Provider Interface.
-
 //!
 //! This module defines the boundary between the Recorder workflow
 //! and concrete persistence implementations.
@@ -18,6 +17,7 @@ pub enum PersistenceStoreError {
     /// from the incoming artifact.
     Conflict { artifact_id: String },
     /// Persistence infrastructure failed while writing the artifact.
+    #[cfg(test)]
     Io(String),
 }
 
