@@ -44,11 +44,7 @@ impl FilesystemPersistenceProvider {
     }
 
     fn validate_id(id: &str) -> bool {
-        !id.is_empty()
-            && id != "."
-            && id != ".."
-            && !id.contains('/')
-            && !id.contains('\\')
+        !id.is_empty() && id != "." && id != ".." && !id.contains('/') && !id.contains('\\')
     }
 
     fn read_artifact(dir: &Path) -> PersistenceLoadResult {
