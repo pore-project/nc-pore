@@ -8,6 +8,7 @@
 //! storage are handled by separate implementations.
 
 use crate::artifact::RecordingArtifact;
+use crate::persistence::PersistenceLoadResult;
 
 /// Persistence contract used by the Recorder workflow.
 ///
@@ -17,7 +18,12 @@ use crate::artifact::RecordingArtifact;
 pub trait PersistenceProvider {
     fn store(&mut self, artifact: RecordingArtifact);
 
-    fn load(&self, id: &str) -> Option<RecordingArtifact>;
+    /// Assesses the persisted representation of one artifact.
+    ///
+    /// The boundary deliberately distinguishes a valid artifact from
+    /// incomplete or inconsistent persisted data. This prevents recovery
+    /// code from treating every existing artifact directory as valid.
+    fn load(&self, id: &str) -> PersistenceLoadResult;
 
     fn list(&self) -> Vec<RecordingArtifact>;
 

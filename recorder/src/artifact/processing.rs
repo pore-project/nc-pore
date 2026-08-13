@@ -23,7 +23,7 @@ use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::coordination::ArtifactCoordinator;
 use crate::artifact::factory::RecordingArtifactFactory;
 use crate::audio::CaptureResult;
-use crate::persistence::PersistenceProvider;
+use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
 use crate::session::RecordingSessionId;
 
 /// Processes completed capture results into recording artifacts.
@@ -97,11 +97,10 @@ mod tests {
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-017"));
 
-        let persisted = processor
-            .coordinator
-            .persistence()
-            .load("capture-001")
-            .expect("processed artifact must be persisted");
+        let persisted = match processor.coordinator.persistence().load("capture-001") {
+            PersistenceLoadResult::Valid(artifact) => artifact,
+            result => panic!("processed artifact must be valid, got {result:?}"),
+        };
 
         assert_eq!(persisted.production_id(), Some("production-001"));
         assert_eq!(persisted.recording_id(), Some("recording-017"));

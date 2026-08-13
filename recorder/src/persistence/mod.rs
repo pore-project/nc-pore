@@ -10,9 +10,11 @@
 //! - ADR-044 Persistence Provider Interface
 //! - ADR-052 Local Filesystem Persistence Provider
 
+mod assessment;
 mod filesystem;
 mod provider;
 
+pub use assessment::PersistenceLoadResult;
 pub use filesystem::FilesystemPersistenceProvider;
 pub use provider::PersistenceProvider;
 
@@ -45,11 +47,13 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
         self.artifacts.push(artifact);
     }
 
-    fn load(&self, id: &str) -> Option<RecordingArtifact> {
+    fn load(&self, id: &str) -> PersistenceLoadResult {
         self.artifacts
             .iter()
             .find(|artifact| artifact.id.value() == id)
             .cloned()
+            .map(PersistenceLoadResult::Valid)
+            .unwrap_or(PersistenceLoadResult::NotFound)
     }
 
     fn list(&self) -> Vec<RecordingArtifact> {
@@ -97,10 +101,10 @@ mod tests {
             RecordingSessionId::new("session-001"),
         ));
 
-        let artifact = provider.load("artifact-001");
-
-        assert!(artifact.is_some());
-        assert_eq!(artifact.unwrap().id.value(), "artifact-001");
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::Valid(artifact) if artifact.id.value() == "artifact-001"
+        ));
     }
 
     // TEST-14
@@ -139,7 +143,24 @@ mod tests {
 
         provider.remove("artifact-001");
 
-        assert!(provider.load("artifact-001").is_none());
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::NotFound
+        ));
+    }
+
+    // TEST-21
+    //
+    // Protects the persistence assessment boundary:
+    // a missing persisted artifact is distinct from an invalid one.
+    #[test]
+    fn test_21_provider_reports_missing_artifact() {
+        let provider = InMemoryPersistenceProvider::new();
+
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::NotFound
+        ));
     }
 
     // TEST-20
