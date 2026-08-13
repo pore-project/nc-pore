@@ -28,14 +28,21 @@ pub enum PersistenceStoreError {
 /// This keeps persistence replaceable and prevents storage concerns from
 /// leaking into recording logic.
 pub trait PersistenceProvider {
-    /// Persists an artifact and returns its Stored lifecycle representation.
+    fn store(&mut self, artifact: RecordingArtifact);
+
+    /// Persists an artifact while returning the lifecycle result explicitly.
     ///
-    /// A successful operation may be an actual write or an idempotent no-op
-    /// when an equivalent artifact already exists.
-    fn store(
+    /// The default implementation preserves the existing provider contract
+    /// during migration. Providers that can report persistence failures or
+    /// idempotent conflicts override this method.
+    fn store_checked(
         &mut self,
-        artifact: RecordingArtifact,
-    ) -> Result<RecordingArtifact, PersistenceStoreError>;
+        mut artifact: RecordingArtifact,
+    ) -> Result<RecordingArtifact, PersistenceStoreError> {
+        artifact.store();
+        self.store(artifact.clone());
+        Ok(artifact)
+    }
 
     /// Assesses the persisted representation of one artifact.
     ///
