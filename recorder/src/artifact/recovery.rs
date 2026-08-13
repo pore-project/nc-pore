@@ -16,8 +16,8 @@
 //! See:
 //! - ADR-053 Artifact Recovery and Consistency Boundary
 
-use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
 use crate::artifact::ArtifactId;
+use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
 use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
 
 /// Outcome of one recovery pass over persisted artifact candidates.
