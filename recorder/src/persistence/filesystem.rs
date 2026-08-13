@@ -22,9 +22,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::artifact::{ArtifactStatus, RecordingArtifact, RecordingChunk, RecordingTrack};
-use crate::persistence::{
-    artifacts_are_equivalent, PersistenceLoadResult, PersistenceProvider, PersistenceStoreError,
-};
+use crate::persistence::{artifacts_are_equivalent, PersistenceLoadResult, PersistenceProvider, PersistenceStoreError};
 use crate::session::RecordingSessionId;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -86,8 +84,10 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
 
 impl PersistedRecordingArtifact {
     fn into_recording_artifact(self, artifact_dir: &Path) -> PersistenceLoadResult {
-        let mut artifact =
-            RecordingArtifact::new(self.id, RecordingSessionId::new(self.recording_session_id));
+        let mut artifact = RecordingArtifact::new(
+            self.id,
+            RecordingSessionId::new(self.recording_session_id),
+        );
 
         if let (Some(production_id), Some(recording_id)) = (self.production_id, self.recording_id) {
             artifact.set_domain_association(production_id, recording_id);
@@ -140,17 +140,11 @@ impl PersistedRecordingArtifact {
     }
 }
 
-/// Filesystem based PersistenceProvider implementation.
-///
-/// Each RecordingArtifact owns one directory below the persistence root.
 pub struct FilesystemPersistenceProvider {
     root: PathBuf,
 }
 
 impl FilesystemPersistenceProvider {
-    /// Creates a filesystem persistence provider.
-    ///
-    /// The directory is created if it does not exist.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         let root = path.into();
         fs::create_dir_all(&root).expect("failed to create persistence directory");
@@ -174,27 +168,18 @@ impl FilesystemPersistenceProvider {
     }
 
     fn write_artifact(&self, artifact: &RecordingArtifact) {
-        assert!(
-            Self::validate_id(artifact.id.value()),
-            "invalid artifact id"
-        );
+        assert!(Self::validate_id(artifact.id.value()), "invalid artifact id");
 
         for track in artifact.tracks() {
             assert!(Self::validate_id(track.id.value()), "invalid track id");
         }
 
         if let Some(production_id) = artifact.production_id() {
-            assert!(
-                Self::validate_id(production_id),
-                "invalid production id in artifact association"
-            );
+            assert!(Self::validate_id(production_id), "invalid production id in artifact association");
         }
 
         if let Some(recording_id) = artifact.recording_id() {
-            assert!(
-                Self::validate_id(recording_id),
-                "invalid recording id in artifact association"
-            );
+            assert!(Self::validate_id(recording_id), "invalid recording id in artifact association");
         }
 
         let persisted = PersistedRecordingArtifact::from(artifact);
@@ -206,7 +191,6 @@ impl FilesystemPersistenceProvider {
 
         let content = serde_json::to_string_pretty(&persisted)
             .expect("failed to serialize recording artifact");
-
         fs::write(temp_dir.join("artifact.json"), content)
             .expect("failed to write artifact metadata");
 
@@ -277,14 +261,11 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
                     })
                 }
             }
-            PersistenceLoadResult::Incomplete => Err(PersistenceStoreError::Io(format!(
-                "cannot persist artifact {}: existing persisted representation is incomplete",
-                artifact.id.value()
-            ))),
-            PersistenceLoadResult::Inconsistent => Err(PersistenceStoreError::Io(format!(
-                "cannot persist artifact {}: existing persisted representation is inconsistent",
-                artifact.id.value()
-            ))),
+            PersistenceLoadResult::Incomplete | PersistenceLoadResult::Inconsistent => {
+                Err(PersistenceStoreError::Conflict {
+                    artifact_id: artifact.id.value().to_owned(),
+                })
+            }
         }
     }
 
@@ -292,7 +273,6 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
         if !Self::validate_id(id) {
             return PersistenceLoadResult::Inconsistent;
         }
-
         Self::read_artifact(&self.artifact_dir(id))
     }
 
@@ -307,11 +287,9 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
             .filter_map(|entry| {
                 let name = entry.file_name();
                 let name = name.to_str()?;
-
                 if name.starts_with('.') || !Self::validate_id(name) {
                     return None;
                 }
-
                 Some(name.to_owned())
             })
             .collect()
@@ -328,7 +306,6 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
             .filter_map(|entry| {
                 let name = entry.file_name();
                 let name = name.to_str()?;
-
                 if name.starts_with('.') || !Self::validate_id(name) {
                     return None;
                 }
@@ -347,7 +324,6 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
         if !Self::validate_id(id) {
             return;
         }
-
         let _ = fs::remove_dir_all(self.artifact_dir(id));
     }
 }
@@ -363,9 +339,10 @@ mod tests {
     }
 
     fn test_artifact() -> RecordingArtifact {
-        let mut artifact =
-            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
-
+        let mut artifact = RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        );
         artifact.set_domain_association("production-001", "recording-017");
 
         let mut host = RecordingTrack::new("track-host");
@@ -382,73 +359,47 @@ mod tests {
         artifact.add_track(host);
         artifact.make_available();
         artifact.store();
-
         artifact
     }
 
-    // TEST-16
-    // Protects ADR-055: artifacts are stored below their own directory.
     #[test]
     fn test_16_filesystem_provider_can_store_artifact() {
         let path = test_directory("test-16");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
-
         assert!(path.join("artifact-001/artifact.json").is_file());
-        assert!(
-            path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload")
-                .is_file()
-        );
-        assert!(
-            path.join("artifact-001/tracks/track-host/chunks/chunk-000002.payload")
-                .is_file()
-        );
-
+        assert!(path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload").is_file());
+        assert!(path.join("artifact-001/tracks/track-host/chunks/chunk-000002.payload").is_file());
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-17
-    // Protects ADR-054/055 and ADR-059: persisted tracks, chunks,
-    // payloads and the domain association can be restored.
     #[test]
     fn test_17_filesystem_provider_can_load_artifact_and_payload() {
         let path = test_directory("test-17");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
         let result = provider.load("artifact-001");
         let PersistenceLoadResult::Valid(artifact) = result else {
             panic!("expected valid persisted artifact");
         };
-
         assert_eq!(artifact.recording_session_id.value(), "session-001");
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-017"));
         assert_eq!(artifact.tracks().len(), 1);
         assert_eq!(artifact.tracks()[0].chunks().len(), 2);
-        assert_eq!(
-            artifact.tracks()[0].chunks()[0].payload().data(),
-            &[1, 2, 3]
-        );
+        assert_eq!(artifact.tracks()[0].chunks()[0].payload().data(), &[1, 2, 3]);
         assert_eq!(artifact.tracks()[0].chunks()[1].payload().data(), &[4, 5]);
-
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-18
-    // Protects ADR-053/055: incomplete temporary directories are ignored.
     #[test]
     fn test_18_filesystem_provider_can_list_artifacts() {
         let path = test_directory("test-18");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
         fs::create_dir_all(path.join(".artifact-002.tmp")).unwrap();
         fs::write(path.join(".artifact-002.tmp/partial"), "incomplete").unwrap();
-
         assert_eq!(provider.list().len(), 1);
-
         let _ = fs::remove_dir_all(path);
     }
 
@@ -456,148 +407,84 @@ mod tests {
     fn provider_can_list_artifact_ids() {
         let path = test_directory("list-ids");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
         fs::create_dir_all(path.join(".artifact-002.tmp")).unwrap();
         fs::create_dir_all(path.join("artifact-003")).unwrap();
-
         let ids = provider.list_ids();
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&"artifact-001".to_owned()));
         assert!(ids.contains(&"artifact-003".to_owned()));
-
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-19
-    // Protects ADR-055: removal removes the complete artifact directory.
     #[test]
     fn test_19_filesystem_provider_can_remove_artifact() {
         let path = test_directory("test-19");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
         provider.remove("artifact-001");
-
         assert!(!path.join("artifact-001").exists());
-        assert!(matches!(
-            provider.load("artifact-001"),
-            PersistenceLoadResult::NotFound
-        ));
-
+        assert!(matches!(provider.load("artifact-001"), PersistenceLoadResult::NotFound));
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-37
-    // Protects ADR-059 and the persistence assessment boundary:
-    // a missing payload is incomplete persisted data.
     #[test]
     fn missing_payload_is_incomplete() {
         let path = test_directory("missing-payload");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
-        fs::remove_file(path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"))
-            .unwrap();
-
-        assert!(matches!(
-            provider.load("artifact-001"),
-            PersistenceLoadResult::Incomplete
-        ));
-
+        fs::remove_file(path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload")).unwrap();
+        assert!(matches!(provider.load("artifact-001"), PersistenceLoadResult::Incomplete));
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-38
-    // Protects the persistence assessment boundary:
-    // payload size disagreement means persisted metadata and payload
-    // disagree and therefore the artifact is inconsistent.
     #[test]
     fn payload_size_mismatch_is_inconsistent() {
         let path = test_directory("payload-size-mismatch");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
-
         let metadata_path = path.join("artifact-001/artifact.json");
         let content = fs::read_to_string(&metadata_path).unwrap();
         let content = content.replace("\"payload_size_bytes\": 3", "\"payload_size_bytes\": 4");
         fs::write(metadata_path, content).unwrap();
-
-        assert!(matches!(
-            provider.load("artifact-001"),
-            PersistenceLoadResult::Inconsistent
-        ));
-
+        assert!(matches!(provider.load("artifact-001"), PersistenceLoadResult::Inconsistent));
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-39
-    // Protects the persistence assessment boundary:
-    // malformed metadata is inconsistent persisted data.
     #[test]
     fn malformed_metadata_is_inconsistent() {
         let path = test_directory("malformed-metadata");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-
         provider.store(test_artifact());
         fs::write(path.join("artifact-001/artifact.json"), "not-json").unwrap();
-
-        assert!(matches!(
-            provider.load("artifact-001"),
-            PersistenceLoadResult::Inconsistent
-        ));
-
+        assert!(matches!(provider.load("artifact-001"), PersistenceLoadResult::Inconsistent));
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-41
-    // Protects ADR-060:
-    // equivalent persisted content is an idempotent success and returns
-    // the already Stored artifact rather than creating another artifact.
     #[test]
     fn store_checked_is_idempotent_for_equivalent_artifact() {
         let path = test_directory("store-checked-idempotent");
         let mut provider = FilesystemPersistenceProvider::new(&path);
         let artifact = test_artifact();
-
-        let first = provider
-            .store_checked(artifact.clone())
-            .expect("first store should succeed");
-        let second = provider
-            .store_checked(artifact)
-            .expect("equivalent store should be idempotent");
-
+        let first = provider.store_checked(artifact.clone()).expect("first store should succeed");
+        let second = provider.store_checked(artifact).expect("equivalent store should be idempotent");
         assert_eq!(first.status(), &ArtifactStatus::Stored);
         assert_eq!(second.status(), &ArtifactStatus::Stored);
         assert_eq!(provider.list().len(), 1);
-
         let _ = fs::remove_dir_all(path);
     }
 
-    // TEST-42
-    // Protects ADR-060:
-    // a reused artifact identity with different persisted content is a
-    // conflict and must not replace the existing artifact.
     #[test]
     fn store_checked_rejects_conflicting_artifact() {
         let path = test_directory("store-checked-conflict");
         let mut provider = FilesystemPersistenceProvider::new(&path);
         let first = test_artifact();
-        let conflicting = RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-conflict"),
-        );
-
-        provider
-            .store_checked(first)
-            .expect("first store should succeed");
-
+        let conflicting = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-conflict"));
+        provider.store_checked(first).expect("first store should succeed");
         assert!(matches!(
             provider.store_checked(conflicting),
             Err(PersistenceStoreError::Conflict { artifact_id }) if artifact_id == "artifact-001"
         ));
-
         let _ = fs::remove_dir_all(path);
     }
 
@@ -606,13 +493,10 @@ mod tests {
         let path = test_directory("store-checked-incomplete");
         let mut provider = FilesystemPersistenceProvider::new(&path);
         fs::create_dir_all(path.join("artifact-001")).unwrap();
-
         assert!(matches!(
             provider.store_checked(test_artifact()),
-            Err(PersistenceStoreError::Io(message))
-                if message.contains("existing persisted representation is incomplete")
+            Err(PersistenceStoreError::Conflict { artifact_id }) if artifact_id == "artifact-001"
         ));
-
         let _ = fs::remove_dir_all(path);
     }
 
@@ -620,20 +504,9 @@ mod tests {
     fn invalid_ids_cannot_escape_persistence_root() {
         let path = test_directory("invalid-id");
         let provider = FilesystemPersistenceProvider::new(&path);
-
-        assert!(matches!(
-            provider.load("../outside"),
-            PersistenceLoadResult::Inconsistent
-        ));
-        assert!(matches!(
-            provider.load("nested/id"),
-            PersistenceLoadResult::Inconsistent
-        ));
-        assert!(matches!(
-            provider.load(r"nested\id"),
-            PersistenceLoadResult::Inconsistent
-        ));
-
+        assert!(matches!(provider.load("../outside"), PersistenceLoadResult::Inconsistent));
+        assert!(matches!(provider.load("nested/id"), PersistenceLoadResult::Inconsistent));
+        assert!(matches!(provider.load(r"nested\id"), PersistenceLoadResult::Inconsistent));
         let _ = fs::remove_dir_all(path);
     }
 }
