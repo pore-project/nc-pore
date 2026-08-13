@@ -70,8 +70,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifact::ArtifactStatus;
-    use crate::persistence::InMemoryPersistenceProvider;
+    use crate::artifact::{ArtifactId, ArtifactStatus, RecordingArtifact};
+    use crate::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
 
     // TEST-23
     //
@@ -163,5 +163,67 @@ mod tests {
             .expect("equivalent processing should be idempotent");
 
         assert_eq!(processor.coordinator.persistence().list().len(), 1);
+    }
+
+    struct FailingPersistenceProvider {
+        attempted: Option<RecordingArtifact>,
+    }
+
+    impl PersistenceProvider for FailingPersistenceProvider {
+        fn store(&mut self, _artifact: RecordingArtifact) {}
+
+        fn store_checked(
+            &mut self,
+            artifact: RecordingArtifact,
+        ) -> Result<RecordingArtifact, PersistenceStoreError> {
+            self.attempted = Some(artifact);
+            Err(PersistenceStoreError::Io("test persistence failure".to_owned()))
+        }
+
+        fn load(&self, _id: &str) -> PersistenceLoadResult {
+            PersistenceLoadResult::NotFound
+        }
+
+        fn list_ids(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn list(&self) -> Vec<RecordingArtifact> {
+            Vec::new()
+        }
+
+        fn remove(&mut self, _id: &str) {}
+    }
+
+    // TEST-40
+    //
+    // Protects ADR-060:
+    // A persistence failure must be propagated and the attempted artifact
+    // must remain Available rather than being reported as Stored.
+    #[test]
+    fn processor_preserves_available_state_when_persistence_fails() {
+        let coordinator = ArtifactCoordinator::new(FailingPersistenceProvider { attempted: None });
+        let mut processor = RecordingArtifactProcessor::new(coordinator);
+
+        let result = processor.process(
+            CaptureResult::new("capture-040"),
+            RecordingSessionId::new("session-040"),
+            RecordingArtifactAssociation::new("production-040", "recording-040"),
+        );
+
+        assert!(matches!(
+            result,
+            Err(PersistenceStoreError::Io(message)) if message == "test persistence failure"
+        ));
+
+        let attempted = processor
+            .coordinator
+            .persistence()
+            .attempted
+            .as_ref()
+            .expect("failing provider must retain attempted artifact for the test");
+
+        assert_eq!(attempted.id, ArtifactId::new("capture-040"));
+        assert_eq!(attempted.status(), &ArtifactStatus::Available);
     }
 }
