@@ -232,10 +232,7 @@ mod tests {
         }
 
         fn list_ids(&self) -> Vec<String> {
-            self.candidates
-                .iter()
-                .map(|(id, _)| id.clone())
-                .collect()
+            self.candidates.iter().map(|(id, _)| id.clone()).collect()
         }
 
         fn list(&self) -> Vec<RecordingArtifact> {
@@ -289,7 +286,10 @@ mod tests {
             result.inconsistent,
             vec![ArtifactId::new("artifact-inconsistent")]
         );
-        assert_eq!(result.not_found, vec![ArtifactId::new("artifact-not-found")]);
+        assert_eq!(
+            result.not_found,
+            vec![ArtifactId::new("artifact-not-found")]
+        );
         assert!(registry.contains(&ArtifactId::new("artifact-valid")));
         assert!(!registry.contains(&ArtifactId::new("artifact-incomplete")));
         assert!(!registry.contains(&ArtifactId::new("artifact-inconsistent")));
