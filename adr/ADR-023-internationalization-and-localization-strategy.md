@@ -324,4 +324,4 @@ NC-PoRe should be software that people around the world can use.
 
 Language must not become a technical barrier.
 
-Software adapts to people – not people to the software.
+Software adapts to people – not people to software.
