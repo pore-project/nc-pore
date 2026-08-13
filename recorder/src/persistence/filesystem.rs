@@ -1,90 +1,251 @@
+//! Filesystem persistence provider.
+//!
+//! This module provides the concrete local filesystem implementation
+//! of the PersistenceProvider boundary.
+//!
+//! The physical layout follows ADR-055. Actual chunk payload bytes are
+//! stored as opaque `.payload` files because this issue does not decide
+//! an audio codec or container format.
+//!
+//! See:
+//! - ADR-052 Local Filesystem Persistence Provider
+//! - ADR-054 Recording Artifact and Local Recording Data Association
+//! - ADR-055 Filesystem Persistence Layout
+//! - ADR-058 Recording Payload Representation
+//! - ADR-059 Recording Payload Filesystem Persistence
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
+use serde::{Deserialize, Serialize};
+
+use crate::artifact::{ArtifactStatus, RecordingArtifact, RecordingChunk, RecordingTrack};
 use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
 use crate::session::RecordingSessionId;
 
-/// Filesystem-backed implementation of the persistence boundary.
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedRecordingArtifact {
+    id: String,
+    recording_session_id: String,
+    #[serde(default)]
+    production_id: Option<String>,
+    #[serde(default)]
+    recording_id: Option<String>,
+    status: String,
+    tracks: Vec<PersistedRecordingTrack>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedRecordingTrack {
+    id: String,
+    chunks: Vec<PersistedRecordingChunk>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedRecordingChunk {
+    sequence: u32,
+    payload_reference: String,
+    payload_size_bytes: u64,
+}
+
+impl From<&RecordingArtifact> for PersistedRecordingArtifact {
+    fn from(artifact: &RecordingArtifact) -> Self {
+        Self {
+            id: artifact.id.value().to_string(),
+            recording_session_id: artifact.recording_session_id.value().to_string(),
+            production_id: artifact.production_id().map(str::to_string),
+            recording_id: artifact.recording_id().map(str::to_string),
+            status: match artifact.status() {
+                ArtifactStatus::Created => "Created".to_string(),
+                ArtifactStatus::Available => "Available".to_string(),
+                ArtifactStatus::Stored => "Stored".to_string(),
+            },
+            tracks: artifact
+                .tracks()
+                .iter()
+                .map(|track| PersistedRecordingTrack {
+                    id: track.id.value().to_string(),
+                    chunks: track
+                        .chunks()
+                        .iter()
+                        .map(|chunk| PersistedRecordingChunk {
+                            sequence: chunk.sequence,
+                            payload_reference: chunk.payload().reference().value().to_string(),
+                            payload_size_bytes: chunk.payload().size_bytes(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl PersistedRecordingArtifact {
+    fn into_recording_artifact(self, artifact_dir: &Path) -> PersistenceLoadResult {
+        let mut artifact =
+            RecordingArtifact::new(self.id, RecordingSessionId::new(self.recording_session_id));
+
+        if let (Some(production_id), Some(recording_id)) = (self.production_id, self.recording_id) {
+            artifact.set_domain_association(production_id, recording_id);
+        }
+
+        for persisted_track in self.tracks {
+            let mut track = RecordingTrack::new(persisted_track.id.clone());
+
+            for persisted_chunk in persisted_track.chunks {
+                let payload_path = FilesystemPersistenceProvider::payload_path(
+                    artifact_dir,
+                    &persisted_track.id,
+                    persisted_chunk.sequence,
+                );
+
+                if !payload_path.is_file() {
+                    return PersistenceLoadResult::Incomplete;
+                }
+
+                let payload = match fs::read(payload_path) {
+                    Ok(payload) => payload,
+                    Err(_) => return PersistenceLoadResult::Inconsistent,
+                };
+
+                if payload.len() as u64 != persisted_chunk.payload_size_bytes {
+                    return PersistenceLoadResult::Inconsistent;
+                }
+
+                track.add_chunk(RecordingChunk::with_payload(
+                    persisted_chunk.sequence,
+                    persisted_chunk.payload_reference,
+                    payload,
+                ));
+            }
+
+            artifact.add_track(track);
+        }
+
+        match self.status.as_str() {
+            "Available" => artifact.make_available(),
+            "Stored" => {
+                artifact.make_available();
+                artifact.store();
+            }
+            "Created" => {}
+            _ => return PersistenceLoadResult::Inconsistent,
+        }
+
+        PersistenceLoadResult::Valid(artifact)
+    }
+}
+
+/// Filesystem based PersistenceProvider implementation.
 ///
-/// Each artifact is stored below its own directory. The provider is
-/// responsible for translating filesystem state into persistence outcomes;
-/// higher layers must not need to know about the storage layout.
+/// Each RecordingArtifact owns one directory below the persistence root.
 pub struct FilesystemPersistenceProvider {
     root: PathBuf,
 }
 
 impl FilesystemPersistenceProvider {
-    pub fn new(root: impl Into<PathBuf>) -> Self {
-        let root = root.into();
-        let _ = fs::create_dir_all(&root);
+    /// Creates a filesystem persistence provider.
+    ///
+    /// The directory is created if it does not exist.
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        let root = path.into();
+        fs::create_dir_all(&root).expect("failed to create persistence directory");
         Self { root }
-    }
-
-    fn artifact_dir(&self, id: &str) -> PathBuf {
-        self.root.join(id)
-    }
-
-    fn write_artifact(&self, artifact: &RecordingArtifact) {
-        let dir = self.artifact_dir(artifact.id.value());
-        let _ = fs::create_dir_all(&dir);
-
-        let metadata = serde_json::to_string_pretty(artifact).expect("artifact serialization");
-        fs::write(dir.join("artifact.json"), metadata).expect("artifact metadata write");
-
-        for track in artifact.tracks() {
-            let chunks_dir = dir.join("tracks").join(track.id().value()).join("chunks");
-            let _ = fs::create_dir_all(&chunks_dir);
-
-            for chunk in track.chunks() {
-                let payload_path = chunks_dir.join(format!("{}.payload", chunk.id()));
-                fs::write(payload_path, chunk.payload().data()).expect("payload write");
-            }
-        }
     }
 
     fn validate_id(id: &str) -> bool {
         !id.is_empty() && id != "." && id != ".." && !id.contains('/') && !id.contains('\\')
     }
 
-    fn read_artifact(dir: &Path) -> PersistenceLoadResult {
-        let metadata_path = dir.join("artifact.json");
+    fn artifact_dir(&self, id: &str) -> PathBuf {
+        self.root.join(id)
+    }
+
+    fn payload_path(artifact_dir: &Path, track_id: &str, sequence: u32) -> PathBuf {
+        artifact_dir
+            .join("tracks")
+            .join(track_id)
+            .join("chunks")
+            .join(format!("chunk-{sequence:06}.payload"))
+    }
+
+    fn write_artifact(&self, artifact: &RecordingArtifact) {
+        assert!(
+            Self::validate_id(artifact.id.value()),
+            "invalid artifact id"
+        );
+
+        for track in artifact.tracks() {
+            assert!(Self::validate_id(track.id.value()), "invalid track id");
+        }
+
+        if let Some(production_id) = artifact.production_id() {
+            assert!(
+                Self::validate_id(production_id),
+                "invalid production id in artifact association"
+            );
+        }
+
+        if let Some(recording_id) = artifact.recording_id() {
+            assert!(
+                Self::validate_id(recording_id),
+                "invalid recording id in artifact association"
+            );
+        }
+
+        let persisted = PersistedRecordingArtifact::from(artifact);
+        let artifact_dir = self.artifact_dir(&persisted.id);
+        let temp_dir = self.root.join(format!(".{}.tmp", persisted.id));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).expect("failed to create temporary artifact directory");
+
+        let content = serde_json::to_string_pretty(&persisted)
+            .expect("failed to serialize recording artifact");
+
+        fs::write(temp_dir.join("artifact.json"), content)
+            .expect("failed to write artifact metadata");
+
+        for track in artifact.tracks() {
+            for chunk in track.chunks() {
+                let payload_path = Self::payload_path(&temp_dir, track.id.value(), chunk.sequence);
+                if let Some(parent) = payload_path.parent() {
+                    fs::create_dir_all(parent).expect("failed to create payload directory");
+                }
+
+                let temp_payload = payload_path.with_extension("payload.tmp");
+                fs::write(&temp_payload, chunk.payload().data())
+                    .expect("failed to write recording payload");
+                fs::rename(&temp_payload, &payload_path)
+                    .expect("failed to publish recording payload");
+            }
+        }
+
+        let _ = fs::remove_dir_all(&artifact_dir);
+        fs::rename(&temp_dir, &artifact_dir).expect("failed to publish artifact directory");
+    }
+
+    fn read_artifact(path: &Path) -> PersistenceLoadResult {
+        if !path.is_dir() {
+            return PersistenceLoadResult::NotFound;
+        }
+
+        let metadata_path = path.join("artifact.json");
         if !metadata_path.is_file() {
             return PersistenceLoadResult::Incomplete;
         }
 
-        let content = match fs::read_to_string(&metadata_path) {
+        let content = match fs::read_to_string(metadata_path) {
             Ok(content) => content,
             Err(_) => return PersistenceLoadResult::Inconsistent,
         };
 
-        let mut artifact: RecordingArtifact = match serde_json::from_str(&content) {
-            Ok(artifact) => artifact,
+        let persisted: PersistedRecordingArtifact = match serde_json::from_str(&content) {
+            Ok(persisted) => persisted,
             Err(_) => return PersistenceLoadResult::Inconsistent,
         };
 
-        for track in artifact.tracks_mut() {
-            for chunk in track.chunks_mut() {
-                let payload_path = dir
-                    .join("tracks")
-                    .join(track.id().value())
-                    .join("chunks")
-                    .join(format!("{}.payload", chunk.id()));
-
-                let payload = match fs::read(&payload_path) {
-                    Ok(payload) => payload,
-                    Err(_) => return PersistenceLoadResult::Incomplete,
-                };
-
-                if payload.len() as u64 != chunk.payload().size_bytes() {
-                    return PersistenceLoadResult::Inconsistent;
-                }
-
-                chunk.replace_payload(payload);
-            }
-        }
-
-        PersistenceLoadResult::Valid(artifact)
+        persisted.into_recording_artifact(path)
     }
 }
 
