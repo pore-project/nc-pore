@@ -25,6 +25,13 @@ pub trait PersistenceProvider {
     /// code from treating every existing artifact directory as valid.
     fn load(&self, id: &str) -> PersistenceLoadResult;
 
+    /// Lists identifiers for persisted artifact candidates without loading
+    /// their artifact representations.
+    ///
+    /// Recovery uses this to enumerate candidates and then delegates the
+    /// actual consistency assessment to `load`.
+    fn list_ids(&self) -> Vec<String>;
+
     fn list(&self) -> Vec<RecordingArtifact>;
 
     fn remove(&mut self, id: &str);
