@@ -18,7 +18,7 @@
 
 use crate::artifact::recovery::ArtifactRecoveryService;
 use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
-use crate::artifact::RecordingArtifact;
+use crate::artifact::{ArtifactId, RecordingArtifact};
 use crate::persistence::{PersistenceProvider, PersistenceStoreError};
 
 /// Coordinates artifact registration and persistence.
@@ -52,7 +52,7 @@ where
         &mut self,
         artifact: RecordingArtifact,
     ) -> Result<RecordingArtifact, PersistenceStoreError> {
-        let stored_artifact = self.persistence.store(artifact)?;
+        let stored_artifact = self.persistence.store_checked(artifact)?;
 
         self.registry.register(ArtifactRegistryEntry::new(
             stored_artifact.id.value().to_string(),
@@ -108,7 +108,7 @@ mod tests {
         let mut persistence = InMemoryPersistenceProvider::new();
 
         persistence
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-033",
                 RecordingSessionId::new("session-033"),
             ))
