@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 2.4
-- Date: 2026-08-12
+- Version: 2.5
+- Date: 2026-08-13
 
 ---
 
@@ -63,6 +63,7 @@ Implementiert:
 - Artifact Recovery Boundary
 - RecordingSessionId Value Object für technische Session-Referenzen
 - ArtifactId und RecordingSessionId als explizite Identitätstypen an Artifact-Grenzen
+- definierte Filesystem-Store-Semantik für lokale Recording Artifacts
 
 Relevante Architekturentscheidungen:
 
@@ -76,6 +77,7 @@ Relevante Architekturentscheidungen:
 - ADR-054 Recording Artifact and Local Recording Data Association
 - ADR-055 Filesystem Persistence Layout
 - ADR-056 Capture Result and Recording Artifact Data Boundary
+- ADR-060 Filesystem Artifact Store Semantics
 
 ---
 
@@ -88,6 +90,7 @@ Implementiert:
 - In-Memory Persistence Provider
 - Filesystem Persistence Provider
 - Persistence Integration Tests
+- definierte Semantik für das Speichern von Recording Artifacts im Filesystem Persistence Provider
 
 Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
 
@@ -96,6 +99,7 @@ Relevante Architekturentscheidungen:
 - ADR-044 Persistence Provider Interface
 - ADR-048 Artifact Registry and Persistence Coordination
 - ADR-052 Local Filesystem Persistence Provider
+- ADR-060 Filesystem Artifact Store Semantics
 
 ---
 
@@ -142,6 +146,7 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
 - Identitäten innerhalb technischer Grenzen werden nicht mehr über primitive Strings modelliert, sondern über explizite Value Objects
+- Filesystem Persistence folgt definierten Store-Semantiken für Recording Artifacts
 
 ---
 
@@ -175,9 +180,7 @@ Wichtige Einstiegspunkte:
 Geplante nächste Arbeiten:
 
 - lokale Artefaktverwaltung weiter ausbauen
-- Capture- und Artifact-Datenmodell weiter in den Produktionsworkflow integrieren
-- Recovery- und Konsistenzmechanismen erweitern
-- konkrete Storage-Strategien definieren
+- bestehende Artifact- und Persistence-Workflows weiter validieren und vervollständigen
 - weitere Produktionsobjekte modellieren
 - weitere API Operationen für ProductionSession Lifecycle ergänzen
 - weitere technische Workflows auf Basis der bestehenden Grenzen umsetzen
@@ -242,6 +245,7 @@ Implemented:
 - Artifact Recovery Boundary
 - RecordingSessionId value object for technical session references
 - ArtifactId and RecordingSessionId as explicit identity types at artifact boundaries
+- defined filesystem store semantics for local Recording Artifacts
 
 Relevant architecture decisions:
 
@@ -255,6 +259,7 @@ Relevant architecture decisions:
 - ADR-054 Recording Artifact and Local Recording Data Association
 - ADR-055 Filesystem Persistence Layout
 - ADR-056 Capture Result and Recording Artifact Data Boundary
+- ADR-060 Filesystem Artifact Store Semantics
 
 ---
 
@@ -267,6 +272,7 @@ Implemented:
 - In-Memory Persistence Provider
 - Filesystem Persistence Provider
 - Persistence Integration Tests
+- defined semantics for storing Recording Artifacts in the Filesystem Persistence Provider
 
 The persistence architecture remains independent from concrete storage technologies.
 
@@ -275,6 +281,7 @@ Relevant architecture decisions:
 - ADR-044 Persistence Provider Interface
 - ADR-048 Artifact Registry and Persistence Coordination
 - ADR-052 Local Filesystem Persistence Provider
+- ADR-060 Filesystem Artifact Store Semantics
 
 ---
 
@@ -282,13 +289,13 @@ Relevant architecture decisions:
 
 Current test status:
 
-core tests: 34 passed
-recorder tests: 40 passed
+core tests: 40 passed
+recorder tests: 46 passed
 
 The tests validate among other things:
 
-- ProductionSession API boundary operations
 - lifecycle transitions
+- ProductionSession API boundary operations
 - role and state logic
 - recording relationships
 - Artifact Lifecycle
@@ -321,6 +328,7 @@ NC-PoRe currently follows these architecture principles:
 - local recording remains independent from network availability
 - Repository content is the technical source of truth
 - Identities within technical boundaries are no longer modeled as primitive strings but as explicit value objects
+- Filesystem Persistence follows defined store semantics for Recording Artifacts
 
 ---
 
@@ -354,8 +362,7 @@ Important entry points:
 Planned next activities:
 
 - extend local artifact management
-- extend recovery and consistency mechanisms
-- define concrete storage strategies
-- extend ProductionSession lifecycle API operations
+- further validate and complete existing Artifact and Persistence workflows
 - model additional production objects
+- extend ProductionSession lifecycle API operations
 - implement further technical workflows based on the existing boundaries
