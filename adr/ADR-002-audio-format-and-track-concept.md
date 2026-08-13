@@ -1,16 +1,18 @@
-# ADR-002: Audio Format and Track Concept
+# Deutsch ([English version below](#english-version))
+
+# ADR-002: Audioformat und Spurkonzept
 
 ## Status
 
-Accepted
+Angenommen
 
-## Date
+## Datum
 
 2026-07-22
 
 ---
 
-# Context
+# Kontext
 
 NC-PoRe ist nicht nur ein Aufnahmewerkzeug, sondern eine
 Podcast-Produktionsplattform.
@@ -28,7 +30,7 @@ Möglichkeiten einschränken:
 
 ---
 
-# Decision
+# Entscheidung
 
 NC-PoRe speichert Aufnahmen grundsätzlich als getrennte
 Monospuren pro Teilnehmer.
@@ -86,7 +88,7 @@ Sie ersetzen jedoch nicht das hochwertige Masterformat.
 
 ---
 
-# Consequences
+# Konsequenzen
 
 ## Positive Auswirkungen
 
@@ -106,7 +108,7 @@ Sie ersetzen jedoch nicht das hochwertige Masterformat.
 
 ---
 
-# Alternatives considered
+# Betrachtete Alternativen
 
 ## Gemeinsamer Stereo-Mix während der Aufnahme
 
@@ -135,7 +137,7 @@ aber einzelne Monodateien bieten:
 
 ---
 
-# Notes
+# Hinweise
 
 Die Trennung von Aufnahme und Produktion ist ein
 Grundprinzip von NC-PoRe.
@@ -144,3 +146,148 @@ NC-PoRe erzeugt Rohmaterial.
 
 Die kreative Bearbeitung erfolgt in spezialisierten
 Produktionswerkzeugen.
+
+---
+
+# English Version ([Deutsche Version oben](#deutsch))
+
+# ADR-002: Audio Format and Track Concept
+
+## Status
+
+Accepted
+
+## Date
+
+2026-07-22
+
+---
+
+# Context
+
+NC-PoRe is not only a recording tool but a podcast production platform.
+
+For professional post-production, it is necessary to be able to process each participant separately.
+
+A mix created during recording would limit these possibilities:
+
+- individual volume adjustment would be more difficult
+- unwanted noise could not be removed selectively
+- different processing of individual voices would not be possible
+- later production steps would be constrained
+
+---
+
+# Decision
+
+NC-PoRe stores recordings as separate mono tracks per participant by default.
+
+Each participant produces a separate audio file.
+
+Example:
+Episode_042/
+
+audio/
+host.wav
+gast.wav
+cohost.wav
+metadata.json
+
+The recording is not mixed into a single audio file.
+
+---
+
+# Audio Format
+
+The preferred master format is:
+WAV
+PCM
+48 kHz
+24 bit
+Mono
+
+Rationale:
+
+- lossless storage
+- professional post-production
+- support by practically all DAWs
+- sufficient quality for speech and musical content
+
+---
+
+# Alternative Recording Formats
+
+Compressed formats such as Opus may optionally be supported.
+
+Example:
+Opus
+48 kHz
+128 kbit/s or higher
+Mono
+
+They are suitable for:
+
+- low storage requirements
+- mobile scenarios
+- fast transfer
+
+However, they do not replace the high-quality master format.
+
+---
+
+# Consequences
+
+## Positive Effects
+
+- maximum flexibility in post-production
+- easy editing in DAWs
+- speakers can be processed independently
+- better archival quality
+- no quality loss caused by pre-mixing
+
+---
+
+## Negative Effects
+
+- higher storage requirements
+- more files per episode
+- synchronization of multiple tracks is required
+
+---
+
+# Alternatives Considered
+
+## Common Stereo Mix During Recording
+
+Rejected.
+
+Reasons:
+
+- no individual processing possible
+- errors are permanently baked in
+- does not correspond to professional production workflows
+
+---
+
+## Multichannel WAV with All Participants
+
+Not selected as the primary format.
+
+Rationale:
+
+Multichannel WAV can technically contain multiple tracks,
+but individual mono files provide:
+
+- better compatibility
+- simpler archiving
+- better collaboration between different DAWs
+
+---
+
+# Notes
+
+The separation of recording and production is a fundamental principle of NC-PoRe.
+
+NC-PoRe produces raw material.
+
+Creative editing takes place in specialized production tools.
