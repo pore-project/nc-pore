@@ -56,6 +56,13 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
             .unwrap_or(PersistenceLoadResult::NotFound)
     }
 
+    fn list_ids(&self) -> Vec<String> {
+        self.artifacts
+            .iter()
+            .map(|artifact| artifact.id.value().to_owned())
+            .collect()
+    }
+
     fn list(&self) -> Vec<RecordingArtifact> {
         self.artifacts.clone()
     }
@@ -126,6 +133,26 @@ mod tests {
         ));
 
         assert_eq!(provider.list().len(), 2);
+    }
+
+    #[test]
+    fn provider_can_list_artifact_ids() {
+        let mut provider = InMemoryPersistenceProvider::new();
+
+        provider.store(RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        ));
+
+        provider.store(RecordingArtifact::new(
+            "artifact-002",
+            RecordingSessionId::new("session-001"),
+        ));
+
+        assert_eq!(
+            provider.list_ids(),
+            vec!["artifact-001".to_owned(), "artifact-002".to_owned()]
+        );
     }
 
     // TEST-15
