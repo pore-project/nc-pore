@@ -16,9 +16,21 @@ mod provider;
 
 pub use assessment::PersistenceLoadResult;
 pub use filesystem::FilesystemPersistenceProvider;
-pub use provider::PersistenceProvider;
+pub use provider::{PersistenceProvider, PersistenceStoreError};
 
 use crate::artifact::RecordingArtifact;
+
+/// Returns whether two artifacts represent the same persisted content.
+///
+/// Lifecycle status is intentionally excluded: an incoming Available artifact
+/// is equivalent to an already persisted Stored artifact when all persisted
+/// content and identity fields match.
+fn artifacts_are_equivalent(left: &RecordingArtifact, right: &RecordingArtifact) -> bool {
+    left.id == right.id
+        && left.recording_session_id == right.recording_session_id
+        && left.tracks() == right.tracks()
+        && left.association() == right.association()
+}
 
 /// Reference implementation used for development and tests.
 ///
@@ -43,8 +55,27 @@ impl Default for InMemoryPersistenceProvider {
 }
 
 impl PersistenceProvider for InMemoryPersistenceProvider {
-    fn store(&mut self, artifact: RecordingArtifact) {
-        self.artifacts.push(artifact);
+    fn store(
+        &mut self,
+        mut artifact: RecordingArtifact,
+    ) -> Result<RecordingArtifact, PersistenceStoreError> {
+        if let Some(existing) = self
+            .artifacts
+            .iter()
+            .find(|existing| existing.id == artifact.id)
+        {
+            if artifacts_are_equivalent(existing, &artifact) {
+                return Ok(existing.clone());
+            }
+
+            return Err(PersistenceStoreError::Conflict {
+                artifact_id: artifact.id.value().to_owned(),
+            });
+        }
+
+        artifact.store();
+        self.artifacts.push(artifact.clone());
+        Ok(artifact)
     }
 
     fn load(&self, id: &str) -> PersistenceLoadResult {
@@ -87,10 +118,12 @@ mod tests {
     fn test_12_provider_can_store_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        ));
+        provider
+            .store(RecordingArtifact::new(
+                "artifact-001",
+                RecordingSessionId::new("session-001"),
+            ))
+            .expect("artifact should be stored");
 
         assert_eq!(provider.list().len(), 1);
     }
@@ -103,10 +136,12 @@ mod tests {
     fn test_13_provider_can_load_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        ));
+        provider
+            .store(RecordingArtifact::new(
+                "artifact-001",
+                RecordingSessionId::new("session-001"),
+            ))
+            .expect("artifact should be stored");
 
         assert!(matches!(
             provider.load("artifact-001"),
@@ -122,15 +157,19 @@ mod tests {
     fn test_14_provider_can_list_artifacts() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        ));
+        provider
+            .store(RecordingArtifact::new(
+                "artifact-001",
+                RecordingSessionId::new("session-001"),
+            ))
+            .expect("artifact should be stored");
 
-        provider.store(RecordingArtifact::new(
-            "artifact-002",
-            RecordingSessionId::new("session-001"),
-        ));
+        provider
+            .store(RecordingArtifact::new(
+                "artifact-002",
+                RecordingSessionId::new("session-001"),
+            ))
+            .expect("artifact should be stored");
 
         assert_eq!(provider.list().len(), 2);
     }
@@ -139,15 +178,19 @@ mod tests {
     fn provider_can_list_artifact_ids() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        ));
+        provider
+            .store(RecordingArtifact::new(
+                "artifact-001",
+                RecordingSessionId::new("session-001"),
+            ))
+            .expect("artifact should be stored");
 
-        provider.store(RecordingArtifact::new(
-            "artifact-002",
-            RecordingSessionId::new("session-001"),
-        ));
+        provider
+            .store(RecordingArtifact::new(
+                "artifact-002",
+                RecordingSessionId::new("session-001"),
+            ))
+            .expect("artifact should be stored");
 
         assert_eq!(
             provider.list_ids(),
@@ -163,10 +206,12 @@ mod tests {
     fn test_15_provider_can_remove_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
 
-        provider.store(RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        ));
+        provider
+            .store(RecordingArtifact::new(
+                "artifact-001",
+                RecordingSessionId::new("session-001"),
+            ))
+            .expect("artifact should be stored");
 
         provider.remove("artifact-001");
 
@@ -204,5 +249,42 @@ mod tests {
         drop(provider);
 
         let _ = std::fs::remove_dir_all(path);
+    }
+
+    // TEST-37
+    //
+    // Protects ADR-060:
+    // Storing the same artifact identity and equivalent content is an
+    // idempotent success and does not create a duplicate.
+    #[test]
+    fn test_37_provider_is_idempotent_for_equivalent_artifact() {
+        let mut provider = InMemoryPersistenceProvider::new();
+        let artifact = RecordingArtifact::new("artifact-037", RecordingSessionId::new("session-037"));
+
+        provider.store(artifact.clone()).expect("first store should succeed");
+        provider.store(artifact).expect("equivalent store should be a no-op");
+
+        assert_eq!(provider.list().len(), 1);
+    }
+
+    // TEST-38
+    //
+    // Protects ADR-060:
+    // A different artifact under an already used identity is rejected
+    // instead of silently replacing the persisted artifact.
+    #[test]
+    fn test_38_provider_rejects_conflicting_artifact() {
+        let mut provider = InMemoryPersistenceProvider::new();
+        let first = RecordingArtifact::new("artifact-038", RecordingSessionId::new("session-038-a"));
+        let conflicting = RecordingArtifact::new("artifact-038", RecordingSessionId::new("session-038-b"));
+
+        provider.store(first).expect("first store should succeed");
+
+        assert!(matches!(
+            provider.store(conflicting),
+            Err(PersistenceStoreError::Conflict { artifact_id }) if artifact_id == "artifact-038"
+        ));
+
+        assert_eq!(provider.list().len(), 1);
     }
 }
