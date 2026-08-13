@@ -9,7 +9,7 @@
 use crate::artifact::RecordingArtifact;
 
 /// Result of assessing one persisted RecordingArtifact.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum PersistenceLoadResult {
     /// The persisted representation is complete and internally consistent.
     Valid(RecordingArtifact),
