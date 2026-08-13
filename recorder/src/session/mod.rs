@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Recorder session model.
 //!
 //! This module contains the application-level recording session state.

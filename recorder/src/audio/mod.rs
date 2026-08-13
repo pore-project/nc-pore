@@ -14,7 +14,10 @@
 
 mod result;
 
-pub use result::{CaptureChunk, CaptureResult, CaptureTrack};
+pub use result::CaptureResult;
+
+#[cfg(test)]
+pub use result::{CaptureChunk, CaptureTrack};
 
 /// Defines the interface between recorder workflow
 /// and audio capture implementations.
