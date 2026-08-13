@@ -6,7 +6,7 @@
 
 ---
 
-# Deutsch (English version below)
+# Deutsch ([English version below](#english-version))
 
 ## Kontext
 
@@ -290,7 +290,7 @@ NC-PoRe macht verteilte Podcast-Produktion zuverlässig, indem es die Realität 
 
 ---
 
-# English (Deutsche Version oben)
+# English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
 
