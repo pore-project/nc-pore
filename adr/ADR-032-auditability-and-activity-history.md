@@ -6,7 +6,7 @@
 
 ---
 
-# Deutsch (English version below)
+# Deutsch ([English version below](#english-version))
 
 ## Kontext
 
@@ -305,7 +305,7 @@ Sie benötigt auch Erinnerung.
 
 ---
 
-# English (Deutsche Version oben)
+# English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
 
