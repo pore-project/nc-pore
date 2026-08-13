@@ -93,7 +93,7 @@ mod tests {
         );
 
         assert_eq!(artifact.id.value(), "capture-001");
-        assert_eq!(artifact.status(), &ArtifactStatus::Available);
+        assert_eq!(artifact.status(), &ArtifactStatus::Stored);
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-017"));
 
@@ -104,5 +104,54 @@ mod tests {
 
         assert_eq!(persisted.production_id(), Some("production-001"));
         assert_eq!(persisted.recording_id(), Some("recording-017"));
+        assert_eq!(persisted.status(), &ArtifactStatus::Stored);
+    }
+
+    // TEST-34
+    //
+    // Protects ADR-060:
+    // Successful persistence is represented by a Stored artifact at the
+    // processing boundary rather than returning the pre-persistence state.
+    #[test]
+    fn processor_returns_stored_artifact_after_successful_persistence() {
+        let persistence = InMemoryPersistenceProvider::new();
+        let coordinator = ArtifactCoordinator::new(persistence);
+        let mut processor = RecordingArtifactProcessor::new(coordinator);
+
+        let artifact = processor.process(
+            CaptureResult::new("capture-034"),
+            RecordingSessionId::new("session-034"),
+            RecordingArtifactAssociation::new("production-034", "recording-034"),
+        );
+
+        assert_eq!(artifact.status(), &ArtifactStatus::Stored);
+    }
+
+    // TEST-35
+    //
+    // Protects ADR-060:
+    // Processing the same artifact identity repeatedly must be idempotent
+    // and must not create duplicate persisted artifacts.
+    #[test]
+    fn processor_is_idempotent_for_same_artifact_identity() {
+        let persistence = InMemoryPersistenceProvider::new();
+        let coordinator = ArtifactCoordinator::new(persistence);
+        let mut processor = RecordingArtifactProcessor::new(coordinator);
+
+        let association = RecordingArtifactAssociation::new("production-035", "recording-035");
+
+        processor.process(
+            CaptureResult::new("capture-035"),
+            RecordingSessionId::new("session-035"),
+            association.clone(),
+        );
+
+        processor.process(
+            CaptureResult::new("capture-035"),
+            RecordingSessionId::new("session-035"),
+            association,
+        );
+
+        assert_eq!(processor.coordinator.persistence().list().len(), 1);
     }
 }
