@@ -6,7 +6,7 @@
 
 ---
 
-# Deutsch
+# Deutsch ([English version below](#english-version))
 
 ## Kontext
 
@@ -161,7 +161,7 @@ Komplexität soll innerhalb des Systems gelöst werden und nicht beim Anwender e
 
 ---
 
-# English
+# English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
 
