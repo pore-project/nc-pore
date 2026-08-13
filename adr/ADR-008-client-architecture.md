@@ -1,3 +1,5 @@
+# Deutsch ([English version below](#english-version))
+
 # ADR-008: Client Architecture
 
 ## Status
@@ -10,7 +12,7 @@ Accepted
 
 ---
 
-# Context
+# Kontext
 
 NC-PoRe benötigt eine zuverlässige lokale Audioaufnahme.
 
@@ -27,7 +29,7 @@ Daraus entsteht ein Zielkonflikt:
 
 ---
 
-# Decision
+# Entscheidung
 
 NC-PoRe verwendet eine modulare Client-Architektur.
 
@@ -122,7 +124,7 @@ vereinfachter Zugang unterstützt werden.
 
 ---
 
-# Consequences
+# Konsequenzen
 
 ## Positive Auswirkungen
 
@@ -142,7 +144,7 @@ vereinfachter Zugang unterstützt werden.
 
 ---
 
-# Alternatives considered
+# Betrachtete Alternativen
 
 ## Ausschließliche Web-App
 
@@ -166,9 +168,180 @@ Zugang.
 
 ---
 
-# Notes
+# Hinweise
 
 Die Client-Architektur unterstützt das Grundprinzip von NC-PoRe:
 
 > Professionelle Werkzeuge für diejenigen, die sie benötigen,
 > einfache Teilnahme für diejenigen, die nur beitragen.
+
+---
+
+# English Version ([Deutsche Version oben](#deutsch))
+
+# ADR-008: Client Architecture
+
+## Status
+
+Accepted
+
+## Date
+
+2026-07-22
+
+---
+
+# Context
+
+NC-PoRe requires reliable local audio recording.
+
+Recording quality must not depend on a browser, a server connection, or external services.
+
+At the same time, NC-PoRe should be as easy to access as possible, especially for guests and occasional participants.
+
+This creates a conflict of objectives:
+
+* maximum technical control for professional recordings
+* access for participants should be as simple as possible
+
+---
+
+# Decision
+
+NC-PoRe uses a modular client architecture.
+
+Local recording is performed by a specialized recorder client.
+
+The recorder is responsible for the following tasks:
+
+* access to audio hardware
+* local recording
+* chunk management
+* metadata generation
+* local security
+* upload preparation
+
+The server does not perform the primary audio recording.
+
+---
+
+# Client Variants
+
+NC-PoRe is intended to support different client variants.
+
+## Professional Recorder
+
+For regular podcasters and production environments.
+
+Characteristics:
+
+* maximum audio quality
+* advanced settings
+* reliable local storage
+* professional workflows
+
+---
+
+## Guest Recorder
+
+For external participants.
+
+Goal:
+
+* participation should be as simple as possible
+* low entry barrier
+* secure session participation
+
+The guest does not need extensive administration capabilities.
+
+---
+
+# Architecture Model
+
+```
+                Nextcloud Server
+
+                    |
+                    |
+          Session Management
+                    |
+        +-----------+-----------+
+        |                       |
+        |                       |
+ Professional Client      Guest Client
+
+        |                       |
+        +-----------+-----------+
+
+              local recording
+
+                    |
+
+             Upload after session end
+```
+
+---
+
+# Browser-Based Recording
+
+Pure browser-based recording is not used as the primary architecture.
+
+Reasons:
+
+* limited control over hardware access
+* dependent on browser behavior
+* more difficult error handling
+* limited options for professional workflows
+
+Browser-based participation may nevertheless be supported in the future as a simplified access method.
+
+---
+
+# Consequences
+
+## Positive Effects
+
+* professional recording quality is possible
+* clear separation between recording and server
+* better extensibility
+* suitable for different user groups
+* independent of browser vendors
+
+---
+
+## Negative Effects
+
+* additional software component required
+* installation may be necessary
+* multiple clients must be maintained
+
+---
+
+# Alternatives Considered
+
+## Web App Only
+
+Rejected as the primary solution.
+
+Reason:
+
+A web app does not provide the necessary control for professional local audio recording.
+
+---
+
+## Desktop Client Only
+
+Insufficient.
+
+Reason:
+
+Occasional users and guests need simpler access.
+
+---
+
+# Notes
+
+The client architecture supports the fundamental principle of NC-PoRe:
+
+> Professional tools for those who need them,
+> simple participation for those who only contribute.

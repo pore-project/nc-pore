@@ -10,7 +10,9 @@ Accepted
 
 ---
 
-# Context
+# Deutsch ([English version below](#english-version))
+
+# Kontext
 
 Podcast- und Gesprächsaufnahmen werden häufig über zentrale
 Online-Dienste realisiert.
@@ -31,7 +33,7 @@ und unabhängig von der aktuellen Netzwerkqualität erfolgen.
 
 ---
 
-# Decision
+# Entscheidung
 
 NC-PoRe zeichnet Audiodaten grundsätzlich lokal auf dem
 Endgerät jedes Teilnehmers auf.
@@ -44,7 +46,7 @@ kontrolliert zum selbstgehosteten NC-PoRe-Server übertragen.
 
 ---
 
-# Consequences
+# Konsequenzen
 
 ## Positive Auswirkungen
 
@@ -65,7 +67,7 @@ kontrolliert zum selbstgehosteten NC-PoRe-Server übertragen.
 
 ---
 
-# Alternatives considered
+# Betrachtete Alternativen
 
 ## Serverseitige Stream-Aufnahme
 
@@ -91,8 +93,98 @@ Gründe:
 
 ---
 
-# Notes
+# Hinweise
 
 Diese Entscheidung ist eine zentrale Designentscheidung.
 
 Alle zukünftigen Komponenten müssen dieses Prinzip respektieren.
+
+---
+
+# English Version ([Deutsche Version oben](#deutsch))
+
+# Context
+
+Podcast and conversation recordings are often implemented using centralized
+online services.
+
+This approach creates several problems:
+
+- Audio quality depends on the network connection.
+- Connection failures can result in audio loss.
+- Upload and streaming traffic compete for the same Internet connection.
+- Control over the data is partly held by external service providers.
+
+NC-PoRe follows the principle:
+
+> My data belongs to me.
+
+Therefore, recording shall operate independently of external servers
+and independently of the current network quality.
+
+---
+
+# Decision
+
+NC-PoRe records audio data locally on the end device of each participant
+as a fundamental principle.
+
+No audio data is transmitted to the server while recording is in progress.
+
+After recording has been completed, the generated audio files are
+transferred in a controlled manner to the self-hosted NC-PoRe server.
+
+---
+
+# Consequences
+
+## Positive effects
+
+- Independence from Internet quality during recording.
+- No additional network load during the conversation.
+- Higher audio quality is possible.
+- Participants retain control over their audio data.
+- Recording can continue even during temporary network problems.
+
+---
+
+## Negative effects
+
+- Local recorder software is required.
+- Multiple audio tracks must be synchronized later.
+- Storage space is required on participant devices.
+- Upload takes place after the recording with a time delay.
+
+---
+
+# Alternatives considered
+
+## Server-side stream recording
+
+Rejected.
+
+Reasons:
+
+- Dependence on the network.
+- Quality loss in case of connection problems.
+- Additional load on the connection.
+
+---
+
+## Cloud-based recording services
+
+Rejected.
+
+Reasons:
+
+- Dependence on external providers.
+- Limited data sovereignty.
+- Not compatible with the fundamental philosophy of NC-PoRe.
+
+---
+
+# Notes
+
+This is a central design decision.
+
+All future components must respect this principle.

@@ -1,3 +1,5 @@
+# Deutsch ([English version below](#english-version))
+
 # ADR-016: Audio Layer Technology Selection
 
 ## Status
@@ -47,11 +49,11 @@ technischen Entscheidung festgelegt.
 
 Eine Abstraktionsschicht bietet:
 
-* Unterstützung mehrerer Betriebssysteme
-* bessere Wartbarkeit
-* einfachere Tests
-* geringere Abhängigkeit von einzelnen Plattformen
-* Möglichkeit zum Austausch der technischen Umsetzung
+- Unterstützung mehrerer Betriebssysteme
+- bessere Wartbarkeit
+- einfachere Tests
+- geringere Abhängigkeit von einzelnen Plattformen
+- Möglichkeit zum Austausch der technischen Umsetzung
 
 ---
 
@@ -90,15 +92,15 @@ Audio-Schnittstellen.
 
 Beispiele:
 
-* ALSA
-* CoreAudio
-* WASAPI
+- ALSA
+- CoreAudio
+- WASAPI
 
 Verworfen wegen:
 
-* hoher Plattformabhängigkeit
-* höherem Wartungsaufwand
-* erschwerter Erweiterbarkeit
+- hoher Plattformabhängigkeit
+- höherem Wartungsaufwand
+- erschwerter Erweiterbarkeit
 
 ---
 
@@ -109,9 +111,9 @@ unterstützte Betriebssystem.
 
 Verworfen wegen:
 
-* doppelter Entwicklungsaufwand
-* unterschiedlicher Fehlerquellen
-* schwieriger langfristiger Pflege
+- doppelter Entwicklungsaufwand
+- unterschiedlicher Fehlerquellen
+- schwieriger langfristiger Pflege
 
 ---
 
@@ -119,17 +121,17 @@ Verworfen wegen:
 
 ## Positive Consequences
 
-* plattformübergreifende Architektur
-* klar getrennte Verantwortlichkeiten
-* bessere Erweiterbarkeit
-* einfachere zukünftige Wartung
+- plattformübergreifende Architektur
+- klar getrennte Verantwortlichkeiten
+- bessere Erweiterbarkeit
+- einfachere zukünftige Wartung
 
 ---
 
 ## Negative Consequences
 
-* zusätzliche Abstraktionsebene
-* möglicher Mehraufwand bei speziellen Hardwarefunktionen
+- zusätzliche Abstraktionsebene
+- möglicher Mehraufwand bei speziellen Hardwarefunktionen
 
 ---
 
@@ -140,12 +142,12 @@ technischen Entscheidung ausgewählt.
 
 Dabei werden folgende Kriterien bewertet:
 
-* Stabilität
-* Plattformunterstützung
-* Latenz
-* Echtzeitfähigkeit
-* Wartbarkeit
-* Lizenzmodell
+- Stabilität
+- Plattformunterstützung
+- Latenz
+- Echtzeitfähigkeit
+- Wartbarkeit
+- Lizenzmodell
 
 ---
 
@@ -155,3 +157,158 @@ Die Audio-Schicht soll nicht nur heute funktionieren.
 
 Sie soll eine stabile Grundlage für die zukünftige
 Entwicklung von NC-PoRe bilden.
+
+---
+
+# English Version ([Deutsche Version oben](#deutsch))
+
+# ADR-016: Audio Layer Technology Selection
+
+## Status
+
+Accepted
+
+## Date
+
+2026-07-23
+
+---
+
+# Context
+
+The NC-PoRe Recorder requires a technical foundation
+for recording and processing audio data.
+
+The audio layer is a central component because it
+interacts directly with hardware and operating systems.
+
+The solution must remain maintainable and extensible over the long term.
+
+NC-PoRe should not be restricted to a single platform.
+
+---
+
+# Decision
+
+The audio layer is implemented through a cross-platform abstraction.
+
+The Recorder does not use direct platform-dependent
+audio interfaces in application logic.
+
+Audio hardware is accessed through a separate audio layer component.
+
+The concrete library will be selected in a later technical decision.
+
+---
+
+# Rationale
+
+An abstraction layer provides:
+
+- support for multiple operating systems
+- better maintainability
+- easier testing
+- reduced dependency on individual platforms
+- the ability to replace the technical implementation
+
+---
+
+# Audio Architecture Concept
+
+The planned structure:
+
+```
+Audio Hardware
+
+      ↓
+
+Operating System Audio Backend
+
+      ↓
+
+Rust Audio Layer
+
+      ↓
+
+NC-PoRe Recorder Pipeline
+
+      ↓
+
+Storage / Export
+```
+
+---
+
+# Alternatives Considered
+
+## Direct Platform APIs
+
+Direct use of operating-system-specific
+audio interfaces.
+
+Examples:
+
+- ALSA
+- CoreAudio
+- WASAPI
+
+Rejected because of:
+
+- high platform dependency
+- increased maintenance effort
+- reduced extensibility
+
+---
+
+## Separate Implementations per Platform
+
+Separate audio implementations for each
+supported operating system.
+
+Rejected because of:
+
+- duplicated development effort
+- different sources of errors
+- more difficult long-term maintenance
+
+---
+
+# Consequences
+
+## Positive Consequences
+
+- cross-platform architecture
+- clearly separated responsibilities
+- better extensibility
+- easier future maintenance
+
+---
+
+## Negative Consequences
+
+- additional abstraction layer
+- possible additional effort for specialized hardware functions
+
+---
+
+# Future Considerations
+
+The concrete audio library will be selected in a later technical decision.
+
+The following criteria will be evaluated:
+
+- stability
+- platform support
+- latency
+- real-time capability
+- maintainability
+- licensing model
+
+---
+
+# Final Principle
+
+The audio layer should not only work today.
+
+It should provide a stable foundation for the future
+development of NC-PoRe.

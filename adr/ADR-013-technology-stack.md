@@ -1,3 +1,5 @@
+# Deutsch ([English version below](#english-version))
+
 # ADR-013: Technology Stack
 
 ## Status
@@ -10,7 +12,7 @@ Accepted
 
 ---
 
-# Context
+# Kontext
 
 NC-PoRe besteht aus mehreren technisch unterschiedlichen
 Bereichen.
@@ -28,7 +30,7 @@ weiterentwickelt werden können.
 
 ---
 
-# Decision
+# Entscheidung
 
 NC-PoRe wird als modulare Architektur mit getrennten
 Komponenten umgesetzt.
@@ -149,7 +151,7 @@ Der Technologiestack soll unterstützen:
 
 ---
 
-# Consequences
+# Konsequenzen
 
 ## Positive Auswirkungen
 
@@ -168,7 +170,7 @@ Der Technologiestack soll unterstützen:
 
 ---
 
-# Alternatives considered
+# Betrachtete Alternativen
 
 ## Alles als Nextcloud-App
 
@@ -203,7 +205,7 @@ Aufnahmen.
 
 ---
 
-# Notes
+# Hinweise
 
 Die Architektur folgt dem Prinzip:
 
@@ -211,4 +213,210 @@ Die Architektur folgt dem Prinzip:
 
 Der Recorder macht Audio.
 Nextcloud macht Zusammenarbeit.
+
+---
+
+# English Version ([Deutsche Version oben](#deutsch))
+
+# ADR-013: Technology Stack
+
+## Status
+
+Accepted
+
+## Date
+
+2026-07-22
+
+---
+
+# Context
+
+NC-PoRe consists of several technically different areas.
+
+The platform requires:
+
+- a local audio recorder
+- server integration
+- user and permission management
+- metadata management
+- open interfaces
+
+The components should be able to evolve independently.
+
+---
+
+# Decision
+
+NC-PoRe is implemented as a modular architecture with separate components.
+
+The main components are:
+
 ```
+NC-PoRe
+
+├── Recorder Client
+│
+├── Nextcloud Application
+│
+├── Backend Services
+│
+└── Export Layer
+```
+
+---
+
+# Recorder Client
+
+## Decision
+
+The recorder is developed as a standalone application.
+
+Reasons:
+
+- direct hardware access
+- stable audio processing
+- independent of the browser
+- better resource control
+- professional use cases
+
+---
+
+# Recorder Technology
+
+A native or native-like technology is preferred for the recorder.
+
+Evaluation criteria:
+
+- audio quality
+- stability
+- platform support
+- FOSS suitability
+- long-term maintainability
+
+Possible technologies:
+
+- Rust
+- C++
+- Qt-based applications
+- other suitable FOSS technologies
+
+The final selection will be made after prototyping.
+
+---
+
+# Server Integration
+
+## Decision
+
+Server integration is implemented as a Nextcloud application.
+
+Responsibilities:
+
+- projects
+- sessions
+- users
+- roles
+- metadata
+- file management
+
+The Nextcloud app is not responsible for primary audio recording.
+
+---
+
+# Communication
+
+Recorder and server communicate through defined interfaces.
+
+Examples:
+
+- session creation
+- authentication
+- upload
+- status information
+- metadata
+
+---
+
+# Database and Storage
+
+Storage follows the existing Nextcloud mechanisms.
+
+NC-PoRe uses:
+
+- open data structures
+- documented formats
+- traceable metadata
+
+---
+
+# Open Source Principles
+
+The technology stack should support:
+
+- free development tools
+- open standards
+- community contributions
+- long-term maintainability
+
+---
+
+# Consequences
+
+## Positive Effects
+
+- clear separation of responsibilities
+- professional audio architecture possible
+- better extensibility
+- fewer dependencies
+
+---
+
+## Negative Effects
+
+- multiple components must be maintained
+- higher initial development effort
+- interfaces must be defined carefully
+
+---
+
+# Alternatives Considered
+
+## Everything as a Nextcloud App
+
+Rejected.
+
+Reason:
+
+Nextcloud is not optimized for real-time audio hardware.
+
+---
+
+## Everything as a Desktop Application
+
+Rejected.
+
+Reason:
+
+User management and collaboration would be unnecessarily complicated.
+
+---
+
+## Browser as the Sole Recorder
+
+Rejected as the primary solution.
+
+Reason:
+
+Not sufficiently controllable for professional recordings.
+
+---
+
+# Notes
+
+The architecture follows the principle:
+
+> The right tool for the right task.
+
+The recorder handles audio.
+Nextcloud handles collaboration.
