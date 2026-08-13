@@ -55,7 +55,11 @@ impl Default for InMemoryPersistenceProvider {
 }
 
 impl PersistenceProvider for InMemoryPersistenceProvider {
-    fn store(
+    fn store(&mut self, artifact: RecordingArtifact) {
+        self.artifacts.push(artifact);
+    }
+
+    fn store_checked(
         &mut self,
         mut artifact: RecordingArtifact,
     ) -> Result<RecordingArtifact, PersistenceStoreError> {
@@ -119,7 +123,7 @@ mod tests {
         let mut provider = InMemoryPersistenceProvider::new();
 
         provider
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-001",
                 RecordingSessionId::new("session-001"),
             ))
@@ -137,7 +141,7 @@ mod tests {
         let mut provider = InMemoryPersistenceProvider::new();
 
         provider
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-001",
                 RecordingSessionId::new("session-001"),
             ))
@@ -158,14 +162,14 @@ mod tests {
         let mut provider = InMemoryPersistenceProvider::new();
 
         provider
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-001",
                 RecordingSessionId::new("session-001"),
             ))
             .expect("artifact should be stored");
 
         provider
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-002",
                 RecordingSessionId::new("session-001"),
             ))
@@ -179,14 +183,14 @@ mod tests {
         let mut provider = InMemoryPersistenceProvider::new();
 
         provider
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-001",
                 RecordingSessionId::new("session-001"),
             ))
             .expect("artifact should be stored");
 
         provider
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-002",
                 RecordingSessionId::new("session-001"),
             ))
@@ -207,7 +211,7 @@ mod tests {
         let mut provider = InMemoryPersistenceProvider::new();
 
         provider
-            .store(RecordingArtifact::new(
+            .store_checked(RecordingArtifact::new(
                 "artifact-001",
                 RecordingSessionId::new("session-001"),
             ))
@@ -259,10 +263,15 @@ mod tests {
     #[test]
     fn test_37_provider_is_idempotent_for_equivalent_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
-        let artifact = RecordingArtifact::new("artifact-037", RecordingSessionId::new("session-037"));
+        let artifact =
+            RecordingArtifact::new("artifact-037", RecordingSessionId::new("session-037"));
 
-        provider.store(artifact.clone()).expect("first store should succeed");
-        provider.store(artifact).expect("equivalent store should be a no-op");
+        provider
+            .store_checked(artifact.clone())
+            .expect("first store should succeed");
+        provider
+            .store_checked(artifact)
+            .expect("equivalent store should be a no-op");
 
         assert_eq!(provider.list().len(), 1);
     }
@@ -275,13 +284,17 @@ mod tests {
     #[test]
     fn test_38_provider_rejects_conflicting_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
-        let first = RecordingArtifact::new("artifact-038", RecordingSessionId::new("session-038-a"));
-        let conflicting = RecordingArtifact::new("artifact-038", RecordingSessionId::new("session-038-b"));
+        let first =
+            RecordingArtifact::new("artifact-038", RecordingSessionId::new("session-038-a"));
+        let conflicting =
+            RecordingArtifact::new("artifact-038", RecordingSessionId::new("session-038-b"));
 
-        provider.store(first).expect("first store should succeed");
+        provider
+            .store_checked(first)
+            .expect("first store should succeed");
 
         assert!(matches!(
-            provider.store(conflicting),
+            provider.store_checked(conflicting),
             Err(PersistenceStoreError::Conflict { artifact_id }) if artifact_id == "artifact-038"
         ));
 
