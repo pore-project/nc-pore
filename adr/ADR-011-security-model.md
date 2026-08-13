@@ -1,3 +1,5 @@
+# Deutsch ([English version below](#english-version))
+
 # ADR-011: Security Model
 
 ## Status
@@ -10,7 +12,7 @@ Accepted
 
 ---
 
-# Context
+# Kontext
 
 NC-PoRe verarbeitet persönliche Audiodaten.
 
@@ -21,8 +23,7 @@ Aufnahmen können enthalten:
 - nicht veröffentlichte Inhalte
 - Produktionsmaterial
 
-Daher muss Sicherheit ein grundlegender Bestandteil der
-Architektur sein.
+Daher muss Sicherheit ein grundlegender Bestandteil der Architektur sein.
 
 NC-PoRe verfolgt das Prinzip:
 
@@ -30,7 +31,7 @@ NC-PoRe verfolgt das Prinzip:
 
 ---
 
-# Decision
+# Entscheidung
 
 NC-PoRe verwendet ein mehrschichtiges Sicherheitsmodell.
 
@@ -44,12 +45,11 @@ Die Sicherheitsarchitektur besteht aus:
 
 ---
 
-# Authentication
+# Authentifizierung
 
 Benutzer müssen eindeutig identifiziert werden.
 
-Die Authentifizierung erfolgt über die vorhandene
-Plattformintegration.
+Die Authentifizierung erfolgt über die vorhandene Plattformintegration.
 
 Beispiel:
 
@@ -58,13 +58,13 @@ Beispiel:
 
 ---
 
-# Authorization
+# Autorisierung
 
 Der Zugriff auf Daten erfolgt über Berechtigungen.
 
 Grundprinzip:
 
-```
+```text
 Wer bin ich?
 
 +
@@ -78,12 +78,11 @@ Zugriff
 
 ---
 
-# Principle of Least Privilege
+# Prinzip der geringsten Berechtigung
 
 NC-PoRe folgt dem Prinzip:
 
-> Jeder Benutzer erhält nur die Rechte, die für seine Aufgabe
-> notwendig sind.
+> Jeder Benutzer erhält nur die Rechte, die für seine Aufgabe notwendig sind.
 
 Beispiele:
 
@@ -105,7 +104,7 @@ Gast:
 
 ---
 
-# Session Security
+# Session-Sicherheit
 
 Jede Session besitzt einen eigenen Sicherheitskontext.
 
@@ -116,12 +115,11 @@ Eine Session definiert:
 - Berechtigungen
 - verfügbare Daten
 
-Ein Gast darf nur auf die Session zugreifen,
-zu der er eingeladen wurde.
+Ein Gast darf nur auf die Session zugreifen, zu der er eingeladen wurde.
 
 ---
 
-# Audio Data Protection
+# Schutz der Audiodaten
 
 Audiodateien werden nicht öffentlich abgelegt.
 
@@ -133,7 +131,7 @@ Zugriff erfolgt ausschließlich über:
 
 ---
 
-# Upload Security
+# Upload-Sicherheit
 
 Uploads müssen:
 
@@ -144,7 +142,7 @@ Uploads müssen:
 
 Beispiel:
 
-```
+```text
 Upload
 
 ↓
@@ -162,7 +160,7 @@ Archivierung
 
 ---
 
-# Auditability
+# Nachvollziehbarkeit
 
 Sicherheitsrelevante Aktionen sollen nachvollziehbar sein.
 
@@ -176,7 +174,7 @@ Beispiele:
 
 ---
 
-# Privacy Principles
+# Datenschutzprinzipien
 
 NC-PoRe folgt folgenden Datenschutzprinzipien:
 
@@ -187,7 +185,7 @@ NC-PoRe folgt folgenden Datenschutzprinzipien:
 
 ---
 
-# Consequences
+# Konsequenzen
 
 ## Positive Auswirkungen
 
@@ -195,8 +193,6 @@ NC-PoRe folgt folgenden Datenschutzprinzipien:
 - geeignet für professionelle Produktionen
 - sichere Zusammenarbeit mit Gästen
 - nachvollziehbare Zugriffe
-
----
 
 ## Negative Auswirkungen
 
@@ -206,7 +202,7 @@ NC-PoRe folgt folgenden Datenschutzprinzipien:
 
 ---
 
-# Alternatives considered
+# Betrachtete Alternativen
 
 ## Vollständiger Zugriff innerhalb eines Projektes
 
@@ -228,10 +224,242 @@ Nicht vereinbar mit dem Datenschutzprinzip von NC-PoRe.
 
 ---
 
-# Notes
+# Hinweise
 
 Sicherheit ist kein Zusatzfeature.
 
-Die Sicherheit der Daten ist Bestandteil der
-Grundarchitektur von NC-PoRe.
+Die Sicherheit der Daten ist Bestandteil der Grundarchitektur von NC-PoRe.
+
+---
+
+# English Version ([Deutsche Version oben](#deutsch))
+
+# ADR-011: Security Model
+
+## Status
+
+Accepted
+
+## Date
+
+2026-07-22
+
+---
+
+# Context
+
+NC-PoRe processes personal audio data.
+
+Recordings may contain:
+
+- personal conversations
+- confidential information
+- unpublished content
+- production material
+
+Security must therefore be a fundamental part of the architecture.
+
+NC-PoRe follows the principle:
+
+> Access is granted only when it is explicitly permitted.
+
+---
+
+# Decision
+
+NC-PoRe uses a layered security model.
+
+The security architecture consists of:
+
+- authentication
+- roles and permissions
+- session-based access control
+- secure data transfer
+- auditable actions
+
+---
+
+# Authentication
+
+Users must be uniquely identified.
+
+Authentication is provided through the existing platform integration.
+
+Examples:
+
+- Nextcloud user account
+- external guest identity through invitation
+
+---
+
+# Authorization
+
+Access to data is controlled through permissions.
+
+Basic principle:
+
+```text
+Who am I?
+
++
+
+What am I allowed to do?
+
+=
+
+Access
 ```
+
+---
+
+# Principle of Least Privilege
+
+NC-PoRe follows the principle:
+
+> Each user receives only the permissions necessary for their task.
+
+Examples:
+
+Administrator:
+
+- system administration
+
+Moderator:
+
+- session management
+
+Editor:
+
+- production access
+
+Guest:
+
+- own recording within a session
+
+---
+
+# Session Security
+
+Each session has its own security context.
+
+A session defines:
+
+- participants
+- roles
+- permissions
+- available data
+
+A guest may access only the session to which they were invited.
+
+---
+
+# Audio Data Protection
+
+Audio files are not stored publicly.
+
+Access is provided exclusively through:
+
+- authenticated users
+- valid permissions
+- defined shares
+
+---
+
+# Upload Security
+
+Uploads must:
+
+- be authenticated
+- verify integrity
+- detect incomplete files
+- support resumption
+
+Example:
+
+```text
+Upload
+
+↓
+
+Checksum
+
+↓
+
+Validation
+
+↓
+
+Archiving
+```
+
+---
+
+# Auditability
+
+Security-relevant actions should be auditable.
+
+Examples:
+
+- session created
+- guest invited
+- recording uploaded
+- file exported
+- permission changed
+
+---
+
+# Privacy Principles
+
+NC-PoRe follows these privacy principles:
+
+- data minimization
+- transparency
+- purpose limitation
+- user control
+
+---
+
+# Consequences
+
+## Positive Effects
+
+- clear security structure
+- suitable for professional productions
+- secure collaboration with guests
+- auditable access
+
+## Negative Effects
+
+- additional technical complexity
+- permission management required
+- increased development effort
+
+---
+
+# Alternatives Considered
+
+## Full Access Within a Project
+
+Rejected.
+
+Reason:
+
+Not every participant needs access to all data.
+
+---
+
+## Public File Shares
+
+Rejected.
+
+Reason:
+
+Not compatible with NC-PoRe's privacy principle.
+
+---
+
+# Notes
+
+Security is not an additional feature.
+
+Data security is part of the fundamental architecture of NC-PoRe.
