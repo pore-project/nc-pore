@@ -19,7 +19,7 @@
 use crate::artifact::recovery::ArtifactRecoveryService;
 use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
 use crate::artifact::{ArtifactId, RecordingArtifact};
-use crate::persistence::PersistenceProvider;
+use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
 
 /// Coordinates artifact registration and persistence.
 ///
@@ -131,7 +131,10 @@ mod tests {
 
         assert_eq!(stored_artifact.status(), &ArtifactStatus::Stored);
 
-        assert!(coordinator.persistence().load("artifact-001").is_some());
+        assert!(matches!(
+            coordinator.persistence().load("artifact-001"),
+            PersistenceLoadResult::Valid(_)
+        ));
     }
 
     // TEST-26
@@ -155,7 +158,10 @@ mod tests {
 
         assert_eq!(stored_artifact.status(), &ArtifactStatus::Stored);
 
-        assert!(coordinator.persistence().load("artifact-026").is_some());
+        assert!(matches!(
+            coordinator.persistence().load("artifact-026"),
+            PersistenceLoadResult::Valid(_)
+        ));
 
         let _ = std::fs::remove_dir_all(path);
     }
