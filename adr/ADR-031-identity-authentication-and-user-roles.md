@@ -6,7 +6,7 @@
 
 ---
 
-# Deutsch (English version below)
+# Deutsch ([English version below](#english-version))
 
 ## Kontext
 
@@ -331,7 +331,7 @@ Die Architektur orientiert sich deshalb nicht nur an Daten, sondern an Zusammena
 
 ---
 
-# English (Deutsche Version oben)
+# English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
 
