@@ -97,11 +97,7 @@ mod tests {
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-017"));
 
-        let persisted = match processor
-            .coordinator
-            .persistence()
-            .load("capture-001")
-        {
+        let persisted = match processor.coordinator.persistence().load("capture-001") {
             PersistenceLoadResult::Valid(artifact) => artifact,
             result => panic!("processed artifact must be valid, got {result:?}"),
         };
