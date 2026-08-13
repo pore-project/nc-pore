@@ -1,3 +1,88 @@
+# Deutsch ([English version below](#english-version))
+
+# ADR-058 Recording Payload Representation
+
+- Status: Accepted
+- Date: 2026-08-12
+- Related issue: #5 Define recording payload representation
+
+## Kontext
+
+`CaptureResult` überträgt derzeit technische Track- und Chunk-Metadaten in ein `RecordingArtifact`, während `RecordingChunk` nur eine Sequenznummer enthält. Dies reicht aus, um die Struktur des Artifacts zu beschreiben, beschreibt jedoch noch nicht das tatsächliche Recording-Payload.
+
+Die Payload-Repräsentation muss mit den bestehenden Grenzen aus ADR-054, ADR-055, ADR-056 und ADR-057 kompatibel bleiben. Insbesondere darf das Artifact-Modell kein konkretes Wissen über das Dateisystem erhalten, nur weil lokale Persistence die erste Speicherimplementierung ist.
+
+## Entscheidung
+
+Ein `RecordingChunk` repräsentiert einen logisch identifizierbaren Abschnitt des technischen Recording-Payloads. Der Chunk erhält daher eine vom Storage-Provider unabhängige Payload-Referenz, anstatt einen konkreten Dateisystempfad einzubetten.
+
+Die Beschreibung des Payloads besteht konzeptionell aus:
+
+- einer logischen Payload-Referenz;
+- Metadaten zur Payload-Größe;
+- Integritätsmetadaten, die für spätere Validierung und Recovery erforderlich sind.
+
+Die logische Payload-Referenz ist bewusst unabhängig vom physischen Persistence-Provider. Sie darf keine absoluten Dateisystempfade oder andere speicherspezifische Orte kodieren.
+
+Die tatsächlichen Payload-Bytes sind technische Recording-Daten und bleiben unterhalb der Domain-Grenze von `Recording`. `CaptureResult` bleibt gemäß ADR-056 technisch getrennt von `RecordingArtifact`. Die bestehende Artifact-Factory bleibt dafür verantwortlich, Strukturen aus dem Capture-Bereich in Strukturen des Artifact-Bereichs zu übersetzen.
+
+Die konkrete Darstellung im Dateisystem und die Regeln für die Veröffentlichung werden auf Issue #7 verschoben. Der genaue Integritätsmechanismus sowie die Regeln zur Recovery-Validierung werden auf Issue #8 verschoben.
+
+## Begründung
+
+Damit bleibt die Trennung erhalten zwischen:
+
+```text
+CaptureResult
+    -> technische Capture-Repräsentation
+
+RecordingArtifact
+    -> technische Repräsentation eines persistierten Recordings
+
+PersistenceProvider
+    -> physische Speicherrepräsentation
+```
+
+Eine Payload-Referenz ermöglicht es dem Artifact-Modell, reale Recording-Daten zu beschreiben, ohne das Modell an die aktuelle Dateisystemimplementierung zu koppeln. Dadurch bleiben spätere Storage-Provider möglich, ohne das Recording-Domainmodell ändern zu müssen.
+
+Die Entscheidung bewahrt außerdem die Unterscheidung zwischen technischen Capture-Tracks und Domain-Teilnehmern. Ein Recording-Track bleibt ein technischer Audiostream; die Payload-Referenz identifiziert dessen technische Daten und wird nicht zu einer Teilnehmer- oder Rollenreferenz.
+
+## Konsequenzen
+
+### Positiv
+
+- `RecordingChunk` kann tatsächliches Recording-Payload beschreiben, ohne speicherspezifische Pfade einzubetten.
+- Die Grenze zwischen `CaptureResult` und `RecordingArtifact` bleibt erhalten.
+- Die Dateisystem-Persistence kann ihr physisches Payload-Layout in #7 festlegen, ohne das Architekturmodell zu ändern.
+- Integritäts- und Recovery-Semantik können in #8 ausdrücklich definiert werden.
+- Alternative Persistence-Provider bleiben möglich.
+
+### Negativ
+
+- Das aktuelle Modell benötigt eine zusätzliche Payload-Referenzabstraktion und zugehörige Metadaten.
+- Die Payload-Persistence kann nicht unabhängig von der hier getroffenen Entscheidung vollständig umgesetzt werden.
+
+## Hier nicht entschieden
+
+Diese ADR definiert nicht:
+
+- ein konkretes Audio-Dateiformat;
+- einen konkreten Dateisystempfad oder eine konkrete Verzeichnisstruktur;
+- Details zur atomaren Veröffentlichung persistierter Payloads;
+- einen bestimmten Checksum- oder Hashing-Algorithmus;
+- das Recovery-Verhalten bei unvollständigen oder beschädigten Payloads.
+
+Diese Entscheidungen gehören zur nachfolgenden Persistence- und Recovery-Arbeit, insbesondere zu #7 und #8.
+
+## Bezug zu bestehenden ADRs
+
+- ADR-054 Recording Artifact and Local Recording Data Association
+- ADR-055 Filesystem Persistence Layout
+- ADR-056 Capture Result and Recording Artifact Data Boundary
+- ADR-057 Domain Recording to Recording Artifact Association Boundary
+
+# English Version ([Deutsche Version oben](#deutsch))
+
 # ADR-058 Recording Payload Representation
 
 - Status: Accepted
