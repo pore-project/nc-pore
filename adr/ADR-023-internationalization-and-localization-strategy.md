@@ -6,7 +6,7 @@
 
 ---
 
-# Deutsch (English version below)
+# Deutsch ([English version below](#english-version))
 
 ## Kontext
 
@@ -167,7 +167,7 @@ Die Software passt sich an Menschen an – nicht Menschen an die Software.
 
 ---
 
-# English (Deutsche Version oben)
+# English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
 
@@ -324,4 +324,4 @@ NC-PoRe should be software that people around the world can use.
 
 Language must not become a technical barrier.
 
-Software adapts to people – not people to software.
+Software adapts to people – not people to the software.
