@@ -15,6 +15,7 @@ mod filesystem;
 mod provider;
 
 pub use assessment::PersistenceLoadResult;
+#[cfg(test)]
 pub use filesystem::FilesystemPersistenceProvider;
 pub use provider::{PersistenceProvider, PersistenceStoreError};
 

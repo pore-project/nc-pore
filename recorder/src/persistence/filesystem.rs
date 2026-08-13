@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Filesystem persistence provider.
 //!
 //! This module provides the concrete local filesystem implementation

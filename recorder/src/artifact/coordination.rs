@@ -16,9 +16,9 @@
 //! See:
 //! - ADR-047 Local Artifact Registry and Discovery Strategy
 
+use crate::artifact::RecordingArtifact;
 use crate::artifact::recovery::ArtifactRecoveryService;
 use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
-use crate::artifact::{ArtifactId, RecordingArtifact};
 use crate::persistence::{PersistenceProvider, PersistenceStoreError};
 
 /// Coordinates artifact registration and persistence.
@@ -74,6 +74,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::ArtifactId;
     use crate::artifact::ArtifactStatus;
     use crate::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
     use crate::session::RecordingSessionId;

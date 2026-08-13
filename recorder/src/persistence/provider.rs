@@ -17,9 +17,8 @@ pub enum PersistenceStoreError {
     /// from the incoming artifact.
     Conflict { artifact_id: String },
     /// Persistence infrastructure failed while writing the artifact.
+    #[cfg(test)]
     Io(String),
-    /// The artifact cannot be represented by the persistence provider.
-    InvalidArtifact(String),
 }
 
 /// Persistence contract used by the Recorder workflow.
@@ -58,7 +57,9 @@ pub trait PersistenceProvider {
     /// actual consistency assessment to `load`.
     fn list_ids(&self) -> Vec<String>;
 
+    #[allow(dead_code)]
     fn list(&self) -> Vec<RecordingArtifact>;
 
+    #[allow(dead_code)]
     fn remove(&mut self, id: &str);
 }

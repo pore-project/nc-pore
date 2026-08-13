@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Recording Artifact model.
 //!
 //! This module represents the technical result of a local recording.

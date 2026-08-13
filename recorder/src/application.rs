@@ -21,6 +21,7 @@ use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
 use crate::audio::CaptureProvider;
 use crate::persistence::PersistenceProvider;
+use crate::persistence::PersistenceStoreError;
 use crate::session::{RecordingSession, RecordingSessionId};
 use crate::workflow::RecorderWorkflow;
 
@@ -58,7 +59,7 @@ where
     pub fn stop(
         &mut self,
         association: RecordingArtifactAssociation,
-    ) -> crate::artifact::RecordingArtifact {
+    ) -> Result<crate::artifact::RecordingArtifact, PersistenceStoreError> {
         let recording_session_id = RecordingSessionId::new(self.workflow.session().id());
 
         let capture_result = self.workflow.stop();
@@ -110,10 +111,12 @@ mod tests {
 
         application.start();
 
-        let artifact = application.stop(RecordingArtifactAssociation::new(
-            "production-001",
-            "recording-017",
-        ));
+        let artifact = application
+            .stop(RecordingArtifactAssociation::new(
+                "production-001",
+                "recording-017",
+            ))
+            .expect("application stop should persist artifact");
 
         assert_eq!(artifact.id.value(), "application-test-capture");
         assert_eq!(artifact.recording_session_id.value(), "session-001");
@@ -141,10 +144,12 @@ mod tests {
 
         application.start();
 
-        let artifact = application.stop(RecordingArtifactAssociation::new(
-            "production-002",
-            "recording-018",
-        ));
+        let artifact = application
+            .stop(RecordingArtifactAssociation::new(
+                "production-002",
+                "recording-018",
+            ))
+            .expect("application stop should persist artifact");
 
         assert_eq!(artifact.id.value(), "application-test-capture");
         assert_eq!(artifact.recording_session_id.value(), "session-002");

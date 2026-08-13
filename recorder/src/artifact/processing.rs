@@ -23,7 +23,7 @@ use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::coordination::ArtifactCoordinator;
 use crate::artifact::factory::RecordingArtifactFactory;
 use crate::audio::CaptureResult;
-use crate::persistence::{PersistenceLoadResult, PersistenceProvider, PersistenceStoreError};
+use crate::persistence::{PersistenceProvider, PersistenceStoreError};
 use crate::session::RecordingSessionId;
 
 /// Processes completed capture results into recording artifacts.
@@ -177,7 +177,9 @@ mod tests {
             artifact: RecordingArtifact,
         ) -> Result<RecordingArtifact, PersistenceStoreError> {
             self.attempted = Some(artifact);
-            Err(PersistenceStoreError::Io("test persistence failure".to_owned()))
+            Err(PersistenceStoreError::Io(
+                "test persistence failure".to_owned(),
+            ))
         }
 
         fn load(&self, _id: &str) -> PersistenceLoadResult {
