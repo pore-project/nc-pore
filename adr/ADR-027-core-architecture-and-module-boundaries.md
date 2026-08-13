@@ -6,7 +6,7 @@
 
 ---
 
-# Deutsch (English version below)
+# Deutsch ([English version below](#english-version))
 
 ## Kontext
 
@@ -330,7 +330,7 @@ Ein stabiler Kern, klare Grenzen und austauschbare Module ermöglichen eine Soft
 
 ---
 
-# English (Deutsche Version oben)
+# English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
 
