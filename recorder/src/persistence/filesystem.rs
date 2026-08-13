@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::artifact::{ArtifactStatus, RecordingArtifact, RecordingChunk, RecordingTrack};
-use crate::persistence::PersistenceProvider;
+use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
 use crate::session::RecordingSessionId;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,7 +81,7 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
 }
 
 impl PersistedRecordingArtifact {
-    fn into_recording_artifact(self, artifact_dir: &Path) -> Option<RecordingArtifact> {
+    fn into_recording_artifact(self, artifact_dir: &Path) -> PersistenceLoadResult {
         let mut artifact =
             RecordingArtifact::new(self.id, RecordingSessionId::new(self.recording_session_id));
 
@@ -98,10 +98,18 @@ impl PersistedRecordingArtifact {
                     &persisted_track.id,
                     persisted_chunk.sequence,
                 );
-                let payload = fs::read(payload_path).ok()?;
+
+                if !payload_path.is_file() {
+                    return PersistenceLoadResult::Incomplete;
+                }
+
+                let payload = match fs::read(payload_path) {
+                    Ok(payload) => payload,
+                    Err(_) => return PersistenceLoadResult::Inconsistent,
+                };
 
                 if payload.len() as u64 != persisted_chunk.payload_size_bytes {
-                    return None;
+                    return PersistenceLoadResult::Inconsistent;
                 }
 
                 track.add_chunk(RecordingChunk::with_payload(
@@ -121,10 +129,10 @@ impl PersistedRecordingArtifact {
                 artifact.store();
             }
             "Created" => {}
-            _ => return None,
+            _ => return PersistenceLoadResult::Inconsistent,
         }
 
-        Some(artifact)
+        PersistenceLoadResult::Valid(artifact)
     }
 }
 
@@ -217,10 +225,26 @@ impl FilesystemPersistenceProvider {
         fs::rename(&temp_dir, &artifact_dir).expect("failed to publish artifact directory");
     }
 
-    fn read_artifact(path: &Path) -> Option<RecordingArtifact> {
+    fn read_artifact(path: &Path) -> PersistenceLoadResult {
+        if !path.is_dir() {
+            return PersistenceLoadResult::NotFound;
+        }
+
         let metadata_path = path.join("artifact.json");
-        let content = fs::read_to_string(metadata_path).ok()?;
-        let persisted: PersistedRecordingArtifact = serde_json::from_str(&content).ok()?;
+        if !metadata_path.is_file() {
+            return PersistenceLoadResult::Incomplete;
+        }
+
+        let content = match fs::read_to_string(metadata_path) {
+            Ok(content) => content,
+            Err(_) => return PersistenceLoadResult::Inconsistent,
+        };
+
+        let persisted: PersistedRecordingArtifact = match serde_json::from_str(&content) {
+            Ok(persisted) => persisted,
+            Err(_) => return PersistenceLoadResult::Inconsistent,
+        };
+
         persisted.into_recording_artifact(path)
     }
 }
@@ -230,9 +254,9 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
         self.write_artifact(&artifact);
     }
 
-    fn load(&self, id: &str) -> Option<RecordingArtifact> {
+    fn load(&self, id: &str) -> PersistenceLoadResult {
         if !Self::validate_id(id) {
-            return None;
+            return PersistenceLoadResult::Inconsistent;
         }
 
         Self::read_artifact(&self.artifact_dir(id))
@@ -254,7 +278,12 @@ impl PersistenceProvider for FilesystemPersistenceProvider {
                     return None;
                 }
 
-                Self::read_artifact(&entry.path())
+                match Self::read_artifact(&entry.path()) {
+                    PersistenceLoadResult::Valid(artifact) => Some(artifact),
+                    PersistenceLoadResult::Incomplete
+                    | PersistenceLoadResult::Inconsistent
+                    | PersistenceLoadResult::NotFound => None,
+                }
             })
             .collect()
     }
@@ -333,7 +362,10 @@ mod tests {
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
         provider.store(test_artifact());
-        let artifact = provider.load("artifact-001").expect("artifact missing");
+        let result = provider.load("artifact-001");
+        let PersistenceLoadResult::Valid(artifact) = result else {
+            panic!("expected valid persisted artifact");
+        };
 
         assert_eq!(artifact.recording_session_id.value(), "session-001");
         assert_eq!(artifact.production_id(), Some("production-001"));
@@ -376,16 +408,19 @@ mod tests {
         provider.remove("artifact-001");
 
         assert!(!path.join("artifact-001").exists());
-        assert!(provider.load("artifact-001").is_none());
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::NotFound
+        ));
 
         let _ = fs::remove_dir_all(path);
     }
 
     // TEST-37
-    // Protects ADR-059: an incomplete payload cannot be restored as a
-    // complete artifact.
+    // Protects ADR-059 and the persistence assessment boundary:
+    // a missing payload is incomplete persisted data.
     #[test]
-    fn missing_payload_makes_artifact_unloadable() {
+    fn missing_payload_is_incomplete() {
         let path = test_directory("missing-payload");
         let mut provider = FilesystemPersistenceProvider::new(&path);
 
@@ -393,8 +428,53 @@ mod tests {
         fs::remove_file(path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"))
             .unwrap();
 
-        assert!(provider.load("artifact-001").is_none());
-        assert!(provider.list().is_empty());
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::Incomplete
+        ));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-38
+    // Protects the persistence assessment boundary:
+    // payload size disagreement means persisted metadata and payload
+    // disagree and therefore the artifact is inconsistent.
+    #[test]
+    fn payload_size_mismatch_is_inconsistent() {
+        let path = test_directory("payload-size-mismatch");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+
+        provider.store(test_artifact());
+
+        let metadata_path = path.join("artifact-001/artifact.json");
+        let content = fs::read_to_string(&metadata_path).unwrap();
+        let content = content.replace("\"payload_size_bytes\": 3", "\"payload_size_bytes\": 4");
+        fs::write(metadata_path, content).unwrap();
+
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::Inconsistent
+        ));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-39
+    // Protects the persistence assessment boundary:
+    // malformed metadata is inconsistent persisted data.
+    #[test]
+    fn malformed_metadata_is_inconsistent() {
+        let path = test_directory("malformed-metadata");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+
+        provider.store(test_artifact());
+        fs::write(path.join("artifact-001/artifact.json"), "not-json").unwrap();
+
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::Inconsistent
+        ));
 
         let _ = fs::remove_dir_all(path);
     }
@@ -404,9 +484,18 @@ mod tests {
         let path = test_directory("invalid-id");
         let provider = FilesystemPersistenceProvider::new(&path);
 
-        assert!(provider.load("../outside").is_none());
-        assert!(provider.load("nested/id").is_none());
-        assert!(provider.load(r"nested\id").is_none());
+        assert!(matches!(
+            provider.load("../outside"),
+            PersistenceLoadResult::Inconsistent
+        ));
+        assert!(matches!(
+            provider.load("nested/id"),
+            PersistenceLoadResult::Inconsistent
+        ));
+        assert!(matches!(
+            provider.load(r"nested\id"),
+            PersistenceLoadResult::Inconsistent
+        ));
 
         let _ = fs::remove_dir_all(path);
     }
