@@ -10,13 +10,32 @@
 use crate::artifact::RecordingArtifact;
 use crate::persistence::PersistenceLoadResult;
 
+/// Outcome of an attempted artifact persistence operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PersistenceStoreError {
+    /// A valid artifact with the same identity already exists but differs
+    /// from the incoming artifact.
+    Conflict { artifact_id: String },
+    /// Persistence infrastructure failed while writing the artifact.
+    Io(String),
+    /// The artifact cannot be represented by the persistence provider.
+    InvalidArtifact(String),
+}
+
 /// Persistence contract used by the Recorder workflow.
 ///
 /// The workflow depends on this abstraction instead of concrete storage.
 /// This keeps persistence replaceable and prevents storage concerns from
 /// leaking into recording logic.
 pub trait PersistenceProvider {
-    fn store(&mut self, artifact: RecordingArtifact);
+    /// Persists an artifact and returns its Stored lifecycle representation.
+    ///
+    /// A successful operation may be an actual write or an idempotent no-op
+    /// when an equivalent artifact already exists.
+    fn store(
+        &mut self,
+        artifact: RecordingArtifact,
+    ) -> Result<RecordingArtifact, PersistenceStoreError>;
 
     /// Assesses the persisted representation of one artifact.
     ///
