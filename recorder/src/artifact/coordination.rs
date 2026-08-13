@@ -16,10 +16,10 @@
 //! See:
 //! - ADR-047 Local Artifact Registry and Discovery Strategy
 
+use crate::artifact::RecordingArtifact;
 use crate::artifact::recovery::ArtifactRecoveryService;
 use crate::artifact::registry::{ArtifactRegistryEntry, LocalArtifactRegistry};
-use crate::artifact::{ArtifactId, RecordingArtifact};
-use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
+use crate::persistence::{PersistenceProvider, PersistenceStoreError};
 
 /// Coordinates artifact registration and persistence.
 ///
@@ -48,17 +48,18 @@ where
         }
     }
 
-    pub fn register_and_store(&mut self, mut artifact: RecordingArtifact) -> RecordingArtifact {
+    pub fn register_and_store(
+        &mut self,
+        artifact: RecordingArtifact,
+    ) -> Result<RecordingArtifact, PersistenceStoreError> {
+        let stored_artifact = self.persistence.store_checked(artifact)?;
+
         self.registry.register(ArtifactRegistryEntry::new(
-            artifact.id.value().to_string(),
-            artifact.recording_session_id.clone(),
+            stored_artifact.id.value().to_string(),
+            stored_artifact.recording_session_id.clone(),
         ));
 
-        artifact.store();
-
-        self.persistence.store(artifact.clone());
-
-        artifact
+        Ok(stored_artifact)
     }
 
     pub fn registry(&self) -> &LocalArtifactRegistry {
@@ -73,8 +74,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::ArtifactId;
     use crate::artifact::ArtifactStatus;
-    use crate::persistence::InMemoryPersistenceProvider;
+    use crate::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
     use crate::session::RecordingSessionId;
 
     #[test]
@@ -86,7 +88,9 @@ mod tests {
         let artifact =
             RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
-        coordinator.register_and_store(artifact);
+        coordinator
+            .register_and_store(artifact)
+            .expect("artifact should be stored");
 
         assert!(
             coordinator
@@ -104,10 +108,12 @@ mod tests {
     fn coordinator_recovers_persisted_artifact_registry_entries() {
         let mut persistence = InMemoryPersistenceProvider::new();
 
-        persistence.store(RecordingArtifact::new(
-            "artifact-033",
-            RecordingSessionId::new("session-033"),
-        ));
+        persistence
+            .store_checked(RecordingArtifact::new(
+                "artifact-033",
+                RecordingSessionId::new("session-033"),
+            ))
+            .expect("artifact should be stored");
 
         let coordinator = ArtifactCoordinator::new(persistence);
 
@@ -127,7 +133,9 @@ mod tests {
         let artifact =
             RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
-        let stored_artifact = coordinator.register_and_store(artifact);
+        let stored_artifact = coordinator
+            .register_and_store(artifact)
+            .expect("artifact should be stored");
 
         assert_eq!(stored_artifact.status(), &ArtifactStatus::Stored);
 
@@ -154,7 +162,9 @@ mod tests {
         let artifact =
             RecordingArtifact::new("artifact-026", RecordingSessionId::new("session-026"));
 
-        let stored_artifact = coordinator.register_and_store(artifact);
+        let stored_artifact = coordinator
+            .register_and_store(artifact)
+            .expect("artifact should be stored");
 
         assert_eq!(stored_artifact.status(), &ArtifactStatus::Stored);
 

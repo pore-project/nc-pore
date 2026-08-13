@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Filesystem persistence provider.
 //!
 //! This module provides the concrete local filesystem implementation
@@ -20,7 +22,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::artifact::{ArtifactStatus, RecordingArtifact, RecordingChunk, RecordingTrack};
-use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
+use crate::persistence::{
+    PersistenceLoadResult, PersistenceProvider, PersistenceStoreError, artifacts_are_equivalent,
+};
 use crate::session::RecordingSessionId;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -252,6 +256,36 @@ impl FilesystemPersistenceProvider {
 impl PersistenceProvider for FilesystemPersistenceProvider {
     fn store(&mut self, artifact: RecordingArtifact) {
         self.write_artifact(&artifact);
+    }
+
+    fn store_checked(
+        &mut self,
+        mut artifact: RecordingArtifact,
+    ) -> Result<RecordingArtifact, PersistenceStoreError> {
+        match self.load(artifact.id.value()) {
+            PersistenceLoadResult::NotFound => {
+                artifact.store();
+                self.write_artifact(&artifact);
+                Ok(artifact)
+            }
+            PersistenceLoadResult::Valid(existing) => {
+                if artifacts_are_equivalent(&existing, &artifact) {
+                    Ok(existing)
+                } else {
+                    Err(PersistenceStoreError::Conflict {
+                        artifact_id: artifact.id.value().to_owned(),
+                    })
+                }
+            }
+            PersistenceLoadResult::Incomplete => Err(PersistenceStoreError::Io(format!(
+                "cannot persist artifact {}: existing persisted representation is incomplete",
+                artifact.id.value()
+            ))),
+            PersistenceLoadResult::Inconsistent => Err(PersistenceStoreError::Io(format!(
+                "cannot persist artifact {}: existing persisted representation is inconsistent",
+                artifact.id.value()
+            ))),
+        }
     }
 
     fn load(&self, id: &str) -> PersistenceLoadResult {
@@ -512,6 +546,69 @@ mod tests {
         assert!(matches!(
             provider.load("artifact-001"),
             PersistenceLoadResult::Inconsistent
+        ));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-41
+    // Protects ADR-060:
+    // equivalent persisted content is an idempotent success and returns
+    // the already Stored artifact rather than creating another artifact.
+    #[test]
+    fn store_checked_is_idempotent_for_equivalent_artifact() {
+        let path = test_directory("store-checked-idempotent");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        let artifact = test_artifact();
+
+        let first = provider
+            .store_checked(artifact.clone())
+            .expect("first store should succeed");
+        let second = provider
+            .store_checked(artifact)
+            .expect("equivalent store should be idempotent");
+
+        assert_eq!(first.status(), &ArtifactStatus::Stored);
+        assert_eq!(second.status(), &ArtifactStatus::Stored);
+        assert_eq!(provider.list().len(), 1);
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-42
+    // Protects ADR-060:
+    // a reused artifact identity with different persisted content is a
+    // conflict and must not replace the existing artifact.
+    #[test]
+    fn store_checked_rejects_conflicting_artifact() {
+        let path = test_directory("store-checked-conflict");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        let first = test_artifact();
+        let conflicting =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-conflict"));
+
+        provider
+            .store_checked(first)
+            .expect("first store should succeed");
+
+        assert!(matches!(
+            provider.store_checked(conflicting),
+            Err(PersistenceStoreError::Conflict { artifact_id }) if artifact_id == "artifact-001"
+        ));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn store_checked_rejects_existing_incomplete_artifact() {
+        let path = test_directory("store-checked-incomplete");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        fs::create_dir_all(path.join("artifact-001")).unwrap();
+
+        assert!(matches!(
+            provider.store_checked(test_artifact()),
+            Err(PersistenceStoreError::Io(message))
+                if message.contains("existing persisted representation is incomplete")
         ));
 
         let _ = fs::remove_dir_all(path);

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Result of a completed audio capture operation.
 //!
 //! CaptureResult represents the technical outcome
