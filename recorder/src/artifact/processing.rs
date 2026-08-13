@@ -23,7 +23,7 @@ use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::coordination::ArtifactCoordinator;
 use crate::artifact::factory::RecordingArtifactFactory;
 use crate::audio::CaptureResult;
-use crate::persistence::{PersistenceLoadResult, PersistenceProvider};
+use crate::persistence::{PersistenceLoadResult, PersistenceProvider, PersistenceStoreError};
 use crate::session::RecordingSessionId;
 
 /// Processes completed capture results into recording artifacts.
@@ -48,20 +48,22 @@ where
 
     /// Processes a completed capture result and preserves its originating
     /// domain recording association on the resulting artifact.
+    ///
+    /// A successful result is the Stored artifact returned by persistence.
+    /// Persistence failures are propagated without turning the Available
+    /// artifact into a falsely Stored result.
     pub fn process(
         &mut self,
         capture_result: CaptureResult,
         recording_session_id: RecordingSessionId,
         association: RecordingArtifactAssociation,
-    ) -> crate::artifact::RecordingArtifact {
+    ) -> Result<crate::artifact::RecordingArtifact, PersistenceStoreError> {
         let mut artifact = RecordingArtifactFactory::create(capture_result, recording_session_id);
 
         artifact.set_domain_association(association.production_id(), association.recording_id());
         artifact.make_available();
 
-        self.coordinator.register_and_store(artifact.clone());
-
-        artifact
+        self.coordinator.register_and_store(artifact)
     }
 }
 
@@ -86,11 +88,13 @@ mod tests {
 
         let capture_result = CaptureResult::new("capture-001");
 
-        let artifact = processor.process(
-            capture_result,
-            RecordingSessionId::new("session-001"),
-            RecordingArtifactAssociation::new("production-001", "recording-017"),
-        );
+        let artifact = processor
+            .process(
+                capture_result,
+                RecordingSessionId::new("session-001"),
+                RecordingArtifactAssociation::new("production-001", "recording-017"),
+            )
+            .expect("processing should persist artifact");
 
         assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.status(), &ArtifactStatus::Stored);
@@ -118,11 +122,13 @@ mod tests {
         let coordinator = ArtifactCoordinator::new(persistence);
         let mut processor = RecordingArtifactProcessor::new(coordinator);
 
-        let artifact = processor.process(
-            CaptureResult::new("capture-034"),
-            RecordingSessionId::new("session-034"),
-            RecordingArtifactAssociation::new("production-034", "recording-034"),
-        );
+        let artifact = processor
+            .process(
+                CaptureResult::new("capture-034"),
+                RecordingSessionId::new("session-034"),
+                RecordingArtifactAssociation::new("production-034", "recording-034"),
+            )
+            .expect("processing should persist artifact");
 
         assert_eq!(artifact.status(), &ArtifactStatus::Stored);
     }
@@ -140,17 +146,21 @@ mod tests {
 
         let association = RecordingArtifactAssociation::new("production-035", "recording-035");
 
-        processor.process(
-            CaptureResult::new("capture-035"),
-            RecordingSessionId::new("session-035"),
-            association.clone(),
-        );
+        processor
+            .process(
+                CaptureResult::new("capture-035"),
+                RecordingSessionId::new("session-035"),
+                association.clone(),
+            )
+            .expect("first processing should succeed");
 
-        processor.process(
-            CaptureResult::new("capture-035"),
-            RecordingSessionId::new("session-035"),
-            association,
-        );
+        processor
+            .process(
+                CaptureResult::new("capture-035"),
+                RecordingSessionId::new("session-035"),
+                association,
+            )
+            .expect("equivalent processing should be idempotent");
 
         assert_eq!(processor.coordinator.persistence().list().len(), 1);
     }
