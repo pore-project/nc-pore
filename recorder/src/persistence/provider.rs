@@ -17,7 +17,6 @@ pub enum PersistenceStoreError {
     /// from the incoming artifact.
     Conflict { artifact_id: String },
     /// Persistence infrastructure failed while writing the artifact.
-    #[cfg(test)]
     Io(String),
 }
 
@@ -37,7 +36,7 @@ pub trait PersistenceProvider {
     fn store_checked(
         &mut self,
         mut artifact: RecordingArtifact,
-    ) -> Result<RecordingArtifact, PersistenceStoreError> {
+    ) -> Result<RecordingArtifact, PersistenceStorError> {
         artifact.store();
         self.store(artifact.clone());
         Ok(artifact)
