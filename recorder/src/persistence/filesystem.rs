@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::artifact::{ArtifactStatus, RecordingArtifact, RecordingChunk, RecordingTrack};
 use crate::persistence::{
-    artifacts_are_equivalent, PersistenceLoadResult, PersistenceProvider, PersistenceStoreError,
+    PersistenceLoadResult, PersistenceProvider, PersistenceStoreError, artifacts_are_equivalent,
 };
 use crate::session::RecordingSessionId;
 
@@ -584,10 +584,8 @@ mod tests {
         let path = test_directory("store-checked-conflict");
         let mut provider = FilesystemPersistenceProvider::new(&path);
         let first = test_artifact();
-        let conflicting = RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-conflict"),
-        );
+        let conflicting =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-conflict"));
 
         provider
             .store_checked(first)
