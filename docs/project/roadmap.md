@@ -1,7 +1,7 @@
 # NC-PoRe Roadmap
 
-- Version: 1.1
-- Date: 2026-07-23
+- Version: 1.2
+- Date: 2026-08-14
 
 ---
 
@@ -209,6 +209,60 @@ wird als eine gemeinsame Session verwaltet.
 
 ---
 
+# Eigenständiges Podcast-Hosting
+
+## Produktidee
+
+Neben NC-PoRe soll langfristig ein eigenständiges Podcast-Hosting-Produkt entstehen.
+
+Das Podcast-Hosting ist kein Bestandteil von NC-PoRe, sondern ein eigenständiges Produkt mit eigener Produktgrenze, eigener Entwicklung und eigenständigem Betrieb.
+
+---
+
+## Produktgrenzen
+
+Beide Produkte sollen unabhängig voneinander funktionieren:
+
+- NC-PoRe muss vollständig ohne das Podcast-Hosting betrieben werden können.
+- Das Podcast-Hosting muss vollständig ohne NC-PoRe betrieben werden können.
+- Keines der beiden Produkte setzt die Installation oder Existenz des jeweils anderen voraus.
+- Beide Produkte können unabhängig entwickelt, versioniert und betrieben werden.
+
+NC-PoRe bleibt dabei auf die Produktion und Verarbeitung von Medien-Sessions ausgerichtet.
+
+Das Podcast-Hosting konzentriert sich auf die Bereitstellung und Distribution von Podcast-Inhalten.
+
+---
+
+## Zusammenspiel
+
+Zwischen beiden Produkten ist eine **vorgesehene Integration über definierte Schnittstellen** vorgesehen.
+
+Diese Integration soll:
+
+- die Übergabe von Podcast-Inhalten und zugehörigen Metadaten ermöglichen,
+- die jeweiligen Produktgrenzen erhalten,
+- unabhängig von einer gemeinsamen Codebasis funktionieren,
+- auch eine Integration mit anderen Produktions- bzw. Hosting-Systemen ermöglichen.
+
+Die Schnittstellen sollen deshalb fachlich möglichst neutral gestaltet werden.
+
+NC-PoRe soll nicht auf dieses eine Hosting-Produkt festgelegt sein.
+
+Ebenso soll das Podcast-Hosting Inhalte auch aus anderen Produktionssystemen aufnehmen können.
+
+Die konkrete API-, Protokoll- und Integrationsarchitektur wird in einem späteren eigenständigen Architekturvorhaben festgelegt.
+
+---
+
+## Roadmap-Einordnung
+
+Das Podcast-Hosting ist ein langfristiges eigenständiges Produktvorhaben.
+
+Es ist **nicht Bestandteil des aktuellen NC-PoRe-Implementierungsumfangs** und soll nicht zu einer technischen Abhängigkeit zwischen den beiden Produkten führen.
+
+---
+
 # Langfristige Vision
 
 NC-PoRe soll Menschen ermöglichen, hochwertige Medieninhalte einfach, offen und plattformübergreifend zu erstellen.
@@ -374,6 +428,60 @@ NC-PoRe enables professional distributed media production.
 - large distributed productions
 - complex participant structures
 - professional workflows
+
+---
+
+# Independent Podcast Hosting
+
+## Product Idea
+
+In the long term, a separate podcast hosting product shall be developed alongside NC-PoRe.
+
+The podcast hosting product is not part of NC-PoRe, but an independent product with its own product boundary, development and operation.
+
+---
+
+## Product Boundaries
+
+Both products shall be usable independently:
+
+- NC-PoRe must operate fully without the podcast hosting product.
+- The podcast hosting product must operate fully without NC-PoRe.
+- Neither product requires the installation or existence of the other.
+- Both products can be developed, versioned and operated independently.
+
+NC-PoRe remains focused on the production and processing of media sessions.
+
+The podcast hosting product focuses on the hosting and distribution of podcast content.
+
+---
+
+## Integration
+
+A **planned integration through defined interfaces** shall enable cooperation between the two products.
+
+This integration shall:
+
+- enable the transfer of podcast content and associated metadata,
+- preserve the respective product boundaries,
+- work independently of a shared codebase,
+- also allow integration with other production and hosting systems.
+
+The interfaces should therefore be designed to be as domain-neutral as reasonably possible.
+
+NC-PoRe should not be tied to this particular hosting product.
+
+Likewise, the podcast hosting product should be able to receive content from other production systems.
+
+The concrete API, protocol and integration architecture will be defined in a separate future architecture initiative.
+
+---
+
+## Roadmap Position
+
+Podcast hosting is a long-term independent product initiative.
+
+It is **not part of the current NC-PoRe implementation scope** and shall not create a technical dependency between the two products.
 
 ---
 
