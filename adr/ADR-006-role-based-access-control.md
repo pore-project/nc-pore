@@ -4,11 +4,15 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-031: Identity, Authentication and Authorization
 
 ## Date
 
 2026-07-22
+
+---
+
+> **Hinweis:** Diese Entscheidung beschreibt den ursprünglichen RBAC-Ansatz von NC-PoRe. Sie wurde durch ADR-031 konkretisiert und ersetzt. Die ursprüngliche Rollenbeschreibung bleibt hier als Entscheidungshistorie erhalten.
 
 ---
 
@@ -224,11 +228,15 @@ Neue Rollen dürfen das Grundprinzip nicht verändern.
 
 ## Status
 
-Accepted
+Superseded by ADR-031: Identity, Authentication and Authorization
 
 ## Date
 
 2026-07-22
+
+---
+
+> **Note:** This decision describes the original RBAC approach of NC-PoRe. It has been refined and superseded by ADR-031. The original role description is retained here as decision history.
 
 ---
 
