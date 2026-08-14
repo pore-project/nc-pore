@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 2.5
-- Date: 2026-08-13
+- Version: 2.6
+- Date: 2026-08-14
 
 ---
 
@@ -63,6 +63,8 @@ Implementiert:
 - Artifact Recovery Boundary
 - RecordingSessionId Value Object für technische Session-Referenzen
 - ArtifactId und RecordingSessionId als explizite Identitätstypen an Artifact-Grenzen
+- storage-provider-unabhängige Payload-Referenz und technische Payload-Daten für Recording Chunks
+- Persistenz des tatsächlichen Recording-Payloads im Filesystem Persistence Provider
 - definierte Filesystem-Store-Semantik für lokale Recording Artifacts
 
 Relevante Architekturentscheidungen:
@@ -77,6 +79,7 @@ Relevante Architekturentscheidungen:
 - ADR-054 Recording Artifact and Local Recording Data Association
 - ADR-055 Filesystem Persistence Layout
 - ADR-056 Capture Result and Recording Artifact Data Boundary
+- ADR-058 Recording Payload Representation
 - ADR-060 Filesystem Artifact Store Semantics
 
 ---
@@ -90,6 +93,7 @@ Implementiert:
 - In-Memory Persistence Provider
 - Filesystem Persistence Provider
 - Persistence Integration Tests
+- Persistenz des tatsächlichen Recording-Payloads einschließlich temporärer Veröffentlichung und vollständiger Artifact-Verzeichnisse
 - definierte Semantik für das Speichern von Recording Artifacts im Filesystem Persistence Provider
 
 Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
@@ -105,7 +109,7 @@ Relevante Architekturentscheidungen:
 
 # Validation
 
-Aktueller Teststand:
+Aktueller dokumentierter Teststand:
 
 core tests: 40 passed
 recorder tests: 46 passed
@@ -125,6 +129,8 @@ Die Tests validieren unter anderem:
 - Recording Artifact Creation and Storage Flow
 - Artifact Processing Coordination
 - Artifact Recovery aus persistierten Daten
+- Capture-to-Artifact Track-/Chunk-Übernahme
+- Recording-Payload-Übernahme und Persistenz
 
 ---
 
@@ -142,6 +148,7 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Recovery stellt technische Konsistenz zwischen Persistence und Registry her
 - CaptureResult und RecordingArtifact besitzen getrennte technische Datenmodelle
 - RecordingArtifact strukturiert Tracks und Chunks unabhängig von der physischen Persistenz
+- RecordingChunk kann tatsächliche technische Payload-Daten über eine storage-provider-unabhängige Referenz repräsentieren
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
@@ -179,8 +186,9 @@ Wichtige Einstiegspunkte:
 
 Geplante nächste Arbeiten:
 
-- lokale Artefaktverwaltung weiter ausbauen
-- bestehende Artifact- und Persistence-Workflows weiter validieren und vervollständigen
+- den vollständigen lokalen RecordingArtifact-Pfad als abgeschlossenen Meilenstein dokumentieren
+- verbleibende Einschränkungen des lokalen Recording-Pfads explizit festhalten
+- die Abgrenzung zum nächsten Meilenstein (Synchronisation / Remote Storage) dokumentieren
 - weitere Produktionsobjekte modellieren
 - weitere API Operationen für ProductionSession Lifecycle ergänzen
 - weitere technische Workflows auf Basis der bestehenden Grenzen umsetzen
@@ -245,6 +253,8 @@ Implemented:
 - Artifact Recovery Boundary
 - RecordingSessionId value object for technical session references
 - ArtifactId and RecordingSessionId as explicit identity types at artifact boundaries
+- storage-provider-independent payload reference and technical payload data for Recording Chunks
+- persistence of the actual recording payload in the Filesystem Persistence Provider
 - defined filesystem store semantics for local Recording Artifacts
 
 Relevant architecture decisions:
@@ -259,6 +269,7 @@ Relevant architecture decisions:
 - ADR-054 Recording Artifact and Local Recording Data Association
 - ADR-055 Filesystem Persistence Layout
 - ADR-056 Capture Result and Recording Artifact Data Boundary
+- ADR-058 Recording Payload Representation
 - ADR-060 Filesystem Artifact Store Semantics
 
 ---
@@ -272,6 +283,7 @@ Implemented:
 - In-Memory Persistence Provider
 - Filesystem Persistence Provider
 - Persistence Integration Tests
+- persistence of the actual recording payload including temporary publication and complete artifact directories
 - defined semantics for storing Recording Artifacts in the Filesystem Persistence Provider
 
 The persistence architecture remains independent from concrete storage technologies.
@@ -287,7 +299,7 @@ Relevant architecture decisions:
 
 # Validation
 
-Current test status:
+Current documented test status:
 
 core tests: 40 passed
 recorder tests: 46 passed
@@ -307,6 +319,8 @@ The tests validate among other things:
 - Recording Artifact Creation and Storage Flow
 - Artifact Processing Coordination
 - Artifact Recovery from persisted data
+- Capture-to-Artifact track/chunk transfer
+- recording payload transfer and persistence
 
 ---
 
@@ -324,6 +338,7 @@ NC-PoRe currently follows these architecture principles:
 - Recovery establishes technical consistency between Persistence and Registry
 - CaptureResult and RecordingArtifact use separate technical data models
 - RecordingArtifact structures tracks and chunks independently from physical persistence
+- RecordingChunk can represent actual technical payload data through a storage-provider-independent reference
 - Persistence remains replaceable
 - local recording remains independent from network availability
 - Repository content is the technical source of truth
@@ -361,8 +376,9 @@ Important entry points:
 
 Planned next activities:
 
-- extend local artifact management
-- further validate and complete existing Artifact and Persistence workflows
+- document the complete local RecordingArtifact path as a completed milestone
+- explicitly document remaining limitations of the local recording path
+- document the boundary to the next milestone (synchronization / remote storage)
 - model additional production objects
 - extend ProductionSession lifecycle API operations
 - implement further technical workflows based on the existing boundaries
