@@ -1,6 +1,6 @@
 # NC-PoRe Project Status
 
-- Version: 2.6
+- Version: 2.7
 - Date: 2026-08-14
 
 ---
@@ -66,6 +66,7 @@ Implementiert:
 - storage-provider-unabhängige Payload-Referenz und technische Payload-Daten für Recording Chunks
 - Persistenz des tatsächlichen Recording-Payloads im Filesystem Persistence Provider
 - definierte Filesystem-Store-Semantik für lokale Recording Artifacts
+- abgeschlossener lokaler RecordingArtifact-Persistenzpfad einschließlich Recovery und Konsistenzbewertung
 
 Relevante Architekturentscheidungen:
 
@@ -79,7 +80,9 @@ Relevante Architekturentscheidungen:
 - ADR-054 Recording Artifact and Local Recording Data Association
 - ADR-055 Filesystem Persistence Layout
 - ADR-056 Capture Result and Recording Artifact Data Boundary
+- ADR-057 Domain Recording to RecordingArtifact Association Boundary
 - ADR-058 Recording Payload Representation
+- ADR-059 Recording Payload Filesystem Persistence
 - ADR-060 Filesystem Artifact Store Semantics
 
 ---
@@ -95,6 +98,9 @@ Implementiert:
 - Persistence Integration Tests
 - Persistenz des tatsächlichen Recording-Payloads einschließlich temporärer Veröffentlichung und vollständiger Artifact-Verzeichnisse
 - definierte Semantik für das Speichern von Recording Artifacts im Filesystem Persistence Provider
+- Idempotenz für äquivalente persistierte Artifacts
+- Conflict-Verhalten bei abweichendem Inhalt unter gleicher Artifact-Identität
+- Schutz vor dem stillschweigenden Überschreiben unvollständiger persistierter Artifacts
 
 Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
 
@@ -103,7 +109,9 @@ Relevante Architekturentscheidungen:
 - ADR-044 Persistence Provider Interface
 - ADR-048 Artifact Registry and Persistence Coordination
 - ADR-052 Local Filesystem Persistence Provider
-- ADR-060 Filesystem Artifact Store Semantics
+- ADR-055 Filesystem Persistence Layout
+- ADR-059 Recording Payload Filesystem Persistence
+- ADR-060 Filesystem Store Semantics
 
 ---
 
@@ -131,6 +139,8 @@ Die Tests validieren unter anderem:
 - Artifact Recovery aus persistierten Daten
 - Capture-to-Artifact Track-/Chunk-Übernahme
 - Recording-Payload-Übernahme und Persistenz
+- Idempotenz und Konfliktverhalten der Filesystem-Persistenz
+- Konsistenzbewertung unvollständiger und inkonsistenter persistierter Artifacts
 
 ---
 
@@ -167,6 +177,8 @@ Die historische Entwicklung wird in einzelnen Milestones dokumentiert:
 - `docs/milestones/2026-08-01-local-recording-persistence-foundation.md`
 - `docs/milestones/2026-08-02-artifact-management-foundation.md`
 - `docs/milestones/2026-08-07-artifact-recovery-foundation.md`
+- `docs/milestones/2026-08-09-recording-artifact-data-boundary-foundation.md`
+- `docs/milestones/2026-08-14-local-recording-artifact-persistence-complete.md`
 
 ---
 
@@ -186,12 +198,10 @@ Wichtige Einstiegspunkte:
 
 Geplante nächste Arbeiten:
 
-- den vollständigen lokalen RecordingArtifact-Pfad als abgeschlossenen Meilenstein dokumentieren
-- verbleibende Einschränkungen des lokalen Recording-Pfads explizit festhalten
-- die Abgrenzung zum nächsten Meilenstein (Synchronisation / Remote Storage) dokumentieren
 - weitere Produktionsobjekte modellieren
 - weitere API Operationen für ProductionSession Lifecycle ergänzen
 - weitere technische Workflows auf Basis der bestehenden Grenzen umsetzen
+- Synchronisation und Remote Storage als separaten späteren technischen Meilenstein untersuchen
 
 ---
 
@@ -256,6 +266,7 @@ Implemented:
 - storage-provider-independent payload reference and technical payload data for Recording Chunks
 - persistence of the actual recording payload in the Filesystem Persistence Provider
 - defined filesystem store semantics for local Recording Artifacts
+- completed local RecordingArtifact persistence path including recovery and consistency assessment
 
 Relevant architecture decisions:
 
@@ -269,7 +280,9 @@ Relevant architecture decisions:
 - ADR-054 Recording Artifact and Local Recording Data Association
 - ADR-055 Filesystem Persistence Layout
 - ADR-056 Capture Result and Recording Artifact Data Boundary
+- ADR-057 Domain Recording to RecordingArtifact Association Boundary
 - ADR-058 Recording Payload Representation
+- ADR-059 Recording Payload Filesystem Persistence
 - ADR-060 Filesystem Artifact Store Semantics
 
 ---
@@ -285,6 +298,9 @@ Implemented:
 - Persistence Integration Tests
 - persistence of the actual recording payload including temporary publication and complete artifact directories
 - defined semantics for storing Recording Artifacts in the Filesystem Persistence Provider
+- idempotency for equivalent persisted artifacts
+- conflict behavior for different content using the same artifact identity
+- protection against silently overwriting incomplete persisted artifacts
 
 The persistence architecture remains independent from concrete storage technologies.
 
@@ -293,7 +309,9 @@ Relevant architecture decisions:
 - ADR-044 Persistence Provider Interface
 - ADR-048 Artifact Registry and Persistence Coordination
 - ADR-052 Local Filesystem Persistence Provider
-- ADR-060 Filesystem Artifact Store Semantics
+- ADR-055 Filesystem Persistence Layout
+- ADR-059 Recording Payload Filesystem Persistence
+- ADR-060 Filesystem Store Semantics
 
 ---
 
@@ -321,6 +339,8 @@ The tests validate among other things:
 - Artifact Recovery from persisted data
 - Capture-to-Artifact track/chunk transfer
 - recording payload transfer and persistence
+- idempotency and conflict behavior of filesystem persistence
+- consistency assessment of incomplete and inconsistent persisted artifacts
 
 ---
 
@@ -357,6 +377,8 @@ Historical development is documented in individual milestones:
 - `docs/milestones/2026-08-01-local-recording-persistence-foundation.md`
 - `docs/milestones/2026-08-02-artifact-management-foundation.md`
 - `docs/milestones/2026-08-07-artifact-recovery-foundation.md`
+- `docs/milestones/2026-08-09-recording-artifact-data-boundary-foundation.md`
+- `docs/milestones/2026-08-14-local-recording-artifact-persistence-complete.md`
 
 ---
 
@@ -376,9 +398,7 @@ Important entry points:
 
 Planned next activities:
 
-- document the complete local RecordingArtifact path as a completed milestone
-- explicitly document remaining limitations of the local recording path
-- document the boundary to the next milestone (synchronization / remote storage)
 - model additional production objects
 - extend ProductionSession lifecycle API operations
 - implement further technical workflows based on the existing boundaries
+- investigate synchronization and remote storage as a separate later technical milestone
