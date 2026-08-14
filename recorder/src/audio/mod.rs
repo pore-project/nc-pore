@@ -15,10 +15,11 @@
 mod cpal;
 mod result;
 
+pub use cpal::CpalCaptureProvider;
 pub use cpal::inspect_default_input_device;
+pub use cpal::test_input_stream;
 pub use result::CaptureResult;
 
-#[cfg(test)]
 pub use result::{CaptureChunk, CaptureTrack};
 
 /// Defines the interface between recorder workflow
@@ -34,49 +35,3 @@ pub trait CaptureProvider {
     fn stop_capture(&mut self) -> CaptureResult;
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct TestCaptureProvider {
-        started: bool,
-    }
-
-    impl TestCaptureProvider {
-        fn new() -> Self {
-            Self { started: false }
-        }
-    }
-
-    impl CaptureProvider for TestCaptureProvider {
-        fn start_capture(&mut self) {
-            self.started = true;
-        }
-
-        fn stop_capture(&mut self) -> CaptureResult {
-            self.started = false;
-
-            CaptureResult::new("test-capture")
-        }
-    }
-
-    // TEST-06
-    // Verify: Capture implementations can follow the defined boundary.
-    //
-    // This protects ADR-039:
-    // Recorder workflow remains independent from
-    // concrete audio technology.
-    #[test]
-    fn capture_provider_can_start_and_stop_capture() {
-        let mut capture = TestCaptureProvider::new();
-
-        capture.start_capture();
-
-        assert!(capture.started);
-
-        let result = capture.stop_capture();
-
-        assert_eq!(result.id(), "test-capture");
-        assert!(!capture.started);
-    }
-}

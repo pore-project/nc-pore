@@ -12,33 +12,18 @@ use application::RecorderApplication;
 use artifact::RecordingArtifactAssociation;
 use artifact::coordination::ArtifactCoordinator;
 use artifact::processing::RecordingArtifactProcessor;
-use audio::{CaptureProvider, CaptureResult};
+use audio::CpalCaptureProvider;
 use persistence::InMemoryPersistenceProvider;
 use session::RecordingSession;
 
-struct TestCaptureProvider {
-    active: bool,
-}
-
-impl TestCaptureProvider {
-    fn new() -> Self {
-        Self { active: false }
-    }
-}
-
-impl CaptureProvider for TestCaptureProvider {
-    fn start_capture(&mut self) {
-        self.active = true;
-    }
-
-    fn stop_capture(&mut self) -> CaptureResult {
-        self.active = false;
-
-        CaptureResult::new("application-test-capture")
-    }
-}
-
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("test-audio-stream") {
+        return audio::test_input_stream().unwrap_or_else(|error| {
+            eprintln!("Audio-Stream-Test fehlgeschlagen: {error}");
+            std::process::exit(1);
+        });
+    }
+
     if std::env::args().nth(1).as_deref() == Some("inspect-audio") {
         match audio::inspect_default_input_device() {
             Ok(()) => {}
@@ -55,7 +40,7 @@ fn main() {
 
     let session = RecordingSession::new("test-session-001");
 
-    let capture = TestCaptureProvider::new();
+    let capture = CpalCaptureProvider::new();
 
     let persistence = InMemoryPersistenceProvider::new();
 
@@ -69,10 +54,17 @@ fn main() {
 
     let _ = application.session();
 
-    let _artifact = application.stop(RecordingArtifactAssociation::new(
+    let artifact = application.stop(RecordingArtifactAssociation::new(
         "production-test-001",
         "recording-test-001",
     ));
+
+    let artifact = artifact.expect("RecordingArtifact konnte nicht erzeugt werden.");
+
+    println!(
+        "RecordingArtifact erzeugt: {} Track(s)",
+        artifact.tracks().len()
+    );
 
     println!("NC-PoRe Recorder flow completed.");
 }
