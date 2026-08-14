@@ -39,6 +39,18 @@ impl CaptureProvider for TestCaptureProvider {
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("inspect-audio") {
+        match audio::inspect_default_input_device() {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("Audio-Inspektion fehlgeschlagen: {error}");
+                std::process::exit(1);
+            }
+        }
+
+        return;
+    }
+
     println!("NC-PoRe Recorder starting...");
 
     let session = RecordingSession::new("test-session-001");

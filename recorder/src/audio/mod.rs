@@ -12,8 +12,10 @@
 //! See:
 //! - ADR-039 Recording Architecture and Capture Boundary
 
+mod cpal;
 mod result;
 
+pub use cpal::inspect_default_input_device;
 pub use result::CaptureResult;
 
 #[cfg(test)]
