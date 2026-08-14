@@ -1,7 +1,7 @@
 # NC-PoRe Roadmap
 
-- Version: 1.1
-- Date: 2026-07-23
+- Version: 1.2
+- Date: 2026-08-14
 
 ---
 
@@ -155,6 +155,26 @@ NC-PoRe wird unabhängig von einzelnen Plattformen und Diensten.
 NC-PoRe ist nicht nur ein Nextcloud-Werkzeug.
 
 NC-PoRe ist eine offene Medienplattform.
+
+---
+
+# Mögliche spätere Erweiterung – Eigenständiges Podcast-Hosting
+
+Diese Erweiterung ist bewusst nicht an eine konkrete NC-PoRe-Version gebunden und stellt noch keine Architektur- oder Implementierungsentscheidung dar.
+
+Für eine spätere Entwicklungsphase soll die Entwicklung bzw. Anbindung einer eigenständigen Podcast-Hosting-Komponente untersucht werden.
+
+Ziel ist ein System, das wesentliche Funktionen eines modernen Podcast-Hosters wie RSS-Feed, Medienbereitstellung, Veröffentlichung und Analytics abbilden kann.
+
+Die Hosting-Komponente soll grundsätzlich unabhängig von NC-PoRe entwickelbar und betreibbar sein. Eine mögliche Integration mit NC-PoRe soll über klar definierte Schnittstellen erfolgen.
+
+Damit bleiben beide Systeme eigenständige Komponenten:
+
+- NC-PoRe kann ohne eigenes Podcast-Hosting betrieben werden.
+- Das Podcast-Hosting kann ohne NC-PoRe betrieben werden.
+- Beide Systeme können über definierte Schnittstellen miteinander integriert werden.
+
+Der konkrete Funktionsumfang und die technische Ausgestaltung sind noch nicht festgelegt. Eine spätere Untersuchung bestehender Podcast-Hosting-Lösungen und eine daraus abgeleitete Capability-Matrix sollen als Grundlage für eine mögliche weitere Entscheidung dienen.
 
 ---
 
@@ -338,6 +358,26 @@ NC-PoRe becomes independent from individual platforms and services.
 - open APIs
 - plugin system
 - community extensions
+
+---
+
+# Possible Later Extension – Independent Podcast Hosting
+
+This extension is deliberately not tied to a specific NC-PoRe version and does not yet represent an architectural or implementation decision.
+
+For a later development phase, the development or integration of an independent podcast hosting component should be investigated.
+
+The goal is a system that can provide essential capabilities of a modern podcast host such as RSS feeds, media delivery, publication and analytics.
+
+The hosting component should in principle be independently developable and operable from NC-PoRe. Any possible integration with NC-PoRe should use clearly defined interfaces.
+
+This keeps both systems as independent components:
+
+- NC-PoRe can operate without its own podcast hosting.
+- The podcast hosting system can operate without NC-PoRe.
+- Both systems can be integrated through defined interfaces.
+
+The concrete scope and technical design have not yet been defined. A later investigation of existing podcast hosting solutions and a resulting capability matrix should provide the basis for a possible future decision.
 
 ---
 
