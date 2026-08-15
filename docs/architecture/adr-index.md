@@ -75,6 +75,8 @@ This document provides an overview and navigation entry.
 - ADR-057 Domain Recording to Recording Artifact Association Boundary
 - ADR-058 Recording Payload Representation
 - ADR-059 Recording Payload Filesystem Persistence
+- ADR-060 Filesystem Store Semantics
+- ADR-061 Configurable Recording Configuration
 
 ---
 

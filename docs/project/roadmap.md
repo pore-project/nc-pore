@@ -52,6 +52,7 @@ V1 ist kein isolierter Recorder, sondern die Grundlage für verteilte Medien-Ses
 
 - Session-basierte Architektur
 - stabile Audioaufnahme
+- konfigurierbare Aufnahmeparameter mit einem vorgeschlagenen Standardprofil gemäß ADR-002
 - Teilnehmer- und Geräteverwaltung
 - Metadatenverwaltung
 - lokale Speicherung
@@ -329,6 +330,7 @@ V1 is not an isolated recorder, but the foundation for distributed media session
 
 - session-based architecture
 - stable audio recording
+- configurable recording parameters with a suggested default profile according to ADR-002
 - participant and device management
 - metadata management
 - local storage
