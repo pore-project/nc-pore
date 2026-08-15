@@ -4,7 +4,6 @@
 //! the input capabilities of the selected capture device.
 //!
 //! It intentionally does not yet:
-//! - select a recording format
 //! - apply fallback policy
 //! - convert audio formats
 //! - define recording policy
@@ -12,7 +11,9 @@
 //! Format selection belongs to a later recording implementation
 //! step once the required recording format has been specified.
 
-use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration};
+use crate::audio::{
+    CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat,
+};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 
@@ -54,6 +55,41 @@ impl CpalInputConfiguration {
     pub const fn sample_format(&self) -> cpal::SampleFormat {
         self.sample_format
     }
+
+    /// Returns whether this CPAL capability exactly supports the
+    /// requested recording configuration.
+    pub fn matches_recording_configuration(
+        &self,
+        configuration: &RecordingConfiguration,
+    ) -> bool {
+        self.channels == configuration.channels()
+            && self.min_sample_rate_hz <= configuration.sample_rate_hz()
+            && configuration.sample_rate_hz() <= self.max_sample_rate_hz
+            && self.sample_format == cpal_sample_format(configuration.sample_format())
+    }
+}
+
+fn cpal_sample_format(format: SampleFormat) -> cpal::SampleFormat {
+    match format {
+        SampleFormat::Pcm24 => cpal::SampleFormat::I24,
+        SampleFormat::F32 => cpal::SampleFormat::F32,
+    }
+}
+
+/// Finds the first exact native match for the requested recording
+/// configuration.
+///
+/// No fallback, conversion, prioritization, or resampling policy is
+/// applied. If no capability matches all requested parameters, the
+/// result is `None`.
+pub fn find_exact_input_configuration(
+    requested: &RecordingConfiguration,
+    capabilities: &[CpalInputConfiguration],
+) -> Option<CpalInputConfiguration> {
+    capabilities
+        .iter()
+        .copied()
+        .find(|capability| capability.matches_recording_configuration(requested))
 }
 
 /// Discovers the default input device and exposes its supported
@@ -248,4 +284,55 @@ pub fn inspect_default_input_device() -> Result<(), String> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn capability(
+        channels: u16,
+        min_sample_rate_hz: u32,
+        max_sample_rate_hz: u32,
+        sample_format: cpal::SampleFormat,
+    ) -> CpalInputConfiguration {
+        CpalInputConfiguration {
+            channels,
+            min_sample_rate_hz,
+            max_sample_rate_hz,
+            sample_format,
+        }
+    }
+
+    #[test]
+    fn exact_match_accepts_rate_inside_supported_range() {
+        let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
+        let available = capability(1, 44_100, 96_000, cpal::SampleFormat::F32);
+
+        assert!(available.matches_recording_configuration(&requested));
+    }
+
+    #[test]
+    fn exact_match_rejects_wrong_channel_count() {
+        let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
+        let available = capability(2, 44_100, 96_000, cpal::SampleFormat::F32);
+
+        assert!(!available.matches_recording_configuration(&requested));
+    }
+
+    #[test]
+    fn exact_match_maps_pcm24_to_cpal_i24() {
+        let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24);
+        let available = capability(1, 48_000, 48_000, cpal::SampleFormat::I24);
+
+        assert!(available.matches_recording_configuration(&requested));
+    }
+
+    #[test]
+    fn resolver_returns_none_without_exact_match() {
+        let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24);
+        let capabilities = [capability(2, 48_000, 48_000, cpal::SampleFormat::I24)];
+
+        assert_eq!(find_exact_input_configuration(&requested, &capabilities), None);
+    }
 }
