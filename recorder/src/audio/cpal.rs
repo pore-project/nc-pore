@@ -1,12 +1,12 @@
 //! CPAL-based audio capture discovery.
 //!
-//! This module currently provides the technical bridge to CPAL
-//! and exposes the available input device configurations.
+//! This module provides the technical bridge to CPAL and exposes
+//! the input capabilities of the selected capture device.
 //!
 //! It intentionally does not yet:
 //! - select a recording format
-//! - start an audio stream
-//! - write audio data
+//! - apply fallback policy
+//! - convert audio formats
 //! - define recording policy
 //!
 //! Format selection belongs to a later recording implementation
@@ -16,17 +16,77 @@ use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack, RecordingConfigura
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 
-/// Discovers the default input device and prints its supported
-/// input configurations.
+/// One input configuration range reported by CPAL.
 ///
-/// This is currently a technical integration probe for CPAL.
-/// It does not yet participate in the CaptureProvider boundary.
+/// The type deliberately belongs to the concrete CPAL provider.
+/// It describes technical backend capabilities and is not part of
+/// the backend-independent recording configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CpalInputConfiguration {
+    channels: u16,
+    min_sample_rate_hz: u32,
+    max_sample_rate_hz: u32,
+    sample_format: cpal::SampleFormat,
+}
+
+impl CpalInputConfiguration {
+    fn from_supported_config(config: &cpal::SupportedStreamConfigRange) -> Self {
+        Self {
+            channels: config.channels(),
+            min_sample_rate_hz: config.min_sample_rate().0,
+            max_sample_rate_hz: config.max_sample_rate().0,
+            sample_format: config.sample_format(),
+        }
+    }
+
+    pub const fn channels(&self) -> u16 {
+        self.channels
+    }
+
+    pub const fn min_sample_rate_hz(&self) -> u32 {
+        self.min_sample_rate_hz
+    }
+
+    pub const fn max_sample_rate_hz(&self) -> u32 {
+        self.max_sample_rate_hz
+    }
+
+    pub const fn sample_format(&self) -> cpal::SampleFormat {
+        self.sample_format
+    }
+}
+
+/// Discovers the default input device and exposes its supported
+/// input configuration ranges.
 impl CpalCaptureProvider {
     pub fn new() -> Self {
         Self {
             samples: Arc::new(Mutex::new(Vec::new())),
             stream: None,
         }
+    }
+
+    /// Returns the input configuration ranges supported by the
+    /// default input device.
+    ///
+    /// This is capability discovery only. It does not select a
+    /// configuration for a RecordingConfiguration and does not
+    /// start an audio stream.
+    pub fn discover_input_configurations(&self) -> Result<Vec<CpalInputConfiguration>, String> {
+        let host = cpal::default_host();
+        let device = host
+            .default_input_device()
+            .ok_or_else(|| "Kein Standard-Eingabegerät gefunden.".to_string())?;
+
+        let configurations = device
+            .supported_input_configs()
+            .map_err(|error| {
+                format!("Unterstützte Eingabekonfigurationen konnten nicht gelesen werden: {error}")
+            })?
+            .map(|configuration| CpalInputConfiguration::from_supported_config(&configuration))
+            .collect();
+
+        Ok(configurations)
     }
 }
 
