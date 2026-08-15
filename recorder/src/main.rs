@@ -12,7 +12,7 @@ use application::RecorderApplication;
 use artifact::RecordingArtifactAssociation;
 use artifact::coordination::ArtifactCoordinator;
 use artifact::processing::RecordingArtifactProcessor;
-use audio::CpalCaptureProvider;
+use audio::{CpalCaptureProvider, RecordingConfiguration};
 use persistence::InMemoryPersistenceProvider;
 use session::RecordingSession;
 
@@ -49,8 +49,9 @@ fn main() {
     let processor = RecordingArtifactProcessor::new(coordinator);
 
     let mut application = RecorderApplication::new(session, capture, processor);
+    let configuration = RecordingConfiguration::default();
 
-    application.start();
+    application.start(&configuration);
 
     let _ = application.session();
 
