@@ -16,10 +16,11 @@
 //! See:
 //! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 //! - ADR-051 Recording Artifact Processing Boundary
+//! - ADR-061 Configurable Recording Configuration
 
 use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
-use crate::audio::CaptureProvider;
+use crate::audio::{CaptureProvider, RecordingConfiguration};
 use crate::persistence::PersistenceProvider;
 use crate::persistence::PersistenceStoreError;
 use crate::session::{RecordingSession, RecordingSessionId};
@@ -50,8 +51,8 @@ where
         }
     }
 
-    pub fn start(&mut self) {
-        self.workflow.start();
+    pub fn start(&mut self, configuration: &RecordingConfiguration) {
+        self.workflow.start(configuration);
     }
 
     /// Stops the local recording and persists an artifact associated with
@@ -83,7 +84,7 @@ mod tests {
     struct TestCaptureProvider;
 
     impl CaptureProvider for TestCaptureProvider {
-        fn start_capture(&mut self) {}
+        fn start_capture(&mut self, _configuration: &RecordingConfiguration) {}
 
         fn stop_capture(&mut self) -> CaptureResult {
             CaptureResult::new("application-test-capture")
@@ -108,8 +109,9 @@ mod tests {
         let processor = RecordingArtifactProcessor::new(coordinator);
 
         let mut application = RecorderApplication::new(session, capture, processor);
+        let configuration = RecordingConfiguration::default();
 
-        application.start();
+        application.start(&configuration);
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -141,8 +143,9 @@ mod tests {
         let processor = RecordingArtifactProcessor::new(coordinator);
 
         let mut application = RecorderApplication::new(session, capture, processor);
+        let configuration = RecordingConfiguration::default();
 
-        application.start();
+        application.start(&configuration);
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
