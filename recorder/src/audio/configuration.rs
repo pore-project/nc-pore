@@ -27,11 +27,7 @@ pub struct RecordingConfiguration {
 
 impl RecordingConfiguration {
     /// Creates a recording configuration with explicit parameters.
-    pub const fn new(
-        sample_rate_hz: u32,
-        channels: u16,
-        sample_format: SampleFormat,
-    ) -> Self {
+    pub const fn new(sample_rate_hz: u32, channels: u16, sample_format: SampleFormat) -> Self {
         Self {
             sample_rate_hz,
             channels,
