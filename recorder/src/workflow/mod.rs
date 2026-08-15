@@ -13,8 +13,9 @@
 //!
 //! See:
 //! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
+//! - ADR-061 Configurable Recording Configuration
 
-use crate::audio::{CaptureProvider, CaptureResult};
+use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration};
 use crate::session::RecordingSession;
 
 /// Coordinates the local recorder workflow.
@@ -43,14 +44,14 @@ where
         Self { session, capture }
     }
 
-    /// Starts the recording workflow.
+    /// Starts the recording workflow with the requested configuration.
     ///
     /// The workflow coordinates:
     /// - recorder session state transition
     /// - capture provider activation
-    pub fn start(&mut self) {
+    pub fn start(&mut self, configuration: &RecordingConfiguration) {
         self.session.start();
-        self.capture.start_capture();
+        self.capture.start_capture(configuration);
     }
 
     /// Stops the recording workflow.
@@ -90,7 +91,7 @@ mod tests {
     }
 
     impl CaptureProvider for TestCapture {
-        fn start_capture(&mut self) {
+        fn start_capture(&mut self, _configuration: &RecordingConfiguration) {
             self.active = true;
         }
 
@@ -137,8 +138,9 @@ mod tests {
         let capture = TestCapture::new();
 
         let mut workflow = RecorderWorkflow::new(session, capture);
+        let configuration = RecordingConfiguration::default();
 
-        workflow.start();
+        workflow.start(&configuration);
 
         assert_eq!(
             workflow.session().status(),
