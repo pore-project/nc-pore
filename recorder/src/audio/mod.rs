@@ -34,4 +34,3 @@ pub trait CaptureProvider {
     /// Stops audio capture and returns the capture result.
     fn stop_capture(&mut self) -> CaptureResult;
 }
-
