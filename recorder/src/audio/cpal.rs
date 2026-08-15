@@ -12,7 +12,7 @@
 //! Format selection belongs to a later recording implementation
 //! step once the required recording format has been specified.
 
-use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack};
+use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 
@@ -36,7 +36,7 @@ pub struct CpalCaptureProvider {
 }
 
 impl crate::audio::CaptureProvider for CpalCaptureProvider {
-    fn start_capture(&mut self) {
+    fn start_capture(&mut self, _configuration: &RecordingConfiguration) {
         let host = cpal::default_host();
         let device = host
             .default_input_device()
