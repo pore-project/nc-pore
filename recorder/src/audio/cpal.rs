@@ -222,7 +222,7 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
 
         let chunk = CaptureChunk::with_payload(1, payload);
 
-        let mut track = CaptureTrack::new("cpal-track", configuration);
+        let mut track = CaptureTrack::with_configuration("cpal-track", configuration);
         track.add_chunk(chunk);
 
         let mut result = CaptureResult::new("cpal-capture");
@@ -295,7 +295,7 @@ pub fn test_input_stream() -> Result<(), String> {
 
     println!("CaptureChunk erzeugt: {} Bytes", chunk.payload().len());
 
-    let mut track = CaptureTrack::new(
+    let mut track = CaptureTrack::with_configuration(
         "test-track",
         RecordingConfiguration::new(
             configuration.sample_rate().0,
