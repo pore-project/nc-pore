@@ -51,8 +51,11 @@ where
         }
     }
 
-    pub fn start(&mut self, configuration: &RecordingConfiguration) {
-        self.workflow.start(configuration);
+    pub fn start(
+        &mut self,
+        configuration: &RecordingConfiguration,
+    ) -> Result<(), crate::audio::CaptureStartError> {
+        self.workflow.start(configuration)
     }
 
     /// Stops the local recording and persists an artifact associated with
@@ -116,7 +119,7 @@ mod tests {
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
 
-        application.start(&configuration);
+        application.start(&configuration).unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -150,7 +153,7 @@ mod tests {
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
 
-        application.start(&configuration);
+        application.start(&configuration).unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
