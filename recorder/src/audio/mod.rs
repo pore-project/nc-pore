@@ -18,9 +18,9 @@ mod cpal;
 mod result;
 
 pub use configuration::{RecordingConfiguration, SampleFormat};
-pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
 pub use cpal::inspect_default_input_device;
 pub use cpal::test_input_stream;
+pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
 pub use result::CaptureResult;
 
 pub use result::{CaptureChunk, CaptureTrack};
@@ -30,7 +30,7 @@ pub use result::{CaptureChunk, CaptureTrack};
 pub struct CaptureStartError;
 
 /// Defines the interface between recorder workflow
-/// and audio capture implementations.
+/// and concrete audio capture implementations.
 ///
 /// Concrete implementations may use different audio
 /// technologies without affecting the recorder architecture.
