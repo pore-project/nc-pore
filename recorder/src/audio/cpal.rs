@@ -12,7 +12,8 @@
 //! step once the required recording format has been specified.
 
 use crate::audio::{
-    CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat,
+    CaptureChunk, CaptureResult, CaptureStartError, CaptureTrack, RecordingConfiguration,
+    SampleFormat,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
@@ -132,15 +133,16 @@ pub struct CpalCaptureProvider {
 }
 
 impl crate::audio::CaptureProvider for CpalCaptureProvider {
-    fn start_capture(&mut self, _configuration: &RecordingConfiguration) {
+    fn start_capture(
+        &mut self,
+        _configuration: &RecordingConfiguration,
+    ) -> Result<(), CaptureStartError> {
         let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .expect("Kein Standard-Eingabegerät gefunden.");
+        let device = host.default_input_device().ok_or(CaptureStartError)?;
 
         let configuration = device
             .default_input_config()
-            .expect("Standard-Eingabekonfiguration konnte nicht gelesen werden.");
+            .map_err(|_| CaptureStartError)?;
 
         let stream_config: cpal::StreamConfig = configuration.clone().into();
         let samples = Arc::clone(&self.samples);
@@ -155,13 +157,13 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
                 |_error| {},
                 None,
             )
-            .expect("Input-Stream konnte nicht erstellt werden.");
+            .map_err(|_| CaptureStartError)?;
 
-        stream
-            .play()
-            .expect("Audio-Stream konnte nicht gestartet werden.");
+        stream.play().map_err(|_| CaptureStartError)?;
 
         self.stream = Some(stream);
+
+        Ok(())
     }
 
     fn stop_capture(&mut self) -> CaptureResult {

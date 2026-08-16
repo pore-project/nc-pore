@@ -25,6 +25,10 @@ pub use result::CaptureResult;
 
 pub use result::{CaptureChunk, CaptureTrack};
 
+/// Returned when a capture provider cannot start audio capture.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CaptureStartError;
+
 /// Defines the interface between recorder workflow
 /// and audio capture implementations.
 ///
@@ -32,7 +36,10 @@ pub use result::{CaptureChunk, CaptureTrack};
 /// technologies without affecting the recorder architecture.
 pub trait CaptureProvider {
     /// Starts audio capture using the requested recording configuration.
-    fn start_capture(&mut self, configuration: &RecordingConfiguration);
+    fn start_capture(
+        &mut self,
+        configuration: &RecordingConfiguration,
+    ) -> Result<(), CaptureStartError>;
 
     /// Stops audio capture and returns the capture result.
     fn stop_capture(&mut self) -> CaptureResult;
