@@ -399,8 +399,7 @@ mod tests {
     // A RecordingTrack preserves the technical configuration used for the track.
     #[test]
     fn recording_track_preserves_configuration() {
-        let configuration =
-            RecordingConfiguration::new(48_000, 2, crate::audio::SampleFormat::F32);
+        let configuration = RecordingConfiguration::new(48_000, 2, crate::audio::SampleFormat::F32);
         let track = RecordingTrack::with_configuration("track-001", configuration);
 
         assert_eq!(track.configuration(), Some(configuration));
