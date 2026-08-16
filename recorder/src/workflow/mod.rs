@@ -46,12 +46,23 @@ where
 
     /// Starts the recording workflow with the requested configuration.
     ///
-    /// The workflow coordinates:
-    /// - recorder session state transition
-    /// - capture provider activation
-    pub fn start(&mut self, configuration: &RecordingConfiguration) {
-        self.session.start();
-        self.capture.start_capture(configuration);
+    /// The session enters Recording only after the capture provider
+    /// successfully starts. A failed capture start marks the session
+    /// as Failed and is returned to the caller.
+    pub fn start(
+        &mut self,
+        configuration: &RecordingConfiguration,
+    ) -> Result<(), crate::audio::CaptureStartError> {
+        match self.capture.start_capture(configuration) {
+            Ok(()) => {
+                self.session.start();
+                Ok(())
+            }
+            Err(error) => {
+                self.session.fail();
+                Err(error)
+            }
+        }
     }
 
     /// Stops the recording workflow.
@@ -82,17 +93,36 @@ mod tests {
 
     struct TestCapture {
         active: bool,
+        fail_on_start: bool,
     }
 
     impl TestCapture {
         fn new() -> Self {
-            Self { active: false }
+            Self {
+                active: false,
+                fail_on_start: false,
+            }
+        }
+
+        fn failing() -> Self {
+            Self {
+                active: false,
+                fail_on_start: true,
+            }
         }
     }
 
     impl CaptureProvider for TestCapture {
-        fn start_capture(&mut self, _configuration: &RecordingConfiguration) {
+        fn start_capture(
+            &mut self,
+            _configuration: &RecordingConfiguration,
+        ) -> Result<(), crate::audio::CaptureStartError> {
+            if self.fail_on_start {
+                return Err(crate::audio::CaptureStartError);
+            }
+
             self.active = true;
+            Ok(())
         }
 
         fn stop_capture(&mut self) -> CaptureResult {
@@ -140,7 +170,7 @@ mod tests {
         let mut workflow = RecorderWorkflow::new(session, capture);
         let configuration = RecordingConfiguration::default();
 
-        workflow.start(&configuration);
+        workflow.start(&configuration).unwrap();
 
         assert_eq!(
             workflow.session().status(),
@@ -154,6 +184,25 @@ mod tests {
         assert_eq!(
             workflow.session().status(),
             &crate::session::SessionStatus::Stopped
+        );
+    }
+
+    // TEST-03
+    // Verify: A failed capture start does not enter Recording state.
+    // The workflow marks the session as Failed and propagates the error.
+    #[test]
+    fn failed_capture_start_marks_session_as_failed() {
+        let session = RecordingSession::new("workflow-test");
+        let capture = TestCapture::failing();
+        let mut workflow = RecorderWorkflow::new(session, capture);
+        let configuration = RecordingConfiguration::default();
+
+        let result = workflow.start(&configuration);
+
+        assert_eq!(result, Err(crate::audio::CaptureStartError));
+        assert_eq!(
+            workflow.session().status(),
+            &crate::session::SessionStatus::Failed
         );
     }
 }

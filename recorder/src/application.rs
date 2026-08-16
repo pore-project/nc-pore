@@ -84,7 +84,12 @@ mod tests {
     struct TestCaptureProvider;
 
     impl CaptureProvider for TestCaptureProvider {
-        fn start_capture(&mut self, _configuration: &RecordingConfiguration) {}
+        fn start_capture(
+            &mut self,
+            _configuration: &RecordingConfiguration,
+        ) -> Result<(), crate::audio::CaptureStartError> {
+            Ok(())
+        }
 
         fn stop_capture(&mut self) -> CaptureResult {
             CaptureResult::new("application-test-capture")
