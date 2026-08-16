@@ -73,22 +73,34 @@ impl CaptureTrackId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureTrack {
     pub id: CaptureTrackId,
-    configuration: RecordingConfiguration,
+    configuration: Option<RecordingConfiguration>,
     chunks: Vec<CaptureChunk>,
 }
 
 impl CaptureTrack {
-    /// Creates an empty capture track for the supplied recording configuration.
-    pub fn new(id: impl Into<String>, configuration: RecordingConfiguration) -> Self {
+    /// Creates an empty capture track without configuration metadata.
+    pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: CaptureTrackId::new(id),
-            configuration,
+            configuration: None,
             chunks: Vec::new(),
         }
     }
 
-    /// Returns the recording configuration used for this capture track.
-    pub const fn configuration(&self) -> RecordingConfiguration {
+    /// Creates an empty capture track with the supplied recording configuration.
+    pub fn with_configuration(
+        id: impl Into<String>,
+        configuration: RecordingConfiguration,
+    ) -> Self {
+        Self {
+            id: CaptureTrackId::new(id),
+            configuration: Some(configuration),
+            chunks: Vec::new(),
+        }
+    }
+
+    /// Returns the recording configuration used for this capture track, if known.
+    pub const fn configuration(&self) -> Option<RecordingConfiguration> {
         self.configuration
     }
 
@@ -155,10 +167,9 @@ mod tests {
     #[test]
     fn capture_result_can_contain_tracks() {
         let mut result = CaptureResult::new("capture-001");
-        let configuration = RecordingConfiguration::default();
 
-        result.add_track(CaptureTrack::new("track-host", configuration));
-        result.add_track(CaptureTrack::new("track-guest", configuration));
+        result.add_track(CaptureTrack::new("track-host"));
+        result.add_track(CaptureTrack::new("track-guest"));
 
         assert_eq!(result.tracks().len(), 2);
         assert_eq!(result.tracks()[0].id.value(), "track-host");
@@ -171,7 +182,7 @@ mod tests {
     // A capture track can contain multiple ordered chunks.
     #[test]
     fn capture_track_can_contain_ordered_chunks() {
-        let mut track = CaptureTrack::new("track-host", RecordingConfiguration::default());
+        let mut track = CaptureTrack::new("track-host");
 
         track.add_chunk(CaptureChunk::new(1));
         track.add_chunk(CaptureChunk::new(2));
@@ -190,13 +201,12 @@ mod tests {
     #[test]
     fn capture_result_preserves_independent_track_data() {
         let mut result = CaptureResult::new("capture-001");
-        let configuration = RecordingConfiguration::default();
 
-        let mut host_track = CaptureTrack::new("track-host", configuration);
+        let mut host_track = CaptureTrack::new("track-host");
         host_track.add_chunk(CaptureChunk::new(1));
         host_track.add_chunk(CaptureChunk::new(2));
 
-        let mut guest_track = CaptureTrack::new("track-guest", configuration);
+        let mut guest_track = CaptureTrack::new("track-guest");
         guest_track.add_chunk(CaptureChunk::new(1));
         guest_track.add_chunk(CaptureChunk::new(2));
         guest_track.add_chunk(CaptureChunk::new(3));
@@ -237,9 +247,9 @@ mod tests {
     #[test]
     fn capture_track_preserves_recording_configuration() {
         let configuration = RecordingConfiguration::new(44_100, 2, SampleFormat::F32);
-        let track = CaptureTrack::new("track-host", configuration);
+        let track = CaptureTrack::with_configuration("track-host", configuration);
 
-        assert_eq!(track.configuration(), configuration);
+        assert_eq!(track.configuration(), Some(configuration));
     }
 }
 
