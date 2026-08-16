@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 2.8
-- Date: 2026-08-15
+- Version: 2.9
+- Date: 2026-08-16
 
 ---
 
@@ -71,8 +71,10 @@ Implementiert:
 - erfolgreicher Aufbau und Start eines lokalen CPAL Input-Streams
 - Übernahme empfangener F32-Samples in ein CaptureResult
 - durchgängiger Recorder Application Flow von CPAL Capture bis RecordingArtifact-Persistenz
+- realer lokaler Audio-Capture bis zur Erzeugung und Verarbeitung eines RecordingArtifacts
+- technische Recording-Konfiguration kann entlang des Capture-to-Artifact-Pfades übernommen und erhalten werden
 
-Die aktuelle CPAL-Implementierung ist noch eine technische Integrationsstufe. Sie verwendet die Default-Eingabekonfiguration, einen F32-Sample-Puffer und erzeugt beim Stop einen CaptureChunk mit den technischen Sample-Bytes. Aufnahmeformat, Stream-Fehlerbehandlung, Chunking und produktionsgeeignete Recording-Konfiguration sind noch nicht abgeschlossen.
+Die aktuelle CPAL-Implementierung bildet damit einen funktionierenden technischen Capture-to-Artifact-Pfad ab. Die derzeit verwendete Eingabekonfiguration wird noch nicht als endgültige produktionsgeeignete Recording-Konfiguration behandelt. Insbesondere die verbindliche Konfiguration von Sample-Rate, Kanalzahl und Sample-Format, die produktionsgeeignete Stream-Fehlerbehandlung, Lifecycle-Semantik, Chunking und das endgültige Recording-Format bilden den nächsten zusammenhängenden technischen Umsetzungsschritt.
 
 Relevante Architekturentscheidungen:
 
@@ -136,7 +138,10 @@ Zusätzliche technische Integration wurde erfolgreich manuell ausgeführt:
 - CaptureChunk mit 380928 Payload-Bytes erzeugt
 - CaptureTrack und CaptureResult erfolgreich aufgebaut
 - vollständiger Recorder Application Flow mit CpalCaptureProvider erfolgreich ausgeführt
+- reale Audiodaten aus dem lokalen Default-Input erfasst
+- CaptureResult und RecordingArtifact mit den erfassten technischen Daten aufgebaut
 - RecordingArtifact mit einem Track erzeugt und durch den bestehenden Persistenzpfad verarbeitet
+- Recording-Konfiguration entlang der Capture-to-Artifact-Grenze erhalten
 
 Die Tests validieren unter anderem:
 
@@ -181,7 +186,9 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Identitäten innerhalb technischer Grenzen werden nicht mehr über primitive Strings modelliert, sondern über explizite Value Objects
 - Filesystem Persistence folgt definierten Store-Semantiken für Recording Artifacts
 - die konkrete Capture-Technologie bleibt hinter CaptureProvider verborgen
-- der aktuelle CPAL-Pfad ist als technische Integrationsstufe von der späteren produktionsgeeigneten Recording-Konfiguration getrennt
+- der aktuelle CPAL-Pfad bildet einen funktionierenden technischen Capture-to-Artifact-Pfad
+- die konkrete Capture-Technologie bleibt von der späteren produktionsgeeigneten Recording-Konfiguration getrennt
+- Recording-Konfiguration wird entlang der technischen Capture-to-Artifact-Grenze explizit erhalten
 
 ---
 
@@ -217,11 +224,8 @@ Wichtige Einstiegspunkte:
 
 Geplante nächste Arbeiten:
 
-- CPAL CaptureProvider von der technischen Integrationsstufe in eine definierte Recording-Implementierung überführen
-- Recording-Konfiguration für Sample-Rate, Kanalzahl und Sample-Format festlegen
-- technische Repräsentation der Audio-Payload zwischen CaptureResult und RecordingArtifact präzisieren
-- produktionsgeeignete Stream-Fehlerbehandlung und Lifecycle-Semantik ergänzen
-- Chunking und tatsächliches Recording-Format auf Basis der festgelegten Recording-Konfiguration umsetzen
+- den bestehenden CPAL Capture-to-Artifact-Pfad zu einer definierten produktionsgeeigneten Recording-Implementierung weiterentwickeln
+- dabei Recording-Konfiguration, technische Payload-Repräsentation, Stream-Fehlerbehandlung, Lifecycle-Semantik, Chunking und tatsächliches Recording-Format als zusammenhängenden technischen Umsetzungsschritt behandeln
 - weitere Produktionsobjekte modellieren
 - weitere API Operationen für ProductionSession Lifecycle ergänzen
 - Synchronisation und Remote Storage als separaten späteren technischen Meilenstein untersuchen
@@ -294,8 +298,10 @@ Implemented:
 - successful construction and startup of a local CPAL input stream
 - transfer of received F32 samples into a CaptureResult
 - complete Recorder Application Flow from CPAL capture through RecordingArtifact persistence
+- real local audio capture through creation and processing of a RecordingArtifact
+- technical recording configuration can be carried through and preserved across the Capture-to-Artifact path
 
-The current CPAL implementation is still a technical integration stage. It uses the default input configuration, an F32 sample buffer and creates one CaptureChunk with the technical sample bytes when capture stops. Recording format, stream error handling, chunking and production-ready recording configuration are not yet complete.
+The current CPAL implementation now provides a functioning technical Capture-to-Artifact path. The currently used input configuration is not yet treated as the final production-ready recording configuration. In particular, the defined configuration of sample rate, channel count and sample format, production-ready stream error handling, lifecycle semantics, chunking and the final recording format form the next coherent technical implementation step.
 
 Relevant architecture decisions:
 
@@ -359,7 +365,10 @@ Additional technical integration was successfully executed manually:
 - CaptureChunk created with 380928 payload bytes
 - CaptureTrack and CaptureResult created successfully
 - complete Recorder Application Flow executed successfully with CpalCaptureProvider
+- real audio data captured from the local default input
+- CaptureResult and RecordingArtifact created with the captured technical data
 - RecordingArtifact with one track created and processed through the existing persistence path
+- recording configuration preserved across the Capture-to-Artifact boundary
 
 The tests validate among other things:
 
@@ -404,7 +413,9 @@ NC-PoRe currently follows these architecture principles:
 - Identities within technical boundaries are no longer modeled as primitive strings but as explicit value objects
 - Filesystem Persistence follows defined store semantics for Recording Artifacts
 - the concrete capture technology remains hidden behind CaptureProvider
-- the current CPAL path is treated as a technical integration stage separate from the later production-ready recording configuration
+- the current CPAL path provides a functioning technical Capture-to-Artifact flow
+- the concrete capture technology remains separated from the later production-ready recording configuration
+- recording configuration is explicitly preserved across the technical Capture-to-Artifact boundary
 
 ---
 
@@ -440,11 +451,8 @@ Important entry points:
 
 Planned next activities:
 
-- move CPAL CaptureProvider from technical integration stage toward a defined recording implementation
-- define recording configuration for sample rate, channel count and sample format
-- clarify the technical audio payload representation between CaptureResult and RecordingArtifact
-- add production-ready stream error handling and lifecycle semantics
-- implement chunking and the actual recording format based on the defined recording configuration
+- evolve the existing CPAL Capture-to-Artifact path into a defined production-ready recording implementation
+- treat recording configuration, technical payload representation, stream error handling, lifecycle semantics, chunking and the actual recording format as one coherent technical implementation step
 - model additional production objects
 - extend ProductionSession lifecycle API operations
 - investigate synchronization and remote storage as a separate later technical milestone
