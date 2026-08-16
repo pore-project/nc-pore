@@ -172,14 +172,12 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             .map(|configuration| CpalInputConfiguration::from_supported_config(&configuration))
             .collect::<Vec<_>>();
 
-        let _selected_configuration =
+        let selected_configuration =
             require_exact_input_configuration(configuration, &capabilities)?;
 
-        let configuration = device
-            .default_input_config()
-            .map_err(|_| CaptureStartError::ConfigurationUnavailable)?;
-
-        let stream_config: cpal::StreamConfig = configuration.clone().into();
+        let stream_config = selected_configuration
+            .stream_config_for_sample_rate(configuration.sample_rate_hz())
+            .ok_or(CaptureStartError::UnsupportedRecordingConfiguration)?;
         let samples = Arc::clone(&self.samples);
 
         let stream = device
