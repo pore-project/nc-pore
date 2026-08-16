@@ -116,32 +116,52 @@ impl RecordingPayload {
 ///
 /// The chunk deliberately contains no filesystem-specific information.
 /// Its position belongs to the track and is represented by its sequence
-/// number. The physical payload location is decided by the persistence
-/// provider.
+/// number and sample offset. The physical payload location is decided by
+/// the persistence provider.
 ///
-/// See ADR-003, ADR-054 and ADR-058.
+/// See ADR-003, ADR-009, ADR-054 and ADR-058.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingChunk {
     pub sequence: u32,
+    sample_offset: u64,
     payload: RecordingPayload,
 }
 
 impl RecordingChunk {
-    /// Creates a recording chunk without payload data.
+    /// Creates a recording chunk without payload data at sample offset zero.
     pub fn new(sequence: u32) -> Self {
-        Self::with_payload(sequence, format!("chunk-{sequence:06}"), Vec::new())
+        Self::with_sample_offset(sequence, 0, format!("chunk-{sequence:06}"), Vec::new())
     }
 
     /// Creates a recording chunk with its logical payload reference and data.
+    ///
+    /// The chunk starts at sample offset zero. Use `with_sample_offset` when
+    /// the chunk has a known position within the track.
     pub fn with_payload(
         sequence: u32,
         reference: impl Into<String>,
         data: impl Into<Vec<u8>>,
     ) -> Self {
+        Self::with_sample_offset(sequence, 0, reference, data)
+    }
+
+    /// Creates a recording chunk with an explicit sample-based position.
+    pub fn with_sample_offset(
+        sequence: u32,
+        sample_offset: u64,
+        reference: impl Into<String>,
+        data: impl Into<Vec<u8>>,
+    ) -> Self {
         Self {
             sequence,
+            sample_offset,
             payload: RecordingPayload::new(reference, data),
         }
+    }
+
+    /// Returns the sample offset of this chunk within its track.
+    pub const fn sample_offset(&self) -> u64 {
+        self.sample_offset
     }
 
     /// Returns the technical payload belonging to this recording chunk.
@@ -433,5 +453,22 @@ mod tests {
         let track = RecordingTrack::with_configuration("track-host", configuration);
 
         assert_eq!(track.configuration(), Some(configuration));
+    }
+
+    // TEST-38
+    //
+    // Protects ADR-009:
+    // a recording chunk preserves its sample-based position within its track.
+    #[test]
+    fn recording_chunk_preserves_sample_offset() {
+        let chunk = RecordingChunk::with_sample_offset(
+            2,
+            14_400_000,
+            "track-host/chunk-000002",
+            vec![1, 2, 3],
+        );
+
+        assert_eq!(chunk.sequence, 2);
+        assert_eq!(chunk.sample_offset(), 14_400_000);
     }
 }
