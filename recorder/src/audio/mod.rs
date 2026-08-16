@@ -17,7 +17,7 @@ mod configuration;
 mod cpal;
 mod result;
 
-pub use configuration::{RecordingConfiguration, SampleFormat};
+pub use configuration::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
 pub use cpal::inspect_default_input_device;
 pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
