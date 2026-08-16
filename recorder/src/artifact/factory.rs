@@ -35,10 +35,9 @@ impl RecordingArtifactFactory {
 
         for capture_track in capture_result.tracks() {
             let mut recording_track = match capture_track.configuration() {
-                Some(configuration) => RecordingTrack::with_configuration(
-                    capture_track.id.value(),
-                    configuration,
-                ),
+                Some(configuration) => {
+                    RecordingTrack::with_configuration(capture_track.id.value(), configuration)
+                }
                 None => RecordingTrack::new(capture_track.id.value()),
             };
 
