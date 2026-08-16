@@ -73,10 +73,7 @@ impl CpalInputConfiguration {
     ///
     /// The selection is delegated to CPAL's range API so the native
     /// buffer-size information is retained as reported by the device.
-    pub fn stream_config_for_sample_rate(
-        &self,
-        sample_rate_hz: u32,
-    ) -> Option<cpal::StreamConfig> {
+    pub fn stream_config_for_sample_rate(&self, sample_rate_hz: u32) -> Option<cpal::StreamConfig> {
         let range = cpal::SupportedStreamConfigRange::new(
             self.channels,
             self.min_sample_rate_hz,
@@ -85,9 +82,7 @@ impl CpalInputConfiguration {
             self.sample_format,
         );
 
-        range
-            .try_with_sample_rate(sample_rate_hz)
-            .map(Into::into)
+        range.try_with_sample_rate(sample_rate_hz).map(Into::into)
     }
 }
 
