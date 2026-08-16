@@ -24,6 +24,7 @@ pub mod registry;
 
 pub use id::{ArtifactId, RecordingTrackId};
 
+use crate::audio::RecordingConfiguration;
 use crate::session::RecordingSessionId;
 
 /// Technical lifecycle state of a Recording Artifact.
@@ -143,7 +144,7 @@ impl RecordingChunk {
         }
     }
 
-    /// Returns the technical payload belonging to this chunk.
+    /// Returns the technical payload belonging to this recording chunk.
     pub fn payload(&self) -> &RecordingPayload {
         &self.payload
     }
@@ -158,16 +159,35 @@ impl RecordingChunk {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingTrack {
     pub id: RecordingTrackId,
+    configuration: Option<RecordingConfiguration>,
     chunks: Vec<RecordingChunk>,
 }
 
 impl RecordingTrack {
-    /// Creates an empty recording track.
+    /// Creates an empty recording track without configuration metadata.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: RecordingTrackId::new(id),
+            configuration: None,
             chunks: Vec::new(),
         }
+    }
+
+    /// Creates an empty recording track with the supplied recording configuration.
+    pub fn with_configuration(
+        id: impl Into<String>,
+        configuration: RecordingConfiguration,
+    ) -> Self {
+        Self {
+            id: RecordingTrackId::new(id),
+            configuration: Some(configuration),
+            chunks: Vec::new(),
+        }
+    }
+
+    /// Returns the recording configuration used for this track, if known.
+    pub const fn configuration(&self) -> Option<RecordingConfiguration> {
+        self.configuration
     }
 
     /// Adds a technical recording chunk.
@@ -373,6 +393,7 @@ mod tests {
         assert_eq!(artifact.tracks()[1].chunks().len(), 3);
     }
 
+    // TEST-31
     #[test]
     fn artifact_can_preserve_domain_association() {
         let mut artifact =
@@ -400,5 +421,17 @@ mod tests {
         );
         assert_eq!(chunk.payload().data(), &[1, 2, 3]);
         assert_eq!(chunk.payload().size_bytes(), 3);
+    }
+
+    // TEST-37
+    //
+    // Protects the capture-to-artifact boundary:
+    // the recording configuration used for a technical track is preserved.
+    #[test]
+    fn recording_track_preserves_configuration() {
+        let configuration = RecordingConfiguration::new(48_000, 1, crate::audio::SampleFormat::F32);
+        let track = RecordingTrack::with_configuration("track-host", configuration);
+
+        assert_eq!(track.configuration(), Some(configuration));
     }
 }
