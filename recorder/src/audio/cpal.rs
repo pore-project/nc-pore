@@ -90,6 +90,14 @@ pub fn find_exact_input_configuration(
         .find(|capability| capability.matches_recording_configuration(requested))
 }
 
+fn require_exact_input_configuration(
+    requested: &RecordingConfiguration,
+    capabilities: &[CpalInputConfiguration],
+) -> Result<CpalInputConfiguration, CaptureStartError> {
+    find_exact_input_configuration(requested, capabilities)
+        .ok_or(CaptureStartError::UnsupportedRecordingConfiguration)
+}
+
 /// Discovers the default input device and exposes its supported
 /// input configuration ranges.
 impl CpalCaptureProvider {
@@ -132,14 +140,25 @@ pub struct CpalCaptureProvider {
 impl crate::audio::CaptureProvider for CpalCaptureProvider {
     fn start_capture(
         &mut self,
-        _configuration: &RecordingConfiguration,
+        configuration: &RecordingConfiguration,
     ) -> Result<(), CaptureStartError> {
         let host = cpal::default_host();
-        let device = host.default_input_device().ok_or(CaptureStartError)?;
+        let device = host
+            .default_input_device()
+            .ok_or(CaptureStartError::DeviceUnavailable)?;
+
+        let capabilities = device
+            .supported_input_configs()
+            .map_err(|_| CaptureStartError::ConfigurationUnavailable)?
+            .map(|configuration| CpalInputConfiguration::from_supported_config(&configuration))
+            .collect::<Vec<_>>();
+
+        let _selected_configuration =
+            require_exact_input_configuration(configuration, &capabilities)?;
 
         let configuration = device
             .default_input_config()
-            .map_err(|_| CaptureStartError)?;
+            .map_err(|_| CaptureStartError::ConfigurationUnavailable)?;
 
         let stream_config: cpal::StreamConfig = configuration.clone().into();
         let samples = Arc::clone(&self.samples);
@@ -154,9 +173,11 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
                 |_error| {},
                 None,
             )
-            .map_err(|_| CaptureStartError)?;
+            .map_err(|_| CaptureStartError::ConfigurationUnavailable)?;
 
-        stream.play().map_err(|_| CaptureStartError)?;
+        stream
+            .play()
+            .map_err(|_| CaptureStartError::ConfigurationUnavailable)?;
 
         self.stream = Some(stream);
 
@@ -335,6 +356,28 @@ mod tests {
         assert_eq!(
             find_exact_input_configuration(&requested, &capabilities),
             None
+        );
+    }
+
+    #[test]
+    fn unsupported_configuration_returns_start_error() {
+        let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
+        let capabilities = [capability(2, 48_000, 48_000, cpal::SampleFormat::F32)];
+
+        assert_eq!(
+            require_exact_input_configuration(&requested, &capabilities),
+            Err(CaptureStartError::UnsupportedRecordingConfiguration)
+        );
+    }
+
+    #[test]
+    fn supported_configuration_passes_start_validation() {
+        let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
+        let capabilities = [capability(1, 48_000, 48_000, cpal::SampleFormat::F32)];
+
+        assert_eq!(
+            require_exact_input_configuration(&requested, &capabilities),
+            Ok(capabilities[0])
         );
     }
 }
