@@ -32,10 +32,13 @@ impl RecordingArtifactFactory {
         let mut artifact = RecordingArtifact::new(capture_result.id(), recording_session_id);
 
         for capture_track in capture_result.tracks() {
-            let mut recording_track = RecordingTrack::with_configuration(
-                capture_track.id.value(),
-                capture_track.configuration().unwrap_or_default(),
-            );
+            let mut recording_track = match capture_track.configuration() {
+                Some(configuration) => RecordingTrack::with_configuration(
+                    capture_track.id.value(),
+                    configuration,
+                ),
+                None => RecordingTrack::new(capture_track.id.value()),
+            };
 
             for capture_chunk in capture_track.chunks() {
                 // The logical reference remains independent from the concrete
