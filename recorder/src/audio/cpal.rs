@@ -466,20 +466,15 @@ mod tests {
             .lock()
             .expect("Sample-Puffer konnte nicht geschrieben werden.")
             .extend_from_slice(&[0x01, 0x02, 0x03]);
-        provider.active_configuration = Some(RecordingConfiguration::new(
-            48_000,
-            1,
-            SampleFormat::Pcm24,
-        ));
+        provider.active_configuration = Some(RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24));
 
         let first_result = provider.stop_capture();
-        assert_eq!(first_result.tracks()[0].chunks()[0].payload(), &[0x01, 0x02, 0x03]);
+        assert_eq!(
+            first_result.tracks()[0].chunks()[0].payload(),
+            &[0x01, 0x02, 0x03]
+        );
 
-        provider.active_configuration = Some(RecordingConfiguration::new(
-            48_000,
-            1,
-            SampleFormat::Pcm24,
-        ));
+        provider.active_configuration = Some(RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24));
 
         let second_result = provider.stop_capture();
         assert_eq!(second_result.tracks()[0].chunks()[0].payload(), &[]);
