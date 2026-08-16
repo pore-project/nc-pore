@@ -158,6 +158,7 @@ impl CaptureResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::SampleFormat;
 
     // TEST-31
     //
