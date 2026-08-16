@@ -357,6 +357,7 @@ pub fn inspect_default_input_device() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::CaptureProvider;
 
     fn capability(
         channels: u16,
