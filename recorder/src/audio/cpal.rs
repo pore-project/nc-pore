@@ -29,6 +29,7 @@ pub struct CpalInputConfiguration {
     min_sample_rate_hz: u32,
     max_sample_rate_hz: u32,
     sample_format: cpal::SampleFormat,
+    buffer_size: cpal::SupportedBufferSize,
 }
 
 impl CpalInputConfiguration {
@@ -38,6 +39,7 @@ impl CpalInputConfiguration {
             min_sample_rate_hz: config.min_sample_rate(),
             max_sample_rate_hz: config.max_sample_rate(),
             sample_format: config.sample_format(),
+            buffer_size: *config.buffer_size(),
         }
     }
 
@@ -64,6 +66,28 @@ impl CpalInputConfiguration {
             && self.min_sample_rate_hz <= configuration.sample_rate_hz()
             && configuration.sample_rate_hz() <= self.max_sample_rate_hz
             && self.sample_format == cpal_sample_format(configuration.sample_format())
+    }
+
+    /// Returns a concrete CPAL stream configuration for a supported
+    /// sample rate.
+    ///
+    /// The selection is delegated to CPAL's range API so the native
+    /// buffer-size information is retained as reported by the device.
+    pub fn stream_config_for_sample_rate(
+        &self,
+        sample_rate_hz: u32,
+    ) -> Option<cpal::StreamConfig> {
+        let range = cpal::SupportedStreamConfigRange::new(
+            self.channels,
+            self.min_sample_rate_hz,
+            self.max_sample_rate_hz,
+            self.buffer_size,
+            self.sample_format,
+        );
+
+        range
+            .try_with_sample_rate(sample_rate_hz)
+            .map(Into::into)
     }
 }
 
@@ -98,6 +122,11 @@ fn require_exact_input_configuration(
         .ok_or(CaptureStartError::UnsupportedRecordingConfiguration)
 }
 
+pub struct CpalCaptureProvider {
+    samples: Arc<Mutex<Vec<f32>>>,
+    stream: Option<cpal::Stream>,
+}
+
 /// Discovers the default input device and exposes its supported
 /// input configuration ranges.
 impl CpalCaptureProvider {
@@ -130,11 +159,6 @@ impl CpalCaptureProvider {
 
         Ok(configurations)
     }
-}
-
-pub struct CpalCaptureProvider {
-    samples: Arc<Mutex<Vec<f32>>>,
-    stream: Option<cpal::Stream>,
 }
 
 impl crate::audio::CaptureProvider for CpalCaptureProvider {
@@ -321,6 +345,7 @@ mod tests {
             min_sample_rate_hz,
             max_sample_rate_hz,
             sample_format,
+            buffer_size: cpal::SupportedBufferSize::Unknown,
         }
     }
 
@@ -379,5 +404,24 @@ mod tests {
             require_exact_input_configuration(&requested, &capabilities),
             Ok(capabilities[0])
         );
+    }
+
+    #[test]
+    fn stream_config_uses_requested_sample_rate() {
+        let available = capability(1, 44_100, 96_000, cpal::SampleFormat::F32);
+
+        let stream_config = available
+            .stream_config_for_sample_rate(48_000)
+            .expect("48 kHz should be supported");
+
+        assert_eq!(stream_config.channels, 1);
+        assert_eq!(stream_config.sample_rate, cpal::SampleRate(48_000));
+    }
+
+    #[test]
+    fn stream_config_rejects_rate_outside_supported_range() {
+        let available = capability(1, 44_100, 96_000, cpal::SampleFormat::F32);
+
+        assert!(available.stream_config_for_sample_rate(96_001).is_none());
     }
 }
