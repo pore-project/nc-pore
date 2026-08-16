@@ -62,8 +62,18 @@ pub struct RecordingConfiguration {
 }
 
 impl RecordingConfiguration {
-    /// Creates a recording configuration with explicit parameters.
-    pub const fn new(
+    /// Creates a recording configuration with the default chunk duration.
+    pub const fn new(sample_rate_hz: u32, channels: u16, sample_format: SampleFormat) -> Self {
+        Self {
+            sample_rate_hz,
+            channels,
+            sample_format,
+            chunk_duration: RecordingChunkDuration::OneMinute,
+        }
+    }
+
+    /// Creates a recording configuration with an explicit chunk duration.
+    pub const fn with_chunk_duration(
         sample_rate_hz: u32,
         channels: u16,
         sample_format: SampleFormat,
@@ -77,23 +87,9 @@ impl RecordingConfiguration {
         }
     }
 
-    /// Creates a recording configuration using the default chunk duration.
-    pub const fn with_audio_parameters(
-        sample_rate_hz: u32,
-        channels: u16,
-        sample_format: SampleFormat,
-    ) -> Self {
-        Self::new(
-            sample_rate_hz,
-            channels,
-            sample_format,
-            RecordingChunkDuration::OneMinute,
-        )
-    }
-
     /// Returns the preferred NC-PoRe recording configuration from ADR-002.
     pub const fn default() -> Self {
-        Self::with_audio_parameters(48_000, 1, SampleFormat::Pcm24)
+        Self::new(48_000, 1, SampleFormat::Pcm24)
     }
 
     pub const fn sample_rate_hz(&self) -> u32 {
@@ -135,7 +131,7 @@ mod tests {
     // without being coupled to a concrete audio backend.
     #[test]
     fn configuration_preserves_explicit_parameters() {
-        let configuration = RecordingConfiguration::new(
+        let configuration = RecordingConfiguration::with_chunk_duration(
             44_100,
             2,
             SampleFormat::F32,
