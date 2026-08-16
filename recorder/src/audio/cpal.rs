@@ -120,6 +120,7 @@ fn require_exact_input_configuration(
 pub struct CpalCaptureProvider {
     samples: Arc<Mutex<Vec<f32>>>,
     stream: Option<cpal::Stream>,
+    active_configuration: Option<RecordingConfiguration>,
 }
 
 /// Discovers the default input device and exposes its supported
@@ -129,6 +130,7 @@ impl CpalCaptureProvider {
         Self {
             samples: Arc::new(Mutex::new(Vec::new())),
             stream: None,
+            active_configuration: None,
         }
     }
 
@@ -196,6 +198,7 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             .play()
             .map_err(|_| CaptureStartError::ConfigurationUnavailable)?;
 
+        self.active_configuration = Some(*configuration);
         self.stream = Some(stream);
 
         Ok(())
@@ -203,6 +206,11 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
 
     fn stop_capture(&mut self) -> CaptureResult {
         self.stream.take();
+
+        let configuration = self
+            .active_configuration
+            .take()
+            .expect("Keine aktive Aufnahmekonfiguration vorhanden.");
 
         let payload = self
             .samples
@@ -214,7 +222,7 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
 
         let chunk = CaptureChunk::with_payload(1, payload);
 
-        let mut track = CaptureTrack::new("cpal-track");
+        let mut track = CaptureTrack::with_configuration("cpal-track", configuration);
         track.add_chunk(chunk);
 
         let mut result = CaptureResult::new("cpal-capture");
@@ -287,7 +295,14 @@ pub fn test_input_stream() -> Result<(), String> {
 
     println!("CaptureChunk erzeugt: {} Bytes", chunk.payload().len());
 
-    let mut track = CaptureTrack::new("test-track");
+    let mut track = CaptureTrack::with_configuration(
+        "test-track",
+        RecordingConfiguration::new(
+            configuration.sample_rate(),
+            configuration.channels(),
+            SampleFormat::F32,
+        ),
+    );
     track.add_chunk(chunk);
 
     println!("CaptureTrack erzeugt: {} Chunk", track.chunks().len());
@@ -342,6 +357,7 @@ mod tests {
         }
     }
 
+    // TEST-01
     #[test]
     fn exact_match_accepts_rate_inside_supported_range() {
         let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
@@ -350,6 +366,7 @@ mod tests {
         assert!(available.matches_recording_configuration(&requested));
     }
 
+    // TEST-02
     #[test]
     fn exact_match_rejects_wrong_channel_count() {
         let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
@@ -358,6 +375,7 @@ mod tests {
         assert!(!available.matches_recording_configuration(&requested));
     }
 
+    // TEST-03
     #[test]
     fn exact_match_maps_pcm24_to_cpal_i24() {
         let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24);
@@ -366,6 +384,7 @@ mod tests {
         assert!(available.matches_recording_configuration(&requested));
     }
 
+    // TEST-04
     #[test]
     fn resolver_returns_none_without_exact_match() {
         let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24);
@@ -377,6 +396,7 @@ mod tests {
         );
     }
 
+    // TEST-05
     #[test]
     fn unsupported_configuration_returns_start_error() {
         let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
@@ -388,6 +408,7 @@ mod tests {
         );
     }
 
+    // TEST-06
     #[test]
     fn supported_configuration_passes_start_validation() {
         let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
@@ -399,6 +420,7 @@ mod tests {
         );
     }
 
+    // TEST-07
     #[test]
     fn stream_config_uses_requested_sample_rate() {
         let available = capability(1, 44_100, 96_000, cpal::SampleFormat::F32);
@@ -411,6 +433,7 @@ mod tests {
         assert_eq!(stream_config.sample_rate, 48_000);
     }
 
+    // TEST-08
     #[test]
     fn stream_config_rejects_rate_outside_supported_range() {
         let available = capability(1, 44_100, 96_000, cpal::SampleFormat::F32);

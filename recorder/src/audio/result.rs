@@ -15,6 +15,8 @@
 //! - ADR-039 Recording Architecture and Capture Boundary
 //! - ADR-056 Capture Result and Recording Artifact Data Boundary
 
+use super::RecordingConfiguration;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureChunk {
     pub sequence: u32,
@@ -71,16 +73,35 @@ impl CaptureTrackId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureTrack {
     pub id: CaptureTrackId,
+    configuration: Option<RecordingConfiguration>,
     chunks: Vec<CaptureChunk>,
 }
 
 impl CaptureTrack {
-    /// Creates an empty capture track.
+    /// Creates an empty capture track without configuration metadata.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: CaptureTrackId::new(id),
+            configuration: None,
             chunks: Vec::new(),
         }
+    }
+
+    /// Creates an empty capture track with the supplied recording configuration.
+    pub fn with_configuration(
+        id: impl Into<String>,
+        configuration: RecordingConfiguration,
+    ) -> Self {
+        Self {
+            id: CaptureTrackId::new(id),
+            configuration: Some(configuration),
+            chunks: Vec::new(),
+        }
+    }
+
+    /// Returns the recording configuration used for this capture track, if known.
+    pub const fn configuration(&self) -> Option<RecordingConfiguration> {
+        self.configuration
     }
 
     /// Adds a technical capture chunk.
@@ -137,6 +158,7 @@ impl CaptureResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::SampleFormat;
 
     // TEST-31
     //
@@ -217,12 +239,26 @@ mod tests {
         assert_eq!(chunk.sequence, 1);
         assert_eq!(chunk.payload(), &[1, 2, 3, 4]);
     }
+
+    // TEST-35
+    //
+    // Protects the capture boundary:
+    // The technical configuration used for a capture track remains
+    // attached to the resulting track.
+    #[test]
+    fn capture_track_preserves_recording_configuration() {
+        let configuration = RecordingConfiguration::new(44_100, 2, SampleFormat::F32);
+        let track = CaptureTrack::with_configuration("track-host", configuration);
+
+        assert_eq!(track.configuration(), Some(configuration));
+    }
 }
 
 #[cfg(test)]
 mod capture_track_id_tests {
     use super::*;
 
+    // TEST-36
     #[test]
     fn capture_track_id_preserves_value() {
         let id = CaptureTrackId::new("track-001");
