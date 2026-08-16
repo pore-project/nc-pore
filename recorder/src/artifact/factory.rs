@@ -32,7 +32,10 @@ impl RecordingArtifactFactory {
         let mut artifact = RecordingArtifact::new(capture_result.id(), recording_session_id);
 
         for capture_track in capture_result.tracks() {
-            let mut recording_track = RecordingTrack::new(capture_track.id.value());
+            let mut recording_track = RecordingTrack::with_configuration(
+                capture_track.id.value(),
+                capture_track.configuration().unwrap_or_default(),
+            );
 
             for capture_chunk in capture_track.chunks() {
                 // The logical reference remains independent from the concrete
@@ -60,7 +63,7 @@ impl RecordingArtifactFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack};
+    use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat};
 
     // TEST-22
     //
@@ -79,6 +82,7 @@ mod tests {
         assert_eq!(artifact.recording_session_id.value(), "session-001");
     }
 
+    // TEST-23
     #[test]
     fn factory_transfers_tracks_and_chunks() {
         let mut capture = CaptureResult::new("capture-001");
@@ -117,14 +121,18 @@ mod tests {
     #[test]
     fn factory_transfers_chunk_payload_and_assigns_logical_reference() {
         let mut capture = CaptureResult::new("capture-001");
-        let mut track = CaptureTrack::new("track-host");
+        let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
+        let mut track = CaptureTrack::with_configuration("track-host", configuration);
         track.add_chunk(CaptureChunk::with_payload(1, vec![10, 20, 30]));
         capture.add_track(track);
 
         let artifact =
             RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
 
-        let chunk = &artifact.tracks()[0].chunks()[0];
+        let recording_track = &artifact.tracks()[0];
+        assert_eq!(recording_track.configuration(), Some(configuration));
+
+        let chunk = &recording_track.chunks()[0];
         assert_eq!(
             chunk.payload().reference().value(),
             "track-host/chunk-000001"
