@@ -298,7 +298,7 @@ pub fn test_input_stream() -> Result<(), String> {
     let mut track = CaptureTrack::with_configuration(
         "test-track",
         RecordingConfiguration::new(
-            configuration.sample_rate().0,
+            configuration.sample_rate(),
             configuration.channels(),
             SampleFormat::F32,
         ),
