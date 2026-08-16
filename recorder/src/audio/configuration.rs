@@ -123,7 +123,10 @@ mod tests {
         assert_eq!(configuration.sample_rate_hz(), 48_000);
         assert_eq!(configuration.channels(), 1);
         assert_eq!(configuration.sample_format(), SampleFormat::Pcm24);
-        assert_eq!(configuration.chunk_duration(), RecordingChunkDuration::OneMinute);
+        assert_eq!(
+            configuration.chunk_duration(),
+            RecordingChunkDuration::OneMinute
+        );
     }
 
     // TEST-02
@@ -141,7 +144,10 @@ mod tests {
         assert_eq!(configuration.sample_rate_hz(), 44_100);
         assert_eq!(configuration.channels(), 2);
         assert_eq!(configuration.sample_format(), SampleFormat::F32);
-        assert_eq!(configuration.chunk_duration(), RecordingChunkDuration::FiveMinutes);
+        assert_eq!(
+            configuration.chunk_duration(),
+            RecordingChunkDuration::FiveMinutes
+        );
     }
 
     // TEST-03
