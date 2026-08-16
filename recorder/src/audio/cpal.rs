@@ -35,8 +35,8 @@ impl CpalInputConfiguration {
     fn from_supported_config(config: &cpal::SupportedStreamConfigRange) -> Self {
         Self {
             channels: config.channels(),
-            min_sample_rate_hz: config.min_sample_rate().0,
-            max_sample_rate_hz: config.max_sample_rate().0,
+            min_sample_rate_hz: config.min_sample_rate(),
+            max_sample_rate_hz: config.max_sample_rate(),
             sample_format: config.sample_format(),
         }
     }
