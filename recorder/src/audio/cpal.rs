@@ -410,7 +410,7 @@ mod tests {
             .expect("48 kHz should be supported");
 
         assert_eq!(stream_config.channels, 1);
-        assert_eq!(stream_config.sample_rate.0, 48_000);
+        assert_eq!(stream_config.sample_rate, 48_000);
     }
 
     #[test]
