@@ -63,7 +63,9 @@ impl RecordingArtifactFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::{CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat};
+    use crate::audio::{
+        CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat,
+    };
 
     // TEST-22
     //
