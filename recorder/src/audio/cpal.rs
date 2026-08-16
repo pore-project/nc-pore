@@ -59,10 +59,7 @@ impl CpalInputConfiguration {
 
     /// Returns whether this CPAL capability exactly supports the
     /// requested recording configuration.
-    pub fn matches_recording_configuration(
-        &self,
-        configuration: &RecordingConfiguration,
-    ) -> bool {
+    pub fn matches_recording_configuration(&self, configuration: &RecordingConfiguration) -> bool {
         self.channels == configuration.channels()
             && self.min_sample_rate_hz <= configuration.sample_rate_hz()
             && configuration.sample_rate_hz() <= self.max_sample_rate_hz
@@ -335,6 +332,9 @@ mod tests {
         let requested = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24);
         let capabilities = [capability(2, 48_000, 48_000, cpal::SampleFormat::I24)];
 
-        assert_eq!(find_exact_input_configuration(&requested, &capabilities), None);
+        assert_eq!(
+            find_exact_input_configuration(&requested, &capabilities),
+            None
+        );
     }
 }
