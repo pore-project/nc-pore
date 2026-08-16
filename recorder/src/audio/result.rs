@@ -15,6 +15,8 @@
 //! - ADR-039 Recording Architecture and Capture Boundary
 //! - ADR-056 Capture Result and Recording Artifact Data Boundary
 
+use super::RecordingConfiguration;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureChunk {
     pub sequence: u32,
@@ -71,16 +73,23 @@ impl CaptureTrackId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureTrack {
     pub id: CaptureTrackId,
+    configuration: RecordingConfiguration,
     chunks: Vec<CaptureChunk>,
 }
 
 impl CaptureTrack {
-    /// Creates an empty capture track.
-    pub fn new(id: impl Into<String>) -> Self {
+    /// Creates an empty capture track for the supplied recording configuration.
+    pub fn new(id: impl Into<String>, configuration: RecordingConfiguration) -> Self {
         Self {
             id: CaptureTrackId::new(id),
+            configuration,
             chunks: Vec::new(),
         }
+    }
+
+    /// Returns the recording configuration used for this capture track.
+    pub const fn configuration(&self) -> RecordingConfiguration {
+        self.configuration
     }
 
     /// Adds a technical capture chunk.
@@ -146,9 +155,10 @@ mod tests {
     #[test]
     fn capture_result_can_contain_tracks() {
         let mut result = CaptureResult::new("capture-001");
+        let configuration = RecordingConfiguration::default();
 
-        result.add_track(CaptureTrack::new("track-host"));
-        result.add_track(CaptureTrack::new("track-guest"));
+        result.add_track(CaptureTrack::new("track-host", configuration));
+        result.add_track(CaptureTrack::new("track-guest", configuration));
 
         assert_eq!(result.tracks().len(), 2);
         assert_eq!(result.tracks()[0].id.value(), "track-host");
@@ -161,7 +171,7 @@ mod tests {
     // A capture track can contain multiple ordered chunks.
     #[test]
     fn capture_track_can_contain_ordered_chunks() {
-        let mut track = CaptureTrack::new("track-host");
+        let mut track = CaptureTrack::new("track-host", RecordingConfiguration::default());
 
         track.add_chunk(CaptureChunk::new(1));
         track.add_chunk(CaptureChunk::new(2));
@@ -180,12 +190,13 @@ mod tests {
     #[test]
     fn capture_result_preserves_independent_track_data() {
         let mut result = CaptureResult::new("capture-001");
+        let configuration = RecordingConfiguration::default();
 
-        let mut host_track = CaptureTrack::new("track-host");
+        let mut host_track = CaptureTrack::new("track-host", configuration);
         host_track.add_chunk(CaptureChunk::new(1));
         host_track.add_chunk(CaptureChunk::new(2));
 
-        let mut guest_track = CaptureTrack::new("track-guest");
+        let mut guest_track = CaptureTrack::new("track-guest", configuration);
         guest_track.add_chunk(CaptureChunk::new(1));
         guest_track.add_chunk(CaptureChunk::new(2));
         guest_track.add_chunk(CaptureChunk::new(3));
@@ -217,12 +228,26 @@ mod tests {
         assert_eq!(chunk.sequence, 1);
         assert_eq!(chunk.payload(), &[1, 2, 3, 4]);
     }
+
+    // TEST-35
+    //
+    // Protects the capture boundary:
+    // The technical configuration used for a capture track remains
+    // attached to the resulting track.
+    #[test]
+    fn capture_track_preserves_recording_configuration() {
+        let configuration = RecordingConfiguration::new(44_100, 2, SampleFormat::F32);
+        let track = CaptureTrack::new("track-host", configuration);
+
+        assert_eq!(track.configuration(), configuration);
+    }
 }
 
 #[cfg(test)]
 mod capture_track_id_tests {
     use super::*;
 
+    // TEST-36
     #[test]
     fn capture_track_id_preserves_value() {
         let id = CaptureTrackId::new("track-001");
