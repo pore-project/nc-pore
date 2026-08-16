@@ -118,7 +118,7 @@ mod tests {
             _configuration: &RecordingConfiguration,
         ) -> Result<(), crate::audio::CaptureStartError> {
             if self.fail_on_start {
-                return Err(crate::audio::CaptureStartError);
+                return Err(crate::audio::CaptureStartError::DeviceUnavailable);
             }
 
             self.active = true;
@@ -199,7 +199,10 @@ mod tests {
 
         let result = workflow.start(&configuration);
 
-        assert_eq!(result, Err(crate::audio::CaptureStartError));
+        assert_eq!(
+            result,
+            Err(crate::audio::CaptureStartError::DeviceUnavailable)
+        );
         assert_eq!(
             workflow.session().status(),
             &crate::session::SessionStatus::Failed

@@ -27,7 +27,11 @@ pub use result::{CaptureChunk, CaptureTrack};
 
 /// Returned when a capture provider cannot start audio capture.
 #[derive(Debug, PartialEq, Eq)]
-pub struct CaptureStartError;
+pub enum CaptureStartError {
+    DeviceUnavailable,
+    ConfigurationUnavailable,
+    UnsupportedRecordingConfiguration,
+}
 
 /// Defines the interface between recorder workflow
 /// and concrete audio capture implementations.

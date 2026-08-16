@@ -51,7 +51,10 @@ fn main() {
     let mut application = RecorderApplication::new(session, capture, processor);
     let configuration = RecordingConfiguration::default();
 
-    application.start(&configuration);
+    if let Err(error) = application.start(&configuration) {
+        eprintln!("Aufnahme konnte nicht gestartet werden: {error:?}");
+        std::process::exit(1);
+    }
 
     let _ = application.session();
 
