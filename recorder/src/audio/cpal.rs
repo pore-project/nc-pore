@@ -480,6 +480,9 @@ mod tests {
             Some(RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24));
 
         let second_result = provider.stop_capture();
-        assert_eq!(second_result.tracks()[0].chunks()[0].payload(), &[]);
+        assert_eq!(
+            second_result.tracks()[0].chunks()[0].payload(),
+            &[] as &[u8]
+        );
     }
 }
