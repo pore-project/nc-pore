@@ -118,7 +118,7 @@ fn require_exact_input_configuration(
 }
 
 pub struct CpalCaptureProvider {
-    samples: Arc<Mutex<Vec<f32>>>,
+    samples: Arc<Mutex<Vec<u8>>>,
     stream: Option<cpal::Stream>,
     active_configuration: Option<RecordingConfiguration>,
 }
@@ -163,6 +163,15 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
         &mut self,
         configuration: &RecordingConfiguration,
     ) -> Result<(), CaptureStartError> {
+        if self.stream.is_some() || self.active_configuration.is_some() {
+            return Err(CaptureStartError::AlreadyCapturing);
+        }
+
+        self.samples
+            .lock()
+            .expect("Sample-Puffer konnte nicht geleert werden.")
+            .clear();
+
         let host = cpal::default_host();
         let device = host
             .default_input_device()
@@ -183,13 +192,16 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
         let samples = Arc::clone(&self.samples);
 
         let stream = device
-            .build_input_stream::<f32, _, _>(
+            .build_input_stream_raw(
                 stream_config,
+                selected_configuration.sample_format(),
                 move |data, _| {
                     let mut samples = samples.lock().unwrap();
-                    samples.extend_from_slice(data);
+                    samples.extend_from_slice(data.bytes());
                 },
-                |_error| {},
+                |error| {
+                    eprintln!("CPAL Input-Stream-Fehler: {error}");
+                },
                 None,
             )
             .map_err(|_| CaptureStartError::ConfigurationUnavailable)?;
@@ -216,9 +228,12 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             .samples
             .lock()
             .expect("Sample-Puffer konnte nicht gelesen werden.")
-            .iter()
-            .flat_map(|sample| sample.to_le_bytes())
-            .collect::<Vec<u8>>();
+            .clone();
+
+        self.samples
+            .lock()
+            .expect("Sample-Puffer konnte nicht geleert werden.")
+            .clear();
 
         let chunk = CaptureChunk::with_payload(1, payload);
 
@@ -252,20 +267,23 @@ pub fn test_input_stream() -> Result<(), String> {
         configuration.sample_format(),
     );
 
-    let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
+    let samples = Arc::new(Mutex::new(Vec::<u8>::new()));
 
     let stream_config: cpal::StreamConfig = configuration.clone().into();
 
     let samples_for_callback = Arc::clone(&samples);
 
     let stream = device
-        .build_input_stream::<f32, _, _>(
+        .build_input_stream_raw(
             stream_config,
+            configuration.sample_format(),
             move |data, _| {
                 let mut samples = samples_for_callback.lock().unwrap();
-                samples.extend_from_slice(data);
+                samples.extend_from_slice(data.bytes());
             },
-            |_error| {},
+            |error| {
+                eprintln!("CPAL Input-Stream-Fehler: {error}");
+            },
             None,
         )
         .map_err(|error| format!("Input-Stream konnte nicht erstellt werden: {error}"))?;
@@ -282,14 +300,12 @@ pub fn test_input_stream() -> Result<(), String> {
         .map_err(|_| "Sample-Puffer konnte nicht gelesen werden.".to_string())?
         .len();
 
-    println!("Empfangene Samples: {count}");
+    println!("Empfangene Sample-Bytes: {count}");
 
     let payload = samples
         .lock()
         .map_err(|_| "Sample-Puffer konnte nicht gelesen werden.".to_string())?
-        .iter()
-        .flat_map(|sample| sample.to_le_bytes())
-        .collect::<Vec<u8>>();
+        .clone();
 
     let chunk = CaptureChunk::with_payload(1, payload);
 
@@ -341,6 +357,7 @@ pub fn inspect_default_input_device() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::CaptureProvider;
 
     fn capability(
         channels: u16,
@@ -439,5 +456,33 @@ mod tests {
         let available = capability(1, 44_100, 96_000, cpal::SampleFormat::F32);
 
         assert!(available.stream_config_for_sample_rate(96_001).is_none());
+    }
+
+    // TEST-09
+    #[test]
+    fn stop_capture_clears_samples_for_next_capture() {
+        let mut provider = CpalCaptureProvider::new();
+        provider
+            .samples
+            .lock()
+            .expect("Sample-Puffer konnte nicht geschrieben werden.")
+            .extend_from_slice(&[0x01, 0x02, 0x03]);
+        provider.active_configuration =
+            Some(RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24));
+
+        let first_result = provider.stop_capture();
+        assert_eq!(
+            first_result.tracks()[0].chunks()[0].payload(),
+            &[0x01, 0x02, 0x03]
+        );
+
+        provider.active_configuration =
+            Some(RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24));
+
+        let second_result = provider.stop_capture();
+        assert_eq!(
+            second_result.tracks()[0].chunks()[0].payload(),
+            &[] as &[u8]
+        );
     }
 }

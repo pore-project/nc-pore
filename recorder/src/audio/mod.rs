@@ -31,6 +31,7 @@ pub enum CaptureStartError {
     DeviceUnavailable,
     ConfigurationUnavailable,
     UnsupportedRecordingConfiguration,
+    AlreadyCapturing,
 }
 
 /// Defines the interface between recorder workflow
