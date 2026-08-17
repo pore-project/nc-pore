@@ -10,18 +10,17 @@
 //! ```text
 //! application ──► core
 //!      │
-//!      └──────► technical recorder boundary
+//!      └──────► recorder boundary
 //! ```
 
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
 use nc_pore_core::session::{ProductionSession, ProductionSessionError, ProductionSessionRepository};
+use recorder::application::{RecorderApplication, RecorderApplicationError};
+use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
+use recorder::persistence::PersistenceProvider;
 
 /// Technical recorder boundary used by recording lifecycle use cases.
-///
-/// The concrete recorder implementation remains outside the application
-/// layer. The application only needs a start operation and a completion
-/// operation that yields the opaque domain artifact identity.
 pub trait RecorderPort<C> {
     type Error;
 
@@ -32,6 +31,63 @@ pub trait RecorderPort<C> {
         production_id: &ProductionId,
         recording_id: &RecordingId,
     ) -> Result<RecordingArtifactId, Self::Error>;
+}
+
+/// Adapter from the concrete technical RecorderApplication to the application
+/// boundary. Technical ArtifactId is converted to the opaque domain reference
+/// here, never in Core.
+pub struct RecorderApplicationAdapter<C, P>
+where
+    C: CaptureProvider,
+    P: PersistenceProvider,
+{
+    recorder: RecorderApplication<C, P>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RecorderBoundaryError {
+    Start(String),
+    Recorder(RecorderApplicationError),
+}
+
+impl<C, P> RecorderApplicationAdapter<C, P>
+where
+    C: CaptureProvider,
+    P: PersistenceProvider,
+{
+    pub fn new(recorder: RecorderApplication<C, P>) -> Self {
+        Self { recorder }
+    }
+}
+
+impl<C, P> RecorderPort<RecordingConfiguration> for RecorderApplicationAdapter<C, P>
+where
+    C: CaptureProvider,
+    P: PersistenceProvider,
+{
+    type Error = RecorderBoundaryError;
+
+    fn start(&mut self, configuration: &RecordingConfiguration) -> Result<(), Self::Error> {
+        self.recorder
+            .start(configuration)
+            .map_err(|error: CaptureStartError| RecorderBoundaryError::Start(error.to_string()))
+    }
+
+    fn complete(
+        &mut self,
+        production_id: &ProductionId,
+        recording_id: &RecordingId,
+    ) -> Result<RecordingArtifactId, Self::Error> {
+        let artifact = self
+            .recorder
+            .stop(recorder::artifact::RecordingArtifactAssociation::new(
+                production_id.value(),
+                recording_id.value(),
+            ))
+            .map_err(RecorderBoundaryError::Recorder)?;
+
+        Ok(RecordingArtifactId::new(artifact.id.value()))
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,7 +109,7 @@ pub enum CompleteRecordingError<RE, TE> {
 /// The domain transition is persisted before the technical recorder starts.
 /// If the technical start subsequently fails, the persisted Recording remains
 /// in `Recording` state with no artifact association. This is an intentional
-/// interrupted-recording state and is handled by the recovery semantics in #71.
+/// interrupted-recording state and is handled by #71.
 pub struct StartRecordingUseCase<'a, R, T, C>
 where
     R: ProductionSessionRepository,
@@ -108,10 +164,6 @@ where
 /// The technical recorder is completed first because its result supplies the
 /// `RecordingArtifactId` required by the domain completion transition. The
 /// domain aggregate is persisted only after that transition succeeds.
-///
-/// If persistence fails after a technical artifact has been produced, the
-/// artifact may temporarily exist without a persisted domain association.
-/// That is a recovery concern for #71, not a new domain lifecycle state.
 pub struct CompleteRecordingUseCase<'a, R, T, C>
 where
     R: ProductionSessionRepository,
@@ -242,12 +294,7 @@ mod tests {
 
         assert_eq!(recorder.events, vec!["recorder.start"]);
         assert_eq!(
-            repository
-                .session
-                .as_ref()
-                .unwrap()
-                .recordings()[0]
-                .status(),
+            repository.session.as_ref().unwrap().recordings()[0].status(),
             nc_pore_core::recording::RecordingStatus::Recording
         );
     }
@@ -268,12 +315,7 @@ mod tests {
 
         assert_eq!(recorder.events, vec!["recorder.complete"]);
         assert_eq!(
-            repository
-                .session
-                .as_ref()
-                .unwrap()
-                .recordings()[0]
-                .artifact_id(),
+            repository.session.as_ref().unwrap().recordings()[0].artifact_id(),
             Some(&artifact_id)
         );
     }
@@ -309,12 +351,7 @@ mod tests {
             Err(StartRecordingError::Recorder("capture start failed"))
         );
         assert_eq!(
-            repository
-                .session
-                .as_ref()
-                .unwrap()
-                .recordings()[0]
-                .status(),
+            repository.session.as_ref().unwrap().recordings()[0].status(),
             nc_pore_core::recording::RecordingStatus::Recording
         );
         assert_eq!(
