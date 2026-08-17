@@ -15,7 +15,9 @@
 
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
-use nc_pore_core::session::{ProductionSession, ProductionSessionError, ProductionSessionRepository};
+use nc_pore_core::session::{
+    ProductionSession, ProductionSessionError, ProductionSessionRepository,
+};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
 use recorder::persistence::PersistenceProvider;
@@ -70,7 +72,9 @@ where
     fn start(&mut self, configuration: &RecordingConfiguration) -> Result<(), Self::Error> {
         self.recorder
             .start(configuration)
-            .map_err(|error: CaptureStartError| RecorderBoundaryError::Start(format!("{error:?}")))
+            .map_err(|error: CaptureStartError| {
+                RecorderBoundaryError::Start(format!("{error:?}"))
+            })
     }
 
     fn complete(
@@ -143,7 +147,9 @@ where
             .repository
             .get(production_id)
             .map_err(StartRecordingError::Repository)?
-            .ok_or(StartRecordingError::Domain(ProductionSessionError::RecordingNotFound))?;
+            .ok_or(StartRecordingError::Domain(
+                ProductionSessionError::RecordingNotFound,
+            ))?;
 
         session
             .start_recording(recording_id)
@@ -302,7 +308,12 @@ mod tests {
     #[test]
     fn complete_use_case_associates_recorder_result_with_domain_recording() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
-        repository.session.as_mut().unwrap().start_recording(&recording_id).unwrap();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording(&recording_id)
+            .unwrap();
 
         let artifact_id = RecordingArtifactId::new("artifact-001");
         let mut recorder = TestRecorder {
@@ -310,7 +321,8 @@ mod tests {
             artifact_id: artifact_id.clone(),
         };
 
-        let mut use_case = CompleteRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
+        let mut use_case =
+            CompleteRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
         use_case.execute(&production_id, &recording_id).unwrap();
 
         assert_eq!(recorder.events, vec!["recorder.complete"]);
