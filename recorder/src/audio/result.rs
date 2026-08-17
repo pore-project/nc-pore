@@ -115,6 +115,13 @@ impl CaptureTrack {
     }
 }
 
+/// Technical outcome of a capture operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CaptureStatus {
+    Completed,
+    Failed(String),
+}
+
 /// Result of a completed audio capture operation.
 ///
 /// CaptureResult contains technical recording data produced by
@@ -127,14 +134,25 @@ impl CaptureTrack {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureResult {
     id: String,
+    status: CaptureStatus,
     tracks: Vec<CaptureTrack>,
 }
 
 impl CaptureResult {
-    /// Creates a new capture result.
+    /// Creates a successfully completed capture result.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
+            status: CaptureStatus::Completed,
+            tracks: Vec::new(),
+        }
+    }
+
+    /// Creates a capture result representing a technical capture failure.
+    pub fn failed(id: impl Into<String>, error: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            status: CaptureStatus::Failed(error.into()),
             tracks: Vec::new(),
         }
     }
@@ -142,6 +160,11 @@ impl CaptureResult {
     /// Returns the identifier of the capture result.
     pub fn id(&self) -> &str {
         &self.id
+    }
+
+    /// Returns the technical outcome of the capture operation.
+    pub fn status(&self) -> &CaptureStatus {
+        &self.status
     }
 
     /// Adds a technical capture track.
@@ -251,6 +274,22 @@ mod tests {
         let track = CaptureTrack::with_configuration("track-host", configuration);
 
         assert_eq!(track.configuration(), Some(configuration));
+    }
+
+    #[test]
+    fn capture_result_defaults_to_completed() {
+        let result = CaptureResult::new("capture-001");
+        assert_eq!(result.status(), &CaptureStatus::Completed);
+    }
+
+    #[test]
+    fn capture_result_can_represent_technical_failure() {
+        let result = CaptureResult::failed("capture-001", "input stream failed");
+        assert_eq!(
+            result.status(),
+            &CaptureStatus::Failed("input stream failed".to_string())
+        );
+        assert!(result.tracks().is_empty());
     }
 }
 
