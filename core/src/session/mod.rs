@@ -372,10 +372,7 @@ mod tests {
             .complete_recording(&recording_id, artifact_id.clone())
             .unwrap();
 
-        assert_eq!(
-            session.recordings()[0].artifact_id(),
-            Some(&artifact_id)
-        );
+        assert_eq!(session.recordings()[0].artifact_id(), Some(&artifact_id));
     }
 
     #[test]
