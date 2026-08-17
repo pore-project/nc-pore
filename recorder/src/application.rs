@@ -238,11 +238,9 @@ mod tests {
             "recording-failed",
         ));
 
-        assert_eq!(
+        assert!(matches!(
             result,
-            Err(RecorderApplicationError::Capture(
-                "input stream failed".to_owned()
-            ))
-        );
+            Err(RecorderApplicationError::Capture(error)) if error == "input stream failed"
+        ));
     }
 }
