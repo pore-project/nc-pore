@@ -2,6 +2,7 @@
 
 * Version: 1.1
 * Date: 2026-08-17
+* Lifecycle documentation scope clarified.
 
 ---
 
