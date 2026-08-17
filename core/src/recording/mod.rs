@@ -11,6 +11,10 @@
 //! See:
 //! - ADR-039 Recording Architecture and Capture Boundary (future)
 //! - ADR-038 Core Implementation Structure and Module Organization
+//!
+//! The domain records only an opaque `RecordingArtifactId` reference. The
+//! technical `RecordingArtifact` and its lifecycle remain outside the Core.
+//! A domain artifact association exists only for a completed recording.
 
 pub mod artifact_id;
 pub mod id;
@@ -37,6 +41,8 @@ pub enum RecordingLifecycleError {
 pub struct Recording {
     id: RecordingId,
     status: RecordingStatus,
+    // A domain artifact association is established atomically with completion.
+    // A technically existing artifact may precede this reference during recovery.
     artifact_id: Option<RecordingArtifactId>,
 }
 
