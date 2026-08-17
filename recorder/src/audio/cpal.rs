@@ -176,7 +176,8 @@ impl CaptureChunkBuffer {
         let payload = std::mem::take(&mut self.current_payload);
         let sequence = self.next_sequence;
         self.next_sequence += 1;
-        self.chunks.push(CaptureChunk::with_payload(sequence, payload));
+        self.chunks
+            .push(CaptureChunk::with_payload(sequence, payload));
     }
 
     fn finish(mut self) -> Vec<CaptureChunk> {
