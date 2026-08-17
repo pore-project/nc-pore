@@ -1,31 +1,21 @@
-mod application;
-mod artifact;
-mod audio;
-mod export;
-mod metadata;
-mod persistence;
-mod session;
-mod storage;
-mod workflow;
-
-use application::RecorderApplication;
-use artifact::RecordingArtifactAssociation;
-use artifact::coordination::ArtifactCoordinator;
-use artifact::processing::RecordingArtifactProcessor;
-use audio::{CpalCaptureProvider, RecordingConfiguration};
-use persistence::InMemoryPersistenceProvider;
-use session::RecordingSession;
+use recorder::application::RecorderApplication;
+use recorder::artifact::RecordingArtifactAssociation;
+use recorder::artifact::coordination::ArtifactCoordinator;
+use recorder::artifact::processing::RecordingArtifactProcessor;
+use recorder::audio::{CpalCaptureProvider, RecordingConfiguration};
+use recorder::persistence::InMemoryPersistenceProvider;
+use recorder::session::RecordingSession;
 
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("test-audio-stream") {
-        return audio::test_input_stream().unwrap_or_else(|error| {
+        return recorder::audio::test_input_stream().unwrap_or_else(|error| {
             eprintln!("Audio-Stream-Test fehlgeschlagen: {error}");
             std::process::exit(1);
         });
     }
 
     if std::env::args().nth(1).as_deref() == Some("inspect-audio") {
-        match audio::inspect_default_input_device() {
+        match recorder::audio::inspect_default_input_device() {
             Ok(()) => {}
             Err(error) => {
                 eprintln!("Audio-Inspektion fehlgeschlagen: {error}");
