@@ -1,7 +1,7 @@
 # NC-PoRe Domain Rules
 
-* Version: 1.0
-* Date: 2026-07-24
+* Version: 1.1
+* Date: 2026-08-17
 
 ---
 
@@ -75,7 +75,8 @@ Completed
 Archived
 ```
 
-Die konkreten Zustände werden später technisch definiert.
+Die konkreten Zustandsmodelle werden durch die jeweiligen
+Domain-Entscheidungen und Implementierungen festgelegt.
 
 ---
 
@@ -154,9 +155,42 @@ Es ist nicht identisch mit einer Datei.
 
 ## Regel 6.3
 
-Ein abgeschlossenes Recording gilt als unveränderliches Ergebnis.
+Ein Recording besitzt den fachlichen Lebenszyklus:
 
-Änderungen erzeugen neue Zustände oder neue Versionen.
+```text
+Prepared
+   |
+   v
+Recording
+   |
+   v
+Completed
+```
+
+Nur die Übergänge `Prepared → Recording` und `Recording → Completed`
+sind gültig.
+
+Ein Recording kann nicht direkt von `Prepared` nach `Completed` wechseln,
+und ein abgeschlossenes Recording kann nicht in einen früheren Zustand
+zurückkehren.
+
+Die Zustandsänderungen erfolgen über fachliche Domain-Operationen.
+
+---
+
+## Regel 6.4
+
+Ein abgeschlossenes Recording ist ein unveränderliches fachliches Ergebnis.
+
+Beim Übergang nach `Completed` wird die zugehörige
+`RecordingArtifactId` atomar mit dem Recording verknüpft.
+
+Ein bereits abgeschlossenes Recording kann mit demselben Artifact
+idempotent erneut abgeschlossen werden. Der Versuch, es mit einem
+anderen Artifact erneut abzuschließen, ist ein fachlicher Konflikt.
+
+Das technische Recording Artifact selbst gehört nicht zum Domain-Modell.
+Die Domain hält lediglich die Referenz darauf.
 
 ---
 
@@ -340,7 +374,8 @@ Completed
 Archived
 ```
 
-The exact states will be defined technically later.
+Concrete state models are defined by the respective domain decisions
+and implementations.
 
 ---
 
@@ -417,9 +452,41 @@ It is not identical to a file.
 
 ## Rule 6.3
 
-A completed Recording is treated as an immutable result.
+A Recording has the following domain lifecycle:
 
-Changes create new states or versions.
+```text
+Prepared
+   |
+   v
+Recording
+   |
+   v
+Completed
+```
+
+Only the transitions `Prepared → Recording` and `Recording → Completed`
+are valid.
+
+A Recording cannot transition directly from `Prepared` to `Completed`,
+and a completed Recording cannot return to an earlier state.
+
+State changes occur through domain operations.
+
+---
+
+## Rule 6.4
+
+A completed Recording is an immutable domain result.
+
+When transitioning to `Completed`, the associated `RecordingArtifactId`
+is atomically associated with the Recording.
+
+A completed Recording may be completed idempotently again with the same
+Artifact. Attempting to complete it again with a different Artifact is
+a domain conflict.
+
+The technical Recording Artifact itself is not part of the domain model.
+The domain only holds a reference to it.
 
 ---
 
