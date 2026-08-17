@@ -177,6 +177,11 @@ zurückkehren.
 
 Die Zustandsänderungen erfolgen über fachliche Domain-Operationen.
 
+Die architektonische Grundlage für dieses Lifecycle-Modell ist in
+ADR-035 festgelegt; die Recording-spezifische Umsetzung und Recovery-
+Semantik sind in den einschlägigen Recording-Lifecycle- und Recovery-
+Entscheidungen dokumentiert.
+
 ---
 
 ## Regel 6.4
@@ -472,6 +477,10 @@ A Recording cannot transition directly from `Prepared` to `Completed`,
 and a completed Recording cannot return to an earlier state.
 
 State changes occur through domain operations.
+
+The architectural basis for this lifecycle model is defined in ADR-035;
+Recording-specific implementation and recovery semantics are documented
+in the relevant Recording lifecycle and recovery decisions.
 
 ---
 
