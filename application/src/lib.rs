@@ -72,9 +72,7 @@ where
     fn start(&mut self, configuration: &RecordingConfiguration) -> Result<(), Self::Error> {
         self.recorder
             .start(configuration)
-            .map_err(|error: CaptureStartError| {
-                RecorderBoundaryError::Start(format!("{error:?}"))
-            })
+            .map_err(|error: CaptureStartError| RecorderBoundaryError::Start(format!("{error:?}")))
     }
 
     fn complete(
@@ -296,7 +294,9 @@ mod tests {
         };
 
         let mut use_case = StartRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
-        use_case.execute(&production_id, &recording_id, &()).unwrap();
+        use_case
+            .execute(&production_id, &recording_id, &())
+            .unwrap();
 
         assert_eq!(recorder.events, vec!["recorder.start"]);
         assert_eq!(
