@@ -1,6 +1,6 @@
 # ADR-035: Domain Lifecycle and State Transition Management
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-07-29
 - Decision Type: Architecture
 
@@ -88,6 +88,10 @@ Lebenszyklen werden so modelliert, dass:
 
 Die konkrete technische Umsetzung eines Lebenszyklus ist
 nicht Bestandteil dieser Entscheidung.
+
+Diese Entscheidung bleibt bewusst auf der architektonischen Ebene.
+Konkrete Zustandsmodelle einzelner Domänenobjekte werden durch
+nachgelagerte Entscheidungen und Implementierungen festgelegt.
 
 ---
 
@@ -192,9 +196,9 @@ Weitere fachliche Lebenszyklen werden separat betrachtet:
 Diese Entscheidung definiert das grundlegende Muster
 für fachliche Lebenszyklen innerhalb des NC-PoRe Core.
 
-Die konkreten Zustandsmodelle einzelner Domänenobjekte
-werden durch spätere Implementierungen und Entscheidungen
-festgelegt.
+Die Entscheidung ist Accepted. Die konkreten Zustandsmodelle
+einzelner Domänenobjekte werden durch nachgelagerte
+Entscheidungen und Implementierungen festgelegt.
 
 ---
 
@@ -267,10 +271,124 @@ Responsibility lies in the Core and not in:
 
 ---
 
+# Lifecycle Modeling
+
+Lifecycles are modeled so that:
+
+- allowed transitions remain understandable
+- invalid states are prevented
+- domain rules remain centralized
+- changes can be verified through tests
+
+The concrete technical implementation of an individual lifecycle
+is not part of this decision.
+
+This decision deliberately remains at the architectural level.
+Concrete state models of individual domain objects are defined by
+subsequent decisions and implementations.
+
+---
+
+# Example: Production Session
+
+A Production Session has a controlled domain lifecycle.
+
+Example:
+
+Created
+
+↓
+
+Active
+
+↓
+
+Completed
+
+The Core defines which transitions are allowed.
+
+A completed state must not return to an earlier state without
+a defined domain rule.
+
+---
+
+# Consequences
+
+## Positive Consequences
+
+- invalid domain states are prevented
+- Domain Rules remain centralized in the Core
+- clients do not need to duplicate business logic
+- lifecycles remain understandable and documented
+- tests can verify domain rules directly
+
+---
+
+## Negative Consequences
+
+- additional modeling is required
+- state transitions must be deliberately defined
+- simple state value changes are not always possible
+
+These disadvantages are consciously accepted.
+
+---
+
+# Alternatives Considered
+
+## Free State Changes by External Components
+
+Rejected.
+
+Reason:
+
+This would weaken the Core's responsibility as Domain Authority
+and could lead to inconsistent domain states.
+
+---
+
+## Implicit State Logic Without Explicit Lifecycle Modeling
+
+Rejected.
+
+Reason:
+
+Lifecycles are domain rules and must be visible,
+understandable and testable.
+
+---
+
+# Relationship to Existing Architecture
+
+This decision extends existing architectural decisions:
+
+- ADR-019 Recording Session Data Model
+- ADR-026 Session Data and Storage Architecture
+- ADR-027 Core Architecture and Module Boundaries
+- ADR-033 Core Architecture
+- ADR-034 Implementation Architecture
+
+It specifically clarifies the Core's responsibility as
+domain authority for states and their transitions.
+
+---
+
+# Future Considerations
+
+Further domain lifecycles are considered separately:
+
+- Recording Lifecycle
+- Synchronization Lifecycle
+- Export Lifecycle
+- Asset Lifecycle
+
+---
+
 # Status
 
-This decision defines the general pattern
+This decision defines the fundamental pattern
 for domain lifecycles within the NC-PoRe Core.
 
-The concrete state models of individual domain objects
-will be defined through later implementations and decisions.
+The decision is Accepted. Concrete state models of individual
+domain objects are defined through subsequent decisions and
+implementations.
