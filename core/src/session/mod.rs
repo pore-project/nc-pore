@@ -4,7 +4,7 @@ use crate::activity::{ActivityEvent, ActivityType};
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
-use crate::recording::Recording;
+use crate::recording::{Recording, RecordingArtifactId, RecordingId, RecordingLifecycleError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
@@ -17,7 +17,9 @@ pub enum ProductionStatus {
 pub enum ProductionSessionError {
     ParticipantAlreadyExists,
     MissingOwner,
+    RecordingNotFound,
     InvalidStateTransition,
+    RecordingLifecycle(RecordingLifecycleError),
 }
 
 #[derive(Debug, Clone)]
@@ -73,11 +75,6 @@ impl ProductionSession {
         self.participations.len()
     }
 
-    /// Completes a production session.
-    ///
-    /// A production session requires an owner before completion.
-    ///
-    /// See ADR-031.
     pub fn complete(&mut self) -> Result<(), ProductionSessionError> {
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
@@ -95,11 +92,6 @@ impl ProductionSession {
         Ok(())
     }
 
-    /// Adds a participation to the production session.
-    ///
-    /// A participant can only participate once within the same session.
-    ///
-    /// See ADR-019 and ADR-031.
     pub fn add_participation(
         &mut self,
         participation: Participation,
@@ -117,26 +109,53 @@ impl ProductionSession {
     ///
     /// The production session owns the relationship between
     /// production and recordings.
-    ///
-    /// See ADR-038.
     pub fn add_recording(&mut self, recording: Recording) {
         self.recordings.push(recording);
     }
 
-    /// Checks whether a participant is already part of this production session.
+    /// Starts the domain recording owned by this production session.
     ///
-    /// See ADR-031.
+    /// The aggregate delegates the recording lifecycle transition to the
+    /// owned Recording rather than exposing mutable recording state.
+    pub fn start_recording(
+        &mut self,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        recording
+            .start()
+            .map_err(ProductionSessionError::RecordingLifecycle)
+    }
+
+    /// Completes the domain recording owned by this production session and
+    /// associates it with the opaque technical artifact identity.
+    pub fn complete_recording(
+        &mut self,
+        recording_id: &RecordingId,
+        artifact_id: RecordingArtifactId,
+    ) -> Result<(), ProductionSessionError> {
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        recording
+            .complete(artifact_id)
+            .map_err(ProductionSessionError::RecordingLifecycle)
+    }
+
     pub fn has_participant(&self, participant_id: &ParticipantId) -> bool {
         self.participations
             .iter()
             .any(|participation| &participation.participant_id == participant_id)
     }
 
-    /// Checks whether this production session has an owner.
-    ///
-    /// A production session requires ownership responsibility.
-    ///
-    /// See ADR-031.
     pub fn has_owner(&self) -> bool {
         self.participations
             .iter()
@@ -160,8 +179,6 @@ mod tests {
         }
     }
 
-    // TEST-01
-    // Verify: A new production session starts in Created state.
     #[test]
     fn new_session_starts_as_created() {
         let session = create_test_session();
@@ -169,8 +186,6 @@ mod tests {
         assert_eq!(session.status(), ProductionStatus::Created);
     }
 
-    // TEST-02
-    // Verify: Starting a created session changes the state to Active.
     #[test]
     fn starting_session_changes_status_to_active() {
         let mut session = create_test_session();
@@ -180,11 +195,6 @@ mod tests {
         assert_eq!(session.status(), ProductionStatus::Active);
     }
 
-    // TEST-03
-    // Verify: A completed session cannot be started again.
-    //
-    // Lifecycle:
-    // Created -> Active -> Completed
     #[test]
     fn completed_session_cannot_be_started_again() {
         let mut session = create_test_session();
@@ -203,8 +213,6 @@ mod tests {
         );
     }
 
-    // TEST-04
-    // Verify: An active session cannot be completed without an owner.
     #[test]
     fn completing_active_session_without_owner_fails() {
         let mut session = create_test_session();
@@ -217,8 +225,6 @@ mod tests {
         );
     }
 
-    // TEST-05
-    // Verify: An active session with an owner can be completed.
     #[test]
     fn completing_session_with_owner_changes_status_to_completed() {
         let mut session = create_test_session();
@@ -233,8 +239,6 @@ mod tests {
         assert_eq!(session.status(), ProductionStatus::Completed);
     }
 
-    // TEST-06
-    // Verify: A participation can be added to a production session.
     #[test]
     fn participation_can_be_added_to_session() {
         let mut session = create_test_session();
@@ -251,8 +255,6 @@ mod tests {
         assert_eq!(session.participant_count(), 1);
     }
 
-    // TEST-07
-    // Verify: A participant cannot be added twice to the same session.
     #[test]
     fn duplicate_participant_cannot_be_added_to_session() {
         let mut session = create_test_session();
@@ -273,8 +275,6 @@ mod tests {
         );
     }
 
-    // TEST-08
-    // Verify: Owner responsibility can be detected inside a session.
     #[test]
     fn session_can_check_owner() {
         let mut session = create_test_session();
@@ -288,10 +288,6 @@ mod tests {
         assert!(session.has_owner());
     }
 
-    // TEST-09
-    // Verify: The public participation accessor exposes stored participations.
-    //
-    // This protects the read-only access boundary.
     #[test]
     fn session_exposes_participations_read_only() {
         let mut session = create_test_session();
@@ -310,11 +306,6 @@ mod tests {
         );
     }
 
-    // TEST-10
-    // Verify: A recording can be added to a production session.
-    //
-    // This protects the relationship between production sessions
-    // and recordings.
     #[test]
     fn recording_can_be_added_to_session() {
         let mut session = create_test_session();
@@ -324,13 +315,6 @@ mod tests {
         assert_eq!(session.recordings().len(), 1);
     }
 
-    // TEST-11
-    // Verify: Lifecycle transitions create activity history entries.
-    //
-    // Lifecycle:
-    // Created -> Active -> Completed
-    //
-    // Protects ADR-032 and ADR-035.
     #[test]
     fn session_lifecycle_creates_activity_history() {
         let mut session = create_test_session();
@@ -359,6 +343,46 @@ mod tests {
         assert_eq!(
             session.activities()[2].activity_type,
             ActivityType::SessionCompleted
+        );
+    }
+
+    #[test]
+    fn session_can_start_owned_recording() {
+        let mut session = create_test_session();
+        let recording_id = RecordingId::new("recording-001");
+        session.add_recording(Recording::new(recording_id.value()));
+
+        session.start_recording(&recording_id).unwrap();
+
+        assert_eq!(
+            session.recordings()[0].status(),
+            crate::recording::RecordingStatus::Recording
+        );
+    }
+
+    #[test]
+    fn session_can_complete_owned_recording_with_artifact() {
+        let mut session = create_test_session();
+        let recording_id = RecordingId::new("recording-001");
+        let artifact_id = RecordingArtifactId::new("artifact-001");
+        session.add_recording(Recording::new(recording_id.value()));
+
+        session.start_recording(&recording_id).unwrap();
+        session
+            .complete_recording(&recording_id, artifact_id.clone())
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].artifact_id(), Some(&artifact_id));
+    }
+
+    #[test]
+    fn session_rejects_unknown_recording_for_lifecycle_operations() {
+        let mut session = create_test_session();
+        let recording_id = RecordingId::new("missing");
+
+        assert_eq!(
+            session.start_recording(&recording_id),
+            Err(ProductionSessionError::RecordingNotFound)
         );
     }
 }

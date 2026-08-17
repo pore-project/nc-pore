@@ -1,0 +1,8 @@
+[package]
+name = "nc-pore-application"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nc-pore-core = { package = "core", path = "../core" }
+recorder = { path = "../recorder" }
