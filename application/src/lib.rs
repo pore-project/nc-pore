@@ -197,7 +197,7 @@ where
                     Ok(RecordingRecoveryOutcome::Recovered { artifact_id })
                 }
             }
-            PersistenceRecoveryLookup::Incomplete { artifact_id } => {
+            PersistenceRecoveryLookup::Incomplete { .. } => {
                 Ok(RecordingRecoveryOutcome::Incomplete)
             }
             PersistenceRecoveryLookup::Inconsistent { artifact_id } => {
@@ -423,8 +423,12 @@ mod tests {
     }
 
     fn recovery_artifact(production_id: &str, recording_id: &str) -> RecordingArtifact {
-        RecordingArtifact::new("artifact-recovery-001", RecordingSessionId::new("session-001"))
-            .with_association(production_id, recording_id)
+        let mut artifact = RecordingArtifact::new(
+            "artifact-recovery-001",
+            RecordingSessionId::new("session-001"),
+        );
+        artifact.set_domain_association(production_id, recording_id);
+        artifact
     }
 
     #[test]
@@ -438,7 +442,7 @@ mod tests {
             .unwrap();
         let artifact = recovery_artifact(production_id.value(), recording_id.value());
         let artifact_id = RecordingArtifactId::new(artifact.id.value());
-        let mut persistence = TestPersistence {
+        let persistence = TestPersistence {
             outcome: PersistenceRecoveryLookup::Valid(artifact),
         };
 
@@ -455,7 +459,6 @@ mod tests {
             repository.session.as_ref().unwrap().recordings()[0].artifact_id(),
             Some(&artifact_id)
         );
-        persistence.outcome = PersistenceRecoveryLookup::NotFound;
     }
 
     #[test]
