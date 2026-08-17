@@ -188,6 +188,7 @@ impl CaptureChunkBuffer {
 
 pub struct CpalCaptureProvider {
     chunk_buffer: Arc<Mutex<Option<CaptureChunkBuffer>>>,
+    capture_error: Arc<Mutex<Option<String>>>,
     stream: Option<cpal::Stream>,
     active_configuration: Option<RecordingConfiguration>,
 }
@@ -198,6 +199,7 @@ impl CpalCaptureProvider {
     pub fn new() -> Self {
         Self {
             chunk_buffer: Arc::new(Mutex::new(None)),
+            capture_error: Arc::new(Mutex::new(None)),
             stream: None,
             active_configuration: None,
         }
@@ -241,6 +243,10 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             .lock()
             .expect("Chunk-Puffer konnte nicht initialisiert werden.") =
             Some(CaptureChunkBuffer::new(configuration));
+        *self
+            .capture_error
+            .lock()
+            .expect("Capture-Fehlerzustand konnte nicht initialisiert werden.") = None;
 
         let host = cpal::default_host();
         let device = host
@@ -260,6 +266,7 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             .stream_config_for_sample_rate(configuration.sample_rate_hz())
             .ok_or(CaptureStartError::UnsupportedRecordingConfiguration)?;
         let chunk_buffer = Arc::clone(&self.chunk_buffer);
+        let capture_error = Arc::clone(&self.capture_error);
 
         let stream = device
             .build_input_stream_raw(
@@ -271,8 +278,11 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
                         chunk_buffer.push_bytes(data.bytes());
                     }
                 },
-                |error| {
-                    eprintln!("CPAL Input-Stream-Fehler: {error}");
+                move |error| {
+                    let mut capture_error = capture_error.lock().unwrap();
+                    if capture_error.is_none() {
+                        *capture_error = Some(error.to_string());
+                    }
                 },
                 None,
             )
@@ -309,7 +319,16 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             track.add_chunk(chunk);
         }
 
-        let mut result = CaptureResult::new("cpal-capture");
+        let capture_error = self
+            .capture_error
+            .lock()
+            .expect("Capture-Fehlerzustand konnte nicht gelesen werden.")
+            .take();
+
+        let mut result = match capture_error {
+            Some(error) => CaptureResult::failed("cpal-capture", error),
+            None => CaptureResult::new("cpal-capture"),
+        };
         result.add_track(track);
 
         result
