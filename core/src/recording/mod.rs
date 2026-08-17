@@ -29,11 +29,15 @@ pub enum RecordingStatus {
     Completed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordingLifecycleError {
     InvalidTransition {
         from: RecordingStatus,
         to: RecordingStatus,
+    },
+    ArtifactConflict {
+        existing: RecordingArtifactId,
+        requested: RecordingArtifactId,
     },
 }
 
@@ -76,6 +80,20 @@ impl Recording {
         &mut self,
         artifact_id: RecordingArtifactId,
     ) -> Result<(), RecordingLifecycleError> {
+        if self.status == RecordingStatus::Completed {
+            return match self.artifact_id.as_ref() {
+                Some(existing) if existing == &artifact_id => Ok(()),
+                Some(existing) => Err(RecordingLifecycleError::ArtifactConflict {
+                    existing: existing.clone(),
+                    requested: artifact_id,
+                }),
+                None => Err(RecordingLifecycleError::InvalidTransition {
+                    from: RecordingStatus::Completed,
+                    to: RecordingStatus::Completed,
+                }),
+            };
+        }
+
         self.transition_to(RecordingStatus::Completed)?;
         self.artifact_id = Some(artifact_id);
         Ok(())
@@ -188,21 +206,35 @@ mod tests {
     }
 
     #[test]
-    fn completed_recording_cannot_be_completed_again() {
+    fn completed_recording_is_idempotent_for_same_artifact() {
         let mut recording = Recording::new("recording-test-07");
+        let artifact = artifact_id();
 
         recording.start().unwrap();
-        recording.complete(artifact_id()).unwrap();
-        let result = recording.complete(RecordingArtifactId::new("artifact-test-02"));
+        recording.complete(artifact.clone()).unwrap();
+        let result = recording.complete(artifact.clone());
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(recording.status(), RecordingStatus::Completed);
+        assert_eq!(recording.artifact_id(), Some(&artifact));
+    }
+
+    #[test]
+    fn completed_recording_rejects_different_artifact() {
+        let mut recording = Recording::new("recording-test-08");
+        let existing = artifact_id();
+        let requested = RecordingArtifactId::new("artifact-test-02");
+
+        recording.start().unwrap();
+        recording.complete(existing.clone()).unwrap();
+        let result = recording.complete(requested.clone());
 
         assert_eq!(
             result,
-            Err(RecordingLifecycleError::InvalidTransition {
-                from: RecordingStatus::Completed,
-                to: RecordingStatus::Completed,
+            Err(RecordingLifecycleError::ArtifactConflict {
+                existing,
+                requested,
             })
         );
-        assert_eq!(recording.status(), RecordingStatus::Completed);
-        assert_eq!(recording.artifact_id(), Some(&artifact_id()));
     }
 }
