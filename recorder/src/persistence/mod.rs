@@ -17,7 +17,7 @@ mod provider;
 pub use assessment::PersistenceLoadResult;
 #[cfg(test)]
 pub use filesystem::FilesystemPersistenceProvider;
-pub use provider::{PersistenceProvider, PersistenceStoreError};
+pub use provider::{PersistenceProvider, PersistenceRecoveryLookup, PersistenceStoreError};
 
 use crate::artifact::RecordingArtifact;
 
