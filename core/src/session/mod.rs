@@ -354,7 +354,10 @@ mod tests {
 
         session.start_recording(&recording_id).unwrap();
 
-        assert_eq!(session.recordings()[0].status(), crate::recording::RecordingStatus::Recording);
+        assert_eq!(
+            session.recordings()[0].status(),
+            crate::recording::RecordingStatus::Recording
+        );
     }
 
     #[test]
