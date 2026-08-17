@@ -21,6 +21,21 @@ pub enum PersistenceStoreError {
     Io(String),
 }
 
+/// Technical evidence found while recovering one domain recording.
+#[derive(Debug, Clone)]
+pub enum PersistenceRecoveryLookup {
+    /// Exactly one valid artifact is associated with the requested recording.
+    Valid(RecordingArtifact),
+    /// A persisted candidate exists but is incomplete.
+    Incomplete { artifact_id: String },
+    /// A persisted candidate exists but is inconsistent.
+    Inconsistent { artifact_id: String },
+    /// No persisted artifact candidate is associated with the recording.
+    NotFound,
+    /// More than one persisted artifact candidate is associated with the recording.
+    Conflict { artifact_ids: Vec<String> },
+}
+
 /// Persistence contract used by the Recorder workflow.
 ///
 /// The workflow depends on this abstraction instead of concrete storage.
@@ -50,11 +65,51 @@ pub trait PersistenceProvider {
     /// code from treating every existing artifact directory as valid.
     fn load(&self, id: &str) -> PersistenceLoadResult;
 
+    /// Looks up technical recovery evidence for one concrete domain recording.
+    ///
+    /// Candidate discovery remains inside the persistence boundary. Callers
+    /// therefore do not need to enumerate artifact identifiers or inspect
+    /// concrete storage layouts. The default implementation preserves
+    /// compatibility for providers that do not yet have a native index.
+    fn find_for_recording(
+        &self,
+        production_id: &str,
+        recording_id: &str,
+    ) -> PersistenceRecoveryLookup {
+        let mut matches = Vec::new();
+
+        for artifact_id in self.list_ids() {
+            match self.load(&artifact_id) {
+                PersistenceLoadResult::Valid(artifact)
+                    if artifact.production_id() == Some(production_id)
+                        && artifact.recording_id() == Some(recording_id) =>
+                {
+                    matches.push(artifact);
+                }
+                PersistenceLoadResult::Incomplete => {}
+                PersistenceLoadResult::Inconsistent | PersistenceLoadResult::NotFound => {}
+                PersistenceLoadResult::Valid(_) => {}
+            }
+        }
+
+        match matches.len() {
+            0 => PersistenceRecoveryLookup::NotFound,
+            1 => PersistenceRecoveryLookup::Valid(matches.remove(0)),
+            _ => PersistenceRecoveryLookup::Conflict {
+                artifact_ids: matches
+                    .into_iter()
+                    .map(|artifact| artifact.id.value().to_owned())
+                    .collect(),
+            },
+        }
+    }
+
     /// Lists identifiers for persisted artifact candidates without loading
     /// their artifact representations.
     ///
-    /// Recovery uses this to enumerate candidates and then delegates the
-    /// actual consistency assessment to `load`.
+    /// This remains part of the low-level persistence contract for existing
+    /// maintenance and inspection use cases. Recovery callers should use
+    /// `find_for_recording` instead.
     fn list_ids(&self) -> Vec<String>;
 
     #[allow(dead_code)]
