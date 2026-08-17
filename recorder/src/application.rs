@@ -20,11 +20,23 @@
 
 use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
-use crate::audio::{CaptureProvider, RecordingConfiguration};
+use crate::audio::{CaptureProvider, CaptureStatus, RecordingConfiguration};
 use crate::persistence::PersistenceProvider;
 use crate::persistence::PersistenceStoreError;
 use crate::session::{RecordingSession, RecordingSessionId};
 use crate::workflow::RecorderWorkflow;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecorderApplicationError {
+    Capture(String),
+    Persistence(PersistenceStoreError),
+}
+
+impl From<PersistenceStoreError> for RecorderApplicationError {
+    fn from(error: PersistenceStoreError) -> Self {
+        Self::Persistence(error)
+    }
+}
 
 pub struct RecorderApplication<C, P>
 where
@@ -63,13 +75,18 @@ where
     pub fn stop(
         &mut self,
         association: RecordingArtifactAssociation,
-    ) -> Result<crate::artifact::RecordingArtifact, PersistenceStoreError> {
+    ) -> Result<crate::artifact::RecordingArtifact, RecorderApplicationError> {
         let recording_session_id = RecordingSessionId::new(self.workflow.session().id());
 
         let capture_result = self.workflow.stop();
 
+        if let CaptureStatus::Failed(error) = capture_result.status() {
+            return Err(RecorderApplicationError::Capture(error.clone()));
+        }
+
         self.processor
             .process(capture_result, recording_session_id, association)
+            .map_err(RecorderApplicationError::from)
     }
 
     pub fn session(&self) -> &RecordingSession {
@@ -82,7 +99,7 @@ mod tests {
     use super::*;
     use crate::artifact::coordination::ArtifactCoordinator;
     use crate::audio::{CaptureProvider, CaptureResult};
-    use crate::persistence::InMemoryPersistenceProvider;
+    use crate::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
 
     struct TestCaptureProvider;
 
@@ -97,6 +114,43 @@ mod tests {
         fn stop_capture(&mut self) -> CaptureResult {
             CaptureResult::new("application-test-capture")
         }
+    }
+
+    struct FailedCaptureProvider;
+
+    impl CaptureProvider for FailedCaptureProvider {
+        fn start_capture(
+            &mut self,
+            _configuration: &RecordingConfiguration,
+        ) -> Result<(), crate::audio::CaptureStartError> {
+            Ok(())
+        }
+
+        fn stop_capture(&mut self) -> CaptureResult {
+            CaptureResult::failed("application-failed-capture", "input stream failed")
+        }
+    }
+
+    struct RejectingPersistenceProvider;
+
+    impl crate::persistence::PersistenceProvider for RejectingPersistenceProvider {
+        fn store(&mut self, _artifact: crate::artifact::RecordingArtifact) {
+            panic!("failed capture must not reach persistence");
+        }
+
+        fn load(&self, _id: &str) -> PersistenceLoadResult {
+            PersistenceLoadResult::NotFound
+        }
+
+        fn list_ids(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn list(&self) -> Vec<crate::artifact::RecordingArtifact> {
+            Vec::new()
+        }
+
+        fn remove(&mut self, _id: &str) {}
     }
 
     // TEST-24
@@ -166,5 +220,28 @@ mod tests {
         assert_eq!(artifact.recording_session_id.value(), "session-002");
         assert_eq!(artifact.production_id(), Some("production-002"));
         assert_eq!(artifact.recording_id(), Some("recording-018"));
+    }
+
+    #[test]
+    fn failed_capture_returns_application_error() {
+        let session = RecordingSession::new("session-failed");
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            RejectingPersistenceProvider,
+        ));
+        let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
+
+        application.start(&RecordingConfiguration::default()).unwrap();
+
+        let result = application.stop(RecordingArtifactAssociation::new(
+            "production-failed",
+            "recording-failed",
+        ));
+
+        assert_eq!(
+            result,
+            Err(RecorderApplicationError::Capture(
+                "input stream failed".to_owned()
+            ))
+        );
     }
 }
