@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 nc-pore-core = { path = "../core" }
+recorder = { path = "../recorder" }
