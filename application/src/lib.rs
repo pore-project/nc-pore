@@ -319,7 +319,8 @@ mod tests {
             artifact_id: artifact_id.clone(),
         };
 
-        let mut use_case = CompleteRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
+        let mut use_case =
+            CompleteRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
         use_case.execute(&production_id, &recording_id).unwrap();
 
         assert_eq!(recorder.events, vec!["recorder.complete"]);
