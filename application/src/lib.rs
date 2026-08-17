@@ -70,7 +70,7 @@ where
     fn start(&mut self, configuration: &RecordingConfiguration) -> Result<(), Self::Error> {
         self.recorder
             .start(configuration)
-            .map_err(|error: CaptureStartError| RecorderBoundaryError::Start(error.to_string()))
+            .map_err(|error: CaptureStartError| RecorderBoundaryError::Start(format!("{error:?}")))
     }
 
     fn complete(
