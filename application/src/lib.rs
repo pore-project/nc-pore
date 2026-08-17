@@ -18,7 +18,7 @@ use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
 use nc_pore_core::session::{repository::ProductionSessionRepository, ProductionSessionError};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
-use recorder::persistence::PersistenceProvider;
+use recorder::persistence::{PersistenceProvider, PersistenceRecoveryLookup};
 
 /// Technical recorder boundary used by recording lifecycle use cases.
 pub trait RecorderPort<C> {
@@ -102,6 +102,113 @@ pub enum CompleteRecordingError<RE, TE> {
     Repository(RE),
     Domain(ProductionSessionError),
     Recorder(TE),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecordingRecoveryOutcome {
+    Recovered { artifact_id: RecordingArtifactId },
+    AlreadyCompleted { artifact_id: RecordingArtifactId },
+    Incomplete,
+    Inconsistent { artifact_id: String },
+    Conflict { artifact_ids: Vec<String> },
+    NotFound,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RecoverRecordingError<RE> {
+    Repository(RE),
+    Domain(ProductionSessionError),
+}
+
+/// Application use case for recovering one concrete domain Recording.
+///
+/// Recovery is explicitly requested for the production/recording pair. The
+/// persistence boundary supplies technical evidence; the domain aggregate
+/// remains the authority for whether that evidence can complete the recording.
+/// The recorder itself is not involved in the recovery decision.
+pub struct RecoverRecordingUseCase<'a, R, P>
+where
+    R: ProductionSessionRepository,
+    P: PersistenceProvider,
+{
+    repository: &'a mut R,
+    persistence: &'a P,
+}
+
+impl<'a, R, P> RecoverRecordingUseCase<'a, R, P>
+where
+    R: ProductionSessionRepository,
+    P: PersistenceProvider,
+{
+    pub fn new(repository: &'a mut R, persistence: &'a P) -> Self {
+        Self {
+            repository,
+            persistence,
+        }
+    }
+
+    pub fn execute(
+        &mut self,
+        production_id: &ProductionId,
+        recording_id: &RecordingId,
+    ) -> Result<RecordingRecoveryOutcome, RecoverRecordingError<R::Error>> {
+        let mut session = self
+            .repository
+            .get(production_id)
+            .map_err(RecoverRecordingError::Repository)?
+            .ok_or(RecoverRecordingError::Domain(
+                ProductionSessionError::RecordingNotFound,
+            ))?;
+
+        if !session
+            .recordings()
+            .iter()
+            .any(|recording| recording.id() == recording_id)
+        {
+            return Err(RecoverRecordingError::Domain(
+                ProductionSessionError::RecordingNotFound,
+            ));
+        }
+
+        match self
+            .persistence
+            .find_for_recording(production_id.value(), recording_id.value())
+        {
+            PersistenceRecoveryLookup::Valid(artifact) => {
+                let artifact_id = RecordingArtifactId::new(artifact.id.value());
+                let already_completed = session
+                    .recordings()
+                    .iter()
+                    .find(|recording| recording.id() == recording_id)
+                    .and_then(|recording| recording.artifact_id())
+                    == Some(&artifact_id);
+
+                session
+                    .complete_recording(recording_id, artifact_id.clone())
+                    .map_err(RecoverRecordingError::Domain)?;
+
+                self.repository
+                    .update(&session)
+                    .map_err(RecoverRecordingError::Repository)?;
+
+                if already_completed {
+                    Ok(RecordingRecoveryOutcome::AlreadyCompleted { artifact_id })
+                } else {
+                    Ok(RecordingRecoveryOutcome::Recovered { artifact_id })
+                }
+            }
+            PersistenceRecoveryLookup::Incomplete { artifact_id } => {
+                Ok(RecordingRecoveryOutcome::Incomplete)
+            }
+            PersistenceRecoveryLookup::Inconsistent { artifact_id } => {
+                Ok(RecordingRecoveryOutcome::Inconsistent { artifact_id })
+            }
+            PersistenceRecoveryLookup::NotFound => Ok(RecordingRecoveryOutcome::NotFound),
+            PersistenceRecoveryLookup::Conflict { artifact_ids } => {
+                Ok(RecordingRecoveryOutcome::Conflict { artifact_ids })
+            }
+        }
+    }
 }
 
 /// Application use case for starting a domain Recording.
@@ -222,6 +329,8 @@ mod tests {
     use super::*;
     use nc_pore_core::recording::Recording;
     use nc_pore_core::session::ProductionSession;
+    use recorder::artifact::RecordingArtifact;
+    use recorder::session::RecordingSessionId;
 
     struct InMemoryRepository {
         session: Option<ProductionSession>,
@@ -242,6 +351,36 @@ mod tests {
 
         fn get(&self, _id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
             Ok(self.session.clone())
+        }
+    }
+
+    struct TestPersistence {
+        outcome: PersistenceRecoveryLookup,
+    }
+
+    impl PersistenceProvider for TestPersistence {
+        fn store(&mut self, _artifact: RecordingArtifact) {}
+
+        fn load(&self, _id: &str) -> recorder::persistence::PersistenceLoadResult {
+            recorder::persistence::PersistenceLoadResult::NotFound
+        }
+
+        fn list_ids(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn list(&self) -> Vec<RecordingArtifact> {
+            Vec::new()
+        }
+
+        fn remove(&mut self, _id: &str) {}
+
+        fn find_for_recording(
+            &self,
+            _production_id: &str,
+            _recording_id: &str,
+        ) -> PersistenceRecoveryLookup {
+            self.outcome.clone()
         }
     }
 
@@ -281,6 +420,123 @@ mod tests {
             production_id,
             recording_id,
         )
+    }
+
+    fn recovery_artifact(production_id: &str, recording_id: &str) -> RecordingArtifact {
+        RecordingArtifact::new("artifact-recovery-001", RecordingSessionId::new("session-001"))
+            .with_association(production_id, recording_id)
+    }
+
+    #[test]
+    fn recovery_completes_recording_from_valid_artifact() {
+        let (mut repository, production_id, recording_id) = repository_with_recording();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording(&recording_id)
+            .unwrap();
+        let artifact = recovery_artifact(production_id.value(), recording_id.value());
+        let artifact_id = RecordingArtifactId::new(artifact.id.value());
+        let mut persistence = TestPersistence {
+            outcome: PersistenceRecoveryLookup::Valid(artifact),
+        };
+
+        let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
+        let result = use_case.execute(&production_id, &recording_id).unwrap();
+
+        assert_eq!(
+            result,
+            RecordingRecoveryOutcome::Recovered {
+                artifact_id: artifact_id.clone()
+            }
+        );
+        assert_eq!(
+            repository.session.as_ref().unwrap().recordings()[0].artifact_id(),
+            Some(&artifact_id)
+        );
+        persistence.outcome = PersistenceRecoveryLookup::NotFound;
+    }
+
+    #[test]
+    fn recovery_is_idempotent_for_already_completed_recording() {
+        let (mut repository, production_id, recording_id) = repository_with_recording();
+        let artifact = recovery_artifact(production_id.value(), recording_id.value());
+        let artifact_id = RecordingArtifactId::new(artifact.id.value());
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording(&recording_id)
+            .unwrap();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .complete_recording(&recording_id, artifact_id.clone())
+            .unwrap();
+
+        let persistence = TestPersistence {
+            outcome: PersistenceRecoveryLookup::Valid(artifact),
+        };
+        let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
+
+        assert_eq!(
+            use_case.execute(&production_id, &recording_id).unwrap(),
+            RecordingRecoveryOutcome::AlreadyCompleted { artifact_id }
+        );
+    }
+
+    #[test]
+    fn recovery_does_not_change_domain_without_artifact() {
+        let (mut repository, production_id, recording_id) = repository_with_recording();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording(&recording_id)
+            .unwrap();
+        let persistence = TestPersistence {
+            outcome: PersistenceRecoveryLookup::NotFound,
+        };
+        let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
+
+        assert_eq!(
+            use_case.execute(&production_id, &recording_id).unwrap(),
+            RecordingRecoveryOutcome::NotFound
+        );
+        assert_eq!(
+            repository.session.as_ref().unwrap().recordings()[0].artifact_id(),
+            None
+        );
+    }
+
+    #[test]
+    fn recovery_does_not_change_domain_for_conflicting_evidence() {
+        let (mut repository, production_id, recording_id) = repository_with_recording();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording(&recording_id)
+            .unwrap();
+        let persistence = TestPersistence {
+            outcome: PersistenceRecoveryLookup::Conflict {
+                artifact_ids: vec!["artifact-a".to_owned(), "artifact-b".to_owned()],
+            },
+        };
+        let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
+
+        assert_eq!(
+            use_case.execute(&production_id, &recording_id).unwrap(),
+            RecordingRecoveryOutcome::Conflict {
+                artifact_ids: vec!["artifact-a".to_owned(), "artifact-b".to_owned()]
+            }
+        );
+        assert_eq!(
+            repository.session.as_ref().unwrap().recordings()[0].artifact_id(),
+            None
+        );
     }
 
     #[test]
