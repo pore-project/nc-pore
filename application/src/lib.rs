@@ -15,10 +15,7 @@
 
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
-use nc_pore_core::session::{
-    ProductionSessionError,
-    repository::ProductionSessionRepository,
-};
+use nc_pore_core::session::{repository::ProductionSessionRepository, ProductionSessionError};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
 use recorder::persistence::PersistenceProvider;
@@ -294,8 +291,7 @@ mod tests {
             artifact_id: RecordingArtifactId::new("artifact-001"),
         };
 
-        let mut use_case =
-            StartRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
+        let mut use_case = StartRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
         use_case
             .execute(&production_id, &recording_id, &())
             .unwrap();
@@ -323,8 +319,7 @@ mod tests {
             artifact_id: artifact_id.clone(),
         };
 
-        let mut use_case =
-            CompleteRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
+        let mut use_case = CompleteRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
         use_case.execute(&production_id, &recording_id).unwrap();
 
         assert_eq!(recorder.events, vec!["recorder.complete"]);
@@ -356,8 +351,7 @@ mod tests {
 
         let (mut repository, production_id, recording_id) = repository_with_recording();
         let mut recorder = FailingRecorder;
-        let mut use_case =
-            StartRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
+        let mut use_case = StartRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
 
         let result = use_case.execute(&production_id, &recording_id, &());
 
