@@ -117,8 +117,77 @@ fn require_exact_input_configuration(
         .ok_or(CaptureStartError::UnsupportedRecordingConfiguration)
 }
 
+/// Runtime state used by the capture callback to split the incoming
+/// audio stream into configured-duration chunks without stopping capture.
+struct CaptureChunkBuffer {
+    chunks: Vec<CaptureChunk>,
+    current_payload: Vec<u8>,
+    next_sequence: u32,
+    chunk_size_bytes: usize,
+}
+
+impl CaptureChunkBuffer {
+    fn new(configuration: &RecordingConfiguration) -> Self {
+        let bytes_per_sample = match configuration.sample_format() {
+            SampleFormat::Pcm24 => 3,
+            SampleFormat::F32 => 4,
+        };
+        let frames_per_chunk = configuration
+            .chunk_duration()
+            .seconds()
+            .saturating_mul(configuration.sample_rate_hz());
+        let bytes_per_frame = bytes_per_sample * usize::from(configuration.channels());
+        let chunk_size_bytes = usize::try_from(frames_per_chunk)
+            .expect("Chunkgröße überschreitet die lokale Speicherkapazität.")
+            .checked_mul(bytes_per_frame)
+            .expect("Chunkgröße überschreitet die lokale Speicherkapazität.");
+
+        Self {
+            chunks: Vec::new(),
+            current_payload: Vec::new(),
+            next_sequence: 1,
+            chunk_size_bytes,
+        }
+    }
+
+    fn push_bytes(&mut self, bytes: &[u8]) {
+        if self.chunk_size_bytes == 0 {
+            return;
+        }
+
+        let mut remaining = bytes;
+        while !remaining.is_empty() {
+            let available = self.chunk_size_bytes - self.current_payload.len();
+            let take = available.min(remaining.len());
+            self.current_payload.extend_from_slice(&remaining[..take]);
+            remaining = &remaining[take..];
+
+            if self.current_payload.len() == self.chunk_size_bytes {
+                self.finish_current_chunk();
+            }
+        }
+    }
+
+    fn finish_current_chunk(&mut self) {
+        if self.current_payload.is_empty() {
+            return;
+        }
+
+        let payload = std::mem::take(&mut self.current_payload);
+        let sequence = self.next_sequence;
+        self.next_sequence += 1;
+        self.chunks
+            .push(CaptureChunk::with_payload(sequence, payload));
+    }
+
+    fn finish(mut self) -> Vec<CaptureChunk> {
+        self.finish_current_chunk();
+        self.chunks
+    }
+}
+
 pub struct CpalCaptureProvider {
-    samples: Arc<Mutex<Vec<u8>>>,
+    chunk_buffer: Arc<Mutex<Option<CaptureChunkBuffer>>>,
     stream: Option<cpal::Stream>,
     active_configuration: Option<RecordingConfiguration>,
 }
@@ -128,7 +197,7 @@ pub struct CpalCaptureProvider {
 impl CpalCaptureProvider {
     pub fn new() -> Self {
         Self {
-            samples: Arc::new(Mutex::new(Vec::new())),
+            chunk_buffer: Arc::new(Mutex::new(None)),
             stream: None,
             active_configuration: None,
         }
@@ -167,10 +236,11 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             return Err(CaptureStartError::AlreadyCapturing);
         }
 
-        self.samples
+        *self
+            .chunk_buffer
             .lock()
-            .expect("Sample-Puffer konnte nicht geleert werden.")
-            .clear();
+            .expect("Chunk-Puffer konnte nicht initialisiert werden.") =
+            Some(CaptureChunkBuffer::new(configuration));
 
         let host = cpal::default_host();
         let device = host
@@ -189,15 +259,17 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
         let stream_config = selected_configuration
             .stream_config_for_sample_rate(configuration.sample_rate_hz())
             .ok_or(CaptureStartError::UnsupportedRecordingConfiguration)?;
-        let samples = Arc::clone(&self.samples);
+        let chunk_buffer = Arc::clone(&self.chunk_buffer);
 
         let stream = device
             .build_input_stream_raw(
                 stream_config,
                 selected_configuration.sample_format(),
                 move |data, _| {
-                    let mut samples = samples.lock().unwrap();
-                    samples.extend_from_slice(data.bytes());
+                    let mut chunk_buffer = chunk_buffer.lock().unwrap();
+                    if let Some(chunk_buffer) = chunk_buffer.as_mut() {
+                        chunk_buffer.push_bytes(data.bytes());
+                    }
                 },
                 |error| {
                     eprintln!("CPAL Input-Stream-Fehler: {error}");
@@ -224,21 +296,18 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
             .take()
             .expect("Keine aktive Aufnahmekonfiguration vorhanden.");
 
-        let payload = self
-            .samples
+        let chunks = self
+            .chunk_buffer
             .lock()
-            .expect("Sample-Puffer konnte nicht gelesen werden.")
-            .clone();
-
-        self.samples
-            .lock()
-            .expect("Sample-Puffer konnte nicht geleert werden.")
-            .clear();
-
-        let chunk = CaptureChunk::with_payload(1, payload);
+            .expect("Chunk-Puffer konnte nicht gelesen werden.")
+            .take()
+            .map(CaptureChunkBuffer::finish)
+            .unwrap_or_default();
 
         let mut track = CaptureTrack::with_configuration("cpal-track", configuration);
-        track.add_chunk(chunk);
+        for chunk in chunks {
+            track.add_chunk(chunk);
+        }
 
         let mut result = CaptureResult::new("cpal-capture");
         result.add_track(track);
@@ -460,29 +529,105 @@ mod tests {
 
     // TEST-09
     #[test]
-    fn stop_capture_clears_samples_for_next_capture() {
-        let mut provider = CpalCaptureProvider::new();
-        provider
-            .samples
-            .lock()
-            .expect("Sample-Puffer konnte nicht geschrieben werden.")
-            .extend_from_slice(&[0x01, 0x02, 0x03]);
-        provider.active_configuration =
-            Some(RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24));
-
-        let first_result = provider.stop_capture();
-        assert_eq!(
-            first_result.tracks()[0].chunks()[0].payload(),
-            &[0x01, 0x02, 0x03]
+    fn stop_capture_returns_final_partial_chunk() {
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            10,
+            1,
+            SampleFormat::F32,
+            crate::audio::RecordingChunkDuration::TenSeconds,
         );
+        let mut buffer = CaptureChunkBuffer::new(&configuration);
+        buffer.push_bytes(&[0x01, 0x02, 0x03]);
 
-        provider.active_configuration =
-            Some(RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm24));
+        let chunks = buffer.finish();
 
-        let second_result = provider.stop_capture();
-        assert_eq!(
-            second_result.tracks()[0].chunks()[0].payload(),
-            &[] as &[u8]
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].sequence, 1);
+        assert_eq!(chunks[0].payload(), &[0x01, 0x02, 0x03]);
+    }
+
+    // TEST-10
+    #[test]
+    fn runtime_chunking_splits_at_configured_duration() {
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            2,
+            1,
+            SampleFormat::F32,
+            crate::audio::RecordingChunkDuration::TenSeconds,
         );
+        let mut buffer = CaptureChunkBuffer::new(&configuration);
+        let chunk_size = 2 * 10 * 4;
+        let payload = vec![0x01; chunk_size + 3];
+
+        buffer.push_bytes(&payload);
+        let chunks = buffer.finish();
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].sequence, 1);
+        assert_eq!(chunks[0].payload().len(), chunk_size);
+        assert_eq!(chunks[1].sequence, 2);
+        assert_eq!(chunks[1].payload(), &[0x01, 0x01, 0x01]);
+    }
+
+    // TEST-11
+    #[test]
+    fn runtime_chunking_preserves_sequence_across_callbacks() {
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            1,
+            1,
+            SampleFormat::F32,
+            crate::audio::RecordingChunkDuration::TenSeconds,
+        );
+        let mut buffer = CaptureChunkBuffer::new(&configuration);
+        buffer.push_bytes(&vec![0x01; 20]);
+        buffer.push_bytes(&vec![0x02; 20]);
+
+        let chunks = buffer.finish();
+
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].sequence, 1);
+        assert_eq!(chunks[0].payload().len(), 40);
+    }
+
+    // TEST-12
+    #[test]
+    fn runtime_chunking_keeps_multiple_channels_in_frame_sized_chunks() {
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            2,
+            2,
+            SampleFormat::Pcm24,
+            crate::audio::RecordingChunkDuration::TenSeconds,
+        );
+        let mut buffer = CaptureChunkBuffer::new(&configuration);
+        let chunk_size = 10 * 2 * 3 * 2;
+        let payload = vec![0x01; chunk_size + 6];
+
+        buffer.push_bytes(&payload);
+        let chunks = buffer.finish();
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].payload().len(), chunk_size);
+        assert_eq!(chunks[1].payload().len(), 6);
+    }
+
+    // TEST-13
+    #[test]
+    fn stop_capture_clears_runtime_chunk_state_for_next_capture() {
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            1,
+            1,
+            SampleFormat::F32,
+            crate::audio::RecordingChunkDuration::TenSeconds,
+        );
+        let mut buffer = CaptureChunkBuffer::new(&configuration);
+        buffer.push_bytes(&[0x01, 0x02]);
+        let first = buffer.finish();
+
+        let mut next_buffer = CaptureChunkBuffer::new(&configuration);
+        let second = next_buffer.finish();
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].sequence, 1);
+        assert!(second.is_empty());
     }
 }
