@@ -21,7 +21,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::artifact::{ArtifactStatus, RecordingArtifact, RecordingChunk, RecordingTrack};
+use crate::artifact::{
+    ArtifactStatus, PayloadHash, RecordingArtifact, RecordingChunk, RecordingTrack,
+};
 use crate::persistence::{
     PersistenceLoadResult, PersistenceProvider, PersistenceStoreError, artifacts_are_equivalent,
 };
@@ -50,6 +52,7 @@ struct PersistedRecordingChunk {
     sequence: u32,
     payload_reference: String,
     payload_size_bytes: u64,
+    payload_hash: [u8; 32],
 }
 
 impl From<&RecordingArtifact> for PersistedRecordingArtifact {
@@ -76,6 +79,7 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
                             sequence: chunk.sequence,
                             payload_reference: chunk.payload().reference().value().to_string(),
                             payload_size_bytes: chunk.payload().size_bytes(),
+                            payload_hash: *chunk.payload().hash().as_bytes(),
                         })
                         .collect(),
                 })
@@ -113,6 +117,11 @@ impl PersistedRecordingArtifact {
                 };
 
                 if payload.len() as u64 != persisted_chunk.payload_size_bytes {
+                    return PersistenceLoadResult::Inconsistent;
+                }
+
+                let payload_hash = PayloadHash::from_bytes(&payload);
+                if payload_hash.as_bytes() != &persisted_chunk.payload_hash {
                     return PersistenceLoadResult::Inconsistent;
                 }
 
@@ -532,6 +541,57 @@ mod tests {
         let _ = fs::remove_dir_all(path);
     }
 
+    // TEST-43
+    // Protects the persistence integrity boundary:
+    // payload corruption is detected even when the payload size is unchanged.
+    #[test]
+    fn payload_content_mismatch_is_inconsistent() {
+        let path = test_directory("payload-content-mismatch");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+
+        provider.store(test_artifact());
+        fs::write(
+            path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"),
+            [9, 8, 7],
+        )
+        .unwrap();
+
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::Inconsistent
+        ));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-44
+    // Protects the persistence integrity boundary:
+    // changing the persisted expected hash is detected independently of
+    // the payload bytes themselves.
+    #[test]
+    fn payload_hash_mismatch_is_inconsistent() {
+        let path = test_directory("payload-hash-mismatch");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+
+        provider.store(test_artifact());
+
+        let metadata_path = path.join("artifact-001/artifact.json");
+        let content = fs::read_to_string(&metadata_path).unwrap();
+        let content = content.replacen(
+            "\"payload_hash\": [",
+            "\"payload_hash\": [0,",
+            1,
+        );
+        fs::write(metadata_path, content).unwrap();
+
+        assert!(matches!(
+            provider.load("artifact-001"),
+            PersistenceLoadResult::Inconsistent
+        ));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
     // TEST-39
     // Protects the persistence assessment boundary:
     // malformed metadata is inconsistent persisted data.
@@ -596,7 +656,7 @@ mod tests {
             Err(PersistenceStoreError::Conflict { artifact_id }) if artifact_id == "artifact-001"
         ));
 
-        let _ = fs::remove_dir_all(path);
+        assert_eq!(provider.list().len(), 1);
     }
 
     #[test]
