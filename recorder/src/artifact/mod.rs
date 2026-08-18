@@ -25,9 +25,9 @@ pub mod recovery;
 pub mod registry;
 
 pub use id::{ArtifactId, RecordingTrackId};
-pub use integrity::PayloadHash;
+pub use integrity::{ManifestHash, PayloadHash};
 
-use crate::audio::RecordingConfiguration;
+use crate::audio::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
 use crate::session::RecordingSessionId;
 
 /// Technical lifecycle state of a Recording Artifact.
@@ -286,9 +286,66 @@ impl RecordingArtifact {
         self.tracks.push(track);
     }
 
-    /// Returns the tracks belonging to this artifact.
+    /// Returns the tracks belonging to this recording artifact.
     pub fn tracks(&self) -> &[RecordingTrack] {
         &self.tracks
+    }
+
+    /// Returns the deterministic integrity hash of the technical artifact manifest.
+    ///
+    /// Lifecycle status is deliberately excluded. The manifest covers the
+    /// artifact identity, recording session, domain association, track
+    /// configuration, chunk positions, payload references and payload hashes.
+    pub fn manifest_hash(&self) -> ManifestHash {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"NC-PORE:recording-artifact-manifest:v1\0");
+
+        append_str(&mut bytes, self.id.value());
+        append_str(&mut bytes, self.recording_session_id.value());
+
+        match &self.association {
+            Some(association) => {
+                bytes.push(1);
+                append_str(&mut bytes, association.production_id());
+                append_str(&mut bytes, association.recording_id());
+            }
+            None => bytes.push(0),
+        }
+
+        let mut tracks: Vec<&RecordingTrack> = self.tracks.iter().collect();
+        tracks.sort_by(|left, right| left.id.value().cmp(right.id.value()));
+        append_u32(&mut bytes, tracks.len() as u32);
+
+        for track in tracks {
+            append_str(&mut bytes, track.id.value());
+
+            match track.configuration() {
+                Some(configuration) => {
+                    bytes.push(1);
+                    append_u32(&mut bytes, configuration.sample_rate_hz());
+                    append_u16(&mut bytes, configuration.channels());
+                    bytes.push(match configuration.sample_format() {
+                        SampleFormat::Pcm24 => 1,
+                        SampleFormat::F32 => 2,
+                    });
+                    append_chunk_duration(&mut bytes, configuration.chunk_duration());
+                }
+                None => bytes.push(0),
+            }
+
+            let mut chunks: Vec<&RecordingChunk> = track.chunks().iter().collect();
+            chunks.sort_by_key(|chunk| chunk.sequence);
+            append_u32(&mut bytes, chunks.len() as u32);
+
+            for chunk in chunks {
+                append_u32(&mut bytes, chunk.sequence);
+                append_u64(&mut bytes, chunk.sample_offset());
+                append_str(&mut bytes, chunk.payload().reference().value());
+                bytes.extend_from_slice(chunk.payload().hash().as_bytes());
+            }
+        }
+
+        ManifestHash::from_manifest_bytes(&bytes)
     }
 
     /// Associates the artifact with its originating domain recording context.
@@ -321,6 +378,27 @@ impl RecordingArtifact {
             .as_ref()
             .map(RecordingArtifactAssociation::recording_id)
     }
+}
+
+fn append_u16(bytes: &mut Vec<u8>, value: u16) {
+    bytes.extend_from_slice(&value.to_be_bytes());
+}
+
+fn append_u32(bytes: &mut Vec<u8>, value: u32) {
+    bytes.extend_from_slice(&value.to_be_bytes());
+}
+
+fn append_u64(bytes: &mut Vec<u8>, value: u64) {
+    bytes.extend_from_slice(&value.to_be_bytes());
+}
+
+fn append_str(bytes: &mut Vec<u8>, value: &str) {
+    append_u32(bytes, value.len() as u32);
+    bytes.extend_from_slice(value.as_bytes());
+}
+
+fn append_chunk_duration(bytes: &mut Vec<u8>, duration: RecordingChunkDuration) {
+    append_u32(bytes, duration.seconds());
 }
 
 #[cfg(test)]
