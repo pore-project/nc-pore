@@ -577,11 +577,7 @@ mod tests {
 
         let metadata_path = path.join("artifact-001/artifact.json");
         let content = fs::read_to_string(&metadata_path).unwrap();
-        let content = content.replacen(
-            "\"payload_hash\": [",
-            "\"payload_hash\": [0,",
-            1,
-        );
+        let content = content.replacen("\"payload_hash\": [", "\"payload_hash\": [0,", 1);
         fs::write(metadata_path, content).unwrap();
 
         assert!(matches!(
