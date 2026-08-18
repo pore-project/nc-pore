@@ -16,12 +16,16 @@ fn benchmark_payload_hash(c: &mut Criterion) {
             b.iter(|| black_box(data.clone()));
         });
 
-        group.bench_with_input(BenchmarkId::new("copy_and_hash", size), &payload, |b, data| {
-            b.iter(|| {
-                let copied = data.clone();
-                black_box(PayloadHash::from_bytes(&copied));
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("copy_and_hash", size),
+            &payload,
+            |b, data| {
+                b.iter(|| {
+                    let copied = data.clone();
+                    black_box(PayloadHash::from_bytes(&copied));
+                });
+            },
+        );
 
         group.bench_with_input(BenchmarkId::new("hash_only", size), &payload, |b, data| {
             b.iter(|| black_box(PayloadHash::from_bytes(data)));
