@@ -51,8 +51,8 @@ impl ManifestHash {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
     use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
+    use crate::audio::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
     use crate::session::RecordingSessionId;
 
     #[test]
@@ -117,12 +117,8 @@ mod tests {
     }
 
     fn artifact_with_configuration(duration: RecordingChunkDuration) -> RecordingArtifact {
-        let configuration = RecordingConfiguration::with_chunk_duration(
-            48_000,
-            1,
-            SampleFormat::Pcm24,
-            duration,
-        );
+        let configuration =
+            RecordingConfiguration::with_chunk_duration(48_000, 1, SampleFormat::Pcm24, duration);
         let mut track = RecordingTrack::with_configuration("track-a", configuration);
         track.add_chunk(RecordingChunk::with_payload(
             1,
@@ -130,10 +126,8 @@ mod tests {
             b"payload".to_vec(),
         ));
 
-        let mut artifact = RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        );
+        let mut artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
         artifact.add_track(track);
         artifact
     }
@@ -142,10 +136,8 @@ mod tests {
         let mut track = RecordingTrack::new("track-a");
         track.add_chunk(RecordingChunk::with_payload(1, reference, data.to_vec()));
 
-        let mut artifact = RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        );
+        let mut artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
         artifact.add_track(track);
         artifact
     }
