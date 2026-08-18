@@ -25,9 +25,9 @@ pub mod recovery;
 pub mod registry;
 
 pub use id::{ArtifactId, RecordingTrackId};
-pub use integrity::PayloadHash;
+pub use integrity::{ManifestHash, PayloadHash};
 
-use crate::audio::RecordingConfiguration;
+use crate::audio::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
 use crate::session::RecordingSessionId;
 
 /// Technical lifecycle state of a Recording Artifact.
@@ -39,9 +39,6 @@ pub enum ArtifactStatus {
 }
 
 /// Opaque reference to the domain recording context that produced an artifact.
-///
-/// The recorder crate deliberately does not depend on the core crate. The
-/// identifiers are therefore stored as opaque values at this boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingArtifactAssociation {
     production_id: String,
@@ -66,9 +63,6 @@ impl RecordingArtifactAssociation {
 }
 
 /// Storage-provider-independent logical identity of one payload segment.
-///
-/// The reference identifies the payload within the artifact without encoding
-/// an absolute filesystem path or another concrete storage location.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingPayloadReference(String);
 
@@ -83,13 +77,6 @@ impl RecordingPayloadReference {
 }
 
 /// Technical payload belonging to one RecordingChunk.
-///
-/// The payload bytes remain technical recording data. The logical reference
-/// is intentionally independent of the physical persistence provider.
-///
-/// The payload hash is part of the artifact semantics and is independent of
-/// the persistence provider. It allows recovery to distinguish intact data
-/// from data that was found but changed or corrupted after persistence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingPayload {
     reference: RecordingPayloadReference,
@@ -128,13 +115,6 @@ impl RecordingPayload {
 }
 
 /// A technical chunk of recording data.
-///
-/// The chunk deliberately contains no filesystem-specific information.
-/// Its position belongs to the track and is represented by its sequence
-/// number and sample offset. The physical payload location is decided by
-/// the persistence provider.
-///
-/// See ADR-003, ADR-009, ADR-038 and ADR-058.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingChunk {
     pub sequence: u32,
@@ -149,9 +129,6 @@ impl RecordingChunk {
     }
 
     /// Creates a recording chunk with its logical payload reference and data.
-    ///
-    /// The chunk starts at sample offset zero. Use `with_sample_offset` when
-    /// the chunk has a known position within the track.
     pub fn with_payload(
         sequence: u32,
         reference: impl Into<String>,
@@ -174,23 +151,16 @@ impl RecordingChunk {
         }
     }
 
-    /// Returns the sample offset of this chunk within its track.
     pub const fn sample_offset(&self) -> u64 {
         self.sample_offset
     }
 
-    /// Returns the technical payload belonging to this recording chunk.
     pub fn payload(&self) -> &RecordingPayload {
         &self.payload
     }
 }
 
 /// A technical recording track.
-///
-/// A track represents one technical audio stream within a
-/// RecordingArtifact. It does not represent a domain participant or role.
-///
-/// See ADR-002 and ADR-054.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingTrack {
     pub id: RecordingTrackId,
@@ -199,7 +169,6 @@ pub struct RecordingTrack {
 }
 
 impl RecordingTrack {
-    /// Creates an empty recording track without configuration metadata.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: RecordingTrackId::new(id),
@@ -208,7 +177,6 @@ impl RecordingTrack {
         }
     }
 
-    /// Creates an empty recording track with the supplied recording configuration.
     pub fn with_configuration(
         id: impl Into<String>,
         configuration: RecordingConfiguration,
@@ -220,28 +188,20 @@ impl RecordingTrack {
         }
     }
 
-    /// Returns the recording configuration used for this track, if known.
     pub const fn configuration(&self) -> Option<RecordingConfiguration> {
         self.configuration
     }
 
-    /// Adds a technical recording chunk.
     pub fn add_chunk(&mut self, chunk: RecordingChunk) {
         self.chunks.push(chunk);
     }
 
-    /// Returns the chunks belonging to this recording track.
     pub fn chunks(&self) -> &[RecordingChunk] {
         &self.chunks
     }
 }
 
 /// Technical representation of the result of a local recording.
-///
-/// A RecordingArtifact is not itself a file. It represents the technical
-/// recording result and associates its tracks and recording data.
-///
-/// See ADR-038, ADR-042, ADR-054 and ADR-058.
 #[derive(Debug, Clone)]
 pub struct RecordingArtifact {
     pub id: ArtifactId,
@@ -252,10 +212,6 @@ pub struct RecordingArtifact {
 }
 
 impl RecordingArtifact {
-    /// Creates a new recording artifact.
-    ///
-    /// A new artifact represents a technical recording result
-    /// that has been created but is not yet available or stored.
     pub fn new(id: impl Into<String>, recording_session_id: RecordingSessionId) -> Self {
         Self {
             id: ArtifactId::new(id),
@@ -266,32 +222,83 @@ impl RecordingArtifact {
         }
     }
 
-    /// Returns the current artifact status.
     pub fn status(&self) -> &ArtifactStatus {
         &self.status
     }
 
-    /// Marks the artifact as available.
     pub fn make_available(&mut self) {
         self.status = ArtifactStatus::Available;
     }
 
-    /// Marks the artifact as stored.
     pub fn store(&mut self) {
         self.status = ArtifactStatus::Stored;
     }
 
-    /// Adds a technical recording track to the artifact.
     pub fn add_track(&mut self, track: RecordingTrack) {
         self.tracks.push(track);
     }
 
-    /// Returns the tracks belonging to this artifact.
     pub fn tracks(&self) -> &[RecordingTrack] {
         &self.tracks
     }
 
-    /// Associates the artifact with its originating domain recording context.
+    /// Returns the deterministic integrity hash of the technical artifact manifest.
+    ///
+    /// Lifecycle status is deliberately excluded. The manifest covers the
+    /// artifact identity, recording session, domain association, track
+    /// configuration, chunk positions, payload references and payload hashes.
+    pub fn manifest_hash(&self) -> ManifestHash {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"NC-PORE:recording-artifact-manifest:v1\0");
+
+        append_str(&mut bytes, self.id.value());
+        append_str(&mut bytes, self.recording_session_id.value());
+
+        match &self.association {
+            Some(association) => {
+                bytes.push(1);
+                append_str(&mut bytes, association.production_id());
+                append_str(&mut bytes, association.recording_id());
+            }
+            None => bytes.push(0),
+        }
+
+        let mut tracks: Vec<&RecordingTrack> = self.tracks.iter().collect();
+        tracks.sort_by(|left, right| left.id.value().cmp(right.id.value()));
+        append_u32(&mut bytes, tracks.len() as u32);
+
+        for track in tracks {
+            append_str(&mut bytes, track.id.value());
+
+            match track.configuration() {
+                Some(configuration) => {
+                    bytes.push(1);
+                    append_u32(&mut bytes, configuration.sample_rate_hz());
+                    append_u16(&mut bytes, configuration.channels());
+                    bytes.push(match configuration.sample_format() {
+                        SampleFormat::Pcm24 => 1,
+                        SampleFormat::F32 => 2,
+                    });
+                    append_chunk_duration(&mut bytes, configuration.chunk_duration());
+                }
+                None => bytes.push(0),
+            }
+
+            let mut chunks: Vec<&RecordingChunk> = track.chunks().iter().collect();
+            chunks.sort_by_key(|chunk| chunk.sequence);
+            append_u32(&mut bytes, chunks.len() as u32);
+
+            for chunk in chunks {
+                append_u32(&mut bytes, chunk.sequence);
+                append_u64(&mut bytes, chunk.sample_offset());
+                append_str(&mut bytes, chunk.payload().reference().value());
+                bytes.extend_from_slice(chunk.payload().hash().as_bytes());
+            }
+        }
+
+        ManifestHash::from_manifest_bytes(&bytes)
+    }
+
     pub fn set_domain_association(
         &mut self,
         production_id: impl Into<String>,
@@ -303,19 +310,16 @@ impl RecordingArtifact {
         ));
     }
 
-    /// Returns the originating domain association, if one was supplied.
     pub fn association(&self) -> Option<&RecordingArtifactAssociation> {
         self.association.as_ref()
     }
 
-    /// Returns the originating production identifier, if one was supplied.
     pub fn production_id(&self) -> Option<&str> {
         self.association
             .as_ref()
             .map(RecordingArtifactAssociation::production_id)
     }
 
-    /// Returns the originating domain recording identifier, if one was supplied.
     pub fn recording_id(&self) -> Option<&str> {
         self.association
             .as_ref()
@@ -323,17 +327,32 @@ impl RecordingArtifact {
     }
 }
 
+fn append_u16(bytes: &mut Vec<u8>, value: u16) {
+    bytes.extend_from_slice(&value.to_be_bytes());
+}
+
+fn append_u32(bytes: &mut Vec<u8>, value: u32) {
+    bytes.extend_from_slice(&value.to_be_bytes());
+}
+
+fn append_u64(bytes: &mut Vec<u8>, value: u64) {
+    bytes.extend_from_slice(&value.to_be_bytes());
+}
+
+fn append_str(bytes: &mut Vec<u8>, value: &str) {
+    append_u32(bytes, value.len() as u32);
+    bytes.extend_from_slice(value.as_bytes());
+}
+
+fn append_chunk_duration(bytes: &mut Vec<u8>, duration: RecordingChunkDuration) {
+    append_u32(bytes, duration.seconds());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     // TEST-09
-    //
-    // Verify: A new artifact starts in Created state.
-    //
-    // This protects ADR-042:
-    // Recording artifacts have their own technical lifecycle
-    // independent from domain recording states.
     #[test]
     fn new_artifact_starts_as_created() {
         let artifact =
@@ -343,8 +362,6 @@ mod tests {
     }
 
     // TEST-10
-    //
-    // Verify: Artifact lifecycle can progress from Created to Available.
     #[test]
     fn artifact_can_become_available() {
         let mut artifact =
@@ -356,8 +373,6 @@ mod tests {
     }
 
     // TEST-11
-    //
-    // Verify: Available artifacts can be stored.
     #[test]
     fn artifact_can_be_stored() {
         let mut artifact =
@@ -370,9 +385,6 @@ mod tests {
     }
 
     // TEST-28
-    //
-    // Protects ADR-054:
-    // A RecordingArtifact can contain technical recording tracks.
     #[test]
     fn artifact_can_contain_tracks() {
         let mut artifact =
@@ -385,9 +397,6 @@ mod tests {
     }
 
     // TEST-29
-    //
-    // Protects ADR-054:
-    // A recording track can contain multiple ordered chunks.
     #[test]
     fn track_can_contain_chunks() {
         let mut track = RecordingTrack::new("track-001");
@@ -403,9 +412,6 @@ mod tests {
     }
 
     // TEST-30
-    //
-    // Protects ADR-054:
-    // Tracks are independent technical structures.
     #[test]
     fn artifact_can_contain_multiple_independent_tracks() {
         let mut artifact =
@@ -429,9 +435,6 @@ mod tests {
     }
 
     // TEST-31
-    //
-    // Protects ADR-054:
-    // A RecordingArtifact can preserve its originating domain association.
     #[test]
     fn artifact_can_preserve_domain_association() {
         let mut artifact =
@@ -444,10 +447,6 @@ mod tests {
     }
 
     // TEST-35
-    //
-    // Protects ADR-058:
-    // A RecordingChunk can carry actual technical payload bytes
-    // while exposing only a storage-provider-independent reference.
     #[test]
     fn recording_chunk_can_contain_payload() {
         let chunk = RecordingChunk::with_payload(1, "track-host/chunk-000001", vec![1, 2, 3]);
@@ -463,9 +462,6 @@ mod tests {
     }
 
     // TEST-37
-    //
-    // Protects the capture-to-artifact boundary:
-    // the recording configuration used for a technical track is preserved.
     #[test]
     fn recording_track_preserves_configuration() {
         let configuration = RecordingConfiguration::new(48_000, 1, crate::audio::SampleFormat::F32);
@@ -475,9 +471,6 @@ mod tests {
     }
 
     // TEST-38
-    //
-    // Protects ADR-009:
-    // a recording chunk preserves its sample-based position within its track.
     #[test]
     fn recording_chunk_preserves_sample_offset() {
         let chunk = RecordingChunk::with_sample_offset(
