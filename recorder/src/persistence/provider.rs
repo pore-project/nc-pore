@@ -36,6 +36,47 @@ pub enum PersistenceRecoveryLookup {
     Conflict { artifact_ids: Vec<String> },
 }
 
+impl PersistenceRecoveryLookup {
+    fn artifact_id(&self) -> Option<&str> {
+        match self {
+            Self::Valid(artifact) => Some(artifact.id.value()),
+            Self::Incomplete { artifact_id } | Self::Inconsistent { artifact_id } => {
+                Some(artifact_id)
+            }
+            Self::NotFound | Self::Conflict { .. } => None,
+        }
+    }
+}
+
+/// Resolves persistence recovery evidence deterministically.
+///
+/// Recovery must never choose one candidate merely because it happens to be
+/// returned first. A single candidate may be classified explicitly, while
+/// multiple candidates always become a conflict, regardless of whether they
+/// are valid, incomplete, or inconsistent.
+fn resolve_recovery_candidates(
+    candidates: Vec<PersistenceRecoveryLookup>,
+) -> PersistenceRecoveryLookup {
+    match candidates.len() {
+        0 => PersistenceRecoveryLookup::NotFound,
+        1 => candidates
+            .into_iter()
+            .next()
+            .expect("candidate count guarantees one candidate"),
+        _ => {
+            let mut artifact_ids: Vec<String> = candidates
+                .iter()
+                .filter_map(PersistenceRecoveryLookup::artifact_id)
+                .map(str::to_owned)
+                .collect();
+            artifact_ids.sort();
+            artifact_ids.dedup();
+
+            PersistenceRecoveryLookup::Conflict { artifact_ids }
+        }
+    }
+}
+
 /// Persistence contract used by the Recorder workflow.
 ///
 /// The workflow depends on this abstraction instead of concrete storage.
@@ -69,8 +110,9 @@ pub trait PersistenceProvider {
     ///
     /// Candidate discovery remains inside the persistence boundary. Callers
     /// therefore do not need to enumerate artifact identifiers or inspect
-    /// concrete storage layouts. The default implementation preserves
-    /// compatibility for providers that do not yet have a native index.
+    /// concrete storage layouts. Providers that can associate incomplete or
+    /// inconsistent persisted candidates with the requested recording should
+    /// override this method and return those states explicitly.
     fn find_for_recording(
         &self,
         production_id: &str,
@@ -84,24 +126,15 @@ pub trait PersistenceProvider {
                     if artifact.production_id() == Some(production_id)
                         && artifact.recording_id() == Some(recording_id) =>
                 {
-                    matches.push(artifact);
+                    matches.push(PersistenceRecoveryLookup::Valid(artifact));
                 }
-                PersistenceLoadResult::Incomplete => {}
-                PersistenceLoadResult::Inconsistent | PersistenceLoadResult::NotFound => {}
+                PersistenceLoadResult::Incomplete | PersistenceLoadResult::Inconsistent => {}
+                PersistenceLoadResult::NotFound => {}
                 PersistenceLoadResult::Valid(_) => {}
             }
         }
 
-        match matches.len() {
-            0 => PersistenceRecoveryLookup::NotFound,
-            1 => PersistenceRecoveryLookup::Valid(matches.remove(0)),
-            _ => PersistenceRecoveryLookup::Conflict {
-                artifact_ids: matches
-                    .into_iter()
-                    .map(|artifact| artifact.id.value().to_owned())
-                    .collect(),
-            },
-        }
+        resolve_recovery_candidates(matches)
     }
 
     /// Lists identifiers for persisted artifact candidates without loading
@@ -117,4 +150,62 @@ pub trait PersistenceProvider {
 
     #[allow(dead_code)]
     fn remove(&mut self, id: &str);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::RecordingSessionId;
+
+    #[test]
+    fn recovery_with_no_candidates_is_not_found() {
+        assert!(matches!(
+            resolve_recovery_candidates(Vec::new()),
+            PersistenceRecoveryLookup::NotFound
+        ));
+    }
+
+    #[test]
+    fn recovery_preserves_a_single_incomplete_candidate() {
+        assert!(matches!(
+            resolve_recovery_candidates(vec![PersistenceRecoveryLookup::Incomplete {
+                artifact_id: "artifact-002".to_owned(),
+            }]),
+            PersistenceRecoveryLookup::Incomplete { artifact_id } if artifact_id == "artifact-002"
+        ));
+    }
+
+    #[test]
+    fn recovery_preserves_a_single_inconsistent_candidate() {
+        assert!(matches!(
+            resolve_recovery_candidates(vec![PersistenceRecoveryLookup::Inconsistent {
+                artifact_id: "artifact-003".to_owned(),
+            }]),
+            PersistenceRecoveryLookup::Inconsistent { artifact_id } if artifact_id == "artifact-003"
+        ));
+    }
+
+    #[test]
+    fn recovery_turns_multiple_candidates_into_sorted_conflict() {
+        let artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+
+        assert!(matches!(
+            resolve_recovery_candidates(vec![
+                PersistenceRecoveryLookup::Inconsistent {
+                    artifact_id: "artifact-003".to_owned(),
+                },
+                PersistenceRecoveryLookup::Valid(artifact),
+                PersistenceRecoveryLookup::Incomplete {
+                    artifact_id: "artifact-002".to_owned(),
+                },
+            ]),
+            PersistenceRecoveryLookup::Conflict { artifact_ids }
+                if artifact_ids == vec![
+                    "artifact-001".to_owned(),
+                    "artifact-002".to_owned(),
+                    "artifact-003".to_owned(),
+                ]
+        ));
+    }
 }
