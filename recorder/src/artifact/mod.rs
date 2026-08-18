@@ -459,10 +459,7 @@ mod tests {
         );
         assert_eq!(chunk.payload().data(), &[1, 2, 3]);
         assert_eq!(chunk.payload().size_bytes(), 3);
-        assert_eq!(
-            chunk.payload().hash(),
-            &PayloadHash::from_bytes(&[1, 2, 3])
-        );
+        assert_eq!(chunk.payload().hash(), &PayloadHash::from_bytes(&[1, 2, 3]));
     }
 
     // TEST-37
@@ -471,8 +468,7 @@ mod tests {
     // the recording configuration used for a technical track is preserved.
     #[test]
     fn recording_track_preserves_configuration() {
-        let configuration =
-            RecordingConfiguration::new(48_000, 1, crate::audio::SampleFormat::F32);
+        let configuration = RecordingConfiguration::new(48_000, 1, crate::audio::SampleFormat::F32);
         let track = RecordingTrack::with_configuration("track-host", configuration);
 
         assert_eq!(track.configuration(), Some(configuration));
