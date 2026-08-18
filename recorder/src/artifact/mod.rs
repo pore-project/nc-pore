@@ -429,6 +429,9 @@ mod tests {
     }
 
     // TEST-31
+    //
+    // Protects ADR-054:
+    // A RecordingArtifact can preserve its originating domain association.
     #[test]
     fn artifact_can_preserve_domain_association() {
         let mut artifact =
@@ -468,7 +471,8 @@ mod tests {
     // the recording configuration used for a technical track is preserved.
     #[test]
     fn recording_track_preserves_configuration() {
-        let configuration = RecordingConfiguration::new(48_000, 1, crate::audio::SampleFormat::F32);
+        let configuration =
+            RecordingConfiguration::new(48_000, 1, crate::audio::SampleFormat::F32);
         let track = RecordingTrack::with_configuration("track-host", configuration);
 
         assert_eq!(track.configuration(), Some(configuration));
