@@ -187,10 +187,7 @@ mod tests {
 
     #[test]
     fn recovery_turns_multiple_candidates_into_sorted_conflict() {
-        let artifact = RecordingArtifact::new(
-            "artifact-001",
-            RecordingSessionId::new("session-001"),
-        );
+        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
 
         assert!(matches!(
             resolve_recovery_candidates(vec![
