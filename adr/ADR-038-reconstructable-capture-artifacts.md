@@ -41,6 +41,9 @@ Capture-Daten müssen:
 * eine zeitliche Positionierung besitzen
 * bei Bedarf auf Chunk-/Segmentebene identifizierbar sein
 * zwischen vollständigem und unvollständigem Capture-Zustand unterscheiden können
+* zwischen vollständigem und beschädigtem Capture-Zustand unterscheiden können
+* ihre Integrität auf Chunk-Ebene verifizieren können
+* die Integrität des gesamten Artifacts verifizierbar machen
 * unabhängig von abgeleiteten Processing-Ausgaben gemäß Storage Policy erhalten werden können
 
 Ein Capture Artifact muss keine fertige WAV-, AIFF-, FLAC- oder andere Produktionsdatei sein.
@@ -97,6 +100,54 @@ Diese ADR schreibt **FLAC ausdrücklich nicht als lokales Capture-Format vor**. 
 
 ---
 
+# Integrität der Capture Artifacts
+
+NC-PoRe verwendet **SHA-256** zur Integritätsprüfung persistierter Capture Artifacts.
+
+Jeder persistierte Capture Chunk erhält einen SHA-256-Hash über seine Payload. Das Artifact erhält zusätzlich einen deterministisch berechneten Integritäts-Hash über seine relevante Struktur, seine relevanten Metadaten und die Hashes seiner Chunks.
+
+Die beiden Ebenen beantworten unterschiedliche Fragen:
+
+* Der **Chunk-Hash** stellt fest, ob die gespeicherten Payload-Bytes eines einzelnen Chunks unverändert sind.
+* Der **Artifact-Hash** stellt fest, ob das gesamte Artifact strukturell und inhaltlich noch dasselbe Artifact ist.
+
+Artifact Identity und Integrity Hash sind dabei bewusst unterschiedliche Konzepte:
+
+```text
+ArtifactId   = Welches Artifact ist gemeint?
+IntegrityHash = Sind dessen relevante Daten unverändert?
+```
+
+Die Integritätsinformationen gehören zur Artifact-Semantik und sind nicht provider-spezifisch. Ein Storage Provider darf und soll die Integrität beim Persistieren und Laden verifizieren, ist aber nicht die fachliche Autorität über die Bedeutung der Hashes.
+
+Ein Integritätsfehler wird als **Inconsistent** behandelt. Ein fehlendes oder unvollständiges Artifact bleibt davon unterscheidbar als **Incomplete**; ein nicht vorhandenes Artifact als **NotFound**.
+
+---
+
+# Performance-Anforderung für den Capture-Pfad
+
+Integritätsberechnung darf den eigentlichen Aufnahmevorgang nicht zum Flaschenhals machen.
+
+Die Hash-Berechnung muss daher **streamingfähig** sein und darf keine synchrone Abhängigkeit von der Latenz des Persistence Providers in den Capture-Pfad einführen.
+
+Konzeptionell:
+
+```text
+Audio Capture
+     |
+     +----> Chunk Payload
+     |
+     +----> SHA-256 update
+              |
+              +----> Persistence Queue
+```
+
+Der Capture-Pfad darf insbesondere nicht auf langsame oder netzwerkbasierte Storage Provider warten müssen, nur um die Aufnahme fortsetzen zu können.
+
+Die konkrete Parallelisierungs-, Buffering- und Backpressure-Strategie bleibt eine spätere Implementierungsentscheidung.
+
+---
+
 # Konsequenzen
 
 ## Positive Auswirkungen
@@ -106,15 +157,18 @@ Diese ADR schreibt **FLAC ausdrücklich nicht als lokales Capture-Format vor**. 
 * Production Artifacts können neu erzeugt werden
 * Capture- und Production-Formate bleiben entkoppelt
 * Recovery-Semantik wird explizit
+* Beschädigte Payloads können erkannt und von fehlenden oder unvollständigen Daten unterschieden werden
+* Integrität bleibt unabhängig vom konkreten Storage Provider überprüfbar
 
 ---
 
 ## Negative Auswirkungen
 
 * zusätzliche Metadaten müssen persistiert werden
-* vollständige und unvollständige Artifact-Zustände müssen modelliert werden
+* vollständige, unvollständige und inkonsistente Artifact-Zustände müssen modelliert werden
 * Rekonstruktionslogik wird zu einem eigenen Subsystem
 * die Storage-Anforderungen können steigen, wenn Raw Capture erhalten bleibt
+* Integritätsberechnung und Verifikation benötigen zusätzliche Rechenarbeit
 
 ---
 
@@ -132,17 +186,33 @@ Als allgemeine Architekturvorgabe verworfen. Dadurch würde Capture auf Browser-
 
 ---
 
+## Nur einen Hash für das gesamte Artifact verwenden
+
+Verworfen. Ein einzelner Artifact-Hash kann feststellen, dass ein Artifact verändert oder beschädigt wurde, identifiziert aber nicht zuverlässig den betroffenen Chunk. Chunk-Level-Hashes unterstützen Recovery, Diagnose und Rekonstruktion besser.
+
+---
+
+## Provider-spezifische Prüfsummen verwenden
+
+Verworfen. Integritätsinformationen müssen über verschiedene Storage Provider hinweg dieselbe Bedeutung behalten. Provider-spezifische Checksums können ergänzend genutzt werden, ersetzen aber nicht die provider-unabhängige Artifact-Integrität.
+
+---
+
 # Beziehung zu bestehender Architektur
 
 Diese Entscheidung baut auf ADR-026 (Session Data and Storage Architecture) und ADR-035 (Domain Lifecycle and State Transition Management) auf.
 
 Sie führt eine deutlichere Trennung zwischen Source Capture Artifacts und abgeleiteten Production Artifacts ein, ohne eine konkrete Storage-Technologie oder einen Audio-Codec vorzuschreiben.
 
+Die Integritätsentscheidung ergänzt die bestehende Artifact- und Persistence-Abstraktion und bleibt mit der Provider-Grenze aus ADR-039 kompatibel.
+
 ---
 
 # Zukünftige Betrachtungen
 
-Eine spätere Implementierungsentscheidung muss Artifact Identity, Chunk Addressing, Integritätsinformationen, Completion Semantics, Retention und Rekonstruktionsregeln definieren.
+Eine spätere Implementierungsentscheidung muss Artifact Identity, Chunk Addressing, konkrete Hash-Repräsentation und Serialisierung, Completion Semantics, Retention und Rekonstruktionsregeln definieren.
+
+Die konkrete Implementierung muss außerdem nachweisen, dass Integritätsberechnung und -prüfung den Echtzeit-Capture-Pfad nicht unzulässig belasten.
 
 ---
 
@@ -189,6 +259,9 @@ Capture data must:
 * contain temporal positioning
 * be identifiable at chunk/segment level where required
 * distinguish complete from incomplete capture state
+* distinguish complete from corrupted capture state
+* allow integrity verification at chunk level
+* make integrity of the complete Artifact verifiable
 * be preservable independently of derived processing outputs according to storage policy
 
 A Capture Artifact is not required to be a finished WAV, AIFF, FLAC or other production file.
@@ -245,6 +318,54 @@ This ADR deliberately does **not** mandate FLAC for local capture. Browser and r
 
 ---
 
+# Capture Artifact Integrity
+
+NC-PoRe uses **SHA-256** for integrity verification of persisted Capture Artifacts.
+
+Each persisted Capture Chunk receives a SHA-256 hash over its payload. The Artifact additionally receives a deterministically computed integrity hash over its relevant structure, relevant metadata and the hashes of its chunks.
+
+The two levels answer different questions:
+
+* The **Chunk Hash** establishes whether the stored payload bytes of an individual chunk remain unchanged.
+* The **Artifact Hash** establishes whether the complete Artifact remains structurally and substantively the same Artifact.
+
+Artifact identity and integrity hash are deliberately separate concepts:
+
+```text
+ArtifactId    = Which Artifact is this?
+IntegrityHash = Are its relevant data unchanged?
+```
+
+Integrity information is part of Artifact semantics and is not provider-specific. A Storage Provider may and should verify integrity during persistence and loading, but it is not the domain authority for the meaning of the hashes.
+
+An integrity failure is treated as **Inconsistent**. A missing or incomplete Artifact remains distinguishable as **Incomplete**, while an Artifact that does not exist is **NotFound**.
+
+---
+
+# Performance Requirement for the Capture Path
+
+Integrity computation must not turn the actual recording process into a bottleneck.
+
+Hash computation must therefore be **streaming-capable** and must not introduce a synchronous dependency on Persistence Provider latency into the capture path.
+
+Conceptually:
+
+```text
+Audio Capture
+     |
+     +----> Chunk Payload
+     |
+     +----> SHA-256 update
+              |
+              +----> Persistence Queue
+```
+
+In particular, the capture path must not have to wait for slow or network-based Storage Providers merely to continue recording.
+
+The concrete parallelization, buffering and backpressure strategy remains a later implementation decision.
+
+---
+
 # Consequences
 
 ## Positive Effects
@@ -254,15 +375,18 @@ This ADR deliberately does **not** mandate FLAC for local capture. Browser and r
 * Production Artifacts can be regenerated
 * capture and production formats remain decoupled
 * recovery semantics become explicit
+* corrupted payloads can be detected and distinguished from missing or incomplete data
+* integrity remains verifiable independently of the concrete Storage Provider
 
 ---
 
 ## Negative Effects
 
 * additional metadata must be persisted
-* complete and incomplete artifact states must be modeled
+* complete, incomplete and inconsistent artifact states must be modeled
 * reconstruction logic becomes a first-class subsystem
 * storage requirements may increase when Raw Capture is retained
+* integrity computation and verification require additional computation
 
 ---
 
@@ -280,14 +404,30 @@ Rejected as a general architectural requirement. It would couple browser/client 
 
 ---
 
+## Use Only One Hash for the Complete Artifact
+
+Rejected. A single Artifact Hash can establish that an Artifact has changed or been corrupted, but it does not reliably identify the affected chunk. Chunk-level hashes better support recovery, diagnosis and reconstruction.
+
+---
+
+## Use Provider-Specific Checksums
+
+Rejected. Integrity information must retain the same meaning across different Storage Providers. Provider-specific checksums may be used additionally, but do not replace provider-independent Artifact integrity.
+
+---
+
 # Relationship to Existing Architecture
 
 This decision builds on ADR-026 (Session Data and Storage Architecture) and ADR-035 (Domain Lifecycle and State Transition Management).
 
 It introduces a more explicit distinction between source Capture Artifacts and derived Production Artifacts without making a concrete storage technology or audio codec mandatory.
 
+The integrity decision complements the existing Artifact and Persistence abstraction and remains compatible with the provider boundary established by ADR-039.
+
 ---
 
 # Future Considerations
 
-A later implementation decision must define artifact identity, chunk addressing, integrity information, completion semantics, retention and reconstruction rules.
+A later implementation decision must define artifact identity, chunk addressing, concrete hash representation and serialization, completion semantics, retention and reconstruction rules.
+
+The concrete implementation must also demonstrate that integrity computation and verification do not place an unacceptable load on the real-time capture path.
