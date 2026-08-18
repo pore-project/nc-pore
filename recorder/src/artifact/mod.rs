@@ -14,15 +14,18 @@
 //! - ADR-042 Recording Artifact Model and Lifecycle Boundary
 //! - ADR-054 Recording Artifact and Local Recording Data Association
 //! - ADR-058 Recording Payload Representation
+//! - ADR-038 Reconstructable Capture Artifacts
 
 pub mod coordination;
 pub mod factory;
 pub mod id;
+pub mod integrity;
 pub mod processing;
 pub mod recovery;
 pub mod registry;
 
 pub use id::{ArtifactId, RecordingTrackId};
+pub use integrity::PayloadHash;
 
 use crate::audio::RecordingConfiguration;
 use crate::session::RecordingSessionId;
@@ -84,18 +87,25 @@ impl RecordingPayloadReference {
 /// The payload bytes remain technical recording data. The logical reference
 /// is intentionally independent of the physical persistence provider.
 ///
-/// Integrity validation is deliberately deferred to the recovery work in #8.
+/// The payload hash is part of the artifact semantics and is independent of
+/// the persistence provider. It allows recovery to distinguish intact data
+/// from data that was found but changed or corrupted after persistence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingPayload {
     reference: RecordingPayloadReference,
     data: Vec<u8>,
+    hash: PayloadHash,
 }
 
 impl RecordingPayload {
     pub fn new(reference: impl Into<String>, data: impl Into<Vec<u8>>) -> Self {
+        let data = data.into();
+        let hash = PayloadHash::from_bytes(&data);
+
         Self {
             reference: RecordingPayloadReference::new(reference),
-            data: data.into(),
+            data,
+            hash,
         }
     }
 
@@ -110,6 +120,11 @@ impl RecordingPayload {
     pub fn size_bytes(&self) -> u64 {
         self.data.len() as u64
     }
+
+    /// Returns the SHA-256 hash of the payload bytes.
+    pub fn hash(&self) -> &PayloadHash {
+        &self.hash
+    }
 }
 
 /// A technical chunk of recording data.
@@ -119,7 +134,7 @@ impl RecordingPayload {
 /// number and sample offset. The physical payload location is decided by
 /// the persistence provider.
 ///
-/// See ADR-003, ADR-009, ADR-054 and ADR-058.
+/// See ADR-003, ADR-009, ADR-038 and ADR-058.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingChunk {
     pub sequence: u32,
@@ -226,7 +241,7 @@ impl RecordingTrack {
 /// A RecordingArtifact is not itself a file. It represents the technical
 /// recording result and associates its tracks and recording data.
 ///
-/// See ADR-042, ADR-054 and ADR-058.
+/// See ADR-038, ADR-042, ADR-054 and ADR-058.
 #[derive(Debug, Clone)]
 pub struct RecordingArtifact {
     pub id: ArtifactId,
@@ -414,6 +429,9 @@ mod tests {
     }
 
     // TEST-31
+    //
+    // Protects ADR-054:
+    // A RecordingArtifact can preserve its originating domain association.
     #[test]
     fn artifact_can_preserve_domain_association() {
         let mut artifact =
@@ -441,6 +459,7 @@ mod tests {
         );
         assert_eq!(chunk.payload().data(), &[1, 2, 3]);
         assert_eq!(chunk.payload().size_bytes(), 3);
+        assert_eq!(chunk.payload().hash(), &PayloadHash::from_bytes(&[1, 2, 3]));
     }
 
     // TEST-37
