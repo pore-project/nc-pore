@@ -7,8 +7,8 @@ use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::participation::Participation;
 use nc_pore_core::recording::RecordingStatus;
 use nc_pore_core::role::ParticipantRole;
-use nc_pore_core::session::{ProductionSession, ProductionSessionError, ProductionStatus};
 use nc_pore_core::session::repository::ProductionSessionRepository;
+use nc_pore_core::session::{ProductionSession, ProductionSessionError, ProductionStatus};
 
 /// Stable role vocabulary exposed to a client without leaking the domain role type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,10 +176,7 @@ where
         Self { repository }
     }
 
-    pub fn get(
-        &self,
-        id: &str,
-    ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
+    pub fn get(&self, id: &str) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
         let id = ProductionId::new(id);
         get_production_session(self.repository, &id)
             .map(|session| ClientProductionSession::from(&session))
@@ -301,7 +298,11 @@ mod tests {
         type Error = &'static str;
 
         fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-            if self.sessions.iter().any(|existing| existing.id == session.id) {
+            if self
+                .sessions
+                .iter()
+                .any(|existing| existing.id == session.id)
+            {
                 return Err("session already exists");
             }
             self.sessions.push(session.clone());
@@ -309,7 +310,10 @@ mod tests {
         }
 
         fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-            let existing = self.sessions.iter_mut().find(|existing| existing.id == session.id);
+            let existing = self
+                .sessions
+                .iter_mut()
+                .find(|existing| existing.id == session.id);
             match existing {
                 Some(existing) => {
                     *existing = session.clone();
@@ -320,7 +324,11 @@ mod tests {
         }
 
         fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
-            Ok(self.sessions.iter().find(|session| &session.id == id).cloned())
+            Ok(self
+                .sessions
+                .iter()
+                .find(|session| &session.id == id)
+                .cloned())
         }
     }
 
@@ -346,12 +354,7 @@ mod tests {
 
         client.create("session-001", "owner-1").unwrap();
         let updated = client
-            .add_participant(
-                "session-001",
-                "owner-1",
-                "guest-1",
-                [ClientRole::Guest],
-            )
+            .add_participant("session-001", "owner-1", "guest-1", [ClientRole::Guest])
             .unwrap();
 
         assert_eq!(updated.participants.len(), 2);
@@ -368,12 +371,7 @@ mod tests {
 
         client.create("session-001", "owner-1").unwrap();
         client
-            .add_participant(
-                "session-001",
-                "owner-1",
-                "guest-1",
-                [ClientRole::Guest],
-            )
+            .add_participant("session-001", "owner-1", "guest-1", [ClientRole::Guest])
             .unwrap();
 
         let result = client.start("session-001", "guest-1");
