@@ -79,7 +79,7 @@ mod tests {
     use nc_pore_core::session::repository::ProductionSessionRepository;
     use recorder::artifact::coordination::ArtifactCoordinator;
     use recorder::artifact::processing::RecordingArtifactProcessor;
-    use recorder::audio::CaptureResult;
+    use recorder::audio::{CaptureProvider, CaptureResult, CpalCaptureProvider};
     use recorder::persistence::InMemoryPersistenceProvider;
     use recorder::session::RecordingSession;
 
@@ -131,6 +131,26 @@ mod tests {
 
         fn stop_capture(&mut self) -> CaptureResult {
             CaptureResult::new("vertical-slice-artifact")
+        }
+    }
+
+    struct TimedCpalCaptureProvider {
+        provider: CpalCaptureProvider,
+        duration: std::time::Duration,
+    }
+
+    impl CaptureProvider for TimedCpalCaptureProvider {
+        fn start_capture(
+            &mut self,
+            configuration: &RecordingConfiguration,
+        ) -> Result<(), CaptureStartError> {
+            self.provider.start_capture(configuration)?;
+            std::thread::sleep(self.duration);
+            Ok(())
+        }
+
+        fn stop_capture(&mut self) -> CaptureResult {
+            self.provider.stop_capture()
         }
     }
 
@@ -266,5 +286,68 @@ mod tests {
             session.recordings()[0].status(),
             nc_pore_core::recording::RecordingStatus::Prepared
         );
+    }
+
+    // TEST-03
+    //
+    // Verify: The existing CPAL provider can drive the complete application
+    // recording path and produce a persisted artifact with real payload data.
+    //
+    // This test is intentionally ignored in CI because it requires a physical
+    // default input device. Run it explicitly on a machine with a microphone.
+    #[test]
+    #[ignore = "requires a physical default input device"]
+    fn execute_recording_with_real_cpal_capture_produces_payload() {
+        let (mut repository, production_id, actor, recording_id) = repository_with_recording();
+        let session = RecordingSession::new("recording-001");
+        let persistence = InMemoryPersistenceProvider::new();
+        let coordinator = ArtifactCoordinator::new(persistence);
+        let processor = RecordingArtifactProcessor::new(coordinator);
+        let capture = TimedCpalCaptureProvider {
+            provider: CpalCaptureProvider::new(),
+            duration: std::time::Duration::from_secs(1),
+        };
+        let mut recorder = RecorderApplication::new(session, capture, processor);
+
+        let artifact = execute_recording(
+            &mut repository,
+            &production_id,
+            &actor,
+            &recording_id,
+            &mut recorder,
+            &RecordingConfiguration::default(),
+        )
+        .expect("real CPAL recording should complete successfully");
+
+        let session = repository.get(&production_id).unwrap().unwrap();
+        let recording = &session.recordings()[0];
+
+        assert_eq!(
+            recording.status(),
+            nc_pore_core::recording::RecordingStatus::Completed
+        );
+        assert_eq!(
+            recording.artifact_id().unwrap().value(),
+            artifact.id.value()
+        );
+        assert_eq!(artifact.production_id(), Some("production-001"));
+        assert_eq!(artifact.recording_id(), Some("recording-001"));
+        assert_eq!(artifact.status(), &recorder::artifact::ArtifactStatus::Stored);
+        assert!(!artifact.tracks().is_empty(), "real capture must produce a track");
+
+        let track = &artifact.tracks()[0];
+        assert_eq!(
+            track.configuration(),
+            Some(RecordingConfiguration::default())
+        );
+        assert!(!track.chunks().is_empty(), "real capture must produce a chunk");
+        assert!(
+            track
+                .chunks()
+                .iter()
+                .all(|chunk| !chunk.payload().data().is_empty()),
+            "real capture chunks must contain payload bytes"
+        );
+        assert_eq!(track.chunks()[0].sequence, 1);
     }
 }
