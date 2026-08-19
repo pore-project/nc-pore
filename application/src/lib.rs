@@ -440,6 +440,12 @@ mod tests {
     #[test]
     fn recovery_completes_recording_from_valid_artifact() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording_by(&owner(), &recording_id)
+            .unwrap();
         let artifact = recovery_artifact(production_id.value(), recording_id.value());
         let artifact_id = RecordingArtifactId::new(artifact.id.value());
         let persistence = TestPersistence {
@@ -467,6 +473,12 @@ mod tests {
     #[test]
     fn recovery_is_idempotent_for_already_completed_recording() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording_by(&owner(), &recording_id)
+            .unwrap();
         let artifact = recovery_artifact(production_id.value(), recording_id.value());
         let artifact_id = RecordingArtifactId::new(artifact.id.value());
         repository
@@ -556,6 +568,12 @@ mod tests {
     #[test]
     fn complete_use_case_associates_recorder_result_with_domain_recording() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
+        repository
+            .session
+            .as_mut()
+            .unwrap()
+            .start_recording_by(&owner(), &recording_id)
+            .unwrap();
 
         let artifact_id = RecordingArtifactId::new("artifact-001");
         let mut recorder = TestRecorder {
