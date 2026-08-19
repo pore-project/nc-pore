@@ -35,10 +35,14 @@ pub struct ProductionSession {
 
 impl ProductionSession {
     pub fn new(id: ProductionId) -> Self {
+        Self::new_with_actor(id, None)
+    }
+
+    pub fn new_with_actor(id: ProductionId, actor: Option<ParticipantId>) -> Self {
         let activity = ActivityEvent::new(
             ActivityType::SessionCreated,
             id.clone(),
-            None,
+            actor,
             None,
             ActivityResult::Success,
         );
@@ -282,6 +286,18 @@ mod tests {
     }
 
     #[test]
+    fn session_creation_can_record_actor() {
+        let owner = ParticipantId::new("owner-1");
+        let session = ProductionSession::new_with_actor(
+            ProductionId::new("test-session"),
+            Some(owner.clone()),
+        );
+
+        assert_eq!(session.activities()[0].actor, Some(owner));
+        assert_eq!(session.activities()[0].session_id, session.id);
+    }
+
+    #[test]
     fn owner_can_start_session() {
         let mut session = create_test_session();
         let owner = add_owner(&mut session);
@@ -416,14 +432,11 @@ mod tests {
             ActivityType::SessionCompleted
         );
         assert_eq!(session.activities()[2].session_id, session.id);
-        assert_eq!(
-            session.activities()[2].result,
-            ActivityResult::Success
-        );
+        assert_eq!(session.activities()[2].result, ActivityResult::Success);
     }
 
     #[test]
-    fn completed_session_rejects_participant_and_recording_mutations() {
+    fn completed_session_rejects_participant_mutations() {
         let mut session = create_test_session();
         let owner = add_owner(&mut session);
         session.start_by(&owner).unwrap();
