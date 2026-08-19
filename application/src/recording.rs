@@ -4,16 +4,16 @@ use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::{ProductionSession, ProductionSessionError};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
-use recorder::audio::{CaptureProvider, RecordingConfiguration};
+use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
+use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
 use recorder::persistence::PersistenceProvider;
-use recorder::artifact::RecordingArtifact;
-use recorder::artifact::RecordingArtifactAssociation;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteRecordingError<E> {
     SessionNotFound,
     Repository(E),
     Session(ProductionSessionError),
+    RecorderStart(CaptureStartError),
     Recorder(RecorderApplicationError),
 }
 
@@ -46,11 +46,11 @@ where
 
     recorder
         .start(configuration)
-        .map_err(|error| ExecuteRecordingError::Recorder(error.into()))?;
+        .map_err(ExecuteRecordingError::RecorderStart)?;
 
     let artifact = recorder
         .stop(RecordingArtifactAssociation::new(
-            production_id.id_value(),
+            production_id.value(),
             recording_id.value(),
         ))
         .map_err(ExecuteRecordingError::Recorder)?;
@@ -70,22 +70,18 @@ where
     Ok(artifact)
 }
 
-fn _assert_session_type(_: &ProductionSession) {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nc_pore_core::identity::ProductionId;
-    use nc_pore_core::participant::ParticipantId;
     use nc_pore_core::participation::Participation;
     use nc_pore_core::recording::Recording;
     use nc_pore_core::role::ParticipantRole;
     use nc_pore_core::session::repository::ProductionSessionRepository;
     use recorder::artifact::coordination::ArtifactCoordinator;
-    use recorder::audio::{CaptureResult, CaptureStartError};
+    use recorder::artifact::processing::RecordingArtifactProcessor;
+    use recorder::audio::CaptureResult;
     use recorder::persistence::InMemoryPersistenceProvider;
     use recorder::session::RecordingSession;
-    use recorder::artifact::processing::RecordingArtifactProcessor;
 
     struct InMemorySessions {
         sessions: Vec<ProductionSession>,
@@ -143,7 +139,8 @@ mod tests {
         let production_id = ProductionId::new("production-001");
         let actor = owner();
         let recording_id = RecordingId::new("recording-001");
-        let mut session = ProductionSession::new_with_actor(production_id.clone(), Some(actor.clone()));
+        let mut session =
+            ProductionSession::new_with_actor(production_id.clone(), Some(actor.clone()));
 
         session
             .add_participation_by(
@@ -197,7 +194,10 @@ mod tests {
         let session = repository.get(&production_id).unwrap().unwrap();
         let recording = &session.recordings()[0];
 
-        assert_eq!(recording.status(), nc_pore_core::recording::RecordingStatus::Completed);
+        assert_eq!(
+            recording.status(),
+            nc_pore_core::recording::RecordingStatus::Completed
+        );
         assert_eq!(recording.artifact_id().unwrap().value(), artifact.id.value());
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-001"));
@@ -218,7 +218,7 @@ mod tests {
                 &mut self,
                 _configuration: &RecordingConfiguration,
             ) -> Result<(), CaptureStartError> {
-                Err(CaptureStartError::new("capture start failed"))
+                Err(CaptureStartError::DeviceUnavailable)
             }
 
             fn stop_capture(&mut self) -> CaptureResult {
@@ -245,7 +245,12 @@ mod tests {
             &RecordingConfiguration::default(),
         );
 
-        assert!(matches!(result, Err(ExecuteRecordingError::Recorder(_))));
+        assert!(matches!(
+            result,
+            Err(ExecuteRecordingError::RecorderStart(
+                CaptureStartError::DeviceUnavailable
+            ))
+        ));
         let session = repository.get(&production_id).unwrap().unwrap();
         assert_eq!(
             session.recordings()[0].status(),
