@@ -25,7 +25,11 @@ impl ProductionSessionRepository for InMemoryRepository {
     type Error = &'static str;
 
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        if self.sessions.iter().any(|existing| existing.id == session.id) {
+        if self
+            .sessions
+            .iter()
+            .any(|existing| existing.id == session.id)
+        {
             return Err("session already exists");
         }
         self.sessions.push(session.clone());
@@ -143,10 +147,7 @@ fn handle_connection(mut stream: TcpStream, repository: &mut InMemoryRepository)
     }
 }
 
-fn create_session(
-    repository: &mut InMemoryRepository,
-    body: &str,
-) -> (u16, &'static str, String) {
+fn create_session(repository: &mut InMemoryRepository, body: &str) -> (u16, &'static str, String) {
     let id = match json_field(body, "id") {
         Some(value) if !value.is_empty() => value,
         _ => {
