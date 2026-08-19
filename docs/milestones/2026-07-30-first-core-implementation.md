@@ -101,7 +101,7 @@ The implementation follows:
 - ADR-033 Core Architecture
 - ADR-034 Implementation Architecture
 - ADR-035 Domain Lifecycle and State Transition Management
-- ADR-036 Development Workflow and Source of Truth
+- ADR-037 Development Workflow and Source of Truth
 
 ---
 

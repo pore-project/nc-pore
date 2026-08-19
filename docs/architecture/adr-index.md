@@ -48,7 +48,7 @@ This document provides an overview and navigation entry.
 - ADR-033 Core Architecture
 - ADR-034 Implementation Architecture
 - ADR-035 Domain Lifecycle and State Transition Management
-- ADR-036 Development Workflow and Source of Truth
+- ADR-036 Persistence Boundary and Storage Strategy
 
 # Current Implementation Architecture
 
