@@ -22,16 +22,14 @@ pub mod id;
 pub use artifact_id::RecordingArtifactId;
 pub use id::RecordingId;
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecordingStatus {
     Prepared,
     Recording,
     Completed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordingLifecycleError {
     InvalidTransition {
         from: RecordingStatus,
@@ -43,7 +41,7 @@ pub enum RecordingLifecycleError {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recording {
     id: RecordingId,
     status: RecordingStatus,
@@ -56,6 +54,18 @@ impl Recording {
             id: RecordingId::new(id),
             status: RecordingStatus::Prepared,
             artifact_id: None,
+        }
+    }
+
+    pub fn reconstitute(
+        id: RecordingId,
+        status: RecordingStatus,
+        artifact_id: Option<RecordingArtifactId>,
+    ) -> Self {
+        Self {
+            id,
+            status,
+            artifact_id,
         }
     }
 
