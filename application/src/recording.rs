@@ -332,15 +332,24 @@ mod tests {
         );
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-001"));
-        assert_eq!(artifact.status(), &recorder::artifact::ArtifactStatus::Stored);
-        assert!(!artifact.tracks().is_empty(), "real capture must produce a track");
+        assert_eq!(
+            artifact.status(),
+            &recorder::artifact::ArtifactStatus::Stored
+        );
+        assert!(
+            !artifact.tracks().is_empty(),
+            "real capture must produce a track"
+        );
 
         let track = &artifact.tracks()[0];
         assert_eq!(
             track.configuration(),
             Some(RecordingConfiguration::default())
         );
-        assert!(!track.chunks().is_empty(), "real capture must produce a chunk");
+        assert!(
+            !track.chunks().is_empty(),
+            "real capture must produce a chunk"
+        );
         assert!(
             track
                 .chunks()
