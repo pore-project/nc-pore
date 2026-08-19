@@ -3,7 +3,8 @@
 members = [
     "core",
     "recorder",
-    "application"
+    "application",
+    "infrastructure"
 ]
 
 resolver = "2"
