@@ -50,3 +50,34 @@ impl ParticipantRole {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owner_has_all_v1_capabilities() {
+        assert!(ParticipantRole::Owner.allows(ProductionAction::StartSession));
+        assert!(ParticipantRole::Owner.allows(ProductionAction::ManageParticipants));
+        assert!(ParticipantRole::Owner.allows(ProductionAction::ParticipateInRecording));
+    }
+
+    #[test]
+    fn producer_has_participant_capabilities_but_not_owner_only_semantics() {
+        assert!(ParticipantRole::Producer.allows(ProductionAction::ManageRecordings));
+        assert!(ParticipantRole::Producer.allows(ProductionAction::ParticipateInRecording));
+    }
+
+    #[test]
+    fn participant_cannot_manage_production() {
+        assert!(!ParticipantRole::Participant.allows(ProductionAction::ManageParticipants));
+        assert!(!ParticipantRole::Participant.allows(ProductionAction::StartSession));
+        assert!(ParticipantRole::Participant.allows(ProductionAction::ParticipateInRecording));
+    }
+
+    #[test]
+    fn guest_has_no_management_or_recording_capabilities() {
+        assert!(!ParticipantRole::Guest.allows(ProductionAction::ManageRecordings));
+        assert!(!ParticipantRole::Guest.allows(ProductionAction::ParticipateInRecording));
+    }
+}
