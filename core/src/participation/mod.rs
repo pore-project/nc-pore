@@ -1,5 +1,6 @@
 use crate::participant::ParticipantId;
 use crate::role::{ParticipantRole, ProductionAction};
+use serde::{Deserialize, Serialize};
 
 /// Represents a participant's involvement in a production session.
 ///
@@ -7,7 +8,7 @@ use crate::role::{ParticipantRole, ProductionAction};
 /// within a specific production. Multiple roles may be held simultaneously.
 ///
 /// See ADR-031 and the refined role semantics in issue #95.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Participation {
     pub participant_id: ParticipantId,
     pub roles: Vec<ParticipantRole>,
