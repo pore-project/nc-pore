@@ -301,8 +301,15 @@ impl PersistedProductionSession {
 
         let mut activities = Vec::with_capacity(self.activities.len());
         for activity in self.activities {
+            let seconds = activity.timestamp_nanos / 1_000_000_000;
+            let nanos = activity.timestamp_nanos % 1_000_000_000;
+            if seconds > u64::MAX as u128 {
+                return Err(FileProductionSessionRepositoryError::InvalidTimestamp(
+                    activity.timestamp_nanos,
+                ));
+            }
             let timestamp = UNIX_EPOCH
-                .checked_add(Duration::from_nanos(activity.timestamp_nanos as u64))
+                .checked_add(Duration::new(seconds as u64, nanos as u32))
                 .ok_or(FileProductionSessionRepositoryError::InvalidTimestamp(
                     activity.timestamp_nanos,
                 ))?;
