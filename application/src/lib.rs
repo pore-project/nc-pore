@@ -409,7 +409,10 @@ mod tests {
         let recording_id = RecordingId::new("recording-001");
         let mut session = ProductionSession::new_with_actor(production_id.clone(), Some(owner()));
         session
-            .add_participation_by(&owner(), Participation::new(owner(), ParticipantRole::Owner))
+            .add_participation_by(
+                &owner(),
+                Participation::new(owner(), ParticipantRole::Owner),
+            )
             .unwrap();
         session.start_by(&owner()).unwrap();
         session
