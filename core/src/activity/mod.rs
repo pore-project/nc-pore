@@ -6,7 +6,7 @@ use crate::participant::ParticipantId;
 
 static NEXT_EVENT_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityType {
     SessionCreated,
     SessionStarted,
