@@ -40,6 +40,9 @@ pub trait ProductionSessionRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::participant::ParticipantId;
+    use crate::participation::Participation;
+    use crate::role::ParticipantRole;
 
     struct InMemory {
         sessions: Vec<ProductionSession>,
@@ -68,7 +71,7 @@ mod tests {
         }
 
         fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
-            Ok(self.sessions.iter().find(|s| &s.id == id).cloned())
+            Ok(self.sessions.iter().find(|session| &session.id == id).cloned())
         }
     }
 
@@ -113,7 +116,14 @@ mod tests {
         repo.store(&ProductionSession::new(id.clone())).unwrap();
 
         let mut updated = ProductionSession::new(id.clone());
-        updated.start().unwrap();
+        let owner = ParticipantId::new("owner-1");
+        updated
+            .add_participation_by(
+                &owner,
+                Participation::new(owner.clone(), ParticipantRole::Owner),
+            )
+            .unwrap();
+        updated.start_by(&owner).unwrap();
 
         repo.update(&updated).unwrap();
 
