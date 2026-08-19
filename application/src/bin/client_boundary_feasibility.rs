@@ -129,6 +129,7 @@ fn handle_connection(mut stream: TcpStream, repository: &mut InMemoryRepository)
             }
         }
         ("POST", "/api/sessions") => create_session(repository, body),
+        ("POST", "/api/sessions/feasibility-session/join") => join_session(repository, body),
         _ => (
             404,
             "application/json; charset=utf-8",
@@ -180,6 +181,48 @@ fn create_session(repository: &mut InMemoryRepository, body: &str) -> (u16, &'st
             409,
             "application/json; charset=utf-8",
             r#"{"error":"session_already_exists"}"#.to_owned(),
+        ),
+        Err(_) => (
+            500,
+            "application/json; charset=utf-8",
+            r#"{"error":"application_error"}"#.to_owned(),
+        ),
+    }
+}
+
+fn join_session(repository: &mut InMemoryRepository, body: &str) -> (u16, &'static str, String) {
+    let participant_id = match json_field(body, "participant_id") {
+        Some(value) if !value.is_empty() => value,
+        _ => {
+            return (
+                400,
+                "application/json; charset=utf-8",
+                r#"{"error":"invalid_request"}"#.to_owned(),
+            )
+        }
+    };
+
+    let mut client = ClientSessionService::new(repository);
+    match client.add_participant(SESSION_ID, OWNER_ID, &participant_id, [ClientRole::Guest]) {
+        Ok(session) => (
+            200,
+            "application/json; charset=utf-8",
+            session_json(&session),
+        ),
+        Err(ClientSessionError::SessionNotFound) => (
+            404,
+            "application/json; charset=utf-8",
+            r#"{"error":"session_not_found"}"#.to_owned(),
+        ),
+        Err(ClientSessionError::ParticipantAlreadyExists) => (
+            409,
+            "application/json; charset=utf-8",
+            r#"{"error":"participant_already_exists"}"#.to_owned(),
+        ),
+        Err(ClientSessionError::Repository(_)) => (
+            500,
+            "application/json; charset=utf-8",
+            r#"{"error":"application_error"}"#.to_owned(),
         ),
         Err(_) => (
             500,
@@ -284,6 +327,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
   <h1>NC-PoRe external client boundary</h1>
   <p>This page is a feasibility test, not a production client.</p>
   <button id="create">Create session</button>
+  <button id="join">Join session as guest</button>
   <pre id="result">Loading…</pre>
   <script>
     const result = document.getElementById('result');
@@ -318,6 +362,22 @@ const INDEX_HTML: &str = r#"<!doctype html>
           result.textContent = `Create session failed: ${error}`;
         });
     });
+
+    document.getElementById('join').addEventListener('click', () => {
+      const participant_id = `browser-guest-${Date.now()}`;
+      fetch('/api/sessions/feasibility-session/join', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({participant_id})
+      })
+        .then(showResponse)
+        .then(data => {
+          result.textContent = JSON.stringify(data, null, 2);
+        })
+        .catch(error => {
+          result.textContent = `Join session failed: ${error}`;
+        });
+    });
   </script>
 </body>
 </html>"#;
@@ -347,5 +407,33 @@ mod tests {
         let body = r#"{"id":"session-1","owner":"owner-1"}"#;
         assert_eq!(json_field(body, "id"), Some("session-1".to_owned()));
         assert_eq!(json_field(body, "owner"), Some("owner-1".to_owned()));
+    }
+
+    #[test]
+    fn TEST_04_join_session_adds_guest_participant() {
+        let mut repository = InMemoryRepository {
+            sessions: Vec::new(),
+        };
+        let mut client = ClientSessionService::new(&mut repository);
+        client
+            .create(SESSION_ID, OWNER_ID)
+            .expect("feasibility session must be creatable");
+        drop(client);
+
+        let (status, content_type, body) =
+            join_session(&mut repository, r#"{"participant_id":"guest-1"}"#);
+
+        assert_eq!(status, 200);
+        assert_eq!(content_type, "application/json; charset=utf-8");
+        assert!(body.contains(r#""id":"guest-1","roles":["Guest"]"#));
+
+        let client = ClientSessionService::new(&mut repository);
+        let session = client
+            .get(SESSION_ID)
+            .expect("joined session must remain readable");
+
+        assert!(session.participants.iter().any(|participant| {
+            participant.id == "guest-1" && participant.roles == vec![ClientRole::Guest]
+        }));
     }
 }
