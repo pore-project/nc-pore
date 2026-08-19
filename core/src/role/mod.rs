@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 /// Defines the role of a participant within a production session.
 ///
 /// Roles describe responsibility inside a production context.
 ///
 /// See ADR-006 and ADR-031.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ParticipantRole {
     /// Owns and is responsible for the production session.
     Owner,
@@ -19,7 +21,7 @@ pub enum ParticipantRole {
 }
 
 /// Domain operations that require a production role.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProductionAction {
     StartSession,
     CompleteSession,
