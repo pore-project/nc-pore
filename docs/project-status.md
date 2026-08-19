@@ -1,6 +1,6 @@
 # NC-PoRe Project Status
 
-- Version: 3.1
+- Version: 3.2
 - Date: 2026-08-19
 
 ---
@@ -30,14 +30,32 @@ Implementiert:
 - Core Modulstruktur
 - ProductionSession Modell
 - ProductionSession Lifecycle
+- ProductionSession Lifecycle-Invarianten und Zustandsübergänge
 - Recording Modell
 - Recording Lifecycle
 - Participant Modell
 - Participation Modell
 - Activity History Grundstruktur
+- ProductionSession-, Participant- und Participation-Semantik
+- sessionbezogene Rollen- und Berechtigungssemantik für Owner, Producer, Participant und Guest
 - API Operationen für ProductionSession Lifecycle
 - API Operationen für ProductionSession-Verwaltung und Recording-Verknüpfung
+- stabile Application/API-Grenzen für Production-Management-Operationen
 - Read-API-Operationen für Participants, Recordings und Activity History
+- konsistente Domain-/Application-Fehlersemantik für Production-Management-Operationen
+- fachliche Validierung von Lifecycle-, Rollen- und Participation-Invarianten an der Domain-Grenze
+- Production Activity/History-Semantik einschließlich Actor-, Action-, Target-, Session- und Result-Kontext
+
+Die Production-Management- und Collaboration-Foundation ist damit als zusammenhängende fachliche Grundlage für spätere Clients und Kollaborationsfunktionen implementiert und validiert.
+
+Relevante Architekturentscheidungen:
+
+- ADR-027 Core Architecture and Module Boundaries
+- ADR-031 Identity, Authentication and User Roles
+- ADR-032 Auditability and Activity History
+- ADR-033 Core Architecture
+- ADR-034 Implementation Architecture
+- ADR-035 Domain Lifecycle and State Transition Management
 
 ---
 
@@ -111,11 +129,13 @@ Implementiert:
 - Idempotenz für äquivalente persistierte Artifacts
 - Conflict-Verhalten bei abweichendem Inhalt unter gleicher Artifact-Identität
 - Schutz vor dem stillschweigenden Überschreiben unvollständiger persistierter Artifacts
+- Trennung der konkreten Persistence-Implementierung von der Core-Domain
 
 Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
 
 Relevante Architekturentscheidungen:
 
+- ADR-036 Persistence Boundary and Storage Strategy
 - ADR-044 Persistence Provider Interface
 - ADR-048 Artifact Registry and Persistence Coordination
 - ADR-052 Local Filesystem Persistence Provider
@@ -149,9 +169,14 @@ Zusätzliche technische Integration wurde erfolgreich manuell ausgeführt:
 Die Tests validieren unter anderem:
 
 - Lifecycle-Übergänge
+- ProductionSession Lifecycle-Invarianten
 - API Boundary Operationen für ProductionSession
 - Rollen- und Zustandslogik
+- Participant- und Participation-Semantik
 - Recording-Verknüpfungen
+- Application/API Boundary für Production Management
+- konsistente Fehlersemantik für Production-Management-Operationen
+- Activity History Semantik und Persistenz
 - Artifact Lifecycle
 - Artifact Registry Verhalten
 - Persistence Provider Verhalten
@@ -174,12 +199,16 @@ Die Tests validieren unter anderem:
 NC-PoRe folgt aktuell diesen Architekturprinzipien:
 
 - Production Session als zentrale fachliche Einheit
-- Core als Autorität für Geschäftslogik
+- Core als Autorität für Geschäftslogik, Lifecycle, Rollen und fachliche Berechtigungen
 - technische Details bleiben von der Domäne getrennt
 - Recording Artifacts bleiben von Domainobjekten getrennt
 - Capture und Storage werden über technische Grenzen abstrahiert
 - Artifact Registry und Persistence bleiben getrennte Verantwortlichkeiten
 - Application Flow verbindet Workflow, Artifact Processing und Persistence über definierte Grenzen
+- Production Management wird über stabile Application/API-Grenzen koordiniert, ohne Domainregeln an Recorder oder Storage zu koppeln
+- Participant Identity und sessionbezogene Participation bleiben getrennte fachliche Konzepte
+- Rollen sind sessionbezogen und folgen der definierten Owner/Producer/Participant/Guest-Autoritätsrichtung
+- Activity History gehört zur ProductionSession und bleibt auf Produktionsaktivitäten bezogen
 - Recovery stellt technische Konsistenz zwischen Persistence und Registry her
 - CaptureResult und RecordingArtifact besitzen getrennte technische Datenmodelle
 - RecordingArtifact strukturiert Tracks und Chunks unabhängig von der physischen Persistenz
@@ -215,8 +244,11 @@ Abgeschlossen:
 
 - **Milestone #55 – Local Technical Recording Pipeline**
 - **Milestone #64 – Recording Lifecycle Foundation**
+- **Milestone #65 – Production Management & Collaboration Foundation**
 
 Milestone #64 umfasst insbesondere den fachlichen Recording-Lifecycle, die Verbindung von Recording und RecordingArtifact, die Application Use Cases sowie die definierten Recovery- und Reconciliation-Semantiken.
+
+Milestone #65 umfasst insbesondere ProductionSession-Management, Participant- und Participation-Semantik, sessionbezogene Rollen und Berechtigungen, stabile Production-Management-Application/API-Grenzen sowie Production Activity/History.
 
 ---
 
@@ -224,13 +256,9 @@ Milestone #64 umfasst insbesondere den fachlichen Recording-Lifecycle, die Verbi
 
 Die nächsten Arbeiten werden als größere technische Meilensteine verfolgt. Ein Meilenstein darf mehrere konkrete Issues und PRs umfassen.
 
-1. **`milestone: Production Management & Collaboration Foundation`**
+1. **`milestone: Distributed Recording & Synchronisation`**
 
-   Weiterentwicklung der ProductionSession- und Recording-Welt zu einer belastbaren fachlichen Management- und Kollaborationsgrundlage, auf der spätere Clients und weitere Schnittstellen aufbauen können.
-
-2. **`milestone: Distributed Recording & Synchronisation`**
-
-   Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage. Dieser Meilenstein baut auf der abgeschlossenen lokalen Recording-Pipeline und den abgeschlossenen fachlichen Recording-Lifecycle-Grenzen auf.
+   Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage. Dieser Meilenstein baut auf der abgeschlossenen lokalen Recording-Pipeline, den abgeschlossenen fachlichen Recording-Lifecycle-Grenzen und der Production-Management-Foundation auf.
 
 Die Meilensteine sind als übergeordnete Wegpunkte zu verstehen und werden jeweils in konkrete Umsetzungsschritte zerlegt. Die konkrete Reihenfolge und die Abhängigkeiten werden vor Beginn der jeweiligen Implementierung geprüft.
 
@@ -256,12 +284,14 @@ Completed milestones include:
 
 - **Milestone #55 – Local Technical Recording Pipeline**
 - **Milestone #64 – Recording Lifecycle Foundation**
+- **Milestone #65 – Production Management & Collaboration Foundation**
 
 Milestone #64 establishes the domain-level Recording lifecycle across ProductionSession, Recording, RecordingArtifact, persistence and recovery, including application use cases and deterministic reconciliation semantics.
 
-The next major milestones are:
+Milestone #65 establishes the production-management and collaboration foundation across ProductionSession management, participant and participation semantics, session-scoped roles and permissions, stable production-management application/API boundaries, and production activity/history.
 
-1. **`milestone: Production Management & Collaboration Foundation`** — establish a robust production-management and collaboration foundation for future clients and interfaces.
-2. **`milestone: Distributed Recording & Synchronisation`** — establish the offline-first foundation for distributed recording, synchronization and remote storage.
+The next major milestone is:
+
+1. **`milestone: Distributed Recording & Synchronisation`** — establish the offline-first foundation for distributed recording, synchronization and remote storage.
 
 Each milestone may contain multiple implementation issues and pull requests. Dependencies and implementation order are reviewed before work begins.
