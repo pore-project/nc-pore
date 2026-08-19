@@ -4,11 +4,10 @@
 //! real external path: browser -> HTTP -> application client facade -> JSON.
 //! Transport, wire format and development identity remain experimental here.
 
-use nc_pore_application::{
+use nc_pore_application::client::{
     ClientProductionSession, ClientRole, ClientSessionError, ClientSessionService,
 };
 use nc_pore_core::identity::ProductionId;
-use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSession;
 use std::io::{Read, Write};
