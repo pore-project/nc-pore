@@ -91,7 +91,11 @@ mod tests {
         type Error = &'static str;
 
         fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-            if self.sessions.iter().any(|existing| existing.id == session.id) {
+            if self
+                .sessions
+                .iter()
+                .any(|existing| existing.id == session.id)
+            {
                 return Err("session already exists");
             }
             self.sessions.push(session.clone());
@@ -135,7 +139,9 @@ mod tests {
     }
 
     fn repository_with_recording() -> (InMemorySessions, ProductionId, ParticipantId, RecordingId) {
-        let mut repository = InMemorySessions { sessions: Vec::new() };
+        let mut repository = InMemorySessions {
+            sessions: Vec::new(),
+        };
         let production_id = ProductionId::new("production-001");
         let actor = owner();
         let recording_id = RecordingId::new("recording-001");
@@ -164,7 +170,8 @@ mod tests {
         (repository, production_id, actor, recording_id)
     }
 
-    fn recorder_application() -> RecorderApplication<TestCaptureProvider, InMemoryPersistenceProvider> {
+    fn recorder_application(
+    ) -> RecorderApplication<TestCaptureProvider, InMemoryPersistenceProvider> {
         let session = RecordingSession::new("recording-001");
         let persistence = InMemoryPersistenceProvider::new();
         let coordinator = ArtifactCoordinator::new(persistence);
@@ -198,7 +205,10 @@ mod tests {
             recording.status(),
             nc_pore_core::recording::RecordingStatus::Completed
         );
-        assert_eq!(recording.artifact_id().unwrap().value(), artifact.id.value());
+        assert_eq!(
+            recording.artifact_id().unwrap().value(),
+            artifact.id.value()
+        );
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-001"));
         assert_eq!(artifact.id.value(), "vertical-slice-artifact");
