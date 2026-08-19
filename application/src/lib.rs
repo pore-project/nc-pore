@@ -1,6 +1,5 @@
-mod legacy {
-    include!("lib_original.rs");
-}
+#[path = "lib_source.rs"]
+mod legacy;
 
 pub use legacy::*;
 pub mod session_repository;
