@@ -62,4 +62,24 @@ impl ActivityEvent {
             result,
         }
     }
+
+    pub fn reconstitute(
+        event_id: String,
+        timestamp: SystemTime,
+        actor: Option<ParticipantId>,
+        activity_type: ActivityType,
+        target: Option<String>,
+        session_id: ProductionId,
+        result: ActivityResult,
+    ) -> Self {
+        Self {
+            event_id,
+            timestamp,
+            actor,
+            activity_type,
+            target,
+            session_id,
+            result,
+        }
+    }
 }
