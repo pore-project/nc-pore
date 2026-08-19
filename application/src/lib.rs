@@ -14,6 +14,7 @@
 //! ```
 
 use nc_pore_core::identity::ProductionId;
+use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
 use nc_pore_core::session::{repository::ProductionSessionRepository, ProductionSessionError};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
@@ -121,11 +122,6 @@ pub enum RecoverRecordingError<RE> {
 }
 
 /// Application use case for recovering one concrete domain Recording.
-///
-/// Recovery is explicitly requested for the production/recording pair. The
-/// persistence boundary supplies technical evidence; the domain aggregate
-/// remains the authority for whether that evidence can complete the recording.
-/// The recorder itself is not involved in the recovery decision.
 pub struct RecoverRecordingUseCase<'a, R, P>
 where
     R: ProductionSessionRepository,
@@ -149,6 +145,7 @@ where
 
     pub fn execute(
         &mut self,
+        actor: &ParticipantId,
         production_id: &ProductionId,
         recording_id: &RecordingId,
     ) -> Result<RecordingRecoveryOutcome, RecoverRecordingError<R::Error>> {
@@ -184,7 +181,7 @@ where
                     == Some(&artifact_id);
 
                 session
-                    .complete_recording(recording_id, artifact_id.clone())
+                    .complete_recording_by(actor, recording_id, artifact_id.clone())
                     .map_err(RecoverRecordingError::Domain)?;
 
                 self.repository
@@ -212,11 +209,6 @@ where
 }
 
 /// Application use case for starting a domain Recording.
-///
-/// The domain transition is persisted before the technical recorder starts.
-/// If the technical start subsequently fails, the persisted Recording remains
-/// in `Recording` state with no artifact association. This is an intentional
-/// interrupted-recording state and is handled by #71.
 pub struct StartRecordingUseCase<'a, R, T, C>
 where
     R: ProductionSessionRepository,
@@ -242,6 +234,7 @@ where
 
     pub fn execute(
         &mut self,
+        actor: &ParticipantId,
         production_id: &ProductionId,
         recording_id: &RecordingId,
         configuration: &C,
@@ -255,7 +248,7 @@ where
             ))?;
 
         session
-            .start_recording(recording_id)
+            .start_recording_by(actor, recording_id)
             .map_err(StartRecordingError::Domain)?;
 
         self.repository
@@ -269,10 +262,6 @@ where
 }
 
 /// Application use case for completing a domain Recording.
-///
-/// The technical recorder is completed first because its result supplies the
-/// `RecordingArtifactId` required by the domain completion transition. The
-/// domain aggregate is persisted only after that transition succeeds.
 pub struct CompleteRecordingUseCase<'a, R, T, C>
 where
     R: ProductionSessionRepository,
@@ -298,6 +287,7 @@ where
 
     pub fn execute(
         &mut self,
+        actor: &ParticipantId,
         production_id: &ProductionId,
         recording_id: &RecordingId,
     ) -> Result<(), CompleteRecordingError<R::Error, T::Error>> {
@@ -315,7 +305,7 @@ where
             .map_err(CompleteRecordingError::Recorder)?;
 
         session
-            .complete_recording(recording_id, artifact_id)
+            .complete_recording_by(actor, recording_id, artifact_id)
             .map_err(CompleteRecordingError::Domain)?;
 
         self.repository
@@ -327,7 +317,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nc_pore_core::participant::ParticipantId;
+    use nc_pore_core::participation::Participation;
     use nc_pore_core::recording::Recording;
+    use nc_pore_core::role::ParticipantRole;
     use nc_pore_core::session::ProductionSession;
     use recorder::artifact::RecordingArtifact;
     use recorder::session::RecordingSessionId;
@@ -407,11 +400,21 @@ mod tests {
         }
     }
 
+    fn owner() -> ParticipantId {
+        ParticipantId::new("owner-1")
+    }
+
     fn repository_with_recording() -> (InMemoryRepository, ProductionId, RecordingId) {
         let production_id = ProductionId::new("production-001");
         let recording_id = RecordingId::new("recording-001");
-        let mut session = ProductionSession::new(production_id.clone());
-        session.add_recording(Recording::new(recording_id.value()));
+        let mut session = ProductionSession::new_with_actor(production_id.clone(), Some(owner()));
+        session
+            .add_participation_by(&owner(), Participation::new(owner(), ParticipantRole::Owner))
+            .unwrap();
+        session.start_by(&owner()).unwrap();
+        session
+            .add_recording_by(&owner(), Recording::new(recording_id.value()))
+            .unwrap();
 
         (
             InMemoryRepository {
@@ -434,20 +437,17 @@ mod tests {
     #[test]
     fn recovery_completes_recording_from_valid_artifact() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
-        repository
-            .session
-            .as_mut()
-            .unwrap()
-            .start_recording(&recording_id)
-            .unwrap();
         let artifact = recovery_artifact(production_id.value(), recording_id.value());
         let artifact_id = RecordingArtifactId::new(artifact.id.value());
         let persistence = TestPersistence {
             outcome: PersistenceRecoveryLookup::Valid(artifact),
         };
 
+        let actor = owner();
         let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
-        let result = use_case.execute(&production_id, &recording_id).unwrap();
+        let result = use_case
+            .execute(&actor, &production_id, &recording_id)
+            .unwrap();
 
         assert_eq!(
             result,
@@ -470,13 +470,7 @@ mod tests {
             .session
             .as_mut()
             .unwrap()
-            .start_recording(&recording_id)
-            .unwrap();
-        repository
-            .session
-            .as_mut()
-            .unwrap()
-            .complete_recording(&recording_id, artifact_id.clone())
+            .complete_recording_by(&owner(), &recording_id, artifact_id.clone())
             .unwrap();
 
         let persistence = TestPersistence {
@@ -485,7 +479,9 @@ mod tests {
         let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
 
         assert_eq!(
-            use_case.execute(&production_id, &recording_id).unwrap(),
+            use_case
+                .execute(&owner(), &production_id, &recording_id)
+                .unwrap(),
             RecordingRecoveryOutcome::AlreadyCompleted { artifact_id }
         );
     }
@@ -493,19 +489,15 @@ mod tests {
     #[test]
     fn recovery_does_not_change_domain_without_artifact() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
-        repository
-            .session
-            .as_mut()
-            .unwrap()
-            .start_recording(&recording_id)
-            .unwrap();
         let persistence = TestPersistence {
             outcome: PersistenceRecoveryLookup::NotFound,
         };
         let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
 
         assert_eq!(
-            use_case.execute(&production_id, &recording_id).unwrap(),
+            use_case
+                .execute(&owner(), &production_id, &recording_id)
+                .unwrap(),
             RecordingRecoveryOutcome::NotFound
         );
         assert_eq!(
@@ -517,12 +509,6 @@ mod tests {
     #[test]
     fn recovery_does_not_change_domain_for_conflicting_evidence() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
-        repository
-            .session
-            .as_mut()
-            .unwrap()
-            .start_recording(&recording_id)
-            .unwrap();
         let persistence = TestPersistence {
             outcome: PersistenceRecoveryLookup::Conflict {
                 artifact_ids: vec!["artifact-a".to_owned(), "artifact-b".to_owned()],
@@ -531,7 +517,9 @@ mod tests {
         let mut use_case = RecoverRecordingUseCase::new(&mut repository, &persistence);
 
         assert_eq!(
-            use_case.execute(&production_id, &recording_id).unwrap(),
+            use_case
+                .execute(&owner(), &production_id, &recording_id)
+                .unwrap(),
             RecordingRecoveryOutcome::Conflict {
                 artifact_ids: vec!["artifact-a".to_owned(), "artifact-b".to_owned()]
             }
@@ -552,7 +540,7 @@ mod tests {
 
         let mut use_case = StartRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
         use_case
-            .execute(&production_id, &recording_id, &())
+            .execute(&owner(), &production_id, &recording_id, &())
             .unwrap();
 
         assert_eq!(recorder.events, vec!["recorder.start"]);
@@ -565,12 +553,6 @@ mod tests {
     #[test]
     fn complete_use_case_associates_recorder_result_with_domain_recording() {
         let (mut repository, production_id, recording_id) = repository_with_recording();
-        repository
-            .session
-            .as_mut()
-            .unwrap()
-            .start_recording(&recording_id)
-            .unwrap();
 
         let artifact_id = RecordingArtifactId::new("artifact-001");
         let mut recorder = TestRecorder {
@@ -580,7 +562,9 @@ mod tests {
 
         let mut use_case =
             CompleteRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
-        use_case.execute(&production_id, &recording_id).unwrap();
+        use_case
+            .execute(&owner(), &production_id, &recording_id)
+            .unwrap();
 
         assert_eq!(recorder.events, vec!["recorder.complete"]);
         assert_eq!(
@@ -613,7 +597,7 @@ mod tests {
         let mut recorder = FailingRecorder;
         let mut use_case = StartRecordingUseCase::<_, _, ()>::new(&mut repository, &mut recorder);
 
-        let result = use_case.execute(&production_id, &recording_id, &());
+        let result = use_case.execute(&owner(), &production_id, &recording_id, &());
 
         assert_eq!(
             result,
