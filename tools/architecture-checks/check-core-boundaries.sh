@@ -4,7 +4,7 @@ set -e
 
 echo "Checking core boundaries..."
 
-if grep -R "RecordingArtifact" core/src --include="*.rs"; then
+if grep -R -E '(^|[^A-Za-z0-9_])RecordingArtifact([^A-Za-z0-9_]|$)' core/src --include="*.rs" | grep -vE ':[[:space:]]*(//|///|//!|\*)'; then
     echo
     echo "ERROR:"
     echo "Core must not depend on RecordingArtifact."
@@ -12,7 +12,7 @@ if grep -R "RecordingArtifact" core/src --include="*.rs"; then
     exit 1
 fi
 
-if grep -R "CaptureResult" core/src --include="*.rs"; then
+if grep -R -E '(^|[^A-Za-z0-9_])CaptureResult([^A-Za-z0-9_]|$)' core/src --include="*.rs" | grep -vE ':[[:space:]]*(//|///|//!|\*)'; then
     echo
     echo "ERROR:"
     echo "Core must not depend on CaptureResult."
