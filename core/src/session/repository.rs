@@ -71,7 +71,11 @@ mod tests {
         }
 
         fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
-            Ok(self.sessions.iter().find(|session| &session.id == id).cloned())
+            Ok(self
+                .sessions
+                .iter()
+                .find(|session| &session.id == id)
+                .cloned())
         }
     }
 
