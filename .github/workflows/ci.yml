@@ -19,12 +19,12 @@ jobs:
       - name: Configure Ubuntu package mirror
         run: |
           set -euo pipefail
-          for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+          for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors.txt; do
             [ -f "$file" ] || continue
             sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$file"
           done
-          if grep -R 'azure.archive.ubuntu.com' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
-            echo 'Unreplaced Azure Ubuntu mirror found.'
+          if sudo grep -R 'azure.archive.ubuntu.com' /etc/apt/sources.list /etc/apt/sources.list.d /etc/apt/apt-mirrors.txt 2>/dev/null; then
+            echo 'Unreplaced Azure Ubuntu mirror reference found.'
             exit 1
           fi
 
