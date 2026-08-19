@@ -8,7 +8,9 @@ use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::participation::Participation;
 use nc_pore_core::recording::{Recording, RecordingArtifactId, RecordingId, RecordingStatus};
 use nc_pore_core::role::ParticipantRole;
-use nc_pore_core::session::{repository::ProductionSessionRepository, ProductionSession, ProductionStatus};
+use nc_pore_core::session::{
+    repository::ProductionSessionRepository, ProductionSession, ProductionStatus,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -238,7 +240,12 @@ impl PersistedProductionSession {
                 .iter()
                 .map(|participation| PersistedParticipation {
                     participant_id: participation.participant_id.value().to_owned(),
-                    roles: participation.roles.iter().copied().map(Into::into).collect(),
+                    roles: participation
+                        .roles
+                        .iter()
+                        .copied()
+                        .map(Into::into)
+                        .collect(),
                 })
                 .collect(),
             recordings: session
@@ -273,9 +280,7 @@ impl PersistedProductionSession {
         }
     }
 
-    fn into_domain(
-        self,
-    ) -> Result<ProductionSession, FileProductionSessionRepositoryError> {
+    fn into_domain(self) -> Result<ProductionSession, FileProductionSessionRepositoryError> {
         let participations = self
             .participations
             .into_iter()
@@ -324,13 +329,15 @@ impl PersistedProductionSession {
             ));
         }
 
-        Ok(nc_pore_core::session::repository::reconstitute_production_session(
-            ProductionId::new(self.id),
-            self.status.into(),
-            participations,
-            recordings,
-            activities,
-        ))
+        Ok(
+            nc_pore_core::session::repository::reconstitute_production_session(
+                ProductionId::new(self.id),
+                self.status.into(),
+                participations,
+                recordings,
+                activities,
+            ),
+        )
     }
 }
 
