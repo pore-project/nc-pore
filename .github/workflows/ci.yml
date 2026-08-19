@@ -44,3 +44,6 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+      - name: Architecture checks
+        run: ./tools/architecture-checks/run-all.sh
