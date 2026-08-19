@@ -3,11 +3,10 @@ use std::time::SystemTime;
 
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
-use serde::{Deserialize, Serialize};
 
 static NEXT_EVENT_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActivityType {
     SessionCreated,
     SessionStarted,
@@ -18,13 +17,13 @@ pub enum ActivityType {
     RecordingCompleted,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityResult {
     Success,
     Rejected,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivityEvent {
     pub event_id: String,
     pub timestamp: SystemTime,
