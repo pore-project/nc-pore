@@ -59,16 +59,25 @@ impl Recording {
         }
     }
 
-    pub fn id(&self) -> &RecordingId { &self.id }
-    pub fn status(&self) -> RecordingStatus { self.status }
-    pub fn artifact_id(&self) -> Option<&RecordingArtifactId> { self.artifact_id.as_ref() }
+    pub fn id(&self) -> &RecordingId {
+        &self.id
+    }
+    pub fn status(&self) -> RecordingStatus {
+        self.status
+    }
+    pub fn artifact_id(&self) -> Option<&RecordingArtifactId> {
+        self.artifact_id.as_ref()
+    }
 
     pub fn start(&mut self) -> Result<(), RecordingLifecycleError> {
         self.transition_to(RecordingStatus::Recording)?;
         Ok(())
     }
 
-    pub fn complete(&mut self, artifact_id: RecordingArtifactId) -> Result<(), RecordingLifecycleError> {
+    pub fn complete(
+        &mut self,
+        artifact_id: RecordingArtifactId,
+    ) -> Result<(), RecordingLifecycleError> {
         if self.status == RecordingStatus::Completed {
             return match self.artifact_id.as_ref() {
                 Some(existing) if existing == &artifact_id => Ok(()),
@@ -106,7 +115,9 @@ impl Recording {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn artifact_id() -> RecordingArtifactId { RecordingArtifactId::new("artifact-test-01") }
+    fn artifact_id() -> RecordingArtifactId {
+        RecordingArtifactId::new("artifact-test-01")
+    }
 
     #[test]
     fn new_recording_starts_as_prepared_without_artifact() {
@@ -137,10 +148,13 @@ mod tests {
     fn prepared_recording_cannot_be_completed() {
         let mut recording = Recording::new("recording-test-04");
         let result = recording.complete(artifact_id());
-        assert_eq!(result, Err(RecordingLifecycleError::InvalidTransition {
-            from: RecordingStatus::Prepared,
-            to: RecordingStatus::Completed,
-        }));
+        assert_eq!(
+            result,
+            Err(RecordingLifecycleError::InvalidTransition {
+                from: RecordingStatus::Prepared,
+                to: RecordingStatus::Completed,
+            })
+        );
         assert_eq!(recording.status(), RecordingStatus::Prepared);
         assert_eq!(recording.artifact_id(), None);
     }
@@ -150,10 +164,13 @@ mod tests {
         let mut recording = Recording::new("recording-test-05");
         recording.start().unwrap();
         let result = recording.start();
-        assert_eq!(result, Err(RecordingLifecycleError::InvalidTransition {
-            from: RecordingStatus::Recording,
-            to: RecordingStatus::Recording,
-        }));
+        assert_eq!(
+            result,
+            Err(RecordingLifecycleError::InvalidTransition {
+                from: RecordingStatus::Recording,
+                to: RecordingStatus::Recording,
+            })
+        );
         assert_eq!(recording.status(), RecordingStatus::Recording);
     }
 
@@ -163,10 +180,13 @@ mod tests {
         recording.start().unwrap();
         recording.complete(artifact_id()).unwrap();
         let result = recording.start();
-        assert_eq!(result, Err(RecordingLifecycleError::InvalidTransition {
-            from: RecordingStatus::Completed,
-            to: RecordingStatus::Recording,
-        }));
+        assert_eq!(
+            result,
+            Err(RecordingLifecycleError::InvalidTransition {
+                from: RecordingStatus::Completed,
+                to: RecordingStatus::Recording,
+            })
+        );
         assert_eq!(recording.status(), RecordingStatus::Completed);
     }
 
@@ -190,6 +210,12 @@ mod tests {
         recording.start().unwrap();
         recording.complete(existing.clone()).unwrap();
         let result = recording.complete(requested.clone());
-        assert_eq!(result, Err(RecordingLifecycleError::ArtifactConflict { existing, requested }));
+        assert_eq!(
+            result,
+            Err(RecordingLifecycleError::ArtifactConflict {
+                existing,
+                requested,
+            })
+        );
     }
 }
