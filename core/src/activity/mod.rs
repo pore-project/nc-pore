@@ -6,7 +6,7 @@ use crate::participant::ParticipantId;
 
 static NEXT_EVENT_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityType {
     SessionCreated,
     SessionStarted,
@@ -55,6 +55,26 @@ impl ActivityEvent {
         Self {
             event_id,
             timestamp: SystemTime::now(),
+            actor,
+            activity_type,
+            target,
+            session_id,
+            result,
+        }
+    }
+
+    pub fn reconstitute(
+        event_id: String,
+        timestamp: SystemTime,
+        actor: Option<ParticipantId>,
+        activity_type: ActivityType,
+        target: Option<String>,
+        session_id: ProductionId,
+        result: ActivityResult,
+    ) -> Self {
+        Self {
+            event_id,
+            timestamp,
             actor,
             activity_type,
             target,

@@ -4,13 +4,14 @@
 //! retrieve Production Sessions without depending on a concrete
 //! persistence technology.
 //!
-//! See:
-//! - ADR-036 Persistence Boundary and Storage Strategy
-//!
+//! See ADR-036 Persistence Boundary and Storage Strategy.
 
+use crate::activity::ActivityEvent;
 use crate::identity::ProductionId;
+use crate::participation::Participation;
+use crate::recording::Recording;
 
-use super::ProductionSession;
+use super::{ProductionSession, ProductionStatus};
 
 /// Domain-facing repository contract for Production Sessions.
 ///
@@ -21,7 +22,7 @@ use super::ProductionSession;
 pub trait ProductionSessionRepository {
     type Error;
 
-    /// Stores a Production Session.
+    /// Stores a new Production Session.
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error>;
 
     /// Updates an existing Production Session.
@@ -32,16 +33,33 @@ pub trait ProductionSessionRepository {
     /// Retrieves a Production Session by its Production Identifier.
     ///
     /// `Ok(None)` means that no session with the given identifier exists.
-    /// Technical retrieval failures are represented by the implementation's
-    /// associated error type.
     fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error>;
+}
+
+/// Reconstitutes a domain session from already-decoded domain state.
+///
+/// Serialization and storage remain outside Core. This function only restores
+/// the aggregate from domain values supplied by an outer persistence adapter.
+pub fn reconstitute_production_session(
+    id: ProductionId,
+    status: ProductionStatus,
+    participations: Vec<Participation>,
+    recordings: Vec<Recording>,
+    activities: Vec<ActivityEvent>,
+) -> ProductionSession {
+    ProductionSession {
+        id,
+        status,
+        participations,
+        recordings,
+        activities,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::participant::ParticipantId;
-    use crate::participation::Participation;
     use crate::role::ParticipantRole;
 
     struct InMemory {
@@ -80,8 +98,6 @@ mod tests {
     }
 
     #[test]
-    // TEST-01
-    // Verify: A stored production session can be retrieved by its ID.
     fn repository_can_store_and_get_session() {
         let mut repo = InMemory { sessions: vec![] };
         let id = ProductionId::new("session-001");
@@ -90,33 +106,24 @@ mod tests {
     }
 
     #[test]
-    // TEST-02
-    // Verify: A duplicate ProductionSession ID is rejected.
     fn repository_rejects_duplicate_session_id() {
         let mut repo = InMemory { sessions: vec![] };
         let id = ProductionId::new("session-001");
-
         repo.store(&ProductionSession::new(id.clone())).unwrap();
         let result = repo.store(&ProductionSession::new(id));
-
         assert_eq!(result, Err("session already exists"));
     }
 
     #[test]
-    // TEST-03
-    // Verify: An unknown ProductionSession ID returns None.
     fn repository_returns_none_for_unknown_session() {
         let repo = InMemory { sessions: vec![] };
         assert!(repo.get(&ProductionId::new("unknown")).unwrap().is_none());
     }
 
     #[test]
-    // TEST-04
-    // Verify: An existing ProductionSession can be updated.
     fn repository_can_update_existing_session() {
         let mut repo = InMemory { sessions: vec![] };
         let id = ProductionId::new("session-001");
-
         repo.store(&ProductionSession::new(id.clone())).unwrap();
 
         let mut updated = ProductionSession::new(id.clone());
@@ -128,9 +135,7 @@ mod tests {
             )
             .unwrap();
         updated.start_by(&owner).unwrap();
-
         repo.update(&updated).unwrap();
-
         assert_eq!(repo.get(&id).unwrap().unwrap().status(), updated.status());
     }
 }

@@ -45,9 +45,7 @@ impl ParticipantRole {
                     | ProductionAction::ManageRecordings
                     | ProductionAction::ParticipateInRecording
             ),
-            Self::Participant => {
-                matches!(action, ProductionAction::ParticipateInRecording)
-            }
+            Self::Participant => matches!(action, ProductionAction::ParticipateInRecording),
             Self::Guest => false,
         }
     }
