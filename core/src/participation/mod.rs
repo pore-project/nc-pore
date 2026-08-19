@@ -105,8 +105,10 @@ mod tests {
 
     #[test]
     fn participant_does_not_gain_producer_or_owner_authority() {
-        let participation =
-            Participation::new(ParticipantId::new("participant-1"), ParticipantRole::Participant);
+        let participation = Participation::new(
+            ParticipantId::new("participant-1"),
+            ParticipantRole::Participant,
+        );
 
         assert!(!participation.is_producer());
         assert!(!participation.is_owner());
