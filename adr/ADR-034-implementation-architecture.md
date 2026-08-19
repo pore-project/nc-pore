@@ -1,6 +1,6 @@
 # ADR-034 Implementation Architecture
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-07-24
 
 ---
