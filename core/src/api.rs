@@ -397,10 +397,12 @@ mod tests {
         start_production_session(&mut repository, &id, &actor).unwrap();
 
         let history = list_activity_history(&repository, &id).unwrap();
-        assert_eq!(history.len(), 2);
+        assert_eq!(history.len(), 3);
         assert_eq!(history[0].actor, Some(actor.clone()));
-        assert_eq!(history[1].actor, Some(actor));
-        assert_eq!(history[1].session_id, id);
+        assert_eq!(history[1].activity_type, crate::activity::ActivityType::ParticipantAdded);
+        assert_eq!(history[1].actor, Some(actor.clone()));
+        assert_eq!(history[2].actor, Some(actor));
+        assert_eq!(history[2].session_id, id);
     }
 
     #[test]
