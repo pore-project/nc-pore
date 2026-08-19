@@ -1,0 +1,26 @@
+name: Benchmarks
+
+on:
+  push:
+    branches:
+      - 'perf/**'
+
+jobs:
+  payload-hash:
+    name: Payload hash benchmark
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: recorder
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run payload hash benchmark
+        run: cargo bench --bench payload_hash
