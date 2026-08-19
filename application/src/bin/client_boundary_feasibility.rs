@@ -18,39 +18,43 @@ const SESSION_ID: &str = "feasibility-session";
 const OWNER_ID: &str = "owner-1";
 
 struct InMemoryRepository {
-    session: Option<ProductionSession>,
+    sessions: Vec<ProductionSession>,
 }
 
 impl ProductionSessionRepository for InMemoryRepository {
     type Error = &'static str;
 
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        if self.session.is_some() {
+        if self.sessions.iter().any(|existing| existing.id == session.id) {
             return Err("session already exists");
         }
-        self.session = Some(session.clone());
+        self.sessions.push(session.clone());
         Ok(())
     }
 
     fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        if self.session.is_none() {
-            return Err("session not found");
-        }
-        self.session = Some(session.clone());
+        let existing = self
+            .sessions
+            .iter_mut()
+            .find(|existing| existing.id == session.id)
+            .ok_or("session not found")?;
+        *existing = session.clone();
         Ok(())
     }
 
     fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
         Ok(self
-            .session
-            .as_ref()
-            .filter(|session| &session.id == id)
+            .sessions
+            .iter()
+            .find(|session| &session.id == id)
             .cloned())
     }
 }
 
 fn main() -> std::io::Result<()> {
-    let mut repository = InMemoryRepository { session: None };
+    let mut repository = InMemoryRepository {
+        sessions: Vec::new(),
+    };
     let mut client = ClientSessionService::new(&mut repository);
     client
         .create(SESSION_ID, OWNER_ID)
@@ -60,6 +64,7 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind(ADDRESS)?;
     println!("NC-PoRe external-client feasibility harness: http://{ADDRESS}/");
     println!("GET http://{ADDRESS}/api/sessions/{SESSION_ID}");
+    println!("POST http://{ADDRESS}/api/sessions");
     println!("Development identity: {OWNER_ID}");
 
     for stream in listener.incoming() {
@@ -73,17 +78,22 @@ fn main() -> std::io::Result<()> {
 }
 
 fn handle_connection(mut stream: TcpStream, repository: &mut InMemoryRepository) {
-    let mut buffer = [0_u8; 4096];
-    let bytes_read = match stream.read(&mut buffer) {
+    let mut buffer = Vec::new();
+    let mut chunk = [0_u8; 4096];
+    let bytes_read = match stream.read(&mut chunk) {
         Ok(bytes_read) => bytes_read,
         Err(error) => {
             eprintln!("request read error: {error}");
             return;
         }
     };
+    buffer.extend_from_slice(&chunk[..bytes_read]);
 
-    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-    let request_line = match request.lines().next() {
+    let request = String::from_utf8_lossy(&buffer);
+    let mut sections = request.splitn(2, "\r\n\r\n");
+    let headers = sections.next().unwrap_or_default();
+    let body = sections.next().unwrap_or_default();
+    let request_line = match headers.lines().next() {
         Some(line) => line,
         None => return,
     };
@@ -114,6 +124,7 @@ fn handle_connection(mut stream: TcpStream, repository: &mut InMemoryRepository)
                 ),
             }
         }
+        ("POST", "/api/sessions") => create_session(repository, body),
         _ => (
             404,
             "application/json; charset=utf-8",
@@ -132,10 +143,66 @@ fn handle_connection(mut stream: TcpStream, repository: &mut InMemoryRepository)
     }
 }
 
+fn create_session(
+    repository: &mut InMemoryRepository,
+    body: &str,
+) -> (u16, &'static str, String) {
+    let id = match json_field(body, "id") {
+        Some(value) if !value.is_empty() => value,
+        _ => {
+            return (
+                400,
+                "application/json; charset=utf-8",
+                r#"{"error":"invalid_request"}"#.to_owned(),
+            )
+        }
+    };
+    let owner = match json_field(body, "owner") {
+        Some(value) if !value.is_empty() => value,
+        _ => {
+            return (
+                400,
+                "application/json; charset=utf-8",
+                r#"{"error":"invalid_request"}"#.to_owned(),
+            )
+        }
+    };
+
+    let mut client = ClientSessionService::new(repository);
+    match client.create(&id, &owner) {
+        Ok(session) => (
+            201,
+            "application/json; charset=utf-8",
+            session_json(&session),
+        ),
+        Err(ClientSessionError::Repository(_)) => (
+            409,
+            "application/json; charset=utf-8",
+            r#"{"error":"session_already_exists"}"#.to_owned(),
+        ),
+        Err(_) => (
+            500,
+            "application/json; charset=utf-8",
+            r#"{"error":"application_error"}"#.to_owned(),
+        ),
+    }
+}
+
+fn json_field(body: &str, field: &str) -> Option<String> {
+    let marker = format!("\"{field}\":\"");
+    let start = body.find(&marker)? + marker.len();
+    let rest = &body[start..];
+    let end = rest.find('"')?;
+    Some(rest[..end].to_owned())
+}
+
 fn reason_phrase(status: u16) -> &'static str {
     match status {
         200 => "OK",
+        201 => "Created",
+        400 => "Bad Request",
         404 => "Not Found",
+        409 => "Conflict",
         500 => "Internal Server Error",
         _ => "Unknown",
     }
@@ -215,19 +282,41 @@ const INDEX_HTML: &str = r#"<!doctype html>
 <body>
   <h1>NC-PoRe external client boundary</h1>
   <p>This page is a feasibility test, not a production client.</p>
+  <button id="create">Create session</button>
   <pre id="result">Loading…</pre>
   <script>
+    const result = document.getElementById('result');
+
+    function showResponse(response) {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
+
     fetch('/api/sessions/feasibility-session')
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
+      .then(showResponse)
       .then(data => {
-        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        result.textContent = JSON.stringify(data, null, 2);
       })
       .catch(error => {
-        document.getElementById('result').textContent = `Client boundary failed: ${error}`;
+        result.textContent = `Client boundary failed: ${error}`;
       });
+
+    document.getElementById('create').addEventListener('click', () => {
+      const id = `browser-session-${Date.now()}`;
+      const owner = 'browser-owner';
+      fetch('/api/sessions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, owner})
+      })
+        .then(showResponse)
+        .then(data => {
+          result.textContent = JSON.stringify(data, null, 2);
+        })
+        .catch(error => {
+          result.textContent = `Create session failed: ${error}`;
+        });
+    });
   </script>
 </body>
 </html>"#;
@@ -245,7 +334,17 @@ mod tests {
     #[test]
     fn TEST_02_reason_phrase_maps_expected_http_statuses() {
         assert_eq!(reason_phrase(200), "OK");
+        assert_eq!(reason_phrase(201), "Created");
+        assert_eq!(reason_phrase(400), "Bad Request");
         assert_eq!(reason_phrase(404), "Not Found");
+        assert_eq!(reason_phrase(409), "Conflict");
         assert_eq!(reason_phrase(500), "Internal Server Error");
+    }
+
+    #[test]
+    fn TEST_03_json_field_reads_simple_request_fields() {
+        let body = r#"{"id":"session-1","owner":"owner-1"}"#;
+        assert_eq!(json_field(body, "id"), Some("session-1".to_owned()));
+        assert_eq!(json_field(body, "owner"), Some("owner-1".to_owned()));
     }
 }
