@@ -342,9 +342,6 @@ impl PersistedProductionSession {
 }
 
 /// Concrete local filesystem persistence for `ProductionSession`.
-///
-/// This implementation lives in the application/infrastructure layer. Core
-/// exposes only the repository contract and domain reconstitution boundary.
 pub struct FileProductionSessionRepository {
     root: PathBuf,
 }

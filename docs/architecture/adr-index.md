@@ -77,6 +77,11 @@ This document provides an overview and navigation entry.
 - ADR-059 Recording Payload Filesystem Persistence
 - ADR-060 Filesystem Store Semantics
 - ADR-061 Configurable Recording Configuration
+- ADR-062 Browser-First Guest Participation
+- ADR-063 Active Session Synchronisation
+- ADR-064 Reconstructable Capture Artifacts
+- ADR-065 Storage Provider and Retention Policy Boundaries
+- ADR-066 Application and Infrastructure Boundaries
 
 ---
 

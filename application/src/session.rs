@@ -1,9 +1,9 @@
-use crate::identity::ProductionId;
-use crate::participant::ParticipantId;
-use crate::participation::Participation;
-use crate::recording::Recording;
-use crate::session::repository::ProductionSessionRepository;
-use crate::session::{ProductionSession, ProductionSessionError};
+use nc_pore_core::identity::ProductionId;
+use nc_pore_core::participant::ParticipantId;
+use nc_pore_core::participation::Participation;
+use nc_pore_core::recording::Recording;
+use nc_pore_core::session::repository::ProductionSessionRepository;
+use nc_pore_core::session::{ProductionSession, ProductionSessionError};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GetProductionSessionError<E> {
@@ -39,7 +39,8 @@ where
     R: ProductionSessionRepository,
 {
     let mut session = ProductionSession::new_with_actor(id, Some(owner.clone()));
-    let participation = Participation::new(owner.clone(), crate::role::ParticipantRole::Owner);
+    let participation =
+        Participation::new(owner.clone(), nc_pore_core::role::ParticipantRole::Owner);
 
     session
         .add_participation_by(&owner, participation)
@@ -229,7 +230,7 @@ pub enum ListActivityHistoryError<E> {
 pub fn list_activity_history<R>(
     repository: &R,
     id: &ProductionId,
-) -> Result<Vec<crate::activity::ActivityEvent>, ListActivityHistoryError<R::Error>>
+) -> Result<Vec<nc_pore_core::activity::ActivityEvent>, ListActivityHistoryError<R::Error>>
 where
     R: ProductionSessionRepository,
 {
@@ -244,7 +245,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::role::ParticipantRole;
+    use nc_pore_core::role::ParticipantRole;
 
     struct InMemory {
         sessions: Vec<ProductionSession>,
@@ -329,7 +330,7 @@ mod tests {
 
         assert_eq!(
             repository.get(&id).unwrap().unwrap().status(),
-            crate::session::ProductionStatus::Completed
+            nc_pore_core::session::ProductionStatus::Completed
         );
     }
 
@@ -401,7 +402,7 @@ mod tests {
         assert_eq!(history[0].actor, Some(actor.clone()));
         assert_eq!(
             history[1].activity_type,
-            crate::activity::ActivityType::ParticipantAdded
+            nc_pore_core::activity::ActivityType::ParticipantAdded
         );
         assert_eq!(history[1].actor, Some(actor.clone()));
         assert_eq!(history[2].actor, Some(actor));
