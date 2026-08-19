@@ -52,8 +52,12 @@ impl std::fmt::Display for FileProductionSessionRepositoryError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Io(error) => write!(formatter, "persistence I/O error: {error}"),
-            Self::Serialization(error) => write!(formatter, "persistence serialization error: {error}"),
-            Self::InvalidStatus(status) => write!(formatter, "invalid persisted session status: {status}"),
+            Self::Serialization(error) => {
+                write!(formatter, "persistence serialization error: {error}")
+            }
+            Self::InvalidStatus(status) => {
+                write!(formatter, "invalid persisted session status: {status}")
+            }
             Self::AlreadyExists => write!(formatter, "production session already exists"),
         }
     }
@@ -161,11 +165,16 @@ impl FileProductionSessionRepository {
         self.root.join(format!("{filename}.json"))
     }
 
-    fn write(&self, session: &ProductionSession) -> Result<(), FileProductionSessionRepositoryError> {
+    fn write(
+        &self,
+        session: &ProductionSession,
+    ) -> Result<(), FileProductionSessionRepositoryError> {
         let path = self.path_for(&session.id);
         let temporary = self.root.join(format!(
             ".{}.{}.tmp",
-            path.file_name().and_then(|name| name.to_str()).unwrap_or("session"),
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("session"),
             std::process::id()
         ));
         let persisted = PersistedProductionSession::from_domain(session);
@@ -340,7 +349,9 @@ mod tests {
         session
             .add_recording_by(&owner, Recording::new("recording-001"))
             .unwrap();
-        session.start_recording_by(&owner, &crate::recording::RecordingId::new("recording-001")).unwrap();
+        session
+            .start_recording_by(&owner, &crate::recording::RecordingId::new("recording-001"))
+            .unwrap();
         session
             .complete_recording_by(
                 &owner,
@@ -388,10 +399,12 @@ mod tests {
     fn file_repository_returns_none_for_missing_session() {
         let root = temp_root();
         let repository = FileProductionSessionRepository::new(&root).unwrap();
-        assert!(repository
-            .get(&ProductionId::new("missing"))
-            .unwrap()
-            .is_none());
+        assert!(
+            repository
+                .get(&ProductionId::new("missing"))
+                .unwrap()
+                .is_none()
+        );
         let _ = fs::remove_dir_all(root);
     }
 
