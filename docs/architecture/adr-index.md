@@ -77,7 +77,7 @@ This document provides an overview and navigation entry.
 - ADR-059 Recording Payload Filesystem Persistence
 - ADR-060 Filesystem Store Semantics
 - ADR-061 Configurable Recording Configuration
-- ADR-062 Application and Infrastructure Boundaries
+- ADR-066 Application and Infrastructure Boundaries
 
 ---
 
