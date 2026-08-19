@@ -1,17 +1,17 @@
-name: CI
+name: Benchmarks
 
 on:
   push:
     branches:
-      - develop
-  pull_request:
-    branches:
-      - main
-      - develop
+      - 'perf/**'
 
 jobs:
-  check:
+  payload-hash:
+    name: Payload hash benchmark
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: recorder
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,16 +22,8 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          components: rustfmt
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Check formatting
-        run: cargo fmt --check
-
-      - name: Check
-        run: cargo check --workspace
-
-      - name: Test
-        run: cargo test --workspace
+      - name: Run payload hash benchmark
+        run: cargo bench --bench payload_hash
