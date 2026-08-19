@@ -1,3 +1,4 @@
+pub mod recording;
 pub mod session;
 
 #[path = "lib_source.rs"]
