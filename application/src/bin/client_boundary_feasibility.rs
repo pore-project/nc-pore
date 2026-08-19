@@ -98,7 +98,11 @@ fn handle_connection(mut stream: TcpStream, repository: &mut InMemoryRepository)
         ("GET", "/api/sessions/feasibility-session") => {
             let client = ClientSessionService::new(repository);
             match client.get(SESSION_ID) {
-                Ok(session) => (200, "application/json; charset=utf-8", session_json(&session)),
+                Ok(session) => (
+                    200,
+                    "application/json; charset=utf-8",
+                    session_json(&session),
+                ),
                 Err(ClientSessionError::SessionNotFound) => (
                     404,
                     "application/json; charset=utf-8",
