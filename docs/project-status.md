@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 3.0
-- Date: 2026-08-17
+- Version: 3.1
+- Date: 2026-08-19
 
 ---
 
@@ -17,7 +17,7 @@ NC-PoRe befindet sich nach Abschluss der Architekturphase in der technischen Ums
 
 Die grundlegenden Architekturentscheidungen, Entwicklungsprinzipien und technischen Grenzen sind definiert.
 
-Die ersten Core- und Recorder-Komponenten wurden implementiert und durch Tests validiert.
+Die Core- und Recorder-Komponenten wurden implementiert und durch Tests validiert.
 
 ---
 
@@ -88,7 +88,7 @@ Relevante Architekturentscheidungen:
 - ADR-049 Artifact Creation and Workflow Integration
 - ADR-051 Recording Artifact Processing Boundary
 - ADR-053 Artifact Recovery and Consistency Boundary
-- ADR-054 Recording Artifact and Local Recording Data Association
+- ADR-054 Local Recording Data Association
 - ADR-056 Capture Result and Recording Artifact Data Boundary
 - ADR-057 Domain Recording to RecordingArtifact Association Boundary
 - ADR-058 Recording Payload Representation
@@ -129,8 +129,8 @@ Relevante Architekturentscheidungen:
 
 Aktueller dokumentierter Teststand:
 
-core tests: 40 passed
-recorder tests: 46 passed
+- core tests: 40 passed
+- recorder tests: 46 passed
 
 Zusätzliche technische Integration wurde erfolgreich manuell ausgeführt:
 
@@ -187,11 +187,13 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
-- Identitäten innerhalb technischer Grenzen werden nicht mehr über primitive Strings modelliert, sondern über explizite Value Objects
+- Identitäten innerhalb technischer Grenzen werden über explizite Value Objects modelliert
 - Filesystem Persistence folgt definierten Store-Semantiken für Recording Artifacts
 - die konkrete Capture-Technologie bleibt hinter CaptureProvider verborgen
 - der aktuelle CPAL-Pfad bildet einen funktionierenden technischen Capture-to-Artifact-Pfad
 - Recording-Konfiguration wird entlang der technischen Capture-to-Artifact-Grenze explizit erhalten
+- der fachliche Recording-Lifecycle ist über ProductionSession, Recording, Artifact, Persistence und Recovery konsistent definiert
+- Recovery wird für ein konkretes ProductionSession/Recording-Paar orchestriert und wahrt die Domain-Invarianten
 
 ---
 
@@ -209,7 +211,12 @@ Die historische Entwicklung wird in einzelnen Milestones dokumentiert:
 - `docs/milestones/2026-08-14-local-recording-artifact-persistence-complete.md`
 - `docs/milestones/2026-08-15-cpal-capture-integration.md`
 
-Die technische lokale Recording-Pipeline wurde mit Milestone #55 abgeschlossen.
+Abgeschlossen:
+
+- **Milestone #55 – Local Technical Recording Pipeline**
+- **Milestone #64 – Recording Lifecycle Foundation**
+
+Milestone #64 umfasst insbesondere den fachlichen Recording-Lifecycle, die Verbindung von Recording und RecordingArtifact, die Application Use Cases sowie die definierten Recovery- und Reconciliation-Semantiken.
 
 ---
 
@@ -217,19 +224,15 @@ Die technische lokale Recording-Pipeline wurde mit Milestone #55 abgeschlossen.
 
 Die nächsten Arbeiten werden als größere technische Meilensteine verfolgt. Ein Meilenstein darf mehrere konkrete Issues und PRs umfassen.
 
-1. **`milestone: Recording Lifecycle Foundation`**
-
-   Aufbau eines fachlich verwaltbaren Recording-Lifecycles über die bereits vorhandene technische Capture-to-Artifact-Pipeline hinaus. Der Schwerpunkt liegt auf der sauberen Verbindung von Recording, ProductionSession, Artifact und deren fachlichem Lebenszyklus.
-
-2. **`milestone: Production Management & Collaboration Foundation`**
+1. **`milestone: Production Management & Collaboration Foundation`**
 
    Weiterentwicklung der ProductionSession- und Recording-Welt zu einer belastbaren fachlichen Management- und Kollaborationsgrundlage, auf der spätere Clients und weitere Schnittstellen aufbauen können.
 
-3. **`milestone: Distributed Recording & Synchronisation`**
+2. **`milestone: Distributed Recording & Synchronisation`**
 
-   Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage. Dieser Meilenstein baut auf der abgeschlossenen lokalen Recording-Pipeline und den vorherigen fachlichen Grenzen auf.
+   Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage. Dieser Meilenstein baut auf der abgeschlossenen lokalen Recording-Pipeline und den abgeschlossenen fachlichen Recording-Lifecycle-Grenzen auf.
 
-Die drei Meilensteine sind als übergeordnete Wegpunkte zu verstehen und werden jeweils in konkrete Umsetzungsschritte zerlegt. Die konkrete Reihenfolge und die Abhängigkeiten werden vor Beginn der jeweiligen Implementierung geprüft.
+Die Meilensteine sind als übergeordnete Wegpunkte zu verstehen und werden jeweils in konkrete Umsetzungsschritte zerlegt. Die konkrete Reihenfolge und die Abhängigkeiten werden vor Beginn der jeweiligen Implementierung geprüft.
 
 ---
 
@@ -247,10 +250,18 @@ Wichtige Einstiegspunkte:
 
 # English Version (Deutsche Version oben)
 
-The English project-status section mirrors the German status above. The local technical recording pipeline is complete, and the next steps are tracked as three larger milestones:
+The current project status mirrors the German section above.
 
-1. **`milestone: Recording Lifecycle Foundation`** — establish a domain-level, manageable recording lifecycle across ProductionSession, Recording, Artifact and their lifecycle boundaries.
-2. **`milestone: Production Management & Collaboration Foundation`** — establish a robust production-management and collaboration foundation for future clients and interfaces.
-3. **`milestone: Distributed Recording & Synchronisation`** — establish the offline-first foundation for distributed recording, synchronization and remote storage.
+Completed milestones include:
+
+- **Milestone #55 – Local Technical Recording Pipeline**
+- **Milestone #64 – Recording Lifecycle Foundation**
+
+Milestone #64 establishes the domain-level Recording lifecycle across ProductionSession, Recording, RecordingArtifact, persistence and recovery, including application use cases and deterministic reconciliation semantics.
+
+The next major milestones are:
+
+1. **`milestone: Production Management & Collaboration Foundation`** — establish a robust production-management and collaboration foundation for future clients and interfaces.
+2. **`milestone: Distributed Recording & Synchronisation`** — establish the offline-first foundation for distributed recording, synchronization and remote storage.
 
 Each milestone may contain multiple implementation issues and pull requests. Dependencies and implementation order are reviewed before work begins.
