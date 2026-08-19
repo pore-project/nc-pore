@@ -39,10 +39,8 @@ where
     R: ProductionSessionRepository,
 {
     let mut session = ProductionSession::new_with_actor(id, Some(owner.clone()));
-    let participation = Participation::new(
-        owner.clone(),
-        nc_pore_core::role::ParticipantRole::Owner,
-    );
+    let participation =
+        Participation::new(owner.clone(), nc_pore_core::role::ParticipantRole::Owner);
 
     session
         .add_participation_by(&owner, participation)
