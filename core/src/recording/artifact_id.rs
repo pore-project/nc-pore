@@ -6,7 +6,9 @@
 //!
 //! See ADR-054 Recording Artifact and Local Recording Data Association.
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RecordingArtifactId(String);
 
 impl RecordingArtifactId {
