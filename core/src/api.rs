@@ -38,7 +38,7 @@ pub fn create_production_session<R>(
 where
     R: ProductionSessionRepository,
 {
-    let mut session = ProductionSession::new(id);
+    let mut session = ProductionSession::new_with_actor(id, Some(owner.clone()));
     let participation = Participation::new(owner.clone(), crate::role::ParticipantRole::Owner);
 
     session
@@ -282,16 +282,18 @@ mod tests {
     }
 
     #[test]
-    fn create_production_session_establishes_owner() {
+    fn create_production_session_establishes_owner_and_actor() {
         let mut repository = InMemory { sessions: vec![] };
         let id = ProductionId::new("session-001");
+        let actor = owner();
 
-        let result = create_production_session(&mut repository, id.clone(), owner());
+        let result = create_production_session(&mut repository, id.clone(), actor.clone());
 
         assert!(result.is_ok());
         let session = repository.get(&id).unwrap().unwrap();
         assert!(session.has_owner());
         assert_eq!(session.participant_count(), 1);
+        assert_eq!(session.activities()[0].actor, Some(actor));
     }
 
     #[test]
@@ -392,6 +394,7 @@ mod tests {
 
         let history = list_activity_history(&repository, &id).unwrap();
         assert_eq!(history.len(), 2);
+        assert_eq!(history[0].actor, Some(actor.clone()));
         assert_eq!(history[1].actor, Some(actor));
         assert_eq!(history[1].session_id, id);
     }
