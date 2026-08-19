@@ -179,7 +179,11 @@ impl ProductionSession {
 
         let target = recording.id().value().to_owned();
         self.recordings.push(recording);
-        self.push_activity(Some(actor.clone()), ActivityType::RecordingAdded, Some(target));
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingAdded,
+            Some(target),
+        );
 
         Ok(())
     }
@@ -274,7 +278,10 @@ mod tests {
     fn add_owner(session: &mut ProductionSession) -> ParticipantId {
         let owner = ParticipantId::new("owner-1");
         session
-            .add_participation_by(&owner, create_participation("owner-1", ParticipantRole::Owner))
+            .add_participation_by(
+                &owner,
+                create_participation("owner-1", ParticipantRole::Owner),
+            )
             .unwrap();
         owner
     }
