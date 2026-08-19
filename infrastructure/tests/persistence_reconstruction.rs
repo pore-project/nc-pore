@@ -75,13 +75,12 @@ fn completed_recording_survives_repository_restart() {
 
     let recording = &reloaded.recordings()[0];
     assert_eq!(recording.status(), RecordingStatus::Completed);
-    assert_eq!(
-        recording.artifact_id().unwrap().value(),
-        "artifact-001"
-    );
+    assert_eq!(recording.artifact_id().unwrap().value(), "artifact-001");
     assert_eq!(reloaded.activities().len(), expected_activity_count);
-    assert_eq!(reloaded.activities()[expected_activity_count - 1].activity_type,
-               nc_pore_core::activity::ActivityType::RecordingCompleted);
+    assert_eq!(
+        reloaded.activities()[expected_activity_count - 1].activity_type,
+        nc_pore_core::activity::ActivityType::RecordingCompleted
+    );
 
     let _ = std::fs::remove_dir_all(root);
 }
