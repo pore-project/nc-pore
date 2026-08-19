@@ -25,8 +25,12 @@ impl std::fmt::Display for FileProductionSessionRepositoryError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Io(error) => write!(formatter, "persistence I/O error: {error}"),
-            Self::Serialization(error) => write!(formatter, "persistence serialization error: {error}"),
-            Self::InvalidTimestamp(value) => write!(formatter, "invalid persisted activity timestamp: {value}"),
+            Self::Serialization(error) => {
+                write!(formatter, "persistence serialization error: {error}")
+            }
+            Self::InvalidTimestamp(value) => {
+                write!(formatter, "invalid persisted activity timestamp: {value}")
+            }
             Self::AlreadyExists => write!(formatter, "production session already exists"),
         }
     }
@@ -236,7 +240,12 @@ impl PersistedProductionSession {
                 .iter()
                 .map(|participation| PersistedParticipation {
                     participant_id: participation.participant_id.value().to_owned(),
-                    roles: participation.roles.iter().copied().map(Into::into).collect(),
+                    roles: participation
+                        .roles
+                        .iter()
+                        .copied()
+                        .map(Into::into)
+                        .collect(),
                 })
                 .collect(),
             recordings: session
@@ -253,8 +262,15 @@ impl PersistedProductionSession {
                 .iter()
                 .map(|activity| PersistedActivityEvent {
                     event_id: activity.event_id.clone(),
-                    timestamp_nanos: activity.timestamp.duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos(),
-                    actor: activity.actor.as_ref().map(|participant| participant.value().to_owned()),
+                    timestamp_nanos: activity
+                        .timestamp
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos(),
+                    actor: activity
+                        .actor
+                        .as_ref()
+                        .map(|participant| participant.value().to_owned()),
                     activity_type: activity.activity_type.into(),
                     target: activity.target.clone(),
                     session_id: activity.session_id.value().to_owned(),
@@ -293,11 +309,15 @@ impl PersistedProductionSession {
             let seconds = activity.timestamp_nanos / 1_000_000_000;
             let nanos = activity.timestamp_nanos % 1_000_000_000;
             if seconds > u64::MAX as u128 {
-                return Err(FileProductionSessionRepositoryError::InvalidTimestamp(activity.timestamp_nanos));
+                return Err(FileProductionSessionRepositoryError::InvalidTimestamp(
+                    activity.timestamp_nanos,
+                ));
             }
             let timestamp = UNIX_EPOCH
                 .checked_add(Duration::new(seconds as u64, nanos as u32))
-                .ok_or(FileProductionSessionRepositoryError::InvalidTimestamp(activity.timestamp_nanos))?;
+                .ok_or(FileProductionSessionRepositoryError::InvalidTimestamp(
+                    activity.timestamp_nanos,
+                ))?;
             activities.push(ActivityEvent::reconstitute(
                 activity.event_id,
                 timestamp,
@@ -309,13 +329,15 @@ impl PersistedProductionSession {
             ));
         }
 
-        Ok(nc_pore_core::session::repository::reconstitute_production_session(
-            ProductionId::new(self.id),
-            self.status.into(),
-            participations,
-            recordings,
-            activities,
-        ))
+        Ok(
+            nc_pore_core::session::repository::reconstitute_production_session(
+                ProductionId::new(self.id),
+                self.status.into(),
+                participations,
+                recordings,
+                activities,
+            ),
+        )
     }
 }
 
@@ -345,11 +367,16 @@ impl FileProductionSessionRepository {
         self.root.join(format!("{filename}.json"))
     }
 
-    fn write(&self, session: &ProductionSession) -> Result<(), FileProductionSessionRepositoryError> {
+    fn write(
+        &self,
+        session: &ProductionSession,
+    ) -> Result<(), FileProductionSessionRepositoryError> {
         let path = self.path_for(&session.id);
         let temporary = self.root.join(format!(
             ".{}.{}.tmp",
-            path.file_name().and_then(|name| name.to_str()).unwrap_or("session"),
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("session"),
             std::process::id()
         ));
         let persisted = PersistedProductionSession::from_domain(session);
@@ -407,7 +434,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root() -> PathBuf {
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         std::env::temp_dir().join(format!("nc-pore-production-{nanos}"))
     }
 
@@ -421,19 +451,30 @@ mod tests {
                 &owner,
                 Participation::with_roles(
                     owner.clone(),
-                    [ParticipantRole::Owner, ParticipantRole::Producer, ParticipantRole::Participant],
+                    [
+                        ParticipantRole::Owner,
+                        ParticipantRole::Producer,
+                        ParticipantRole::Participant,
+                    ],
                 ),
             )
             .unwrap();
         session
             .add_participation_by(
                 &owner,
-                Participation::with_roles(producer, [ParticipantRole::Producer, ParticipantRole::Participant]),
+                Participation::with_roles(
+                    producer,
+                    [ParticipantRole::Producer, ParticipantRole::Participant],
+                ),
             )
             .unwrap();
         session.start_by(&owner).unwrap();
-        session.add_recording_by(&owner, Recording::new("recording-001")).unwrap();
-        session.start_recording_by(&owner, &RecordingId::new("recording-001")).unwrap();
+        session
+            .add_recording_by(&owner, Recording::new("recording-001"))
+            .unwrap();
+        session
+            .start_recording_by(&owner, &RecordingId::new("recording-001"))
+            .unwrap();
         session
             .complete_recording_by(
                 &owner,
@@ -481,7 +522,10 @@ mod tests {
     fn file_repository_returns_none_for_missing_session() {
         let root = temp_root();
         let repository = FileProductionSessionRepository::new(&root).unwrap();
-        assert!(repository.get(&ProductionId::new("missing")).unwrap().is_none());
+        assert!(repository
+            .get(&ProductionId::new("missing"))
+            .unwrap()
+            .is_none());
         let _ = fs::remove_dir_all(root);
     }
 
