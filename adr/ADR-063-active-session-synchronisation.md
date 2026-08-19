@@ -1,6 +1,6 @@
 # Deutsch ([English version below](#english-version))
 
-# ADR-037: Active Session Synchronisation
+# ADR-063: Active Session Synchronisation
 
 ## Status
 
@@ -102,7 +102,7 @@ Eine spätere ADR muss das konkrete Synchronisationsprotokoll, die Clock-Schätz
 
 # English Version ([Deutsche Version oben](#deutsch))
 
-# ADR-037: Active Session Synchronisation
+# ADR-063: Active Session Synchronisation
 
 ## Status
 

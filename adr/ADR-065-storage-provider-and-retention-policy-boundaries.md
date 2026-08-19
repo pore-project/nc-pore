@@ -1,6 +1,6 @@
 # Deutsch ([English version below](#english-version))
 
-# ADR-039: Storage Provider and Retention Policy Boundaries
+# ADR-065: Storage Provider and Retention Policy Boundaries
 
 ## Status
 
@@ -141,7 +141,7 @@ Diese Entscheidung konkretisiert ADR-026, das die Storage Provider Layer und Pro
 
 Sie ergänzt explizite Grenzen für Artifact Storage, Data Ownership und Retention Policy.
 
-Sie ergänzt ADR-038, indem sie festlegt, wo Raw und Derived Artifacts gespeichert werden können, ohne das Domain-Modell an ein bestimmtes Backend zu koppeln.
+Sie ergänzt ADR-064, indem sie festlegt, wo Raw und Derived Artifacts gespeichert werden können, ohne das Domain-Modell an ein bestimmtes Backend zu koppeln.
 
 ---
 
@@ -153,7 +153,7 @@ Eine spätere Storage-Implementierungs-ADR muss das konkrete Provider-Interface,
 
 # English Version ([Deutsche Version oben](#deutsch))
 
-# ADR-039: Storage Provider and Retention Policy Boundaries
+# ADR-065: Storage Provider and Retention Policy Boundaries
 
 ## Status
 
@@ -294,7 +294,7 @@ This decision refines ADR-026, which already establishes the Storage Provider La
 
 It adds explicit boundaries for artifact storage, data ownership and retention policy.
 
-It complements ADR-038 by defining where Raw and Derived Artifacts may be stored without coupling the domain model to a particular backend.
+It complements ADR-064 by defining where Raw and Derived Artifacts may be stored without coupling the domain model to a particular backend.
 
 ---
 

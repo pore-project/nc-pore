@@ -17,7 +17,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure Ubuntu package mirror
-        run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+        run: |
+          set -euo pipefail
+          for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors.txt; do
+            [ -f "$file" ] || continue
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$file"
+          done
+          if sudo grep -R 'azure.archive.ubuntu.com' /etc/apt/sources.list /etc/apt/sources.list.d /etc/apt/apt-mirrors.txt 2>/dev/null; then
+            echo 'Unreplaced Azure Ubuntu mirror reference found.'
+            exit 1
+          fi
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev

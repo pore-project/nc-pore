@@ -1,6 +1,6 @@
 # Deutsch ([English version below](#english-version))
 
-# ADR-038: Reconstructable Capture Artifacts
+# ADR-064: Reconstructable Capture Artifacts
 
 ## Status
 
@@ -204,7 +204,7 @@ Diese Entscheidung baut auf ADR-026 (Session Data and Storage Architecture) und 
 
 Sie führt eine deutlichere Trennung zwischen Source Capture Artifacts und abgeleiteten Production Artifacts ein, ohne eine konkrete Storage-Technologie oder einen Audio-Codec vorzuschreiben.
 
-Die Integritätsentscheidung ergänzt die bestehende Artifact- und Persistence-Abstraktion und bleibt mit der Provider-Grenze aus ADR-039 kompatibel.
+Die Integritätsentscheidung ergänzt die bestehende Artifact- und Persistence-Abstraktion und bleibt mit der Provider-Grenze aus ADR-065 kompatibel.
 
 ---
 
@@ -218,7 +218,7 @@ Die konkrete Implementierung muss außerdem nachweisen, dass Integritätsberechn
 
 # English Version ([Deutsche Version oben](#deutsch))
 
-# ADR-038: Reconstructable Capture Artifacts
+# ADR-064: Reconstructable Capture Artifacts
 
 ## Status
 
@@ -422,7 +422,7 @@ This decision builds on ADR-026 (Session Data and Storage Architecture) and ADR-
 
 It introduces a more explicit distinction between source Capture Artifacts and derived Production Artifacts without making a concrete storage technology or audio codec mandatory.
 
-The integrity decision complements the existing Artifact and Persistence abstraction and remains compatible with the provider boundary established by ADR-039.
+The integrity decision complements the existing Artifact and Persistence abstraction and remains compatible with the provider boundary established by ADR-065.
 
 ---
 

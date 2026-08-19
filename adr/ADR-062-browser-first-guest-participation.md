@@ -1,6 +1,6 @@
 # Deutsch ([English version below](#english-version))
 
-# ADR-036: Browser-First Guest Participation
+# ADR-062: Browser-First Guest Participation
 
 ## Status
 
@@ -115,7 +115,7 @@ Das Browser-Capture-Modell muss gemeinsam mit den Entscheidungen zu aktiver Sync
 
 # English Version ([Deutsche Version oben](#deutsch))
 
-# ADR-036: Browser-First Guest Participation
+# ADR-062: Browser-First Guest Participation
 
 ## Status
 
