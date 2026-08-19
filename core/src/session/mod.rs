@@ -424,22 +424,26 @@ mod tests {
         session.start_by(&owner).unwrap();
         session.complete_by(&owner).unwrap();
 
-        assert_eq!(session.activities().len(), 3);
+        assert_eq!(session.activities().len(), 4);
         assert_eq!(
             session.activities()[0].activity_type,
             ActivityType::SessionCreated
         );
         assert_eq!(
             session.activities()[1].activity_type,
-            ActivityType::SessionStarted
+            ActivityType::ParticipantAdded
         );
-        assert_eq!(session.activities()[1].actor, Some(owner.clone()));
         assert_eq!(
             session.activities()[2].activity_type,
+            ActivityType::SessionStarted
+        );
+        assert_eq!(session.activities()[2].actor, Some(owner.clone()));
+        assert_eq!(
+            session.activities()[3].activity_type,
             ActivityType::SessionCompleted
         );
-        assert_eq!(session.activities()[2].session_id, session.id);
-        assert_eq!(session.activities()[2].result, ActivityResult::Success);
+        assert_eq!(session.activities()[3].session_id, session.id);
+        assert_eq!(session.activities()[3].result, ActivityResult::Success);
     }
 
     #[test]
