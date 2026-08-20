@@ -1,5 +1,7 @@
 use crate::client::ClientSessionService;
-use crate::session_context::{SessionCapability, SessionState};
+use crate::session_context::{
+    SessionCapability, SessionContext, SessionContextProvider, SessionState,
+};
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSession;
@@ -35,25 +37,52 @@ impl ProductionSessionRepository for InMemory {
     }
 }
 
+struct ExternalContextProvider;
+
+impl SessionContextProvider for ExternalContextProvider {
+    type Error = &'static str;
+
+    fn resolve(&self, session_id: &str, actor_id: &str) -> Result<SessionContext, Self::Error> {
+        if session_id != "external-session-001" {
+            return Err("session not found");
+        }
+        if actor_id != "alice" {
+            return Err("actor not found");
+        }
+
+        Ok(SessionContext {
+            session_id: session_id.to_owned(),
+            state: SessionState::Available,
+            actor_id: actor_id.to_owned(),
+            participants: vec![],
+            capabilities: vec![SessionCapability::ParticipateInRecording],
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // TEST-01: The existing application client consumes the provider-independent context contract.
+    // TEST-01: The existing application client consumes an external provider through the contract.
     #[test]
     fn client_service_resolves_provider_independent_context() {
         let mut repository = InMemory { sessions: vec![] };
-        let mut client = ClientSessionService::new(&mut repository);
-        client.create("session-001", "owner-1").unwrap();
+        let client = ClientSessionService::new(&mut repository);
 
-        let context = client.context("session-001", "owner-1").unwrap();
+        let context = client
+            .context(
+                &ExternalContextProvider,
+                "external-session-001",
+                "alice",
+            )
+            .unwrap();
 
-        assert_eq!(context.session_id, "session-001");
+        assert_eq!(context.session_id, "external-session-001");
         assert_eq!(context.state, SessionState::Available);
-        assert_eq!(context.actor_id, "owner-1");
-        assert_eq!(context.participants.len(), 1);
+        assert_eq!(context.actor_id, "alice");
         assert!(context
             .capabilities
-            .contains(&SessionCapability::StartSession));
+            .contains(&SessionCapability::ParticipateInRecording));
     }
 }
