@@ -208,10 +208,12 @@ where
     {
         let context = self.context(provider, session_id, actor_id)?;
 
-        Ok(context.state == crate::session_context::SessionState::Active
-            && context
-                .capabilities
-                .contains(&crate::session_context::SessionCapability::ParticipateInRecording))
+        Ok(
+            context.state == crate::session_context::SessionState::Active
+                && context
+                    .capabilities
+                    .contains(&crate::session_context::SessionCapability::ParticipateInRecording),
+        )
     }
 
     pub fn get(&self, id: &str) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
