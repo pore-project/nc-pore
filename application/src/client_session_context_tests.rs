@@ -37,7 +37,10 @@ impl ProductionSessionRepository for InMemory {
     }
 }
 
-struct ExternalContextProvider;
+struct ExternalContextProvider {
+    state: SessionState,
+    capabilities: Vec<SessionCapability>,
+}
 
 impl SessionContextProvider for ExternalContextProvider {
     type Error = &'static str;
@@ -52,10 +55,10 @@ impl SessionContextProvider for ExternalContextProvider {
 
         Ok(SessionContext {
             session_id: session_id.to_owned(),
-            state: SessionState::Available,
+            state: self.state,
             actor_id: actor_id.to_owned(),
             participants: vec![],
-            capabilities: vec![SessionCapability::ParticipateInRecording],
+            capabilities: self.capabilities.clone(),
         })
     }
 }
@@ -70,12 +73,13 @@ mod tests {
         let mut repository = InMemory { sessions: vec![] };
         let client = ClientSessionService::new(&mut repository);
 
+        let provider = ExternalContextProvider {
+            state: SessionState::Available,
+            capabilities: vec![SessionCapability::ParticipateInRecording],
+        };
+
         let context = client
-            .context(
-                &ExternalContextProvider,
-                "external-session-001",
-                "alice",
-            )
+            .context(&provider, "external-session-001", "alice")
             .unwrap();
 
         assert_eq!(context.session_id, "external-session-001");
@@ -84,5 +88,68 @@ mod tests {
         assert!(context
             .capabilities
             .contains(&SessionCapability::ParticipateInRecording));
+    }
+
+    // TEST-02: The client evaluates the provider-independent capability while the session is active.
+    #[test]
+    fn client_service_uses_participation_capability() {
+        let mut repository = InMemory { sessions: vec![] };
+        let client = ClientSessionService::new(&mut repository);
+
+        let provider = ExternalContextProvider {
+            state: SessionState::Active,
+            capabilities: vec![SessionCapability::ParticipateInRecording],
+        };
+
+        assert_eq!(
+            client.can_participate(&provider, "external-session-001", "alice"),
+            Ok(true)
+        );
+    }
+
+    // TEST-03: A non-active context cannot be used for recording even if its capability remains present.
+    #[test]
+    fn client_service_rejects_participation_outside_active_session() {
+        let mut repository = InMemory { sessions: vec![] };
+        let client = ClientSessionService::new(&mut repository);
+        let provider = ExternalContextProvider {
+            state: SessionState::Available,
+            capabilities: vec![SessionCapability::ParticipateInRecording],
+        };
+
+        assert_eq!(
+            client.can_participate(&provider, "external-session-001", "alice"),
+            Ok(false)
+        );
+
+        let completed_provider = ExternalContextProvider {
+            state: SessionState::Completed,
+            capabilities: vec![SessionCapability::ParticipateInRecording],
+        };
+
+        assert_eq!(
+            client.can_participate(&completed_provider, "external-session-001", "alice"),
+            Ok(false)
+        );
+    }
+
+    // TEST-04: Provider errors remain provider-owned and are propagated unchanged.
+    #[test]
+    fn client_service_propagates_provider_errors() {
+        let mut repository = InMemory { sessions: vec![] };
+        let client = ClientSessionService::new(&mut repository);
+        let provider = ExternalContextProvider {
+            state: SessionState::Available,
+            capabilities: vec![SessionCapability::ParticipateInRecording],
+        };
+
+        assert_eq!(
+            client.can_participate(&provider, "unknown", "alice"),
+            Err("session not found")
+        );
+        assert_eq!(
+            client.can_participate(&provider, "external-session-001", "bob"),
+            Err("actor not found")
+        );
     }
 }
