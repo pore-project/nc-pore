@@ -3,9 +3,10 @@ use nc_pore_core::role::{ParticipantRole, ProductionAction};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SessionAvailability {
+pub enum SessionState {
     Available,
-    Unavailable,
+    Active,
+    Completed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,35 +18,15 @@ pub enum SessionCapability {
     ParticipateInRecording,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContextParticipantRole {
-    Owner,
-    Producer,
-    Participant,
-    Guest,
-}
-
-impl From<ParticipantRole> for ContextParticipantRole {
-    fn from(role: ParticipantRole) -> Self {
-        match role {
-            ParticipantRole::Owner => Self::Owner,
-            ParticipantRole::Producer => Self::Producer,
-            ParticipantRole::Participant => Self::Participant,
-            ParticipantRole::Guest => Self::Guest,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionContextParticipant {
     pub id: String,
-    pub roles: Vec<ContextParticipantRole>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionContext {
     pub session_id: String,
-    pub availability: SessionAvailability,
+    pub state: SessionState,
     pub actor_id: String,
     pub participants: Vec<SessionContextParticipant>,
     pub capabilities: Vec<SessionCapability>,
@@ -135,13 +116,10 @@ where
 
         Ok(SessionContext {
             session_id: session.id.value().to_owned(),
-            availability: if matches!(
-                session.status(),
-                nc_pore_core::session::ProductionStatus::Completed
-            ) {
-                SessionAvailability::Unavailable
-            } else {
-                SessionAvailability::Available
+            state: match session.status() {
+                nc_pore_core::session::ProductionStatus::Completed => SessionState::Completed,
+                nc_pore_core::session::ProductionStatus::Active => SessionState::Active,
+                _ => SessionState::Available,
             },
             actor_id: actor.participant_id.value().to_owned(),
             participants: session
@@ -149,12 +127,6 @@ where
                 .iter()
                 .map(|participation| SessionContextParticipant {
                     id: participation.participant_id.value().to_owned(),
-                    roles: participation
-                        .roles
-                        .iter()
-                        .copied()
-                        .map(ContextParticipantRole::from)
-                        .collect(),
                 })
                 .collect(),
             capabilities,
@@ -217,7 +189,7 @@ mod tests {
         (repository, id)
     }
 
-    // TEST-01: The native provider resolves the complete application context.
+    // TEST-01: The native provider resolves the provider-independent context.
     #[test]
     fn native_provider_resolves_context() {
         let (repository, id) = session_with_owner();
@@ -226,7 +198,7 @@ mod tests {
         let context = provider.resolve(id.value(), "owner-1").unwrap();
 
         assert_eq!(context.session_id, "session-001");
-        assert_eq!(context.availability, SessionAvailability::Available);
+        assert_eq!(context.state, SessionState::Available);
         assert_eq!(context.actor_id, "owner-1");
         assert_eq!(context.participants.len(), 1);
         assert!(context
@@ -237,9 +209,9 @@ mod tests {
             .contains(&SessionCapability::ManageRecordings));
     }
 
-    // TEST-02: Provider availability is part of the context, not inferred by the caller.
+    // TEST-02: Provider state is exposed directly instead of collapsed into availability.
     #[test]
-    fn native_provider_reports_completed_session_as_unavailable() {
+    fn native_provider_reports_completed_session_state() {
         let (mut repository, id) = session_with_owner();
         let owner = ParticipantId::new("owner-1");
         let mut session = repository.get(&id).unwrap().unwrap();
@@ -250,7 +222,7 @@ mod tests {
         let provider = ProductionSessionContextProvider::new(&repository);
         let context = provider.resolve(id.value(), "owner-1").unwrap();
 
-        assert_eq!(context.availability, SessionAvailability::Unavailable);
+        assert_eq!(context.state, SessionState::Completed);
     }
 
     // TEST-03: Provider and actor failures remain explicit application errors.
