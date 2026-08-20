@@ -208,10 +208,7 @@ mod tests {
         let owner = ParticipantId::new("owner-1");
         let mut session = ProductionSession::new_with_actor(id.clone(), Some(owner.clone()));
         session
-            .add_participation_by(
-                &owner,
-                Participation::new(owner, ParticipantRole::Owner),
-            )
+            .add_participation_by(&owner, Participation::new(owner, ParticipantRole::Owner))
             .unwrap();
         repository.store(&session).unwrap();
         (repository, id)
