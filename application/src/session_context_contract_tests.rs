@@ -1,4 +1,6 @@
-use crate::session_context::{SessionCapability, SessionContext, SessionContextProvider, SessionState};
+use crate::session_context::{
+    SessionCapability, SessionContext, SessionContextProvider, SessionState,
+};
 
 struct ExternalContextProvider;
 
@@ -18,7 +20,17 @@ impl SessionContextProvider for ExternalContextProvider {
             session_id: session_id.to_owned(),
             state: SessionState::Available,
             actor_id: actor_id.to_owned(),
-            participants: vec!["alice".to_owned(), "bob".to_owned(), "guest".to_owned()],
+            participants: vec![
+                super::session_context::SessionContextParticipant {
+                    id: "alice".to_owned(),
+                },
+                super::session_context::SessionContextParticipant {
+                    id: "bob".to_owned(),
+                },
+                super::session_context::SessionContextParticipant {
+                    id: "guest".to_owned(),
+                },
+            ],
             capabilities: vec![SessionCapability::ParticipateInRecording],
         })
     }

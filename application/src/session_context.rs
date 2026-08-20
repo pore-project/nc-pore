@@ -1,5 +1,5 @@
 use crate::session::get_production_session;
-use nc_pore_core::role::{ParticipantRole, ProductionAction};
+use nc_pore_core::role::ProductionAction;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
