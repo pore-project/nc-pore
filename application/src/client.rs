@@ -193,10 +193,10 @@ where
         provider.resolve(session_id, actor_id)
     }
 
-    /// Ask the injected provider for the actor's effective recording capability.
+    /// Ask the injected provider whether the actor may participate in recording now.
     ///
-    /// The client deliberately evaluates the application capability rather than
-    /// inspecting provider-specific roles.
+    /// Participation is available only while the session is active; the client still
+    /// evaluates the application capability rather than inspecting provider-specific roles.
     pub fn can_participate<P>(
         &self,
         provider: &P,
@@ -208,7 +208,7 @@ where
     {
         let context = self.context(provider, session_id, actor_id)?;
 
-        Ok(context.state != crate::session_context::SessionState::Completed
+        Ok(context.state == crate::session_context::SessionState::Active
             && context
                 .capabilities
                 .contains(&crate::session_context::SessionCapability::ParticipateInRecording))

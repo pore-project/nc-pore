@@ -90,14 +90,14 @@ mod tests {
             .contains(&SessionCapability::ParticipateInRecording));
     }
 
-    // TEST-02: The client evaluates the provider-independent capability rather than provider roles.
+    // TEST-02: The client evaluates the provider-independent capability while the session is active.
     #[test]
     fn client_service_uses_participation_capability() {
         let mut repository = InMemory { sessions: vec![] };
         let client = ClientSessionService::new(&mut repository);
 
         let provider = ExternalContextProvider {
-            state: SessionState::Available,
+            state: SessionState::Active,
             capabilities: vec![SessionCapability::ParticipateInRecording],
         };
 
@@ -107,19 +107,28 @@ mod tests {
         );
     }
 
-    // TEST-03: A completed context cannot be used for recording even if its capability remains present.
+    // TEST-03: A non-active context cannot be used for recording even if its capability remains present.
     #[test]
-    fn client_service_rejects_participation_in_completed_session() {
+    fn client_service_rejects_participation_outside_active_session() {
         let mut repository = InMemory { sessions: vec![] };
         let client = ClientSessionService::new(&mut repository);
-
         let provider = ExternalContextProvider {
-            state: SessionState::Completed,
+            state: SessionState::Available,
             capabilities: vec![SessionCapability::ParticipateInRecording],
         };
 
         assert_eq!(
             client.can_participate(&provider, "external-session-001", "alice"),
+            Ok(false)
+        );
+
+        let completed_provider = ExternalContextProvider {
+            state: SessionState::Completed,
+            capabilities: vec![SessionCapability::ParticipateInRecording],
+        };
+
+        assert_eq!(
+            client.can_participate(&completed_provider, "external-session-001", "alice"),
             Ok(false)
         );
     }
