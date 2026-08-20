@@ -2,6 +2,10 @@ use crate::session::{
     add_participation_to_production_session, complete_production_session,
     create_production_session, get_production_session, start_production_session,
 };
+use crate::session_context::{
+    ProductionSessionContextError, ProductionSessionContextProvider, SessionContext,
+    SessionContextProvider,
+};
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::participation::Participation;
@@ -174,6 +178,19 @@ where
 {
     pub fn new(repository: &'a mut R) -> Self {
         Self { repository }
+    }
+
+    /// Resolve provider-independent session context at the application boundary.
+    ///
+    /// The client service deliberately exposes the context contract rather than
+    /// provider-specific roles or session models, so an external provider can be
+    /// substituted without changing the client-facing use case.
+    pub fn context(
+        &self,
+        session_id: &str,
+        actor_id: &str,
+    ) -> Result<SessionContext, ProductionSessionContextError<R::Error>> {
+        ProductionSessionContextProvider::new(&*self.repository).resolve(session_id, actor_id)
     }
 
     pub fn get(&self, id: &str) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
