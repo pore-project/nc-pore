@@ -46,16 +46,16 @@ pub enum RecordingLifecycleError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recording {
     id: RecordingId,
-    participant_id: ParticipantId,
+    participant_id: Option<ParticipantId>,
     status: RecordingStatus,
     artifact_id: Option<RecordingArtifactId>,
 }
 
 impl Recording {
-    pub fn new(id: impl Into<String>, participant_id: ParticipantId) -> Self {
+    pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: RecordingId::new(id),
-            participant_id,
+            participant_id: None,
             status: RecordingStatus::Prepared,
             artifact_id: None,
         }
@@ -63,7 +63,7 @@ impl Recording {
 
     pub fn reconstitute(
         id: RecordingId,
-        participant_id: ParticipantId,
+        participant_id: Option<ParticipantId>,
         status: RecordingStatus,
         artifact_id: Option<RecordingArtifactId>,
     ) -> Self {
@@ -78,14 +78,18 @@ impl Recording {
     pub fn id(&self) -> &RecordingId {
         &self.id
     }
-    pub fn participant_id(&self) -> &ParticipantId {
-        &self.participant_id
+    pub fn participant_id(&self) -> Option<&ParticipantId> {
+        self.participant_id.as_ref()
     }
     pub fn status(&self) -> RecordingStatus {
         self.status
     }
     pub fn artifact_id(&self) -> Option<&RecordingArtifactId> {
         self.artifact_id.as_ref()
+    }
+
+    pub fn assign_participant(&mut self, participant_id: ParticipantId) {
+        self.participant_id = Some(participant_id);
     }
 
     pub fn start(&mut self) -> Result<(), RecordingLifecycleError> {
@@ -144,17 +148,24 @@ mod tests {
     }
 
     #[test]
-    fn new_recording_starts_as_prepared_without_artifact() {
-        let participant = participant_id();
-        let recording = Recording::new("recording-test-01", participant.clone());
+    fn new_recording_starts_as_prepared_without_participant_or_artifact() {
+        let recording = Recording::new("recording-test-01");
         assert_eq!(recording.status(), RecordingStatus::Prepared);
-        assert_eq!(recording.participant_id(), &participant);
+        assert_eq!(recording.participant_id(), None);
         assert_eq!(recording.artifact_id(), None);
     }
 
     #[test]
+    fn recording_can_be_assigned_to_participant() {
+        let participant = participant_id();
+        let mut recording = Recording::new("recording-test-02");
+        recording.assign_participant(participant.clone());
+        assert_eq!(recording.participant_id(), Some(&participant));
+    }
+
+    #[test]
     fn prepared_recording_can_transition_to_recording() {
-        let mut recording = Recording::new("recording-test-02", participant_id());
+        let mut recording = Recording::new("recording-test-03");
         assert_eq!(recording.start(), Ok(()));
         assert_eq!(recording.status(), RecordingStatus::Recording);
         assert_eq!(recording.artifact_id(), None);
@@ -162,7 +173,7 @@ mod tests {
 
     #[test]
     fn recording_can_transition_to_completed_with_artifact() {
-        let mut recording = Recording::new("recording-test-03", participant_id());
+        let mut recording = Recording::new("recording-test-04");
         let expected_artifact = artifact_id();
         recording.start().unwrap();
         assert_eq!(recording.complete(expected_artifact.clone()), Ok(()));
@@ -172,7 +183,7 @@ mod tests {
 
     #[test]
     fn prepared_recording_cannot_be_completed() {
-        let mut recording = Recording::new("recording-test-04", participant_id());
+        let mut recording = Recording::new("recording-test-05");
         let result = recording.complete(artifact_id());
         assert_eq!(
             result,
@@ -187,7 +198,7 @@ mod tests {
 
     #[test]
     fn recording_cannot_be_started_twice() {
-        let mut recording = Recording::new("recording-test-05", participant_id());
+        let mut recording = Recording::new("recording-test-06");
         recording.start().unwrap();
         let result = recording.start();
         assert_eq!(
@@ -202,7 +213,7 @@ mod tests {
 
     #[test]
     fn completed_recording_cannot_be_started_again() {
-        let mut recording = Recording::new("recording-test-06", participant_id());
+        let mut recording = Recording::new("recording-test-07");
         recording.start().unwrap();
         recording.complete(artifact_id()).unwrap();
         let result = recording.start();
@@ -218,7 +229,7 @@ mod tests {
 
     #[test]
     fn completed_recording_is_idempotent_for_same_artifact() {
-        let mut recording = Recording::new("recording-test-07", participant_id());
+        let mut recording = Recording::new("recording-test-08");
         let artifact = artifact_id();
         recording.start().unwrap();
         recording.complete(artifact.clone()).unwrap();
@@ -230,7 +241,7 @@ mod tests {
 
     #[test]
     fn completed_recording_rejects_different_artifact() {
-        let mut recording = Recording::new("recording-test-08", participant_id());
+        let mut recording = Recording::new("recording-test-09");
         let existing = artifact_id();
         let requested = RecordingArtifactId::new("artifact-test-02");
         recording.start().unwrap();
