@@ -205,6 +205,7 @@ impl ProductionSession {
             .find(|recording| recording.id() == recording_id)
             .ok_or(ProductionSessionError::RecordingNotFound)?;
 
+        recording.assign_participant(actor.clone());
         recording
             .start()
             .map_err(ProductionSessionError::RecordingLifecycle)?;
@@ -459,6 +460,25 @@ mod tests {
                 create_participation("participant-1", ParticipantRole::Participant),
             ),
             Err(ProductionSessionError::InvalidStateTransition)
+        );
+    }
+
+    #[test]
+    fn starting_recording_binds_actor_as_participant() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+
+        session
+            .add_recording_by(&owner, Recording::new("recording-001"))
+            .unwrap();
+        session
+            .start_recording_by(&owner, &RecordingId::new("recording-001"))
+            .unwrap();
+
+        assert_eq!(
+            session.recordings()[0].participant_id(),
+            Some(&owner)
         );
     }
 }
