@@ -193,6 +193,27 @@ where
         provider.resolve(session_id, actor_id)
     }
 
+    /// Ask the injected provider for the actor's effective recording capability.
+    ///
+    /// The client deliberately evaluates the application capability rather than
+    /// inspecting provider-specific roles.
+    pub fn can_participate<P>(
+        &self,
+        provider: &P,
+        session_id: &str,
+        actor_id: &str,
+    ) -> Result<bool, P::Error>
+    where
+        P: SessionContextProvider,
+    {
+        let context = self.context(provider, session_id, actor_id)?;
+
+        Ok(context.state != crate::session_context::SessionState::Completed
+            && context
+                .capabilities
+                .contains(&crate::session_context::SessionCapability::ParticipateInRecording))
+    }
+
     pub fn get(&self, id: &str) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
         let id = ProductionId::new(id);
         get_production_session(self.repository, &id)
