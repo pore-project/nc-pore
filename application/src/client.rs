@@ -2,6 +2,7 @@ use crate::session::{
     add_participation_to_production_session, complete_production_session,
     create_production_session, get_production_session, start_production_session,
 };
+use crate::session_context::{SessionContext, SessionContextProvider};
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::participation::Participation;
@@ -174,6 +175,43 @@ where
 {
     pub fn new(repository: &'a mut R) -> Self {
         Self { repository }
+    }
+
+    /// Resolve provider-independent session context through an injected provider.
+    ///
+    /// The client service depends only on the application contract, so a native or
+    /// external provider can be supplied without coupling the client to its role model.
+    pub fn context<P>(
+        &self,
+        provider: &P,
+        session_id: &str,
+        actor_id: &str,
+    ) -> Result<SessionContext, P::Error>
+    where
+        P: SessionContextProvider,
+    {
+        provider.resolve(session_id, actor_id)
+    }
+
+    /// Ask the injected provider whether the actor may participate in recording now.
+    ///
+    /// Participation is available only while the session is active; the client still
+    /// evaluates the application capability rather than inspecting provider-specific roles.
+    pub fn can_participate<P>(
+        &self,
+        provider: &P,
+        session_id: &str,
+        actor_id: &str,
+    ) -> Result<bool, P::Error>
+    where
+        P: SessionContextProvider,
+    {
+        let context = self.context(provider, session_id, actor_id)?;
+
+        Ok(context.state == crate::session_context::SessionState::Active
+            && context
+                .capabilities
+                .contains(&crate::session_context::SessionCapability::ParticipateInRecording))
     }
 
     pub fn get(&self, id: &str) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
