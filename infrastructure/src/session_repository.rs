@@ -83,6 +83,8 @@ enum PersistedParticipantRole {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PersistedRecording {
     id: String,
+    #[serde(default)]
+    participant_id: Option<String>,
     status: PersistedRecordingStatus,
     artifact_id: Option<String>,
 }
@@ -253,6 +255,9 @@ impl PersistedProductionSession {
                 .iter()
                 .map(|recording| PersistedRecording {
                     id: recording.id().value().to_owned(),
+                    participant_id: recording
+                        .participant_id()
+                        .map(|participant| participant.value().to_owned()),
                     status: recording.status().into(),
                     artifact_id: recording.artifact_id().map(|id| id.value().to_owned()),
                 })
@@ -298,6 +303,7 @@ impl PersistedProductionSession {
             .map(|recording| {
                 Recording::reconstitute(
                     RecordingId::new(recording.id),
+                    recording.participant_id.map(ParticipantId::new),
                     recording.status.into(),
                     recording.artifact_id.map(RecordingArtifactId::new),
                 )
