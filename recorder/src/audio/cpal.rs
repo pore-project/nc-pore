@@ -18,11 +18,6 @@ use crate::audio::{
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 
-/// One input configuration range reported by CPAL.
-///
-/// The type deliberately belongs to the concrete CPAL provider.
-/// It describes technical backend capabilities and is not part of
-/// the backend-independent recording configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CpalInputConfiguration {
     channels: u16,
@@ -59,8 +54,6 @@ impl CpalInputConfiguration {
         self.sample_format
     }
 
-    /// Returns whether this CPAL capability exactly supports the
-    /// requested recording configuration.
     pub fn matches_recording_configuration(&self, configuration: &RecordingConfiguration) -> bool {
         self.channels == configuration.channels()
             && self.min_sample_rate_hz <= configuration.sample_rate_hz()
@@ -68,11 +61,6 @@ impl CpalInputConfiguration {
             && self.sample_format == cpal_sample_format(configuration.sample_format())
     }
 
-    /// Returns a concrete CPAL stream configuration for a supported
-    /// sample rate.
-    ///
-    /// The selection is delegated to CPAL's range API so the native
-    /// buffer-size information is retained as reported by the device.
     pub fn stream_config_for_sample_rate(&self, sample_rate_hz: u32) -> Option<cpal::StreamConfig> {
         let range = cpal::SupportedStreamConfigRange::new(
             self.channels,
@@ -93,12 +81,6 @@ fn cpal_sample_format(format: SampleFormat) -> cpal::SampleFormat {
     }
 }
 
-/// Finds the first exact native match for the requested recording
-/// configuration.
-///
-/// No fallback, conversion, prioritization, or resampling policy is
-/// applied. If no capability matches all requested parameters, the
-/// result is `None`.
 pub fn find_exact_input_configuration(
     requested: &RecordingConfiguration,
     capabilities: &[CpalInputConfiguration],
@@ -122,8 +104,6 @@ struct PendingSignet {
     payload: Vec<u8>,
 }
 
-/// Runtime state used by the capture callback to split the incoming
-/// audio stream into configured-duration chunks without stopping capture.
 struct CaptureChunkBuffer {
     chunks: Vec<CaptureChunk>,
     current_payload: Vec<u8>,
@@ -252,10 +232,8 @@ fn render_signet(
         SampleFormat::F32 => 4,
     };
     let channels = usize::from(channels);
-    let total_frames = usize::try_from(
-        u64::from(signet.duration_ms()) * u64::from(sample_rate_hz) / 1_000,
-    )
-    .expect("Signetdauer überschreitet die lokale Speicherkapazität.");
+    let total_frames = usize::try_from(u64::from(signet.duration_ms()) * u64::from(sample_rate_hz) / 1_000)
+        .expect("Signetdauer überschreitet die lokale Speicherkapazität.");
     let mut payload = Vec::with_capacity(
         total_frames
             .saturating_mul(channels)
@@ -380,8 +358,6 @@ pub struct CpalCaptureProvider {
     active_configuration: Option<RecordingConfiguration>,
 }
 
-/// Discovers the default input device and exposes its supported
-/// input configuration ranges.
 impl CpalCaptureProvider {
     pub fn new() -> Self {
         Self {
@@ -392,12 +368,6 @@ impl CpalCaptureProvider {
         }
     }
 
-    /// Returns the input configuration ranges supported by the
-    /// default input device.
-    ///
-    /// This is capability discovery only. It does not select a
-    /// configuration for a RecordingConfiguration and does not
-    /// start an audio stream.
     pub fn discover_input_configurations(&self) -> Result<Vec<CpalInputConfiguration>, String> {
         let host = cpal::default_host();
         let device = host
@@ -408,7 +378,7 @@ impl CpalCaptureProvider {
             .supported_input_configs()
             .map_err(|error| {
                 format!("Unterstützte Eingabekonfigurationen konnten nicht gelesen werden: {error}")
-            })?
+            })
             .map(|configuration| CpalInputConfiguration::from_supported_config(&configuration))
             .collect();
 
@@ -421,10 +391,7 @@ impl CpalCaptureProvider {
     /// capture result is finalized. This keeps the realtime CPAL callback
     /// free of waveform generation while preserving the byte position at
     /// which the synchronization event was requested.
-    pub fn emit_sync_signet(
-        &mut self,
-        signet: &SyncSignet,
-    ) -> Result<(), SyncSignetEmissionError> {
+    pub fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
         let mut buffer = self
             .chunk_buffer
             .lock()
@@ -511,7 +478,7 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
         &mut self,
         signet: &SyncSignet,
     ) -> Result<(), SyncSignetEmissionError> {
-        self.emit_sync_signet(signet)
+        CpalCaptureProvider::emit_sync_signet(self, signet)
     }
 
     fn stop_capture(&mut self) -> CaptureResult {
@@ -574,7 +541,6 @@ pub fn test_input_stream() -> Result<(), String> {
     let samples = Arc::new(Mutex::new(Vec::<u8>::new()));
 
     let stream_config: cpal::StreamConfig = configuration.clone().into();
-
     let samples_for_callback = Arc::clone(&samples);
 
     let stream = device
@@ -885,9 +851,9 @@ mod tests {
         let chunks = buffer.finish();
         let payload = chunks[0].payload();
 
-        assert!(payload[400..].chunks_exact(4).any(|sample| {
-            f32::from_ne_bytes(sample.try_into().unwrap()).abs() > 0.0
-        }));
+        assert!(payload[400..]
+            .chunks_exact(4)
+            .any(|sample| f32::from_ne_bytes(sample.try_into().unwrap()).abs() > 0.0));
         assert!(payload[..400]
             .chunks_exact(4)
             .all(|sample| f32::from_ne_bytes(sample.try_into().unwrap()) == 0.0));
