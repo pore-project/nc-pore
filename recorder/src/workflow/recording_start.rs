@@ -198,7 +198,10 @@ mod tests {
 
         coordinator.confirm_ready(&second).unwrap();
 
-        assert_eq!(coordinator.opening_sync_signet(), Some(SyncSignet::opening()));
+        assert_eq!(
+            coordinator.opening_sync_signet(),
+            Some(SyncSignet::opening())
+        );
     }
 
     // TEST-06 / CUE30
@@ -210,7 +213,10 @@ mod tests {
 
         coordinator.confirm_ready(&participant).unwrap();
 
-        assert_eq!(coordinator.opening_sync_signet(), Some(SyncSignet::opening()));
+        assert_eq!(
+            coordinator.opening_sync_signet(),
+            Some(SyncSignet::opening())
+        );
         assert_eq!(coordinator.opening_sync_signet(), None);
     }
 
