@@ -64,10 +64,11 @@ impl RecordingArtifactSynchronization {
         self.transition_to(RecordingArtifactSynchronizationStatus::Transferring)
     }
 
+    /// Marks the artifact as synchronized. Repeating the same completion is
+    /// idempotent for this artifact identity; transfer conflicts are handled by
+    /// the transfer boundary defined in the subsequent synchronization work.
     pub fn mark_synchronized(&mut self) -> Result<(), RecordingArtifactSynchronizationError> {
         if self.status == RecordingArtifactSynchronizationStatus::Synchronized {
-            // Completion is idempotent for the same artifact because this
-            // object can only ever represent one artifact identity.
             return Ok(());
         }
         self.transition_to(RecordingArtifactSynchronizationStatus::Synchronized)
@@ -133,6 +134,7 @@ mod tests {
         RecordingArtifactSynchronization::new(artifact_id())
     }
 
+    // TEST-01
     #[test]
     fn starts_local_with_artifact_identity() {
         let synchronization = synchronization();
@@ -143,6 +145,7 @@ mod tests {
         assert_eq!(synchronization.artifact_id().value(), "artifact-sync-test-01");
     }
 
+    // TEST-02
     #[test]
     fn follows_local_pending_transferring_synchronized_lifecycle() {
         let mut synchronization = synchronization();
@@ -155,6 +158,7 @@ mod tests {
         );
     }
 
+    // TEST-03
     #[test]
     fn rejects_skipping_pending_and_transfer() {
         let mut synchronization = synchronization();
@@ -167,6 +171,7 @@ mod tests {
         );
     }
 
+    // TEST-04
     #[test]
     fn failed_transfer_can_be_retried_without_changing_artifact_identity() {
         let mut synchronization = synchronization();
@@ -182,6 +187,7 @@ mod tests {
         assert_eq!(synchronization.artifact_id(), &artifact);
     }
 
+    // TEST-05
     #[test]
     fn interrupted_transfer_can_be_restarted() {
         let mut synchronization = synchronization();
@@ -196,6 +202,7 @@ mod tests {
         );
     }
 
+    // TEST-06
     #[test]
     fn synchronized_completion_is_idempotent() {
         let mut synchronization = synchronization();
@@ -205,6 +212,7 @@ mod tests {
         assert_eq!(synchronization.mark_synchronized(), Ok(()));
     }
 
+    // TEST-07
     #[test]
     fn invalid_transitions_are_rejected() {
         let mut synchronization = synchronization();
@@ -222,6 +230,7 @@ mod tests {
         );
     }
 
+    // TEST-08
     #[test]
     fn persisted_state_can_be_reconstituted() {
         let synchronization = RecordingArtifactSynchronization::reconstitute(
