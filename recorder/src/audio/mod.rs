@@ -24,7 +24,7 @@ pub use cpal::inspect_default_input_device;
 pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
 pub use result::{CaptureResult, CaptureStatus};
-pub use signet::{SignetEvent, SyncSignet};
+pub use signet::{SignetEvent, SyncSignet, SyncSignetKind};
 
 pub use result::{CaptureChunk, CaptureTrack};
 
