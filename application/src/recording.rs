@@ -48,6 +48,10 @@ where
         .start(configuration)
         .map_err(ExecuteRecordingError::RecorderStart)?;
 
+    recorder
+        .ready()
+        .map_err(|_| ExecuteRecordingError::RecorderStart(CaptureStartError::DeviceUnavailable))?;
+
     let artifact = recorder
         .stop(RecordingArtifactAssociation::new(
             production_id.value(),
