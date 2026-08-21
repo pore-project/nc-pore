@@ -287,19 +287,30 @@ mod tests {
     fn workflow_can_reconstitute_and_return_existing_recording_state() {
         let mut recording = Recording::new("recording-workflow-02");
         recording.assign_participant(participant("participant-a"));
-        let mut workflow = RecordingWorkflow::from_recording(recording.clone(), [participant("participant-a")]).unwrap();
+        let mut workflow =
+            RecordingWorkflow::from_recording(recording.clone(), [participant("participant-a")])
+                .unwrap();
 
         workflow.begin_ready_phase().unwrap();
         assert!(workflow.mark_ready(&participant("participant-a")).unwrap());
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
-        assert!(workflow.acknowledge_stop(&participant("participant-a")).unwrap());
-        workflow.complete(RecordingArtifactId::new("artifact-workflow-02")).unwrap();
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
+        workflow
+            .complete(RecordingArtifactId::new("artifact-workflow-02"))
+            .unwrap();
 
         let result = workflow.into_recording();
         assert_eq!(result.id(), recording.id());
         assert_eq!(result.participant_id(), recording.participant_id());
         assert_eq!(result.status(), RecordingStatus::Completed);
-        assert_eq!(result.artifact_id().unwrap().value(), "artifact-workflow-02");
+        assert_eq!(
+            result.artifact_id().unwrap().value(),
+            "artifact-workflow-02"
+        );
     }
 }
