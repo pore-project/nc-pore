@@ -57,7 +57,7 @@ impl SyncSignet {
     pub const fn opening() -> Self {
         Self {
             kind: SyncSignetKind::Opening,
-            events: Self::events(),
+            events: Self::event_pattern(),
         }
     }
 
@@ -69,7 +69,7 @@ impl SyncSignet {
     pub const fn closing() -> Self {
         Self {
             kind: SyncSignetKind::Closing,
-            events: Self::events(),
+            events: Self::event_pattern(),
         }
     }
 
@@ -82,7 +82,7 @@ impl SyncSignet {
     }
 
     /// Returns the shared temporal structure used by the current signet family.
-    const fn events() -> [SignetEvent; 3] {
+    const fn event_pattern() -> [SignetEvent; 3] {
         [
             SignetEvent::new(0, 40),
             SignetEvent::new(120, 40),
