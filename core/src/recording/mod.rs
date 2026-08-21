@@ -6,7 +6,7 @@
 //! - audio backend access
 //! - file handling
 //! - hardware interaction
-//! - synchronization transport logic
+//! - synchronization logic
 //!
 //! See:
 //! - ADR-039 Recording Architecture and Capture Boundary (future)
