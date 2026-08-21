@@ -79,6 +79,21 @@ impl RecordingStartCoordinator {
         }
     }
 
+    /// Confirms READY and, if the complete barrier has now been reached,
+    /// returns the Opening Sync Signet in the same synchronization transition.
+    ///
+    /// This is the preferred coordination entry point for the higher-level
+    /// recording-start workflow: local capture must already be active before
+    /// this method is called, while the coordinator owns the participant
+    /// barrier and the exactly-once opening trigger.
+    pub fn confirm_ready_and_opening_signet(
+        &mut self,
+        participant: &RecordingParticipantId,
+    ) -> Result<Option<SyncSignet>, RecordingStartError> {
+        self.confirm_ready(participant)?;
+        Ok(self.opening_sync_signet())
+    }
+
     /// Emits the Opening Sync Signet once the READY barrier has been reached.
     ///
     /// Returning `Some` is the explicit synchronization transition. Repeated
@@ -233,5 +248,30 @@ mod tests {
             Err(RecordingStartError::NotRecordingParticipant)
         );
         assert_eq!(coordinator.opening_sync_signet(), None);
+    }
+
+    // TEST-08 / CUE30
+    // Verify: The combined ADR-068 transition returns no signet until the final
+    // participant is READY, then returns exactly one Opening Sync Signet.
+    #[test]
+    fn combined_ready_transition_opens_only_at_barrier() {
+        let first = participant("participant-1");
+        let second = participant("participant-2");
+        let mut coordinator = RecordingStartCoordinator::new([first.clone(), second.clone()]);
+
+        assert_eq!(
+            coordinator.confirm_ready_and_opening_signet(&first),
+            Ok(None)
+        );
+
+        assert_eq!(
+            coordinator.confirm_ready_and_opening_signet(&second),
+            Ok(Some(SyncSignet::opening()))
+        );
+
+        assert_eq!(
+            coordinator.confirm_ready_and_opening_signet(&second),
+            Ok(None)
+        );
     }
 }
