@@ -225,10 +225,7 @@ mod tests {
             Ok(())
         }
 
-        fn emit_sync_signet(
-            &mut self,
-            signet: &SyncSignet,
-        ) -> Result<(), SyncSignetEmissionError> {
+        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
             if self.fail_on_signet {
                 return Err(SyncSignetEmissionError::Unsupported);
             }
@@ -257,10 +254,8 @@ mod tests {
     // TEST-01: Workflow can be created with session and capture.
     #[test]
     fn workflow_can_be_created_with_session_and_capture() {
-        let workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            TestCapture::new(),
-        );
+        let workflow =
+            RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         assert_eq!(workflow.session().status(), &SessionStatus::Prepared);
     }
 
@@ -295,16 +290,14 @@ mod tests {
         let recording = participant("p1");
         let outsider = participant("p2");
         let mut coordinator = RecordingStartCoordinator::new([recording]);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            TestCapture::new(),
-        );
+        let mut workflow =
+            RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         workflow.start(&RecordingConfiguration::default()).unwrap();
 
         assert_eq!(
             workflow.ready_and_maybe_opening_signet(&mut coordinator, &outsider),
             Err(WorkflowCoordinationError::RecordingStart(
-                RecordingStartError::NotRecordingParticipant,
+                RecordingStartError::NotRecordingParticipant
             ))
         );
         assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
@@ -337,7 +330,9 @@ mod tests {
         let events = Rc::clone(&capture.events);
         let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
-        workflow.ready_and_maybe_opening_signet(&mut start, &p).unwrap();
+        workflow
+            .ready_and_maybe_opening_signet(&mut start, &p)
+            .unwrap();
         let (_signet, result) = workflow.stop_with_coordinator(&mut stop).unwrap();
 
         assert_eq!(result.id(), "workflow-test-capture");
@@ -350,10 +345,8 @@ mod tests {
     fn stop_rejects_non_recording_state_before_consuming_closing_signet() {
         let p = participant("p1");
         let mut stop = RecordingStopCoordinator::new([p]);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            TestCapture::new(),
-        );
+        let mut workflow =
+            RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         assert_eq!(
             workflow.stop_with_coordinator(&mut stop),
             Err(WorkflowCoordinationError::InvalidSessionState)
@@ -387,7 +380,9 @@ mod tests {
             TestCapture::failing_stop(),
         );
         workflow.start(&RecordingConfiguration::default()).unwrap();
-        workflow.ready_and_maybe_opening_signet(&mut start, &p).unwrap();
+        workflow
+            .ready_and_maybe_opening_signet(&mut start, &p)
+            .unwrap();
         let result = workflow.stop_with_coordinator(&mut stop).unwrap().1;
         assert!(matches!(
             result.status(),
