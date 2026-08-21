@@ -25,7 +25,6 @@ pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
 pub use result::{CaptureResult, CaptureStatus};
 pub use signet::{SignetEvent, SyncSignet, SyncSignetKind};
-
 pub use result::{CaptureChunk, CaptureTrack};
 
 /// Returned when a capture provider cannot start audio capture.
@@ -35,6 +34,13 @@ pub enum CaptureStartError {
     ConfigurationUnavailable,
     UnsupportedRecordingConfiguration,
     AlreadyCapturing,
+}
+
+/// Returned when a synchronization signet cannot be emitted into a capture.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SyncSignetEmissionError {
+    NotCapturing,
+    Unsupported,
 }
 
 /// Defines the interface between recorder workflow
@@ -48,6 +54,18 @@ pub trait CaptureProvider {
         &mut self,
         configuration: &RecordingConfiguration,
     ) -> Result<(), CaptureStartError>;
+
+    /// Emits a synchronization signet into the active capture.
+    ///
+    /// The default implementation keeps existing non-audio test providers
+    /// source-compatible while concrete capture backends opt into signet
+    /// injection explicitly.
+    fn emit_sync_signet(
+        &mut self,
+        _signet: &SyncSignet,
+    ) -> Result<(), SyncSignetEmissionError> {
+        Err(SyncSignetEmissionError::Unsupported)
+    }
 
     /// Stops audio capture and returns the capture result.
     fn stop_capture(&mut self) -> CaptureResult;
