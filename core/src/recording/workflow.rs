@@ -51,7 +51,13 @@ impl RecordingWorkflow {
         recording_id: impl Into<String>,
         participants: impl IntoIterator<Item = ParticipantId>,
     ) -> Result<Self, RecordingWorkflowError> {
-        let recording = Recording::new(recording_id);
+        Self::from_recording(Recording::new(recording_id), participants)
+    }
+
+    pub fn from_recording(
+        recording: Recording,
+        participants: impl IntoIterator<Item = ParticipantId>,
+    ) -> Result<Self, RecordingWorkflowError> {
         let coordination = RecordingCoordination::new(recording.id().clone(), participants)?;
 
         Ok(Self {
@@ -64,6 +70,10 @@ impl RecordingWorkflow {
 
     pub fn recording(&self) -> &Recording {
         &self.recording
+    }
+
+    pub fn into_recording(self) -> Recording {
+        self.recording
     }
 
     pub fn coordination(&self) -> &RecordingCoordination {
@@ -270,5 +280,26 @@ mod tests {
             workflow.acknowledge_stop(&participant("participant-a")),
             Err(RecordingWorkflowError::AlreadyAcknowledged)
         );
+    }
+
+    // TEST-07
+    #[test]
+    fn workflow_can_reconstitute_and_return_existing_recording_state() {
+        let mut recording = Recording::new("recording-workflow-02");
+        recording.assign_participant(participant("participant-a"));
+        let mut workflow = RecordingWorkflow::from_recording(recording.clone(), [participant("participant-a")]).unwrap();
+
+        workflow.begin_ready_phase().unwrap();
+        assert!(workflow.mark_ready(&participant("participant-a")).unwrap());
+        workflow.start_recording().unwrap();
+        workflow.request_stop().unwrap();
+        assert!(workflow.acknowledge_stop(&participant("participant-a")).unwrap());
+        workflow.complete(RecordingArtifactId::new("artifact-workflow-02")).unwrap();
+
+        let result = workflow.into_recording();
+        assert_eq!(result.id(), recording.id());
+        assert_eq!(result.participant_id(), recording.participant_id());
+        assert_eq!(result.status(), RecordingStatus::Completed);
+        assert_eq!(result.artifact_id().unwrap().value(), "artifact-workflow-02");
     }
 }
