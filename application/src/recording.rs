@@ -4,7 +4,7 @@ use nc_pore_core::recording::{
     RecordingArtifactId, RecordingId, RecordingWorkflow, RecordingWorkflowError,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
-use nc_pore_core::session::ProductionSessionError;
+use nc_pore_core::session::{ProductionSession, ProductionSessionError};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
