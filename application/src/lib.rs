@@ -7,6 +7,7 @@ pub mod session;
 pub mod session_context;
 #[cfg(test)]
 mod session_context_contract_tests;
+pub mod synchronization;
 
 #[path = "lib_source.rs"]
 mod legacy;
