@@ -5,7 +5,8 @@
 //! It connects:
 //! - RecordingSession
 //! - CaptureProvider
-//! It also provides the participant READY barrier required by ADR-068.
+//! It also provides the participant READY barrier and Closing Sync Signet
+//! stop coordination required by ADR-068.
 //!
 //! It intentionally does not contain:
 //! - domain production rules
@@ -18,6 +19,7 @@
 //! - ADR-068 Recording Start and Audio Synchronization Signet
 
 pub mod recording_start;
+pub mod recording_stop;
 
 use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration};
 use crate::session::{RecordingSession, SessionStatus};
@@ -85,7 +87,7 @@ where
 
     /// Stops the recording workflow.
     ///
-    /// The workflow coordinates the ADR-068 stop order:
+    /// The workflow coordinates the local part of the ADR-068 stop order:
     ///
     /// 1. enter Stopping
     /// 2. the higher-level coordinator emits the Closing Sync Signet
