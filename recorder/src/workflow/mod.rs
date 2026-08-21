@@ -98,7 +98,10 @@ where
 
         let capture_result = self.capture.stop_capture();
 
-        if matches!(capture_result.status(), crate::audio::CaptureStatus::Failed(_)) {
+        if matches!(
+            capture_result.status(),
+            crate::audio::CaptureStatus::Failed(_)
+        ) {
             self.session.fail().ok();
         } else {
             self.session.complete().ok();
@@ -187,10 +190,7 @@ mod tests {
         let capture = TestCapture::new();
         let workflow = RecorderWorkflow::new(session, capture);
 
-        assert_eq!(
-            workflow.session().status(),
-            &SessionStatus::Prepared
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Prepared);
     }
 
     // TEST-02 / CUE30
@@ -205,19 +205,13 @@ mod tests {
 
         workflow.start(&configuration).unwrap();
 
-        assert_eq!(
-            workflow.session().status(),
-            &SessionStatus::Recording
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Recording);
         assert!(workflow.is_recording());
 
         let result = workflow.stop();
 
         assert_eq!(result.id(), "workflow-test-capture");
-        assert_eq!(
-            workflow.session().status(),
-            &SessionStatus::Completed
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Completed);
     }
 
     // TEST-03 / CUE30
@@ -235,10 +229,7 @@ mod tests {
             result,
             Err(crate::audio::CaptureStartError::DeviceUnavailable)
         );
-        assert_eq!(
-            workflow.session().status(),
-            &SessionStatus::Failed
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Failed);
     }
 
     // TEST-04 / CUE30
@@ -258,9 +249,6 @@ mod tests {
             result.status(),
             crate::audio::CaptureStatus::Failed(_)
         ));
-        assert_eq!(
-            workflow.session().status(),
-            &SessionStatus::Failed
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Failed);
     }
 }
