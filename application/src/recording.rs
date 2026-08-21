@@ -4,7 +4,7 @@ use nc_pore_core::recording::{
     RecordingArtifactId, RecordingId, RecordingWorkflow, RecordingWorkflowError,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
-use nc_pore_core::session::{ProductionSession, ProductionSessionError};
+use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
@@ -57,6 +57,10 @@ where
         .begin_ready_phase()
         .map_err(ExecuteRecordingError::Workflow)?;
 
+    session
+        .start_recording_by(actor, recording_id)
+        .map_err(ExecuteRecordingError::Session)?;
+
     recorder
         .start(configuration)
         .map_err(ExecuteRecordingError::RecorderStart)?;
@@ -85,9 +89,6 @@ where
         .complete(RecordingArtifactId::new(artifact.id.value()))
         .map_err(ExecuteRecordingError::Workflow)?;
 
-    session
-        .start_recording_by(actor, recording_id)
-        .map_err(ExecuteRecordingError::Session)?;
     session
         .complete_recording_by(
             actor,
@@ -370,20 +371,14 @@ mod tests {
             artifact.status(),
             &recorder::artifact::ArtifactStatus::Stored
         );
-        assert!(
-            !artifact.tracks().is_empty(),
-            "real capture must produce a track"
-        );
+        assert!(!artifact.tracks().is_empty(), "real capture must produce a track");
 
         let track = &artifact.tracks()[0];
         assert_eq!(
             track.configuration(),
             Some(RecordingConfiguration::default())
         );
-        assert!(
-            !track.chunks().is_empty(),
-            "real capture must produce a chunk"
-        );
+        assert!(!track.chunks().is_empty(), "real capture must produce a chunk");
         assert!(
             track
                 .chunks()
