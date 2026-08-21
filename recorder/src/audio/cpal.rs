@@ -346,8 +346,9 @@ fn mix_signet_into_chunk(
             }
             SampleFormat::Pcm24 => {
                 let input = decode_i24(&payload[payload_offset..payload_offset + 3]);
-                let signet =
-                    decode_i24(&signet_payload[signet_payload_offset..signet_payload_offset + 3]);
+                let signet = decode_i24(
+                    &signet_payload[signet_payload_offset..signet_payload_offset + 3],
+                );
                 payload[payload_offset..payload_offset + 3]
                     .copy_from_slice(&encode_i24_sample(input.saturating_add(signet)));
             }
@@ -502,10 +503,7 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
         Ok(())
     }
 
-    fn emit_sync_signet(
-        &mut self,
-        signet: &SyncSignet,
-    ) -> Result<(), SyncSignetEmissionError> {
+    fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
         CpalCaptureProvider::emit_sync_signet(self, signet)
     }
 
@@ -880,12 +878,16 @@ mod tests {
         let chunks = buffer.finish();
         let payload = chunks[0].payload();
 
-        assert!(payload[400..]
-            .chunks_exact(4)
-            .any(|sample| f32::from_ne_bytes(sample.try_into().unwrap()).abs() > 0.0));
-        assert!(payload[..400]
-            .chunks_exact(4)
-            .all(|sample| f32::from_ne_bytes(sample.try_into().unwrap()) == 0.0));
+        assert!(
+            payload[400..]
+                .chunks_exact(4)
+                .any(|sample| f32::from_ne_bytes(sample.try_into().unwrap()).abs() > 0.0)
+        );
+        assert!(
+            payload[..400]
+                .chunks_exact(4)
+                .all(|sample| f32::from_ne_bytes(sample.try_into().unwrap()) == 0.0)
+        );
     }
 
     // TEST-15 / CUE30
