@@ -14,8 +14,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingArtifactSynchronization,
-    RecordingArtifactSynchronizationError, RecordingArtifactSynchronizationStatus,
+    RecordingArtifactId, RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
+    RecordingArtifactSynchronizationStatus,
 };
 use serde::{Deserialize, Serialize};
 
@@ -207,8 +207,10 @@ impl FilesystemSynchronizationWorkStore {
                 .map_err(|error| SynchronizationWorkStoreError::Io(error.to_string()))?;
         }
 
-        let persisted: Vec<PersistedSynchronizationWork> =
-            work.iter().map(PersistedSynchronizationWork::from).collect();
+        let persisted: Vec<PersistedSynchronizationWork> = work
+            .iter()
+            .map(PersistedSynchronizationWork::from)
+            .collect();
         let content = serde_json::to_string_pretty(&persisted)
             .map_err(|error| SynchronizationWorkStoreError::Serialization(error.to_string()))?;
         let temp_path = self.path.with_extension("json.tmp");
@@ -333,7 +335,11 @@ where
     pub fn recover_interrupted(&mut self) -> Result<usize, SynchronizationQueueError> {
         let mut recovered = 0;
 
-        for mut work in self.store.list().map_err(SynchronizationQueueError::Store)? {
+        for mut work in self
+            .store
+            .list()
+            .map_err(SynchronizationQueueError::Store)?
+        {
             if work.status() != RecordingArtifactSynchronizationStatus::Transferring {
                 continue;
             }
@@ -513,17 +519,15 @@ mod tests {
         let root = std::env::temp_dir().join("nc-pore-sync-work-test-06");
         let _ = fs::remove_dir_all(&root);
 
-        let mut first = PersistentSynchronizationQueue::new(
-            FilesystemSynchronizationWorkStore::new(&root),
-        );
+        let mut first =
+            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
         first
             .enqueue(artifact_id("artifact-007"), manifest_hash(7))
             .unwrap();
         drop(first);
 
-        let second = PersistentSynchronizationQueue::new(
-            FilesystemSynchronizationWorkStore::new(&root),
-        );
+        let second =
+            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
         let work = second.list().unwrap();
 
         assert_eq!(work.len(), 1);
@@ -542,18 +546,16 @@ mod tests {
         let root = std::env::temp_dir().join("nc-pore-sync-work-test-07");
         let _ = fs::remove_dir_all(&root);
 
-        let mut first = PersistentSynchronizationQueue::new(
-            FilesystemSynchronizationWorkStore::new(&root),
-        );
+        let mut first =
+            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
         first
             .enqueue(artifact_id("artifact-008"), manifest_hash(8))
             .unwrap();
         first.claim_next().unwrap();
         drop(first);
 
-        let mut second = PersistentSynchronizationQueue::new(
-            FilesystemSynchronizationWorkStore::new(&root),
-        );
+        let mut second =
+            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
         assert_eq!(second.recover_interrupted().unwrap(), 1);
         assert_eq!(
             second.list().unwrap()[0].status(),
@@ -575,7 +577,10 @@ mod tests {
     // TEST-09
     #[test]
     fn transfer_results_are_vendor_neutral() {
-        assert_eq!(ArtifactTransferResult::Succeeded, ArtifactTransferResult::Succeeded);
+        assert_eq!(
+            ArtifactTransferResult::Succeeded,
+            ArtifactTransferResult::Succeeded
+        );
         assert_eq!(
             ArtifactTransferResult::RetryableFailure("offline".to_owned()),
             ArtifactTransferResult::RetryableFailure("offline".to_owned())
