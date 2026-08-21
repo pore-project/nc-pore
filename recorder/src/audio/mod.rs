@@ -12,16 +12,19 @@
 //! See:
 //! - ADR-039 Recording Architecture and Capture Boundary
 //! - ADR-061 Configurable Recording Configuration
+//! - ADR-068 Recording Start and Audio Synchronization Signet
 
 mod configuration;
 mod cpal;
 mod result;
+mod signet;
 
 pub use configuration::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
 pub use cpal::inspect_default_input_device;
 pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
 pub use result::{CaptureResult, CaptureStatus};
+pub use signet::{SignetEvent, SyncSignet};
 
 pub use result::{CaptureChunk, CaptureTrack};
 
