@@ -1,8 +1,10 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
+use nc_pore_core::recording::{
+    RecordingArtifactId, RecordingId, RecordingWorkflow, RecordingWorkflowError,
+};
 use nc_pore_core::session::repository::ProductionSessionRepository;
-use nc_pore_core::session::{ProductionSession, ProductionSessionError};
+use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
@@ -11,17 +13,19 @@ use recorder::persistence::PersistenceProvider;
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteRecordingError<E> {
     SessionNotFound,
+    RecordingNotFound,
     Repository(E),
     Session(ProductionSessionError),
+    Workflow(RecordingWorkflowError),
     RecorderStart(CaptureStartError),
     Recorder(RecorderApplicationError),
 }
 
 /// Orchestrates one complete production recording lifecycle.
 ///
-/// The domain owns the recording lifecycle while the recorder owns capture
-/// and artifact processing. The application layer coordinates the two without
-/// exposing either implementation detail to the other boundary.
+/// The domain workflow owns the recording state machine while the recorder
+/// owns capture and artifact processing. The application layer coordinates
+/// the two without exposing either implementation detail to the other boundary.
 pub fn execute_recording<R, C, P>(
     repository: &mut R,
     production_id: &ProductionId,
@@ -40,6 +44,19 @@ where
         .map_err(ExecuteRecordingError::Repository)?
         .ok_or(ExecuteRecordingError::SessionNotFound)?;
 
+    let recording = session
+        .recordings()
+        .iter()
+        .find(|recording| recording.id() == recording_id)
+        .cloned()
+        .ok_or(ExecuteRecordingError::RecordingNotFound)?;
+
+    let mut workflow = RecordingWorkflow::from_recording(recording, [actor.clone()])
+        .map_err(ExecuteRecordingError::Workflow)?;
+    workflow
+        .begin_ready_phase()
+        .map_err(ExecuteRecordingError::Workflow)?;
+
     session
         .start_recording_by(actor, recording_id)
         .map_err(ExecuteRecordingError::Session)?;
@@ -48,9 +65,17 @@ where
         .start(configuration)
         .map_err(ExecuteRecordingError::RecorderStart)?;
 
-    recorder
-        .ready()
-        .map_err(|_| ExecuteRecordingError::RecorderStart(CaptureStartError::DeviceUnavailable))?;
+    workflow
+        .mark_ready(actor)
+        .map_err(ExecuteRecordingError::Workflow)?;
+    recorder.ready().map_err(|error| {
+        ExecuteRecordingError::Recorder(RecorderApplicationError::Capture(format!(
+            "recorder ready transition failed: {error:?}"
+        )))
+    })?;
+    workflow
+        .start_recording()
+        .map_err(ExecuteRecordingError::Workflow)?;
 
     let artifact = recorder
         .stop(RecordingArtifactAssociation::new(
@@ -58,6 +83,16 @@ where
             recording_id.value(),
         ))
         .map_err(ExecuteRecordingError::Recorder)?;
+
+    workflow
+        .request_stop()
+        .map_err(ExecuteRecordingError::Workflow)?;
+    workflow
+        .acknowledge_stop(actor)
+        .map_err(ExecuteRecordingError::Workflow)?;
+    workflow
+        .complete(RecordingArtifactId::new(artifact.id.value()))
+        .map_err(ExecuteRecordingError::Workflow)?;
 
     session
         .complete_recording_by(
@@ -81,6 +116,7 @@ mod tests {
     use nc_pore_core::recording::Recording;
     use nc_pore_core::role::ParticipantRole;
     use nc_pore_core::session::repository::ProductionSessionRepository;
+    use nc_pore_core::session::ProductionSession;
     use recorder::artifact::coordination::ArtifactCoordinator;
     use recorder::artifact::processing::RecordingArtifactProcessor;
     use recorder::audio::{CaptureProvider, CaptureResult, CpalCaptureProvider};
@@ -205,8 +241,9 @@ mod tests {
 
     // TEST-01
     //
-    // Verify: The application layer coordinates domain recording state,
-    // technical capture, artifact creation, and domain completion.
+    // Verify: The application layer drives the domain workflow through
+    // ready-gating, recording, stop acknowledgement, and completion while
+    // the recorder remains responsible for technical capture and artifacts.
     #[test]
     fn execute_recording_completes_domain_and_technical_flow() {
         let (mut repository, production_id, actor, recording_id) = repository_with_recording();
@@ -242,7 +279,7 @@ mod tests {
     //
     // Verify: A recorder start failure does not persist a partially advanced
     // domain session because the repository update occurs only after capture
-    // and artifact processing succeed.
+    // and workflow completion succeed.
     #[test]
     fn execute_recording_does_not_persist_failed_start() {
         struct FailingCaptureProvider;
