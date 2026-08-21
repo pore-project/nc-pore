@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 nc-pore-core = { package = "core", path = "../core" }
 recorder = { path = "../recorder" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
