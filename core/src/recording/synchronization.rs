@@ -45,7 +45,10 @@ impl RecordingArtifactSynchronization {
         artifact_id: RecordingArtifactId,
         status: RecordingArtifactSynchronizationStatus,
     ) -> Self {
-        Self { artifact_id, status }
+        Self {
+            artifact_id,
+            status,
+        }
     }
 
     pub fn artifact_id(&self) -> &RecordingArtifactId {
@@ -142,7 +145,10 @@ mod tests {
             synchronization.status(),
             RecordingArtifactSynchronizationStatus::Local
         );
-        assert_eq!(synchronization.artifact_id().value(), "artifact-sync-test-01");
+        assert_eq!(
+            synchronization.artifact_id().value(),
+            "artifact-sync-test-01"
+        );
     }
 
     // TEST-02
@@ -241,6 +247,9 @@ mod tests {
             synchronization.status(),
             RecordingArtifactSynchronizationStatus::Transferring
         );
-        assert_eq!(synchronization.artifact_id().value(), "artifact-sync-test-01");
+        assert_eq!(
+            synchronization.artifact_id().value(),
+            "artifact-sync-test-01"
+        );
     }
 }
