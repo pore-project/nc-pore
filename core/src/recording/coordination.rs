@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use crate::participant::ParticipantId;
 
 use super::RecordingId;
@@ -25,8 +23,8 @@ pub enum RecordingCoordinationError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingCoordination {
     recording_id: RecordingId,
-    participants: BTreeSet<ParticipantId>,
-    ready: BTreeSet<ParticipantId>,
+    participants: Vec<ParticipantId>,
+    ready: Vec<ParticipantId>,
     status: RecordingCoordinationStatus,
 }
 
@@ -35,15 +33,22 @@ impl RecordingCoordination {
         recording_id: RecordingId,
         participants: impl IntoIterator<Item = ParticipantId>,
     ) -> Result<Self, RecordingCoordinationError> {
-        let participants: BTreeSet<_> = participants.into_iter().collect();
+        let participants: Vec<_> = participants.into_iter().collect();
         if participants.is_empty() {
             return Err(RecordingCoordinationError::NoParticipants);
+        }
+        if participants
+            .iter()
+            .enumerate()
+            .any(|(index, participant)| participants[..index].contains(participant))
+        {
+            return Err(RecordingCoordinationError::ParticipantNotSelected);
         }
 
         Ok(Self {
             recording_id,
             participants,
-            ready: BTreeSet::new(),
+            ready: Vec::new(),
             status: RecordingCoordinationStatus::Preparing,
         })
     }
@@ -52,11 +57,11 @@ impl RecordingCoordination {
         &self.recording_id
     }
 
-    pub fn participants(&self) -> &BTreeSet<ParticipantId> {
+    pub fn participants(&self) -> &[ParticipantId] {
         &self.participants
     }
 
-    pub fn ready_participants(&self) -> &BTreeSet<ParticipantId> {
+    pub fn ready_participants(&self) -> &[ParticipantId] {
         &self.ready
     }
 
@@ -82,9 +87,10 @@ impl RecordingCoordination {
         if !self.participants.contains(participant_id) {
             return Err(RecordingCoordinationError::ParticipantNotSelected);
         }
-        if !self.ready.insert(participant_id.clone()) {
+        if self.ready.contains(participant_id) {
             return Err(RecordingCoordinationError::AlreadyReady);
         }
+        self.ready.push(participant_id.clone());
 
         if self.ready.len() == self.participants.len() {
             self.status = RecordingCoordinationStatus::Ready;
@@ -200,6 +206,18 @@ mod tests {
         assert_eq!(
             coordination.mark_ready(&participant("participant-a")),
             Err(RecordingCoordinationError::InvalidState)
+        );
+    }
+
+    // TEST-07
+    #[test]
+    fn duplicate_recording_participant_is_rejected() {
+        assert_eq!(
+            RecordingCoordination::new(
+                RecordingId::new("recording-coordination-03"),
+                [participant("participant-a"), participant("participant-a")],
+            ),
+            Err(RecordingCoordinationError::ParticipantNotSelected)
         );
     }
 }
