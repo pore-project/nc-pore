@@ -237,11 +237,6 @@ impl ProductionSession {
             .map_err(ProductionSessionError::RecordingCoordination)?;
 
         self.recording_coordination = Some(coordination);
-        self.push_activity(
-            Some(actor.clone()),
-            ActivityType::RecordingCoordinationStarted,
-            Some(recording_id.value().to_owned()),
-        );
 
         Ok(())
     }
@@ -256,37 +251,18 @@ impl ProductionSession {
     ) -> Result<bool, ProductionSessionError> {
         self.authorize(actor, ProductionAction::ParticipateInRecording)?;
 
-        let (ready, became_ready) = {
-            let coordination = self
-                .recording_coordination
-                .as_mut()
-                .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
 
-            if coordination.recording_id() != recording_id {
-                return Err(ProductionSessionError::RecordingCoordinationNotFound);
-            }
-
-            let became_ready = coordination
-                .mark_ready(actor)
-                .map_err(ProductionSessionError::RecordingCoordination)?;
-            (became_ready, became_ready)
-        };
-
-        self.push_activity(
-            Some(actor.clone()),
-            ActivityType::RecordingParticipantReady,
-            Some(recording_id.value().to_owned()),
-        );
-
-        if became_ready {
-            self.push_activity(
-                Some(actor.clone()),
-                ActivityType::RecordingCoordinationReady,
-                Some(recording_id.value().to_owned()),
-            );
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
         }
 
-        Ok(ready)
+        coordination
+            .mark_ready(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
     }
 
     pub fn start_recording_by(
@@ -679,10 +655,6 @@ mod tests {
             Ok(true)
         );
         assert!(session.recording_coordination().unwrap().is_ready());
-        assert_eq!(
-            session.activities().last().unwrap().activity_type,
-            ActivityType::RecordingCoordinationReady
-        );
     }
 
     // TEST-13
