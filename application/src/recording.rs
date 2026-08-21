@@ -4,7 +4,7 @@ use nc_pore_core::recording::{
     RecordingArtifactId, RecordingId, RecordingWorkflow, RecordingWorkflowError,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
-use nc_pore_core::session::{ProductionSession, ProductionSessionError};
+use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
@@ -68,6 +68,11 @@ where
     workflow
         .mark_ready(actor)
         .map_err(ExecuteRecordingError::Workflow)?;
+    recorder.ready().map_err(|error| {
+        ExecuteRecordingError::Recorder(RecorderApplicationError::Capture(format!(
+            "recorder ready transition failed: {error:?}"
+        )))
+    })?;
     workflow
         .start_recording()
         .map_err(ExecuteRecordingError::Workflow)?;
@@ -111,6 +116,7 @@ mod tests {
     use nc_pore_core::recording::Recording;
     use nc_pore_core::role::ParticipantRole;
     use nc_pore_core::session::repository::ProductionSessionRepository;
+    use nc_pore_core::session::ProductionSession;
     use recorder::artifact::coordination::ArtifactCoordinator;
     use recorder::artifact::processing::RecordingArtifactProcessor;
     use recorder::audio::{CaptureProvider, CaptureResult, CpalCaptureProvider};
