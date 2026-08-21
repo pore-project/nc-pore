@@ -12,8 +12,8 @@
 //! See ADR-068 and #66 / #143 / #144 / #145.
 
 use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingArtifactSynchronization,
-    RecordingArtifactSynchronizationError, RecordingArtifactSynchronizationStatus,
+    RecordingArtifactId, RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
+    RecordingArtifactSynchronizationStatus,
 };
 
 /// Stable reference to one persisted local artifact version that requires
@@ -393,7 +393,10 @@ mod tests {
 
         assert_eq!(work.artifact_id().value(), "artifact-007");
         assert_eq!(work.manifest_hash(), &manifest_hash(7));
-        assert_eq!(work.status(), RecordingArtifactSynchronizationStatus::Pending);
+        assert_eq!(
+            work.status(),
+            RecordingArtifactSynchronizationStatus::Pending
+        );
     }
 
     // TEST-07
