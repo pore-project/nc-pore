@@ -5,6 +5,7 @@
 //! It connects:
 //! - RecordingSession
 //! - CaptureProvider
+//! It also provides the participant READY barrier required by ADR-068.
 //!
 //! It intentionally does not contain:
 //! - domain production rules
@@ -15,6 +16,8 @@
 //! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 //! - ADR-061 Configurable Recording Configuration
 //! - ADR-068 Recording Start and Audio Synchronization Signet
+
+pub mod recording_start;
 
 use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration};
 use crate::session::{RecordingSession, SessionStatus};
@@ -49,17 +52,16 @@ where
     ///
     /// The lifecycle is deliberately split into explicit local states:
     ///
-    /// Prepared -> Starting -> WaitingForReady -> Recording
+    /// Prepared -> Starting -> WaitingForReady
     ///
-    /// `READY` is reached only after the local capture provider has actually
-    /// started. The higher-level session coordinator decides when all required
-    /// recording participants are ready and when the Opening Sync Signet is
-    /// emitted.
+    /// `READY` is intentionally not generated here. The higher-level session
+    /// coordinator must confirm that this recording participant is ready
+    /// before the Opening Sync Signet may be emitted.
     pub fn start(
         &mut self,
         configuration: &RecordingConfiguration,
     ) -> Result<(), crate::audio::CaptureStartError> {
-        if let Err(error) = self.session.begin() {
+        if let Err(_error) = self.session.begin() {
             self.session.fail().ok();
             return Err(crate::audio::CaptureStartError::DeviceUnavailable);
         }
@@ -67,7 +69,6 @@ where
         match self.capture.start_capture(configuration) {
             Ok(()) => {
                 self.session.capture_started().ok();
-                self.session.ready().ok();
                 Ok(())
             }
             Err(error) => {
@@ -75,6 +76,11 @@ where
                 Err(error)
             }
         }
+    }
+
+    /// Confirms that this local recording participant has reported READY.
+    pub fn ready(&mut self) -> Result<(), crate::session::SessionTransitionError> {
+        self.session.ready()
     }
 
     /// Stops the recording workflow.
@@ -194,16 +200,21 @@ mod tests {
     }
 
     // TEST-02 / CUE30
-    // Verify: Workflow start and stop operations coordinate the complete
-    // recorder lifecycle while keeping capture implementation separate.
+    // Verify: Workflow start leaves the local recorder at WaitingForReady
+    // until the higher-level coordinator confirms READY.
     #[test]
-    fn workflow_coordinates_session_and_capture() {
+    fn workflow_waits_for_ready_after_capture_start() {
         let session = RecordingSession::new("workflow-test");
         let capture = TestCapture::new();
         let mut workflow = RecorderWorkflow::new(session, capture);
         let configuration = RecordingConfiguration::default();
 
         workflow.start(&configuration).unwrap();
+
+        assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
+        assert!(!workflow.is_recording());
+
+        workflow.ready().unwrap();
 
         assert_eq!(workflow.session().status(), &SessionStatus::Recording);
         assert!(workflow.is_recording());
@@ -243,6 +254,7 @@ mod tests {
         let configuration = RecordingConfiguration::default();
 
         workflow.start(&configuration).unwrap();
+        workflow.ready().unwrap();
         let result = workflow.stop();
 
         assert!(matches!(

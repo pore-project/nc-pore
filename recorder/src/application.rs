@@ -17,6 +17,7 @@
 //! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 //! - ADR-051 Recording Artifact Processing Boundary
 //! - ADR-061 Configurable Recording Configuration
+//! - ADR-068 Recording Start and Audio Synchronization Signet
 
 use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
@@ -63,11 +64,24 @@ where
         }
     }
 
+    /// Starts local capture for one concrete recording attempt.
+    ///
+    /// The local recorder remains WaitingForReady until the recording
+    /// coordinator confirms this participant's READY state.
     pub fn start(
         &mut self,
         configuration: &RecordingConfiguration,
     ) -> Result<(), crate::audio::CaptureStartError> {
         self.workflow.start(configuration)
+    }
+
+    /// Confirms that local capture is active and this participant is READY.
+    ///
+    /// A higher-level recording coordinator is responsible for collecting
+    /// READY confirmations and deciding when the Opening Sync Signet may be
+    /// emitted.
+    pub fn ready(&mut self) -> Result<(), crate::session::SessionTransitionError> {
+        self.workflow.ready()
     }
 
     /// Stops the local recording and persists an artifact associated with
@@ -174,6 +188,7 @@ mod tests {
         let configuration = RecordingConfiguration::default();
 
         application.start(&configuration).unwrap();
+        application.ready().unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -208,6 +223,7 @@ mod tests {
         let configuration = RecordingConfiguration::default();
 
         application.start(&configuration).unwrap();
+        application.ready().unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -232,6 +248,7 @@ mod tests {
         application
             .start(&RecordingConfiguration::default())
             .unwrap();
+        application.ready().unwrap();
 
         let result = application.stop(RecordingArtifactAssociation::new(
             "production-failed",
