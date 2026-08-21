@@ -17,9 +17,13 @@
 //! A domain artifact association exists only for a completed recording.
 
 pub mod artifact_id;
+pub mod coordination;
 pub mod id;
 
 pub use artifact_id::RecordingArtifactId;
+pub use coordination::{
+    RecordingCoordination, RecordingCoordinationError, RecordingCoordinationStatus,
+};
 pub use id::RecordingId;
 
 use crate::participant::ParticipantId;

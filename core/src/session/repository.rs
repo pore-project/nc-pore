@@ -52,6 +52,7 @@ pub fn reconstitute_production_session(
         status,
         participations,
         recordings,
+        recording_coordination: None,
         activities,
     }
 }

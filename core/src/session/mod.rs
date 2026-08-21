@@ -4,7 +4,10 @@ use crate::activity::{ActivityEvent, ActivityResult, ActivityType};
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
-use crate::recording::{Recording, RecordingArtifactId, RecordingId, RecordingLifecycleError};
+use crate::recording::{
+    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError, RecordingId,
+    RecordingLifecycleError,
+};
 use crate::role::ProductionAction;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,9 +22,12 @@ pub enum ProductionSessionError {
     ParticipantAlreadyExists,
     MissingOwner,
     RecordingNotFound,
+    RecordingCoordinationNotFound,
+    RecordingCoordinationAlreadyActive,
     InvalidStateTransition,
     Unauthorized,
     RecordingLifecycle(RecordingLifecycleError),
+    RecordingCoordination(RecordingCoordinationError),
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +36,7 @@ pub struct ProductionSession {
     status: ProductionStatus,
     participations: Vec<Participation>,
     recordings: Vec<Recording>,
+    recording_coordination: Option<RecordingCoordination>,
     activities: Vec<ActivityEvent>,
 }
 
@@ -52,6 +59,7 @@ impl ProductionSession {
             status: ProductionStatus::Created,
             participations: Vec::new(),
             recordings: Vec::new(),
+            recording_coordination: None,
             activities: vec![activity],
         }
     }
@@ -107,6 +115,10 @@ impl ProductionSession {
 
     pub fn recordings(&self) -> &[Recording] {
         &self.recordings
+    }
+
+    pub fn recording_coordination(&self) -> Option<&RecordingCoordination> {
+        self.recording_coordination.as_ref()
     }
 
     pub fn activities(&self) -> &[ActivityEvent] {
@@ -186,6 +198,71 @@ impl ProductionSession {
         );
 
         Ok(())
+    }
+
+    /// Begins the coordinated recording handshake for a fixed set of
+    /// recording participants. The participant set is frozen for this start
+    /// attempt. Audio capture and sync-signet emission remain outside Core.
+    pub fn begin_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+        participants: impl IntoIterator<Item = ParticipantId>,
+    ) -> Result<(), ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ManageRecordings)?;
+
+        if self.status != ProductionStatus::Active {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+
+        if self.recording_coordination.is_some() {
+            return Err(ProductionSessionError::RecordingCoordinationAlreadyActive);
+        }
+
+        let participants: Vec<_> = participants.into_iter().collect();
+        for participant in &participants {
+            self.participations
+                .iter()
+                .find(|participation| &participation.participant_id == participant)
+                .filter(|participation| {
+                    participation.allows(ProductionAction::ParticipateInRecording)
+                })
+                .ok_or(ProductionSessionError::Unauthorized)?;
+        }
+
+        let mut coordination = RecordingCoordination::new(recording_id.clone(), participants)
+            .map_err(ProductionSessionError::RecordingCoordination)?;
+        coordination
+            .begin_waiting_for_ready()
+            .map_err(ProductionSessionError::RecordingCoordination)?;
+
+        self.recording_coordination = Some(coordination);
+
+        Ok(())
+    }
+
+    /// Records that one selected participant has actually started local
+    /// capture. Returns `true` when all selected participants are ready and
+    /// the opening-signet boundary may now be emitted by the outer layer.
+    pub fn mark_recording_ready_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<bool, ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
+        }
+
+        coordination
+            .mark_ready(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
     }
 
     pub fn start_recording_by(
@@ -477,5 +554,123 @@ mod tests {
             .unwrap();
 
         assert_eq!(session.recordings()[0].participant_id(), Some(&owner));
+    }
+
+    // TEST-10
+    #[test]
+    fn owner_can_begin_recording_for_fixed_participant_set() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let participant = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        session
+            .begin_recording_by(
+                &owner,
+                &RecordingId::new("recording-002"),
+                [owner.clone(), participant.clone()],
+            )
+            .unwrap();
+
+        let coordination = session.recording_coordination().unwrap();
+        assert_eq!(coordination.participants().len(), 2);
+        assert!(coordination.participants().contains(&owner));
+        assert!(coordination.participants().contains(&participant));
+        assert_eq!(
+            coordination.status(),
+            crate::recording::RecordingCoordinationStatus::WaitingForReady
+        );
+    }
+
+    // TEST-11
+    #[test]
+    fn recording_participant_set_rejects_unselected_participant() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let selected = ParticipantId::new("participant-1");
+        let unselected = ParticipantId::new("participant-2");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-2", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        session
+            .begin_recording_by(
+                &owner,
+                &RecordingId::new("recording-003"),
+                [selected.clone()],
+            )
+            .unwrap();
+
+        assert_eq!(
+            session.mark_recording_ready_by(&unselected, &RecordingId::new("recording-003")),
+            Err(ProductionSessionError::RecordingCoordination(
+                RecordingCoordinationError::ParticipantNotSelected
+            ))
+        );
+    }
+
+    // TEST-12
+    #[test]
+    fn opening_boundary_becomes_ready_only_after_all_selected_participants_report_ready() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let participant = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        let recording_id = RecordingId::new("recording-004");
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
+            .unwrap();
+
+        assert_eq!(
+            session.mark_recording_ready_by(&owner, &recording_id),
+            Ok(false)
+        );
+        assert!(!session.recording_coordination().unwrap().is_ready());
+
+        assert_eq!(
+            session.mark_recording_ready_by(&participant, &recording_id),
+            Ok(true)
+        );
+        assert!(session.recording_coordination().unwrap().is_ready());
+    }
+
+    // TEST-13
+    #[test]
+    fn recording_cannot_be_started_twice_while_coordination_is_active() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+
+        session
+            .begin_recording_by(&owner, &RecordingId::new("recording-005"), [owner.clone()])
+            .unwrap();
+
+        assert_eq!(
+            session.begin_recording_by(&owner, &RecordingId::new("recording-006"), [owner.clone()]),
+            Err(ProductionSessionError::RecordingCoordinationAlreadyActive)
+        );
     }
 }
