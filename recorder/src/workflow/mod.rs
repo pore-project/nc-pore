@@ -118,7 +118,7 @@ where
 
     /// Provides read-only access to the recorder session.
     pub fn session(&self) -> &RecordingSession {
-        &self.session
+        self.session.as_ref()
     }
 
     /// Returns whether the local recorder is actively recording.
@@ -211,10 +211,7 @@ mod tests {
 
         workflow.start(&configuration).unwrap();
 
-        assert_eq!(
-            workflow.session().status(),
-            &SessionStatus::WaitingForReady
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
         assert!(!workflow.is_recording());
 
         workflow.ready().unwrap();
