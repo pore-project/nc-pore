@@ -121,12 +121,16 @@ mod tests {
         let coordination = coordination();
 
         assert_eq!(coordination.participants().len(), 2);
-        assert!(coordination
-            .participants()
-            .contains(&participant("participant-a")));
-        assert!(coordination
-            .participants()
-            .contains(&participant("participant-b")));
+        assert!(
+            coordination
+                .participants()
+                .contains(&participant("participant-a"))
+        );
+        assert!(
+            coordination
+                .participants()
+                .contains(&participant("participant-b"))
+        );
     }
 
     // TEST-02
@@ -178,7 +182,9 @@ mod tests {
     fn participant_cannot_report_ready_twice() {
         let mut coordination = coordination();
         coordination.begin_waiting_for_ready().unwrap();
-        coordination.mark_ready(&participant("participant-a")).unwrap();
+        coordination
+            .mark_ready(&participant("participant-a"))
+            .unwrap();
 
         assert_eq!(
             coordination.mark_ready(&participant("participant-a")),
