@@ -14,9 +14,10 @@
 //! See:
 //! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
 //! - ADR-061 Configurable Recording Configuration
+//! - ADR-068 Recording Start and Audio Synchronization Signet
 
 use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration};
-use crate::session::RecordingSession;
+use crate::session::{RecordingSession, SessionStatus};
 
 /// Coordinates the local recorder workflow.
 ///
@@ -44,22 +45,33 @@ where
         Self { session, capture }
     }
 
-    /// Starts the recording workflow with the requested configuration.
+    /// Starts one concrete recording attempt.
     ///
-    /// The session enters Recording only after the capture provider
-    /// successfully starts. A failed capture start marks the session
-    /// as Failed and is returned to the caller.
+    /// The lifecycle is deliberately split into explicit local states:
+    ///
+    /// Prepared -> Starting -> WaitingForReady -> Recording
+    ///
+    /// `READY` is reached only after the local capture provider has actually
+    /// started. The higher-level session coordinator decides when all required
+    /// recording participants are ready and when the Opening Sync Signet is
+    /// emitted.
     pub fn start(
         &mut self,
         configuration: &RecordingConfiguration,
     ) -> Result<(), crate::audio::CaptureStartError> {
+        if let Err(error) = self.session.begin() {
+            self.session.fail().ok();
+            return Err(crate::audio::CaptureStartError::DeviceUnavailable);
+        }
+
         match self.capture.start_capture(configuration) {
             Ok(()) => {
-                self.session.start();
+                self.session.capture_started().ok();
+                self.session.ready().ok();
                 Ok(())
             }
             Err(error) => {
-                self.session.fail();
+                self.session.fail().ok();
                 Err(error)
             }
         }
@@ -67,16 +79,33 @@ where
 
     /// Stops the recording workflow.
     ///
-    /// The workflow coordinates:
-    /// - capture provider shutdown
-    /// - recorder session state transition
+    /// The workflow coordinates the ADR-068 stop order:
     ///
-    /// The completed CaptureResult is returned to the caller,
-    /// allowing downstream processing to remain outside the workflow.
+    /// 1. enter Stopping
+    /// 2. the higher-level coordinator emits the Closing Sync Signet
+    /// 3. technical capture is stopped
+    /// 4. the local session is completed only after capture has actually ended
+    ///
+    /// The completed CaptureResult is returned to the caller, allowing
+    /// downstream processing to remain outside the workflow.
     pub fn stop(&mut self) -> CaptureResult {
+        if self.session.begin_stop().is_err() {
+            return CaptureResult::failed(
+                self.session.id(),
+                "invalid recording lifecycle transition",
+            );
+        }
+
         let capture_result = self.capture.stop_capture();
 
-        self.session.stop();
+        if matches!(
+            capture_result.status(),
+            crate::audio::CaptureStatus::Failed(_)
+        ) {
+            self.session.fail().ok();
+        } else {
+            self.session.complete().ok();
+        }
 
         capture_result
     }
@@ -84,6 +113,11 @@ where
     /// Provides read-only access to the recorder session.
     pub fn session(&self) -> &RecordingSession {
         &self.session
+    }
+
+    /// Returns whether the local recorder is actively recording.
+    pub fn is_recording(&self) -> bool {
+        matches!(self.session.status(), SessionStatus::Recording)
     }
 }
 
@@ -94,6 +128,7 @@ mod tests {
     struct TestCapture {
         active: bool,
         fail_on_start: bool,
+        fail_on_stop: bool,
     }
 
     impl TestCapture {
@@ -101,13 +136,23 @@ mod tests {
             Self {
                 active: false,
                 fail_on_start: false,
+                fail_on_stop: false,
             }
         }
 
-        fn failing() -> Self {
+        fn failing_start() -> Self {
             Self {
                 active: false,
                 fail_on_start: true,
+                fail_on_stop: false,
+            }
+        }
+
+        fn failing_stop() -> Self {
+            Self {
+                active: false,
+                fail_on_start: false,
+                fail_on_stop: true,
             }
         }
     }
@@ -128,72 +173,53 @@ mod tests {
         fn stop_capture(&mut self) -> CaptureResult {
             self.active = false;
 
-            CaptureResult::new("workflow-test-capture")
+            if self.fail_on_stop {
+                CaptureResult::failed("workflow-test-capture", "stop failed")
+            } else {
+                CaptureResult::new("workflow-test-capture")
+            }
         }
     }
 
-    // TEST-01
+    // TEST-01 / CUE30
     // Verify: A workflow can be created with a recording session
     // and a capture provider.
-    //
-    // Protects ADR-040:
-    // The workflow layer coordinates recorder session state
-    // and capture implementation without coupling them.
     #[test]
     fn workflow_can_be_created_with_session_and_capture() {
         let session = RecordingSession::new("workflow-test");
-
         let capture = TestCapture::new();
-
         let workflow = RecorderWorkflow::new(session, capture);
 
-        assert_eq!(
-            workflow.session().status(),
-            &crate::session::SessionStatus::Created
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Prepared);
     }
 
-    // TEST-02
-    // Verify: Workflow start and stop operations coordinate
-    // session lifecycle and capture lifecycle.
-    //
-    // Protects ADR-040 and ADR-051:
-    // The workflow coordinates capture and session state,
-    // while returning the CaptureResult for downstream
-    // artifact processing.
+    // TEST-02 / CUE30
+    // Verify: Workflow start and stop operations coordinate the complete
+    // recorder lifecycle while keeping capture implementation separate.
     #[test]
     fn workflow_coordinates_session_and_capture() {
         let session = RecordingSession::new("workflow-test");
-
         let capture = TestCapture::new();
-
         let mut workflow = RecorderWorkflow::new(session, capture);
         let configuration = RecordingConfiguration::default();
 
         workflow.start(&configuration).unwrap();
 
-        assert_eq!(
-            workflow.session().status(),
-            &crate::session::SessionStatus::Recording
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Recording);
+        assert!(workflow.is_recording());
 
         let result = workflow.stop();
 
         assert_eq!(result.id(), "workflow-test-capture");
-
-        assert_eq!(
-            workflow.session().status(),
-            &crate::session::SessionStatus::Stopped
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Completed);
     }
 
-    // TEST-03
+    // TEST-03 / CUE30
     // Verify: A failed capture start does not enter Recording state.
-    // The workflow marks the session as Failed and propagates the error.
     #[test]
     fn failed_capture_start_marks_session_as_failed() {
         let session = RecordingSession::new("workflow-test");
-        let capture = TestCapture::failing();
+        let capture = TestCapture::failing_start();
         let mut workflow = RecorderWorkflow::new(session, capture);
         let configuration = RecordingConfiguration::default();
 
@@ -203,9 +229,26 @@ mod tests {
             result,
             Err(crate::audio::CaptureStartError::DeviceUnavailable)
         );
-        assert_eq!(
-            workflow.session().status(),
-            &crate::session::SessionStatus::Failed
-        );
+        assert_eq!(workflow.session().status(), &SessionStatus::Failed);
+    }
+
+    // TEST-04 / CUE30
+    // Verify: A technical failure while stopping does not falsely report
+    // a successfully completed local recording.
+    #[test]
+    fn failed_capture_stop_marks_session_as_failed() {
+        let session = RecordingSession::new("workflow-test");
+        let capture = TestCapture::failing_stop();
+        let mut workflow = RecorderWorkflow::new(session, capture);
+        let configuration = RecordingConfiguration::default();
+
+        workflow.start(&configuration).unwrap();
+        let result = workflow.stop();
+
+        assert!(matches!(
+            result.status(),
+            crate::audio::CaptureStatus::Failed(_)
+        ));
+        assert_eq!(workflow.session().status(), &SessionStatus::Failed);
     }
 }
