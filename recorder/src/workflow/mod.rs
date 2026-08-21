@@ -118,7 +118,7 @@ where
 
     /// Provides read-only access to the recorder session.
     pub fn session(&self) -> &RecordingSession {
-        self.session.as_ref()
+        &self.session
     }
 
     /// Returns whether the local recorder is actively recording.
