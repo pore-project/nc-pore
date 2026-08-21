@@ -141,7 +141,13 @@ mod tests {
     // Verify: Opening and Closing share the current backend-independent timing structure.
     #[test]
     fn opening_and_closing_share_temporal_structure() {
-        assert_eq!(SyncSignet::opening().events(), SyncSignet::closing().events());
-        assert_eq!(SyncSignet::opening().duration_ms(), SyncSignet::closing().duration_ms());
+        assert_eq!(
+            SyncSignet::opening().events(),
+            SyncSignet::closing().events()
+        );
+        assert_eq!(
+            SyncSignet::opening().duration_ms(),
+            SyncSignet::closing().duration_ms()
+        );
     }
 }
