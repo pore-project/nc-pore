@@ -15,9 +15,6 @@ pub enum ActivityType {
     RecordingAdded,
     RecordingStarted,
     RecordingCompleted,
-    RecordingCoordinationStarted,
-    RecordingParticipantReady,
-    RecordingCoordinationReady,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
