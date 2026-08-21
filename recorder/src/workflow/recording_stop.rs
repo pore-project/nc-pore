@@ -136,7 +136,10 @@ mod tests {
             coordinator.confirm_ok(&first),
             Ok(StopStatus::WaitingForParticipants)
         );
-        assert_eq!(coordinator.pending_participants(), [second.clone()].into_iter().collect());
+        assert_eq!(
+            coordinator.pending_participants(),
+            [second.clone()].into_iter().collect()
+        );
         assert!(!coordinator.all_completed());
 
         assert_eq!(
