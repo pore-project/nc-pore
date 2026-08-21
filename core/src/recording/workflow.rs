@@ -1,4 +1,7 @@
-use super::{Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError, RecordingLifecycleError, RecordingStatus};
+use super::{
+    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError,
+    RecordingLifecycleError, RecordingStatus,
+};
 use crate::participant::ParticipantId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -171,7 +174,10 @@ mod tests {
         workflow.begin_ready_phase().unwrap();
         assert!(!workflow.mark_ready(&participant("participant-a")).unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::WaitingForReady);
-        assert_eq!(workflow.start_recording(), Err(RecordingWorkflowError::InvalidState));
+        assert_eq!(
+            workflow.start_recording(),
+            Err(RecordingWorkflowError::InvalidState)
+        );
         assert!(workflow.mark_ready(&participant("participant-b")).unwrap());
         workflow.start_recording().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
@@ -194,7 +200,10 @@ mod tests {
         workflow.begin_ready_phase().unwrap();
         workflow.mark_ready(&participant("participant-a")).unwrap();
         workflow.mark_ready(&participant("participant-b")).unwrap();
-        assert_eq!(workflow.request_stop(), Err(RecordingWorkflowError::InvalidState));
+        assert_eq!(
+            workflow.request_stop(),
+            Err(RecordingWorkflowError::InvalidState)
+        );
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
@@ -209,14 +218,24 @@ mod tests {
         workflow.mark_ready(&participant("participant-b")).unwrap();
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
-        assert!(!workflow.acknowledge_stop(&participant("participant-a")).unwrap());
+        assert!(
+            !workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
         assert_eq!(
             workflow.complete(RecordingArtifactId::new("artifact-workflow-01")),
             Err(RecordingWorkflowError::InvalidState)
         );
-        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
-        workflow.complete(RecordingArtifactId::new("artifact-workflow-01")).unwrap();
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
+        workflow
+            .complete(RecordingArtifactId::new("artifact-workflow-01"))
+            .unwrap();
         assert!(workflow.is_complete());
     }
 
@@ -244,7 +263,9 @@ mod tests {
         workflow.mark_ready(&participant("participant-b")).unwrap();
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
-        workflow.acknowledge_stop(&participant("participant-a")).unwrap();
+        workflow
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap();
         assert_eq!(
             workflow.acknowledge_stop(&participant("participant-a")),
             Err(RecordingWorkflowError::AlreadyAcknowledged)
