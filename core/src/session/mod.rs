@@ -224,7 +224,9 @@ impl ProductionSession {
             self.participations
                 .iter()
                 .find(|participation| &participation.participant_id == participant)
-                .filter(|participation| participation.allows(ProductionAction::ParticipateInRecording))
+                .filter(|participation| {
+                    participation.allows(ProductionAction::ParticipateInRecording)
+                })
                 .ok_or(ProductionSessionError::Unauthorized)?;
         }
 
@@ -666,7 +668,10 @@ mod tests {
             .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
             .unwrap();
 
-        assert_eq!(session.mark_recording_ready_by(&owner, &recording_id), Ok(false));
+        assert_eq!(
+            session.mark_recording_ready_by(&owner, &recording_id),
+            Ok(false)
+        );
         assert!(!session.recording_coordination().unwrap().is_ready());
 
         assert_eq!(
