@@ -7,6 +7,13 @@
 //!
 //! See ADR-068 Recording Start and Audio Synchronization Signet.
 
+/// Identifies the logical role of a synchronization signet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncSignetKind {
+    Opening,
+    Closing,
+}
+
 /// One broadband event within a synchronization signet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SignetEvent {
@@ -36,26 +43,51 @@ impl SignetEvent {
 ///
 /// ADR-068 deliberately leaves the concrete waveform, spectrum and loudness
 /// open. The first implementation step therefore defines only the temporal
-/// structure needed by the recorder workflow.
+/// structure needed by the recorder workflow. Opening and Closing are kept as
+/// distinct logical signet kinds even while they share the same temporal
+/// structure in this backend-independent model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyncSignet {
+    kind: SyncSignetKind,
     events: [SignetEvent; 3],
 }
 
 impl SyncSignet {
-    /// Returns the initial three-event signet pattern defined by ADR-068.
+    /// Returns the initial three-event opening signet pattern defined by ADR-068.
     pub const fn opening() -> Self {
         Self {
-            events: [
-                SignetEvent::new(0, 40),
-                SignetEvent::new(120, 40),
-                SignetEvent::new(240, 40),
-            ],
+            kind: SyncSignetKind::Opening,
+            events: Self::event_pattern(),
         }
+    }
+
+    /// Returns the initial three-event closing signet pattern defined by ADR-068.
+    ///
+    /// The concrete waveform may later distinguish the closing signet from the
+    /// opening signet by signal direction or spectrum. The logical distinction
+    /// is already explicit at this layer.
+    pub const fn closing() -> Self {
+        Self {
+            kind: SyncSignetKind::Closing,
+            events: Self::event_pattern(),
+        }
+    }
+
+    pub const fn kind(self) -> SyncSignetKind {
+        self.kind
     }
 
     pub const fn events(self) -> [SignetEvent; 3] {
         self.events
+    }
+
+    /// Returns the shared temporal structure used by the current signet family.
+    const fn event_pattern() -> [SignetEvent; 3] {
+        [
+            SignetEvent::new(0, 40),
+            SignetEvent::new(120, 40),
+            SignetEvent::new(240, 40),
+        ]
     }
 
     /// Returns the total temporal extent of the signet.
@@ -76,6 +108,7 @@ mod tests {
         let signet = SyncSignet::opening();
 
         assert_eq!(signet.events().len(), 3);
+        assert_eq!(signet.kind(), SyncSignetKind::Opening);
     }
 
     // TEST-02 / CUE30
@@ -94,5 +127,27 @@ mod tests {
     #[test]
     fn opening_signet_duration_includes_final_event() {
         assert_eq!(SyncSignet::opening().duration_ms(), 280);
+    }
+
+    // TEST-04 / CUE30
+    // Verify: Opening and Closing are distinct logical anchors in the signet family.
+    #[test]
+    fn closing_signet_has_distinct_logical_kind() {
+        assert_eq!(SyncSignet::closing().kind(), SyncSignetKind::Closing);
+        assert_ne!(SyncSignet::opening(), SyncSignet::closing());
+    }
+
+    // TEST-05 / CUE30
+    // Verify: Opening and Closing share the current backend-independent timing structure.
+    #[test]
+    fn opening_and_closing_share_temporal_structure() {
+        assert_eq!(
+            SyncSignet::opening().events(),
+            SyncSignet::closing().events()
+        );
+        assert_eq!(
+            SyncSignet::opening().duration_ms(),
+            SyncSignet::closing().duration_ms()
+        );
     }
 }
