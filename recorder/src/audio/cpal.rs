@@ -13,7 +13,7 @@
 
 use crate::audio::{
     CaptureChunk, CaptureResult, CaptureStartError, CaptureTrack, RecordingConfiguration,
-    SampleFormat,
+    SampleFormat, SyncSignet, SyncSignetEmissionError, SyncSignetKind,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
@@ -117,6 +117,11 @@ fn require_exact_input_configuration(
         .ok_or(CaptureStartError::UnsupportedRecordingConfiguration)
 }
 
+struct PendingSignet {
+    offset_bytes: usize,
+    payload: Vec<u8>,
+}
+
 /// Runtime state used by the capture callback to split the incoming
 /// audio stream into configured-duration chunks without stopping capture.
 struct CaptureChunkBuffer {
@@ -124,6 +129,11 @@ struct CaptureChunkBuffer {
     current_payload: Vec<u8>,
     next_sequence: u32,
     chunk_size_bytes: usize,
+    sample_format: SampleFormat,
+    channels: u16,
+    sample_rate_hz: u32,
+    captured_bytes: usize,
+    pending_signets: Vec<PendingSignet>,
 }
 
 impl CaptureChunkBuffer {
@@ -147,13 +157,34 @@ impl CaptureChunkBuffer {
             current_payload: Vec::new(),
             next_sequence: 1,
             chunk_size_bytes,
+            sample_format: configuration.sample_format(),
+            channels: configuration.channels(),
+            sample_rate_hz: configuration.sample_rate_hz(),
+            captured_bytes: 0,
+            pending_signets: Vec::new(),
         }
+    }
+
+    fn request_signet(&mut self, signet: SyncSignet) {
+        let payload = render_signet(
+            signet,
+            self.sample_rate_hz,
+            self.channels,
+            self.sample_format,
+        );
+
+        self.pending_signets.push(PendingSignet {
+            offset_bytes: self.captured_bytes,
+            payload,
+        });
     }
 
     fn push_bytes(&mut self, bytes: &[u8]) {
         if self.chunk_size_bytes == 0 {
             return;
         }
+
+        self.captured_bytes += bytes.len();
 
         let mut remaining = bytes;
         while !remaining.is_empty() {
@@ -182,8 +213,164 @@ impl CaptureChunkBuffer {
 
     fn finish(mut self) -> Vec<CaptureChunk> {
         self.finish_current_chunk();
-        self.chunks
+
+        let mut chunks = Vec::with_capacity(self.chunks.len());
+        let mut chunk_offset = 0usize;
+
+        for chunk in self.chunks {
+            let chunk_start = chunk_offset;
+            let chunk_end = chunk_start + chunk.payload().len();
+            let mut payload = chunk.payload().to_vec();
+
+            for signet in &self.pending_signets {
+                mix_signet_into_chunk(
+                    &mut payload,
+                    chunk_start,
+                    chunk_end,
+                    signet.offset_bytes,
+                    &signet.payload,
+                    self.sample_format,
+                );
+            }
+
+            chunk_offset = chunk_end;
+            chunks.push(CaptureChunk::with_payload(chunk.sequence, payload));
+        }
+
+        chunks
     }
+}
+
+fn render_signet(
+    signet: SyncSignet,
+    sample_rate_hz: u32,
+    channels: u16,
+    sample_format: SampleFormat,
+) -> Vec<u8> {
+    let bytes_per_sample = match sample_format {
+        SampleFormat::Pcm24 => 3,
+        SampleFormat::F32 => 4,
+    };
+    let channels = usize::from(channels);
+    let total_frames = usize::try_from(
+        u64::from(signet.duration_ms()) * u64::from(sample_rate_hz) / 1_000,
+    )
+    .expect("Signetdauer überschreitet die lokale Speicherkapazität.");
+    let mut payload = Vec::with_capacity(
+        total_frames
+            .saturating_mul(channels)
+            .saturating_mul(bytes_per_sample),
+    );
+    let mut state = match signet.kind() {
+        SyncSignetKind::Opening => 0x1357_9bdf,
+        SyncSignetKind::Closing => 0x2468_ace1,
+    };
+
+    for frame in 0..total_frames {
+        let time_ms = frame as u64 * 1_000 / u64::from(sample_rate_hz);
+        let active = signet.events().iter().any(|event| {
+            time_ms >= u64::from(event.start_ms())
+                && time_ms < u64::from(event.start_ms() + event.duration_ms())
+        });
+        let sample = if active {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            let normalized = (state as f32 / u32::MAX as f32) * 2.0 - 1.0;
+            let polarity = match signet.kind() {
+                SyncSignetKind::Opening => 1.0,
+                SyncSignetKind::Closing => -1.0,
+            };
+            normalized * 0.12 * polarity
+        } else {
+            0.0
+        };
+
+        for _ in 0..channels {
+            match sample_format {
+                SampleFormat::F32 => payload.extend_from_slice(&sample.to_ne_bytes()),
+                SampleFormat::Pcm24 => payload.extend_from_slice(&encode_i24(sample)),
+            }
+        }
+    }
+
+    payload
+}
+
+fn mix_signet_into_chunk(
+    payload: &mut [u8],
+    chunk_start: usize,
+    chunk_end: usize,
+    signet_offset: usize,
+    signet_payload: &[u8],
+    sample_format: SampleFormat,
+) {
+    let bytes_per_sample = match sample_format {
+        SampleFormat::Pcm24 => 3,
+        SampleFormat::F32 => 4,
+    };
+    let signet_end = signet_offset + signet_payload.len();
+    let overlap_start = chunk_start.max(signet_offset);
+    let overlap_end = chunk_end.min(signet_end);
+
+    if overlap_start >= overlap_end {
+        return;
+    }
+
+    let aligned_start = overlap_start
+        + (bytes_per_sample - (overlap_start - signet_offset) % bytes_per_sample)
+            % bytes_per_sample;
+    let aligned_end = overlap_end - (overlap_end - signet_offset) % bytes_per_sample;
+
+    if aligned_start >= aligned_end {
+        return;
+    }
+
+    for absolute_offset in (aligned_start..aligned_end).step_by(bytes_per_sample) {
+        let payload_offset = absolute_offset - chunk_start;
+        let signet_payload_offset = absolute_offset - signet_offset;
+
+        match sample_format {
+            SampleFormat::F32 => {
+                let input = f32::from_ne_bytes(
+                    payload[payload_offset..payload_offset + 4]
+                        .try_into()
+                        .expect("F32-Sample muss vier Bytes enthalten."),
+                );
+                let signet = f32::from_ne_bytes(
+                    signet_payload[signet_payload_offset..signet_payload_offset + 4]
+                        .try_into()
+                        .expect("F32-Signet muss vier Bytes enthalten."),
+                );
+                payload[payload_offset..payload_offset + 4]
+                    .copy_from_slice(&(input + signet).clamp(-1.0, 1.0).to_ne_bytes());
+            }
+            SampleFormat::Pcm24 => {
+                let input = decode_i24(&payload[payload_offset..payload_offset + 3]);
+                let signet = decode_i24(
+                    &signet_payload[signet_payload_offset..signet_payload_offset + 3],
+                );
+                payload[payload_offset..payload_offset + 3]
+                    .copy_from_slice(&encode_i24_sample(input.saturating_add(signet)));
+            }
+        }
+    }
+}
+
+fn encode_i24(sample: f32) -> [u8; 3] {
+    let value = (sample.clamp(-1.0, 1.0) * 8_388_607.0).round() as i32;
+    encode_i24_sample(value)
+}
+
+fn encode_i24_sample(value: i32) -> [u8; 3] {
+    let value = value.clamp(-8_388_608, 8_388_607);
+    let bytes = value.to_ne_bytes();
+    [bytes[0], bytes[1], bytes[2]]
+}
+
+fn decode_i24(bytes: &[u8]) -> i32 {
+    let sign = if bytes[2] & 0x80 != 0 { 0xff } else { 0x00 };
+    i32::from_ne_bytes([bytes[0], bytes[1], bytes[2], sign])
 }
 
 pub struct CpalCaptureProvider {
@@ -226,6 +413,28 @@ impl CpalCaptureProvider {
             .collect();
 
         Ok(configurations)
+    }
+
+    /// Queues a synchronization signet at the current capture position.
+    ///
+    /// The signet is mixed into the captured sample stream when the
+    /// capture result is finalized. This keeps the realtime CPAL callback
+    /// free of waveform generation while preserving the byte position at
+    /// which the synchronization event was requested.
+    pub fn emit_sync_signet(
+        &mut self,
+        signet: &SyncSignet,
+    ) -> Result<(), SyncSignetEmissionError> {
+        let mut buffer = self
+            .chunk_buffer
+            .lock()
+            .expect("Chunk-Puffer konnte nicht für das Signet gesperrt werden.");
+        let buffer = buffer
+            .as_mut()
+            .ok_or(SyncSignetEmissionError::NotCapturing)?;
+
+        buffer.request_signet(*signet);
+        Ok(())
     }
 }
 
@@ -296,6 +505,13 @@ impl crate::audio::CaptureProvider for CpalCaptureProvider {
         self.stream = Some(stream);
 
         Ok(())
+    }
+
+    fn emit_sync_signet(
+        &mut self,
+        signet: &SyncSignet,
+    ) -> Result<(), SyncSignetEmissionError> {
+        self.emit_sync_signet(signet)
     }
 
     fn stop_capture(&mut self) -> CaptureResult {
@@ -648,5 +864,56 @@ mod tests {
         assert_eq!(first.len(), 1);
         assert_eq!(first[0].sequence, 1);
         assert!(second.is_empty());
+    }
+
+    // TEST-14 / CUE30
+    // Verify: A requested Opening Sync Signet is mixed into the captured
+    // payload at the byte position where the signet was requested.
+    #[test]
+    fn opening_signet_is_present_at_requested_capture_position() {
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            48_000,
+            1,
+            SampleFormat::F32,
+            crate::audio::RecordingChunkDuration::TenSeconds,
+        );
+        let mut buffer = CaptureChunkBuffer::new(&configuration);
+        buffer.push_bytes(&vec![0; 4 * 100]);
+        buffer.request_signet(SyncSignet::opening());
+        buffer.push_bytes(&vec![0; 4 * 400]);
+
+        let chunks = buffer.finish();
+        let payload = chunks[0].payload();
+
+        assert!(payload[400..].chunks_exact(4).any(|sample| {
+            f32::from_ne_bytes(sample.try_into().unwrap()).abs() > 0.0
+        }));
+        assert!(payload[..400]
+            .chunks_exact(4)
+            .all(|sample| f32::from_ne_bytes(sample.try_into().unwrap()) == 0.0));
+    }
+
+    // TEST-15 / CUE30
+    // Verify: Opening and Closing signets remain distinguishable in the
+    // concrete capture representation.
+    #[test]
+    fn opening_and_closing_signet_payloads_are_distinct() {
+        let opening = render_signet(SyncSignet::opening(), 48_000, 1, SampleFormat::F32);
+        let closing = render_signet(SyncSignet::closing(), 48_000, 1, SampleFormat::F32);
+
+        assert_eq!(opening.len(), closing.len());
+        assert_ne!(opening, closing);
+    }
+
+    // TEST-16 / CUE30
+    // Verify: A signet request made while capture is inactive is rejected.
+    #[test]
+    fn signet_emission_requires_active_capture() {
+        let mut provider = CpalCaptureProvider::new();
+
+        assert_eq!(
+            provider.emit_sync_signet(&SyncSignet::opening()),
+            Err(SyncSignetEmissionError::NotCapturing)
+        );
     }
 }
