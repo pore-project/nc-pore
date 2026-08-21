@@ -346,8 +346,7 @@ fn mix_signet_into_chunk(
             }
             SampleFormat::Pcm24 => {
                 let input = decode_i24(&payload[payload_offset..payload_offset + 3]);
-                let signet =
-                    decode_i24(&signet_payload[signet_payload_offset..signet_payload_offset + 3]);
+                let signet = decode_i24(&signet_payload[signet_payload_offset..signet_payload_offset + 3]);
                 payload[payload_offset..payload_offset + 3]
                     .copy_from_slice(&encode_i24_sample(input.saturating_add(signet)));
             }
