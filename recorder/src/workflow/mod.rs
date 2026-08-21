@@ -9,7 +9,9 @@
 pub mod recording_start;
 pub mod recording_stop;
 
-use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration, SyncSignet, SyncSignetEmissionError};
+use crate::audio::{
+    CaptureProvider, CaptureResult, RecordingConfiguration, SyncSignet, SyncSignetEmissionError,
+};
 use crate::session::{RecordingSession, SessionStatus};
 use recording_start::{RecordingParticipantId, RecordingStartCoordinator, RecordingStartError};
 use recording_stop::RecordingStopCoordinator;
@@ -78,25 +80,22 @@ where
             .confirm_ready(participant)
             .map_err(WorkflowCoordinationError::RecordingStart)?;
 
-        if coordinator.all_ready() {
-            let signet = coordinator
-                .opening_sync_signet()
-                .ok_or(WorkflowCoordinationError::InvalidSessionState)?;
-
-            self.capture
-                .emit_sync_signet(&signet)
-                .map_err(WorkflowCoordinationError::SignetEmission)?;
-
-            self.session
-                .ready()
-                .map_err(|_| WorkflowCoordinationError::InvalidSessionState)?;
-            Ok(Some(signet))
-        } else {
-            self.session
-                .ready()
-                .map_err(|_| WorkflowCoordinationError::InvalidSessionState)?;
-            Ok(None)
+        if !coordinator.all_ready() {
+            return Ok(None);
         }
+
+        let signet = coordinator
+            .opening_sync_signet()
+            .ok_or(WorkflowCoordinationError::InvalidSessionState)?;
+
+        self.capture
+            .emit_sync_signet(&signet)
+            .map_err(WorkflowCoordinationError::SignetEmission)?;
+
+        self.session
+            .ready()
+            .map_err(|_| WorkflowCoordinationError::InvalidSessionState)?;
+        Ok(Some(signet))
     }
 
     /// Legacy/local-only READY transition. Use
@@ -118,7 +117,10 @@ where
 
         let capture_result = self.capture.stop_capture();
 
-        if matches!(capture_result.status(), crate::audio::CaptureStatus::Failed(_)) {
+        if matches!(
+            capture_result.status(),
+            crate::audio::CaptureStatus::Failed(_)
+        ) {
             self.session.fail().ok();
         } else {
             self.session.complete().ok();
@@ -195,44 +197,74 @@ mod tests {
                 events: Rc::new(RefCell::new(Vec::new())),
             }
         }
+
         fn failing_start() -> Self {
-            Self { fail_on_start: true, ..Self::new() }
+            Self {
+                fail_on_start: true,
+                ..Self::new()
+            }
         }
+
         fn failing_stop() -> Self {
-            Self { fail_on_stop: true, ..Self::new() }
+            Self {
+                fail_on_stop: true,
+                ..Self::new()
+            }
         }
     }
 
     impl CaptureProvider for TestCapture {
-        fn start_capture(&mut self, _configuration: &RecordingConfiguration) -> Result<(), crate::audio::CaptureStartError> {
-            if self.fail_on_start { return Err(crate::audio::CaptureStartError::DeviceUnavailable); }
+        fn start_capture(
+            &mut self,
+            _configuration: &RecordingConfiguration,
+        ) -> Result<(), crate::audio::CaptureStartError> {
+            if self.fail_on_start {
+                return Err(crate::audio::CaptureStartError::DeviceUnavailable);
+            }
             self.active = true;
             Ok(())
         }
-        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
-            if self.fail_on_signet { return Err(SyncSignetEmissionError::Unsupported); }
+
+        fn emit_sync_signet(
+            &mut self,
+            signet: &SyncSignet,
+        ) -> Result<(), SyncSignetEmissionError> {
+            if self.fail_on_signet {
+                return Err(SyncSignetEmissionError::Unsupported);
+            }
             self.events.borrow_mut().push(match signet.kind() {
                 crate::audio::SyncSignetKind::Opening => "opening",
                 crate::audio::SyncSignetKind::Closing => "closing",
             });
             Ok(())
         }
+
         fn stop_capture(&mut self) -> CaptureResult {
             self.events.borrow_mut().push("stop");
             self.active = false;
-            if self.fail_on_stop { CaptureResult::failed("workflow-test-capture", "stop failed") }
-            else { CaptureResult::new("workflow-test-capture") }
+            if self.fail_on_stop {
+                CaptureResult::failed("workflow-test-capture", "stop failed")
+            } else {
+                CaptureResult::new("workflow-test-capture")
+            }
         }
     }
 
-    fn participant(id: &str) -> RecordingParticipantId { RecordingParticipantId::new(id) }
+    fn participant(id: &str) -> RecordingParticipantId {
+        RecordingParticipantId::new(id)
+    }
 
+    // TEST-01: Workflow can be created with session and capture.
     #[test]
     fn workflow_can_be_created_with_session_and_capture() {
-        let workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
+        let workflow = RecorderWorkflow::new(
+            RecordingSession::new("workflow-test"),
+            TestCapture::new(),
+        );
         assert_eq!(workflow.session().status(), &SessionStatus::Prepared);
     }
 
+    // TEST-02: Opening signet is emitted only at the READY barrier.
     #[test]
     fn coordinated_ready_emits_opening_only_at_barrier() {
         let first = participant("p1");
@@ -243,27 +275,42 @@ mod tests {
         let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
 
-        assert_eq!(workflow.ready_and_maybe_opening_signet(&mut coordinator, &first), Ok(None));
+        assert_eq!(
+            workflow.ready_and_maybe_opening_signet(&mut coordinator, &first),
+            Ok(None)
+        );
+        assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
+
+        assert_eq!(
+            workflow.ready_and_maybe_opening_signet(&mut coordinator, &second),
+            Ok(Some(SyncSignet::opening()))
+        );
         assert_eq!(workflow.session().status(), &SessionStatus::Recording);
-        assert_eq!(workflow.ready_and_maybe_opening_signet(&mut coordinator, &second), Ok(Some(SyncSignet::opening())));
         assert_eq!(&*events.borrow(), &["opening"]);
     }
 
+    // TEST-03: A non-recording participant cannot complete local READY.
     #[test]
     fn non_recording_participant_cannot_complete_local_ready() {
         let recording = participant("p1");
         let outsider = participant("p2");
         let mut coordinator = RecordingStartCoordinator::new([recording]);
-        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
+        let mut workflow = RecorderWorkflow::new(
+            RecordingSession::new("workflow-test"),
+            TestCapture::new(),
+        );
         workflow.start(&RecordingConfiguration::default()).unwrap();
 
         assert_eq!(
             workflow.ready_and_maybe_opening_signet(&mut coordinator, &outsider),
-            Err(WorkflowCoordinationError::RecordingStart(RecordingStartError::NotRecordingParticipant))
+            Err(WorkflowCoordinationError::RecordingStart(
+                RecordingStartError::NotRecordingParticipant,
+            ))
         );
         assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
     }
 
+    // TEST-04: Opening signet emission failure does not enter Recording.
     #[test]
     fn opening_signet_emission_failure_does_not_enter_recording_state() {
         let p = participant("p1");
@@ -280,6 +327,7 @@ mod tests {
         assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
     }
 
+    // TEST-05: Closing signet is emitted before technical stop.
     #[test]
     fn coordinated_stop_emits_closing_before_technical_stop() {
         let p = participant("p1");
@@ -297,33 +345,54 @@ mod tests {
         assert_eq!(workflow.session().status(), &SessionStatus::Completed);
     }
 
+    // TEST-06: Stop is rejected before consuming the closing signet.
     #[test]
     fn stop_rejects_non_recording_state_before_consuming_closing_signet() {
         let p = participant("p1");
         let mut stop = RecordingStopCoordinator::new([p]);
-        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
-        assert_eq!(workflow.stop_with_coordinator(&mut stop), Err(WorkflowCoordinationError::InvalidSessionState));
+        let mut workflow = RecorderWorkflow::new(
+            RecordingSession::new("workflow-test"),
+            TestCapture::new(),
+        );
+        assert_eq!(
+            workflow.stop_with_coordinator(&mut stop),
+            Err(WorkflowCoordinationError::InvalidSessionState)
+        );
         assert!(stop.closing_sync_signet().is_some());
     }
 
+    // TEST-07: Failed capture start marks the session as failed.
     #[test]
     fn failed_capture_start_marks_session_as_failed() {
-        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::failing_start());
+        let mut workflow = RecorderWorkflow::new(
+            RecordingSession::new("workflow-test"),
+            TestCapture::failing_start(),
+        );
         let result = workflow.start(&RecordingConfiguration::default());
-        assert_eq!(result, Err(crate::audio::CaptureStartError::DeviceUnavailable));
+        assert_eq!(
+            result,
+            Err(crate::audio::CaptureStartError::DeviceUnavailable)
+        );
         assert_eq!(workflow.session().status(), &SessionStatus::Failed);
     }
 
+    // TEST-08: Failed capture stop marks the session as failed.
     #[test]
     fn failed_capture_stop_marks_session_as_failed() {
         let p = participant("p1");
         let mut start = RecordingStartCoordinator::new([p.clone()]);
         let mut stop = RecordingStopCoordinator::new([p.clone()]);
-        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::failing_stop());
+        let mut workflow = RecorderWorkflow::new(
+            RecordingSession::new("workflow-test"),
+            TestCapture::failing_stop(),
+        );
         workflow.start(&RecordingConfiguration::default()).unwrap();
         workflow.ready_and_maybe_opening_signet(&mut start, &p).unwrap();
         let result = workflow.stop_with_coordinator(&mut stop).unwrap().1;
-        assert!(matches!(result.status(), crate::audio::CaptureStatus::Failed(_)));
+        assert!(matches!(
+            result.status(),
+            crate::audio::CaptureStatus::Failed(_)
+        ));
         assert_eq!(workflow.session().status(), &SessionStatus::Failed);
     }
 }
