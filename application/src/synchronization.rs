@@ -5,9 +5,9 @@
 //! synchronization state and manifest identity required to resume work.
 //!
 //! Concrete persistence belongs in the infrastructure layer. The transfer
-//! contract is deliberately vendor- and transport-neutral and prepares the
-//! boundary required by #144/#145 without committing the application to a
-//! concrete remote provider.
+//! contract is deliberately vendor- and transport-neutral and defines the
+//! correctness boundary required by #144/#145 without committing the
+//! application to a concrete remote provider.
 //!
 //! See ADR-068 and #66 / #143 / #144 / #145.
 
@@ -59,12 +59,46 @@ impl SynchronizationWork {
         self.status
     }
 
+    pub fn transfer_request(&self) -> ArtifactTransferRequest {
+        ArtifactTransferRequest::new(self.artifact_id.clone(), self.manifest_hash)
+    }
+
     fn lifecycle(&self) -> RecordingArtifactSynchronization {
         RecordingArtifactSynchronization::reconstitute(self.artifact_id.clone(), self.status)
     }
 
     fn from_lifecycle(&mut self, lifecycle: RecordingArtifactSynchronization) {
         self.status = lifecycle.status();
+    }
+
+    fn apply_transfer_result(
+        &mut self,
+        result: &ArtifactTransferResult,
+    ) -> Result<(), SynchronizationQueueError> {
+        let mut lifecycle = self.lifecycle();
+
+        match result {
+            ArtifactTransferResult::Succeeded | ArtifactTransferResult::AlreadySynchronized => {
+                lifecycle
+                    .mark_synchronized()
+                    .map_err(SynchronizationQueueError::Lifecycle)?;
+            }
+            ArtifactTransferResult::RetryableFailure { .. } => {
+                lifecycle
+                    .retry()
+                    .map_err(SynchronizationQueueError::Lifecycle)?;
+            }
+            ArtifactTransferResult::Conflict { .. }
+            | ArtifactTransferResult::IntegrityFailure { .. }
+            | ArtifactTransferResult::PermanentFailure { .. } => {
+                lifecycle
+                    .mark_failed()
+                    .map_err(SynchronizationQueueError::Lifecycle)?;
+            }
+        }
+
+        self.from_lifecycle(lifecycle);
+        Ok(())
     }
 }
 
@@ -200,6 +234,32 @@ where
         Ok(Some(work))
     }
 
+    /// Applies a transport-neutral transfer outcome to the synchronization
+    /// lifecycle. Retryable outcomes return work to Pending; terminal and
+    /// integrity outcomes become Failed; successful or already-synchronized
+    /// outcomes become Synchronized.
+    pub fn apply_transfer_result(
+        &mut self,
+        artifact_id: &RecordingArtifactId,
+        result: &ArtifactTransferResult,
+    ) -> Result<SynchronizationWork, SynchronizationQueueError> {
+        let mut work = self
+            .store
+            .list()
+            .map_err(SynchronizationQueueError::Store)?
+            .into_iter()
+            .find(|work| work.artifact_id() == artifact_id)
+            .ok_or_else(|| SynchronizationQueueError::ArtifactNotFound {
+                artifact_id: artifact_id.clone(),
+            })?;
+
+        work.apply_transfer_result(result)?;
+        self.store
+            .save(work.clone())
+            .map_err(SynchronizationQueueError::Store)?;
+        Ok(work)
+    }
+
     /// Requeues all in-progress work after process interruption.
     pub fn recover_interrupted(&mut self) -> Result<usize, SynchronizationQueueError> {
         let mut recovered = 0;
@@ -260,6 +320,24 @@ impl ArtifactTransferRequest {
     }
 }
 
+/// Opaque continuation information returned by a transfer implementation.
+///
+/// The application may persist and return this value to a later transfer
+/// attempt, but never interprets its contents. A provider may leave it absent
+/// when restarting a transfer from the beginning is sufficient.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransferContinuation(Vec<u8>);
+
+impl TransferContinuation {
+    pub fn new(value: impl Into<Vec<u8>>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 /// Transfer result semantics required by #144/#145.
 ///
 /// These outcomes contain no HTTP, cloud-provider, or transport-specific
@@ -269,10 +347,13 @@ impl ArtifactTransferRequest {
 pub enum ArtifactTransferResult {
     Succeeded,
     AlreadySynchronized,
-    RetryableFailure(String),
-    Conflict(String),
-    IntegrityFailure(String),
-    PermanentFailure(String),
+    RetryableFailure {
+        reason: String,
+        continuation: Option<TransferContinuation>,
+    },
+    Conflict { reason: String },
+    IntegrityFailure { reason: String },
+    PermanentFailure { reason: String },
 }
 
 /// Application transfer boundary prepared for concrete remote implementations.
@@ -402,7 +483,13 @@ mod tests {
     // TEST-07
     #[test]
     fn transfer_request_preserves_artifact_and_manifest_identity() {
-        let request = ArtifactTransferRequest::new(artifact_id("artifact-008"), manifest_hash(8));
+        let mut queue =
+            PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
+        queue
+            .enqueue(artifact_id("artifact-008"), manifest_hash(8))
+            .unwrap();
+        let work = queue.claim_next().unwrap().unwrap();
+        let request = work.transfer_request();
 
         assert_eq!(request.artifact_id().value(), "artifact-008");
         assert_eq!(request.manifest_hash(), &manifest_hash(8));
@@ -410,18 +497,99 @@ mod tests {
 
     // TEST-08
     #[test]
-    fn transfer_results_are_vendor_neutral() {
+    fn transfer_results_map_to_synchronization_lifecycle() {
+        let results = [
+            (
+                ArtifactTransferResult::Succeeded,
+                RecordingArtifactSynchronizationStatus::Synchronized,
+            ),
+            (
+                ArtifactTransferResult::AlreadySynchronized,
+                RecordingArtifactSynchronizationStatus::Synchronized,
+            ),
+            (
+                ArtifactTransferResult::RetryableFailure {
+                    reason: "offline".to_owned(),
+                    continuation: None,
+                },
+                RecordingArtifactSynchronizationStatus::Pending,
+            ),
+            (
+                ArtifactTransferResult::Conflict {
+                    reason: "remote version differs".to_owned(),
+                },
+                RecordingArtifactSynchronizationStatus::Failed,
+            ),
+            (
+                ArtifactTransferResult::IntegrityFailure {
+                    reason: "hash mismatch".to_owned(),
+                },
+                RecordingArtifactSynchronizationStatus::Failed,
+            ),
+            (
+                ArtifactTransferResult::PermanentFailure {
+                    reason: "not retryable".to_owned(),
+                },
+                RecordingArtifactSynchronizationStatus::Failed,
+            ),
+        ];
+
+        for (result, expected_status) in results {
+            let mut queue =
+                PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
+            queue
+                .enqueue(artifact_id("artifact-result"), manifest_hash(9))
+                .unwrap();
+            queue.claim_next().unwrap();
+
+            let work = queue
+                .apply_transfer_result(&artifact_id("artifact-result"), &result)
+                .unwrap();
+            assert_eq!(work.status(), expected_status);
+        }
+    }
+
+    // TEST-09
+    #[test]
+    fn retryable_failure_can_carry_opaque_continuation() {
+        let continuation = TransferContinuation::new([1_u8, 2, 3]);
+        let result = ArtifactTransferResult::RetryableFailure {
+            reason: "interrupted".to_owned(),
+            continuation: Some(continuation.clone()),
+        };
+
         assert_eq!(
-            ArtifactTransferResult::Succeeded,
-            ArtifactTransferResult::Succeeded
+            match result {
+                ArtifactTransferResult::RetryableFailure { continuation, .. } => continuation,
+                _ => None,
+            },
+            Some(continuation)
         );
-        assert_eq!(
-            ArtifactTransferResult::RetryableFailure("offline".to_owned()),
-            ArtifactTransferResult::RetryableFailure("offline".to_owned())
-        );
-        assert_eq!(
-            ArtifactTransferResult::IntegrityFailure("hash mismatch".to_owned()),
-            ArtifactTransferResult::IntegrityFailure("hash mismatch".to_owned())
-        );
+    }
+
+    // TEST-10
+    #[test]
+    fn deterministic_transfer_implementation_can_be_tested_without_vendor_types() {
+        struct TestTransfer;
+
+        impl ArtifactTransfer for TestTransfer {
+            fn transfer(&mut self, request: &ArtifactTransferRequest) -> ArtifactTransferResult {
+                if request.manifest_hash() == &manifest_hash(10) {
+                    ArtifactTransferResult::Succeeded
+                } else {
+                    ArtifactTransferResult::RetryableFailure {
+                        reason: "test failure".to_owned(),
+                        continuation: None,
+                    }
+                }
+            }
+        }
+
+        let mut transfer = TestTransfer;
+        let success = transfer.transfer(&ArtifactTransferRequest::new(
+            artifact_id("artifact-010"),
+            manifest_hash(10),
+        ));
+        assert_eq!(success, ArtifactTransferResult::Succeeded);
     }
 }
