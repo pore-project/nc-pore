@@ -26,7 +26,7 @@ where
     capture: C,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WorkflowCoordinationError {
     InvalidSessionState,
     RecordingStart(RecordingStartError),
