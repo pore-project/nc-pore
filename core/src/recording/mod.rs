@@ -6,7 +6,7 @@
 //! - audio backend access
 //! - file handling
 //! - hardware interaction
-//! - synchronization logic
+//! - synchronization transport logic
 //!
 //! See:
 //! - ADR-039 Recording Architecture and Capture Boundary (future)
@@ -19,11 +19,16 @@
 pub mod artifact_id;
 pub mod coordination;
 pub mod id;
+pub mod synchronization;
 pub mod workflow;
 
 pub use artifact_id::RecordingArtifactId;
 pub use coordination::{
     RecordingCoordination, RecordingCoordinationError, RecordingCoordinationStatus,
+};
+pub use synchronization::{
+    RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
+    RecordingArtifactSynchronizationStatus,
 };
 pub use id::RecordingId;
 pub use workflow::{RecordingWorkflow, RecordingWorkflowError, RecordingWorkflowStatus};
