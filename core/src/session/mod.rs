@@ -5,8 +5,8 @@ use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
 use crate::recording::{
-    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError,
-    RecordingId, RecordingLifecycleError,
+    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError, RecordingId,
+    RecordingLifecycleError,
 };
 use crate::role::ProductionAction;
 
@@ -693,19 +693,12 @@ mod tests {
         session.start_by(&owner).unwrap();
 
         session
-            .begin_recording_by(
-                &owner,
-                &RecordingId::new("recording-005"),
-                [owner.clone()],
-            )
+            .begin_recording_by(&owner, &RecordingId::new("recording-005"), [owner.clone()])
             .unwrap();
 
         assert_eq!(
-            session.begin_recording_by(
-                &owner,
-                &RecordingId::new("recording-006"),
-                [owner.clone()],
-            ),
+            session
+                .begin_recording_by(&owner, &RecordingId::new("recording-006"), [owner.clone()]),
             Err(ProductionSessionError::RecordingCoordinationAlreadyActive)
         );
     }
