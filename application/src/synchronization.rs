@@ -1,23 +1,20 @@
-//! Persistent synchronization work and transfer boundaries.
+//! Application-layer synchronization boundaries.
 //!
-//! Synchronization work is persisted separately from the local RecordingArtifact.
-//! The artifact remains the source of recording data; this module stores only the
-//! recoverable work reference and synchronization state needed to resume later.
+//! Synchronization work is kept separate from the local RecordingArtifact.
+//! The application boundary stores only the recoverable artifact reference,
+//! synchronization state and manifest identity required to resume work.
 //!
-//! The transfer contract in this module is deliberately vendor- and
-//! transport-neutral. It is the application boundary prepared for the later
-//! concrete transfer implementation.
+//! Concrete persistence belongs in the infrastructure layer. The transfer
+//! contract is deliberately vendor- and transport-neutral and prepares the
+//! boundary required by #144/#145 without committing the application to a
+//! concrete remote provider.
 //!
 //! See ADR-068 and #66 / #143 / #144 / #145.
 
-use std::fs;
-use std::path::{Path, PathBuf};
-
 use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
-    RecordingArtifactSynchronizationStatus,
+    RecordingArtifactId, RecordingArtifactSynchronization,
+    RecordingArtifactSynchronizationError, RecordingArtifactSynchronizationStatus,
 };
-use serde::{Deserialize, Serialize};
 
 /// Stable reference to one persisted local artifact version that requires
 /// synchronization.
@@ -34,6 +31,19 @@ impl SynchronizationWork {
             artifact_id,
             manifest_hash,
             status: RecordingArtifactSynchronizationStatus::Local,
+        }
+    }
+
+    /// Reconstitutes persisted work without performing any transport action.
+    pub fn reconstitute(
+        artifact_id: RecordingArtifactId,
+        manifest_hash: [u8; 32],
+        status: RecordingArtifactSynchronizationStatus,
+    ) -> Self {
+        Self {
+            artifact_id,
+            manifest_hash,
+            status,
         }
     }
 
@@ -58,69 +68,10 @@ impl SynchronizationWork {
     }
 }
 
-/// Serializable representation kept outside Core so the domain remains free
-/// of persistence and serialization concerns.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct PersistedSynchronizationWork {
-    artifact_id: String,
-    manifest_hash: [u8; 32],
-    status: PersistedSynchronizationStatus,
-}
-
-impl From<&SynchronizationWork> for PersistedSynchronizationWork {
-    fn from(work: &SynchronizationWork) -> Self {
-        Self {
-            artifact_id: work.artifact_id.value().to_owned(),
-            manifest_hash: work.manifest_hash,
-            status: PersistedSynchronizationStatus::from_core(work.status),
-        }
-    }
-}
-
-impl PersistedSynchronizationWork {
-    fn into_work(self) -> SynchronizationWork {
-        SynchronizationWork {
-            artifact_id: RecordingArtifactId::new(self.artifact_id),
-            manifest_hash: self.manifest_hash,
-            status: self.status.into_core(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-enum PersistedSynchronizationStatus {
-    Local,
-    Pending,
-    Transferring,
-    Synchronized,
-    Failed,
-}
-
-impl PersistedSynchronizationStatus {
-    fn into_core(self) -> RecordingArtifactSynchronizationStatus {
-        match self {
-            Self::Local => RecordingArtifactSynchronizationStatus::Local,
-            Self::Pending => RecordingArtifactSynchronizationStatus::Pending,
-            Self::Transferring => RecordingArtifactSynchronizationStatus::Transferring,
-            Self::Synchronized => RecordingArtifactSynchronizationStatus::Synchronized,
-            Self::Failed => RecordingArtifactSynchronizationStatus::Failed,
-        }
-    }
-
-    fn from_core(status: RecordingArtifactSynchronizationStatus) -> Self {
-        match status {
-            RecordingArtifactSynchronizationStatus::Local => Self::Local,
-            RecordingArtifactSynchronizationStatus::Pending => Self::Pending,
-            RecordingArtifactSynchronizationStatus::Transferring => Self::Transferring,
-            RecordingArtifactSynchronizationStatus::Synchronized => Self::Synchronized,
-            RecordingArtifactSynchronizationStatus::Failed => Self::Failed,
-        }
-    }
-}
-
 /// Persistent store for synchronization work.
 ///
-/// The store contains work references, never recording payload data.
+/// The store contains work references, never recording payload data. Concrete
+/// implementations belong outside the application layer.
 pub trait SynchronizationWorkStore {
     fn save(&mut self, work: SynchronizationWork) -> Result<(), SynchronizationWorkStoreError>;
     fn list(&self) -> Result<Vec<SynchronizationWork>, SynchronizationWorkStoreError>;
@@ -165,88 +116,6 @@ impl SynchronizationWorkStore for InMemorySynchronizationWorkStore {
 
     fn list(&self) -> Result<Vec<SynchronizationWork>, SynchronizationWorkStoreError> {
         let mut work = self.work.clone();
-        work.sort_by(|left, right| left.artifact_id.value().cmp(right.artifact_id.value()));
-        Ok(work)
-    }
-}
-
-/// Filesystem implementation of the synchronization work store.
-///
-/// Synchronization state is kept in its own file and is therefore independent
-/// from the local artifact directory and its payload files.
-pub struct FilesystemSynchronizationWorkStore {
-    path: PathBuf,
-}
-
-impl FilesystemSynchronizationWorkStore {
-    pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self {
-            path: root.into().join("synchronization-work.json"),
-        }
-    }
-
-    fn read(&self) -> Result<Vec<SynchronizationWork>, SynchronizationWorkStoreError> {
-        if !self.path.is_file() {
-            return Ok(Vec::new());
-        }
-
-        let content = fs::read_to_string(&self.path)
-            .map_err(|error| SynchronizationWorkStoreError::Io(error.to_string()))?;
-        let persisted: Vec<PersistedSynchronizationWork> = serde_json::from_str(&content)
-            .map_err(|error| SynchronizationWorkStoreError::Serialization(error.to_string()))?;
-
-        Ok(persisted
-            .into_iter()
-            .map(PersistedSynchronizationWork::into_work)
-            .collect())
-    }
-
-    fn write(&self, work: &[SynchronizationWork]) -> Result<(), SynchronizationWorkStoreError> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| SynchronizationWorkStoreError::Io(error.to_string()))?;
-        }
-
-        let persisted: Vec<PersistedSynchronizationWork> = work
-            .iter()
-            .map(PersistedSynchronizationWork::from)
-            .collect();
-        let content = serde_json::to_string_pretty(&persisted)
-            .map_err(|error| SynchronizationWorkStoreError::Serialization(error.to_string()))?;
-        let temp_path = self.path.with_extension("json.tmp");
-
-        fs::write(&temp_path, content)
-            .map_err(|error| SynchronizationWorkStoreError::Io(error.to_string()))?;
-        fs::rename(&temp_path, &self.path)
-            .map_err(|error| SynchronizationWorkStoreError::Io(error.to_string()))?;
-
-        Ok(())
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl SynchronizationWorkStore for FilesystemSynchronizationWorkStore {
-    fn save(&mut self, work: SynchronizationWork) -> Result<(), SynchronizationWorkStoreError> {
-        let mut all = self.read()?;
-
-        if let Some(existing) = all
-            .iter_mut()
-            .find(|existing| existing.artifact_id == work.artifact_id)
-        {
-            *existing = work;
-        } else {
-            all.push(work);
-        }
-
-        all.sort_by(|left, right| left.artifact_id.value().cmp(right.artifact_id.value()));
-        self.write(&all)
-    }
-
-    fn list(&self) -> Result<Vec<SynchronizationWork>, SynchronizationWorkStoreError> {
-        let mut work = self.read()?;
         work.sort_by(|left, right| left.artifact_id.value().cmp(right.artifact_id.value()));
         Ok(work)
     }
@@ -515,66 +384,28 @@ mod tests {
 
     // TEST-06
     #[test]
-    fn filesystem_store_survives_reconstruction() {
-        let root = std::env::temp_dir().join("nc-pore-sync-work-test-06");
-        let _ = fs::remove_dir_all(&root);
-
-        let mut first =
-            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
-        first
-            .enqueue(artifact_id("artifact-007"), manifest_hash(7))
-            .unwrap();
-        drop(first);
-
-        let second =
-            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
-        let work = second.list().unwrap();
-
-        assert_eq!(work.len(), 1);
-        assert_eq!(work[0].artifact_id().value(), "artifact-007");
-        assert_eq!(
-            work[0].status(),
-            RecordingArtifactSynchronizationStatus::Pending
+    fn reconstituted_work_preserves_identity_and_state() {
+        let work = SynchronizationWork::reconstitute(
+            artifact_id("artifact-007"),
+            manifest_hash(7),
+            RecordingArtifactSynchronizationStatus::Pending,
         );
 
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(work.artifact_id().value(), "artifact-007");
+        assert_eq!(work.manifest_hash(), &manifest_hash(7));
+        assert_eq!(work.status(), RecordingArtifactSynchronizationStatus::Pending);
     }
 
     // TEST-07
     #[test]
-    fn filesystem_store_recovers_interrupted_work_after_reconstruction() {
-        let root = std::env::temp_dir().join("nc-pore-sync-work-test-07");
-        let _ = fs::remove_dir_all(&root);
+    fn transfer_request_preserves_artifact_and_manifest_identity() {
+        let request = ArtifactTransferRequest::new(artifact_id("artifact-008"), manifest_hash(8));
 
-        let mut first =
-            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
-        first
-            .enqueue(artifact_id("artifact-008"), manifest_hash(8))
-            .unwrap();
-        first.claim_next().unwrap();
-        drop(first);
-
-        let mut second =
-            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
-        assert_eq!(second.recover_interrupted().unwrap(), 1);
-        assert_eq!(
-            second.list().unwrap()[0].status(),
-            RecordingArtifactSynchronizationStatus::Pending
-        );
-
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(request.artifact_id().value(), "artifact-008");
+        assert_eq!(request.manifest_hash(), &manifest_hash(8));
     }
 
     // TEST-08
-    #[test]
-    fn transfer_request_preserves_artifact_and_manifest_identity() {
-        let request = ArtifactTransferRequest::new(artifact_id("artifact-009"), manifest_hash(9));
-
-        assert_eq!(request.artifact_id().value(), "artifact-009");
-        assert_eq!(request.manifest_hash(), &manifest_hash(9));
-    }
-
-    // TEST-09
     #[test]
     fn transfer_results_are_vendor_neutral() {
         assert_eq!(
