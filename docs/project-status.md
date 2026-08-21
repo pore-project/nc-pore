@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 3.2
-- Date: 2026-08-19
+- Version: 3.3
+- Date: 2026-08-21
 
 ---
 
@@ -250,6 +250,25 @@ Milestone #64 umfasst insbesondere den fachlichen Recording-Lifecycle, die Verbi
 
 Milestone #65 umfasst insbesondere ProductionSession-Management, Participant- und Participation-Semantik, sessionbezogene Rollen und Berechtigungen, stabile Production-Management-Application/API-Grenzen sowie Production Activity/History.
 
+### Architectural Milestone – ADR-068
+
+Mit **ADR-068 – Recording Start and Audio Synchronization Signet** ist am 2026-08-21 eine neue Architekturentscheidung für den nächsten Entwicklungsschritt dokumentiert. ADR-068 befindet sich derzeit im Status **Proposed** und wird deshalb nicht als bereits implementierter Meilenstein dargestellt.
+
+Die Entscheidung definiert für einen konkreten Recording-Start insbesondere:
+
+- einen expliziten gemeinsamen Start durch den Host,
+- die Trennung von Session-Mitgliedschaft und Recording-Teilnahme,
+- eine zum Startzeitpunkt eingefrorene Recording-Teilnehmermenge,
+- einen `READY`-Status erst nach tatsächlich gestarteter lokaler Aufnahme,
+- ein gemeinsames Opening Sync Signet als logischen Beginn des Recordings,
+- ein gemeinsames Closing Sync Signet als logisches Ende des Recordings,
+- die technische Beendigung der lokalen Recorder erst nach dem Closing Signet,
+- sowie zwei akustische Synchronisationsanker für die spätere manuelle oder automatisierte Ausrichtung der Audiospuren.
+
+ADR-068 grenzt bewusst spätere automatische DAW-Integration, automatische Spurausrichtung, kontinuierliche Synchronisationskorrektur, Driftmessung und vollständige Recovery-/Re-Join-Verfahren aus. Diese Möglichkeiten bleiben für spätere Versionen offen, werden aber durch ADR-068 nicht vorgezogen.
+
+Die daraus folgende technische Arbeit ist dem bestehenden architektonischen Meilenstein **#66 – Distributed Recording & Synchronisation** zugeordnet. Als erster konkreter Umsetzungsschritt ist **#140 – Define RecordingArtifact synchronization lifecycle invariants** angelegt. Die weiteren Arbeiten sollen auf dem in ADR-068 und #140 etablierten Vertrag aufbauen und nicht unabhängig konkurrierende Synchronisationsmodelle einführen.
+
 ---
 
 # Next Steps
@@ -259,6 +278,10 @@ Die nächsten Arbeiten werden als größere technische Meilensteine verfolgt. Ei
 1. **`milestone: Distributed Recording & Synchronisation`**
 
    Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage. Dieser Meilenstein baut auf der abgeschlossenen lokalen Recording-Pipeline, den abgeschlossenen fachlichen Recording-Lifecycle-Grenzen und der Production-Management-Foundation auf.
+
+   Der aktuelle architektonische Einstiegspunkt ist **ADR-068 – Recording Start and Audio Synchronization Signet**. Die Umsetzung soll zunächst den dort definierten gemeinsamen Recording-Start, die Recording-Teilnehmersemantik, die Ready-Bestätigungen und die beiden Synchronisationssignets in sinnvolle, zusammenhängende technische Arbeitspakete überführen.
+
+   Parallel bzw. anschließend ist der in #140 definierte artifact-level Synchronisationslebenszyklus die Grundlage für die weitere Synchronisationsarchitektur. Konkrete Remote-Storage-, Transport-, Retry-, Idempotenz- und Recovery-Arbeiten werden darauf aufbauend bestimmt.
 
 Die Meilensteine sind als übergeordnete Wegpunkte zu verstehen und werden jeweils in konkrete Umsetzungsschritte zerlegt. Die konkrete Reihenfolge und die Abhängigkeiten werden vor Beginn der jeweiligen Implementierung geprüft.
 
@@ -290,8 +313,16 @@ Milestone #64 establishes the domain-level Recording lifecycle across Production
 
 Milestone #65 establishes the production-management and collaboration foundation across ProductionSession management, participant and participation semantics, session-scoped roles and permissions, stable production-management application/API boundaries, and production activity/history.
 
+### Architectural Milestone – ADR-068
+
+**ADR-068 – Recording Start and Audio Synchronization Signet** was documented on 2026-08-21 as the architectural entry point for the next development direction. ADR-068 is currently **Proposed** and is therefore not presented as an already implemented milestone.
+
+It defines the explicit host-controlled recording start, the separation of session membership and recording participation, frozen recording participant sets, `READY` confirmations after actual local capture start, and Opening/Closing Sync Signets as logical recording boundaries. It deliberately leaves automatic DAW integration, automatic alignment, continuous synchronization correction, drift measurement, and complete recovery/re-join behavior for later versions.
+
+The resulting technical work belongs to **#66 – Distributed Recording & Synchronisation**. The first concrete work package is **#140 – Define RecordingArtifact synchronization lifecycle invariants**. Further work should build on these contracts rather than introducing competing synchronization models.
+
 The next major milestone is:
 
-1. **`milestone: Distributed Recording & Synchronisation`** — establish the offline-first foundation for distributed recording, synchronization and remote storage.
+1. **`milestone: Distributed Recording & Synchronisation`** — establish the offline-first foundation for distributed recording, synchronization and remote storage, beginning from the architectural direction established by ADR-068 and the artifact-level synchronization contract in #140.
 
 Each milestone may contain multiple implementation issues and pull requests. Dependencies and implementation order are reviewed before work begins.
