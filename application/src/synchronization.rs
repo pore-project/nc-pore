@@ -495,7 +495,10 @@ mod tests {
         queue.claim_next().unwrap();
 
         let work = queue
-            .apply_transfer_result(&artifact_id("artifact-009"), &ArtifactTransferResult::Succeeded)
+            .apply_transfer_result(
+                &artifact_id("artifact-009"),
+                &ArtifactTransferResult::Succeeded,
+            )
             .unwrap();
 
         assert_eq!(
@@ -552,7 +555,10 @@ mod tests {
             let work = queue
                 .apply_transfer_result(&artifact_id("artifact-011"), &result)
                 .unwrap();
-            assert_eq!(work.status(), RecordingArtifactSynchronizationStatus::Failed);
+            assert_eq!(
+                work.status(),
+                RecordingArtifactSynchronizationStatus::Failed
+            );
         }
     }
 
@@ -561,10 +567,8 @@ mod tests {
     fn missing_artifact_is_reported_explicitly() {
         let mut queue =
             PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
-        let result = queue.apply_transfer_result(
-            &artifact_id("missing"),
-            &ArtifactTransferResult::Succeeded,
-        );
+        let result = queue
+            .apply_transfer_result(&artifact_id("missing"), &ArtifactTransferResult::Succeeded);
 
         assert_eq!(
             result,
