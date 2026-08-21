@@ -21,7 +21,7 @@
 pub mod recording_start;
 pub mod recording_stop;
 
-use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration};
+use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration, SyncSignet};
 use crate::session::{RecordingSession, SessionStatus};
 
 /// Coordinates the local recorder workflow.
@@ -118,6 +118,23 @@ where
         capture_result
     }
 
+    /// Emits the supplied Closing Sync Signet before technical capture stops.
+    ///
+    /// The actual signet transport remains outside the workflow layer. This
+    /// method establishes the required ordering boundary from ADR-068 without
+    /// coupling the workflow to a concrete audio output implementation.
+    pub fn stop_after_closing_signet<F>(
+        &mut self,
+        closing_signet: SyncSignet,
+        emit: F,
+    ) -> CaptureResult
+    where
+        F: FnOnce(SyncSignet),
+    {
+        emit(closing_signet);
+        self.stop()
+    }
+
     /// Provides read-only access to the recorder session.
     pub fn session(&self) -> &RecordingSession {
         &self.session
@@ -132,11 +149,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     struct TestCapture {
         active: bool,
         fail_on_start: bool,
         fail_on_stop: bool,
+        events: Rc<RefCell<Vec<&'static str>>>,
     }
 
     impl TestCapture {
@@ -145,6 +165,7 @@ mod tests {
                 active: false,
                 fail_on_start: false,
                 fail_on_stop: false,
+                events: Rc::new(RefCell::new(Vec::new())),
             }
         }
 
@@ -153,6 +174,7 @@ mod tests {
                 active: false,
                 fail_on_start: true,
                 fail_on_stop: false,
+                events: Rc::new(RefCell::new(Vec::new())),
             }
         }
 
@@ -161,6 +183,7 @@ mod tests {
                 active: false,
                 fail_on_start: false,
                 fail_on_stop: true,
+                events: Rc::new(RefCell::new(Vec::new())),
             }
         }
     }
@@ -179,6 +202,7 @@ mod tests {
         }
 
         fn stop_capture(&mut self) -> CaptureResult {
+            self.events.borrow_mut().push("stop");
             self.active = false;
 
             if self.fail_on_stop {
@@ -264,5 +288,28 @@ mod tests {
             crate::audio::CaptureStatus::Failed(_)
         ));
         assert_eq!(workflow.session().status(), &SessionStatus::Failed);
+    }
+
+    // TEST-05 / CUE30
+    // Verify: The Closing Sync Signet is emitted before technical capture stops.
+    #[test]
+    fn closing_signet_is_emitted_before_technical_stop() {
+        let session = RecordingSession::new("workflow-test");
+        let capture = TestCapture::new();
+        let events = Rc::clone(&capture.events);
+        let mut workflow = RecorderWorkflow::new(session, capture);
+        let configuration = RecordingConfiguration::default();
+
+        workflow.start(&configuration).unwrap();
+        workflow.ready().unwrap();
+
+        let result = workflow.stop_after_closing_signet(SyncSignet::closing(), |signet| {
+            assert_eq!(signet.kind(), crate::audio::SyncSignetKind::Closing);
+            events.borrow_mut().push("closing");
+        });
+
+        assert_eq!(result.id(), "workflow-test-capture");
+        assert_eq!(&*events.borrow(), &["closing", "stop"]);
+        assert_eq!(workflow.session().status(), &SessionStatus::Completed);
     }
 }
