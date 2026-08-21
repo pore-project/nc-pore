@@ -19,6 +19,7 @@
 pub mod artifact_id;
 pub mod coordination;
 pub mod id;
+pub mod synchronization;
 pub mod workflow;
 
 pub use artifact_id::RecordingArtifactId;
@@ -26,6 +27,10 @@ pub use coordination::{
     RecordingCoordination, RecordingCoordinationError, RecordingCoordinationStatus,
 };
 pub use id::RecordingId;
+pub use synchronization::{
+    RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
+    RecordingArtifactSynchronizationStatus,
+};
 pub use workflow::{RecordingWorkflow, RecordingWorkflowError, RecordingWorkflowStatus};
 
 use crate::participant::ParticipantId;
