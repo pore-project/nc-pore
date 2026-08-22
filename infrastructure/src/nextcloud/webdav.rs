@@ -1,6 +1,4 @@
-use crate::nextcloud::{
-    NextcloudConnectionConfig, NextcloudProviderError, WebDavTransportError,
-};
+use crate::nextcloud::{NextcloudConnectionConfig, NextcloudProviderError, WebDavTransportError};
 use reqwest::{blocking::Client, Method, StatusCode, Url};
 use std::sync::Arc;
 
@@ -122,13 +120,7 @@ impl<T: WebDavTransport> WebDavClient<T> {
     pub fn propfind(&self, path: &str, depth: u8) -> Result<WebDavEntry, NextcloudProviderError> {
         let method = Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method");
         let depth = depth.to_string();
-        self.request(
-            method,
-            path,
-            &[("Depth", &depth)],
-            None,
-            "PROPFIND",
-        )
+        self.request(method, path, &[("Depth", &depth)], None, "PROPFIND")
     }
 
     pub fn mkcol(&self, path: &str) -> Result<(), NextcloudProviderError> {
@@ -198,7 +190,7 @@ mod tests {
 
     #[derive(Clone)]
     struct FakeTransport {
-        requests: Arc<Mutex<Vec<(Method, String, Vec<(String, String)>, Option<Vec<u8>>)>>>,
+        requests: Arc<Mutex<Vec<(Method, String, Vec<(String, String)>, Option<Vec<u8>>)>>> ,
         response: WebDavEntry,
     }
 
