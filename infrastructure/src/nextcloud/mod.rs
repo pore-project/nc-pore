@@ -9,8 +9,7 @@ pub use config::{NextcloudConnectionConfig, NextcloudCredentials};
 pub use error::{NextcloudProviderError, WebDavTransportError};
 pub use synchronization::{
     new_nextcloud_synchronization_orchestrator, NextcloudSynchronizationError,
-    NextcloudSynchronizationOrchestrator, NextcloudSynchronizationOutcome,
-    NextcloudTransferResult,
+    NextcloudSynchronizationOrchestrator, NextcloudSynchronizationOutcome, NextcloudTransferResult,
 };
 pub use webdav::{HttpWebDavTransport, WebDavClient, WebDavEntry, WebDavTransport};
 
