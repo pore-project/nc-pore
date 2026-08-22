@@ -11,20 +11,18 @@
 //! provider implementation.
 
 use nc_pore_application::synchronization::{
-    ArtifactTransferResult, PersistentSynchronizationQueue, SynchronizationOrchestrationError,
-    SynchronizationProcessOutcome, SynchronizationWorkStore,
+    ArtifactTransferResult, PersistentSynchronizationQueue, SynchronizationWorkStore,
 };
-use nc_pore_application::synchronization_orchestration::SynchronizationOrchestrator;
+use nc_pore_application::synchronization_orchestration::{
+    SynchronizationOrchestrationError, SynchronizationOrchestrator, SynchronizationProcessOutcome,
+};
 use recorder::persistence::PersistenceProvider;
 
 use super::{NextcloudArtifactTransfer, NextcloudConnection};
 
 /// Application orchestrator configured with the Nextcloud v1 provider.
-pub type NextcloudSynchronizationOrchestrator<W, OP, TP> = SynchronizationOrchestrator<
-    W,
-    OP,
-    NextcloudArtifactTransfer<TP>,
->;
+pub type NextcloudSynchronizationOrchestrator<W, OP, TP> =
+    SynchronizationOrchestrator<W, OP, NextcloudArtifactTransfer<TP>>;
 
 /// Builds the concrete v1 synchronization composition.
 ///
