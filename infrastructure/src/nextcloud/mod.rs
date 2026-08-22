@@ -3,10 +3,8 @@ mod error;
 mod webdav;
 
 pub use config::{NextcloudConnectionConfig, NextcloudCredentials};
-pub use error::NextcloudProviderError;
-pub use webdav::{
-    HttpWebDavTransport, WebDavClient, WebDavEntry, WebDavTransport, WebDavTransportError,
-};
+pub use error::{NextcloudProviderError, WebDavTransportError};
+pub use webdav::{HttpWebDavTransport, WebDavClient, WebDavEntry, WebDavTransport};
 
 /// A configured Nextcloud connection for the v1 provider.
 ///
