@@ -9,6 +9,7 @@ pub mod session_context;
 mod session_context_contract_tests;
 pub mod synchronization;
 pub mod synchronization_orchestration;
+pub mod synchronization_persistence;
 
 #[path = "lib_source.rs"]
 mod legacy;
