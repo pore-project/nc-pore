@@ -8,7 +8,10 @@
 use nc_pore_core::recording::RecordingArtifactId;
 use recorder::persistence::{PersistenceLoadResult, PersistenceProvider};
 
-use crate::synchronization::{PersistentSynchronizationQueue, SynchronizationQueueError, SynchronizationWork, SynchronizationWorkStore};
+use crate::synchronization::{
+    PersistentSynchronizationQueue, SynchronizationQueueError, SynchronizationWork,
+    SynchronizationWorkStore,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SynchronizationEnqueueError {
@@ -65,7 +68,9 @@ mod tests {
     #[test]
     fn persisted_artifact_is_enqueued_after_successful_persistence() {
         let mut persistence = InMemoryPersistenceProvider::new();
-        let stored = persistence.store_checked(artifact("artifact-163-01")).unwrap();
+        let stored = persistence
+            .store_checked(artifact("artifact-163-01"))
+            .unwrap();
         let mut queue =
             PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
 
