@@ -30,7 +30,7 @@ fn main() {
         let config = match device
             .supported_input_configs()
             .ok()
-            .and_then(|configs| {
+            .and_then(|mut configs| {
                 configs
                     .find(|configuration| {
                         configuration.channels() == 2
