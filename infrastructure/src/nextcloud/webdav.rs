@@ -190,7 +190,7 @@ mod tests {
 
     #[derive(Clone)]
     struct FakeTransport {
-        requests: Arc<Mutex<Vec<(Method, String, Vec<(String, String)>, Option<Vec<u8>>)>>> ,
+        requests: Arc<Mutex<Vec<(Method, String, Vec<(String, String)>, Option<Vec<u8>>)>>>,
         response: WebDavEntry,
     }
 
