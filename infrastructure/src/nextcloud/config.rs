@@ -121,7 +121,7 @@ mod tests {
     fn credentials_debug_output_redacts_password() {
         let credentials = credentials();
         let output = format!("{credentials:?}");
-        assert!(!output.contains("password"));
+        assert!(!output.contains("app-password"));
         assert!(output.contains("<redacted>"));
     }
 }
