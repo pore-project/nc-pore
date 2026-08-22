@@ -4,6 +4,7 @@ use nc_pore_application::{ArtifactTransfer, ArtifactTransferRequest, ArtifactTra
 use recorder::artifact::RecordingArtifact;
 use recorder::persistence::{PersistenceLoadResult, PersistenceProvider};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 const LARGE_FILE_THRESHOLD: usize = 10 * 1024 * 1024;
 const CHUNK_SIZE: usize = 10 * 1024 * 1024;
@@ -116,15 +117,15 @@ where
             NextcloudProviderError::InvalidConfiguration(format!("manifest serialization failed: {error}"))
         })?;
 
-        for (track_index, track) in artifact.tracks.iter().enumerate() {
-            let track_id = format!("track-{:02}", track_index + 1);
-            let track_path = format!("{artifact_path}/tracks/{track_id}");
+        for (track_index, track) in artifact.tracks().iter().enumerate() {
+            let track_id = sanitize_component(track.id.value());
+            let track_path = format!("{artifact_path}/tracks/track-{:02}-{track_id}", track_index + 1);
             let chunk_path = format!("{track_path}/chunks");
             self.ensure_directory_tree(client, &chunk_path)?;
 
-            for (chunk_index, chunk) in track.chunks.iter().enumerate() {
+            for (chunk_index, chunk) in track.chunks().iter().enumerate() {
                 let payload_path = format!("{chunk_path}/chunk-{:06}.payload", chunk_index + 1);
-                self.upload_payload(client, &payload_path, chunk.data.clone())?;
+                self.upload_payload(client, &payload_path, chunk.payload().data().to_vec())?;
             }
         }
 
@@ -226,18 +227,16 @@ where
         T: crate::nextcloud::WebDavTransport,
     {
         if data.len() < LARGE_FILE_THRESHOLD {
+            let checksum = sha256_hex(&data);
             return client.put_with_headers(
                 destination_path,
-                data.clone(),
-                &[("OC-Checksum", &format!("sha256:{}", sha256_hex(&data)))],
+                data,
+                &[("OC-Checksum", &format!("sha256:{checksum}"))],
             );
         }
 
         let destination = client.url_for(destination_path)?.to_string();
-        let upload_id = format!(
-            "nc-pore-{}",
-            sanitize_component(&sha256_hex(destination_path.as_bytes()))
-        );
+        let upload_id = format!("nc-pore-{}", sha256_hex(destination_path.as_bytes()));
         let upload_root = format!(
             "remote.php/dav/uploads/{}/{upload_id}",
             self.connection.config().username()
@@ -302,7 +301,8 @@ struct RemoteManifest {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 struct RemoteTrack {
     index: usize,
-    configuration: RemoteRecordingConfiguration,
+    track_id: String,
+    configuration: Option<RemoteRecordingConfiguration>,
     chunks: Vec<RemoteChunk>,
 }
 
@@ -317,7 +317,11 @@ struct RemoteRecordingConfiguration {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 struct RemoteChunk {
     index: usize,
-    size: usize,
+    sequence: u32,
+    sample_offset: u64,
+    reference: String,
+    size: u64,
+    sha256: String,
 }
 
 fn build_manifest(
@@ -333,24 +337,30 @@ fn build_manifest(
         recording_started_at: metadata.recording_started_at.map(|value| value.to_rfc3339()),
         display_name: metadata.display_name.clone(),
         tracks: artifact
-            .tracks
+            .tracks()
             .iter()
             .enumerate()
             .map(|(index, track)| RemoteTrack {
                 index,
-                configuration: RemoteRecordingConfiguration {
-                    sample_rate_hz: track.configuration.sample_rate_hz(),
-                    channels: track.configuration.channels(),
-                    sample_format: format!("{:?}", track.configuration.sample_format()),
-                    chunk_duration_seconds: track.configuration.chunk_duration().seconds(),
-                },
+                track_id: track.id.value().to_owned(),
+                configuration: track.configuration().map(|configuration| {
+                    RemoteRecordingConfiguration {
+                        sample_rate_hz: configuration.sample_rate_hz(),
+                        channels: configuration.channels(),
+                        sample_format: format!("{:?}", configuration.sample_format()),
+                        chunk_duration_seconds: configuration.chunk_duration().seconds(),
+                    }
+                }),
                 chunks: track
-                    .chunks
+                    .chunks()
                     .iter()
-                    .enumerate()
-                    .map(|(chunk_index, chunk)| RemoteChunk {
-                        index: chunk_index,
-                        size: chunk.data.len(),
+                    .map(|chunk| RemoteChunk {
+                        index: chunk.sequence as usize,
+                        sequence: chunk.sequence,
+                        sample_offset: chunk.sample_offset(),
+                        reference: chunk.payload().reference().value().to_owned(),
+                        size: chunk.payload().size_bytes(),
+                        sha256: hex_hash(chunk.payload().hash().as_bytes()),
                     })
                     .collect(),
             })
@@ -369,7 +379,9 @@ fn map_provider_error(error: NextcloudProviderError) -> ArtifactTransferResult {
                 reason: error.to_string(),
             }
         }
-        NextcloudProviderError::Remote { status, .. } if status >= 500 || status == 408 || status == 429 => {
+        NextcloudProviderError::Remote { status, .. }
+            if status >= 500 || status == 408 || status == 429 =>
+        {
             ArtifactTransferResult::RetryableFailure {
                 reason: error.to_string(),
                 continuation: None,
@@ -408,14 +420,9 @@ fn hex_hash(value: &[u8; 32]) -> String {
 }
 
 fn sha256_hex(data: &[u8]) -> String {
-    // The manifest hash already comes from the application boundary. For
-    // payload checksums the infrastructure uses the same deterministic
-    // SHA-256 implementation supplied by the workspace dependency graph.
-    let mut state = [0_u8; 32];
-    for (index, byte) in data.iter().enumerate() {
-        state[index % 32] = state[index % 32].wrapping_add(*byte).rotate_left((index % 8) as u32);
-    }
-    hex_hash(&state)
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hex_hash(&hasher.finalize().into())
 }
 
 #[cfg(test)]
@@ -423,31 +430,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn path_uses_recording_date_minute_and_display_name_when_available() {
-        let metadata = NextcloudTransferMetadata {
-            recording_started_at: Some(
-                "2026-08-23T14:37:52+02:00".parse::<DateTime<FixedOffset>>().unwrap(),
-            ),
-            display_name: Some("Frizz Feick / Help the man".to_owned()),
-        };
+    fn timestamp_path_uses_date_and_minute() {
+        let timestamp = "2026-08-23T14:37:52+02:00"
+            .parse::<DateTime<FixedOffset>>()
+            .unwrap();
         assert_eq!(
-            metadata
-                .recording_started_at
-                .unwrap()
-                .format("%Y/%m/%d/%H-%M")
-                .to_string(),
+            timestamp.format("%Y/%m/%d/%H-%M").to_string(),
             "2026/08/23/14-37"
         );
-        assert_eq!(sanitize_component("Frizz Feick / Help the man"), "Frizz Feick _ Help the man");
     }
 
     #[test]
-    fn path_fallback_remains_identifiable_without_display_metadata() {
+    fn display_name_is_sanitized_without_losing_human_readability() {
+        assert_eq!(
+            sanitize_component("Frizz Feick / Help the man"),
+            "Frizz Feick _ Help the man"
+        );
+    }
+
+    #[test]
+    fn fallback_name_remains_identifiable() {
         assert_eq!(sanitize_component("artifact-123"), "artifact-123");
     }
 
     #[test]
-    fn hex_hash_is_deterministic() {
-        assert_eq!(hex_hash(&[0; 32]), "0".repeat(64));
+    fn sha256_is_real_and_deterministic() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
     }
 }
