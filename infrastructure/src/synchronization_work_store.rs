@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use nc_pore_application::synchronization::{
     SynchronizationWork, SynchronizationWorkStore, SynchronizationWorkStoreError,
 };
+use nc_pore_application::synchronization_metadata::ArtifactTransferMetadata;
 use nc_pore_core::recording::RecordingArtifactSynchronizationStatus;
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,8 @@ use serde::{Deserialize, Serialize};
 struct PersistedSynchronizationWork {
     artifact_id: String,
     manifest_hash: [u8; 32],
+    display_name: Option<String>,
+    recorded_at: Option<String>,
     status: PersistedSynchronizationStatus,
 }
 
@@ -24,6 +27,8 @@ impl From<&SynchronizationWork> for PersistedSynchronizationWork {
         Self {
             artifact_id: work.artifact_id().value().to_owned(),
             manifest_hash: *work.manifest_hash(),
+            display_name: work.metadata().display_name().map(str::to_owned),
+            recorded_at: work.metadata().recorded_at().map(str::to_owned),
             status: PersistedSynchronizationStatus::from_core(work.status()),
         }
     }
@@ -31,9 +36,10 @@ impl From<&SynchronizationWork> for PersistedSynchronizationWork {
 
 impl PersistedSynchronizationWork {
     fn into_work(self) -> SynchronizationWork {
-        SynchronizationWork::reconstitute(
+        SynchronizationWork::reconstitute_with_metadata(
             nc_pore_core::recording::RecordingArtifactId::new(self.artifact_id),
             self.manifest_hash,
+            ArtifactTransferMetadata::new(self.display_name, self.recorded_at),
             self.status.into_core(),
         )
     }
@@ -207,6 +213,39 @@ mod tests {
             second.list().unwrap()[0].status(),
             RecordingArtifactSynchronizationStatus::Pending
         );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    // TEST-03: provider-neutral metadata survives filesystem persistence and
+    // reconstruction without connector-specific interpretation.
+    #[test]
+    fn filesystem_store_preserves_transfer_metadata() {
+        let root = std::env::temp_dir().join("nc-pore-sync-work-test-03");
+        let _ = fs::remove_dir_all(&root);
+        let metadata = ArtifactTransferMetadata::new(
+            Some("Interview mit Frizz".to_owned()),
+            Some("2026-08-22T18:30:00+02:00".to_owned()),
+        );
+
+        let mut first =
+            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
+        first
+            .enqueue_with_metadata(
+                RecordingArtifactId::new("artifact-003"),
+                manifest_hash(3),
+                metadata.clone(),
+            )
+            .unwrap();
+        drop(first);
+
+        let second =
+            PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&root));
+        let work = second.list().unwrap();
+
+        assert_eq!(work.len(), 1);
+        assert_eq!(work[0].metadata(), &metadata);
+        assert_eq!(work[0].transfer_request().metadata(), &metadata);
 
         let _ = fs::remove_dir_all(root);
     }
