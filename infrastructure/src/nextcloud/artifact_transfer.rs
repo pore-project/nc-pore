@@ -48,17 +48,26 @@ where
             PersistenceLoadResult::Valid(artifact) => artifact,
             PersistenceLoadResult::NotFound => {
                 return ArtifactTransferResult::PermanentFailure {
-                    reason: format!("local artifact {} was not found", request.artifact_id().value()),
+                    reason: format!(
+                        "local artifact {} was not found",
+                        request.artifact_id().value()
+                    ),
                 };
             }
             PersistenceLoadResult::Incomplete => {
                 return ArtifactTransferResult::IntegrityFailure {
-                    reason: format!("local artifact {} is incomplete", request.artifact_id().value()),
+                    reason: format!(
+                        "local artifact {} is incomplete",
+                        request.artifact_id().value()
+                    ),
                 };
             }
             PersistenceLoadResult::Inconsistent => {
                 return ArtifactTransferResult::IntegrityFailure {
-                    reason: format!("local artifact {} is inconsistent", request.artifact_id().value()),
+                    reason: format!(
+                        "local artifact {} is inconsistent",
+                        request.artifact_id().value()
+                    ),
                 };
             }
         };
@@ -94,11 +103,12 @@ where
         let manifest_path = format!("{artifact_path}/manifest.json");
 
         if let Some(remote_manifest) = client.get_optional(&manifest_path)? {
-            let remote: RemoteManifest = serde_json::from_slice(&remote_manifest.body).map_err(|error| {
-                NextcloudProviderError::InvalidConfiguration(format!(
-                    "remote artifact manifest is invalid: {error}"
-                ))
-            })?;
+            let remote: RemoteManifest =
+                serde_json::from_slice(&remote_manifest.body).map_err(|error| {
+                    NextcloudProviderError::InvalidConfiguration(format!(
+                        "remote artifact manifest is invalid: {error}"
+                    ))
+                })?;
             if remote.artifact_id == artifact.id.value()
                 && remote.manifest_hash == hex_hash(request.manifest_hash())
             {
@@ -114,12 +124,17 @@ where
 
         let manifest = build_manifest(artifact, request.manifest_hash(), metadata);
         let manifest_body = serde_json::to_vec_pretty(&manifest).map_err(|error| {
-            NextcloudProviderError::InvalidConfiguration(format!("manifest serialization failed: {error}"))
+            NextcloudProviderError::InvalidConfiguration(format!(
+                "manifest serialization failed: {error}"
+            ))
         })?;
 
         for (track_index, track) in artifact.tracks().iter().enumerate() {
             let track_id = sanitize_component(track.id.value());
-            let track_path = format!("{artifact_path}/tracks/track-{:02}-{track_id}", track_index + 1);
+            let track_path = format!(
+                "{artifact_path}/tracks/track-{:02}-{track_id}",
+                track_index + 1
+            );
             let chunk_path = format!("{track_path}/chunks");
             self.ensure_directory_tree(client, &chunk_path)?;
 
@@ -141,11 +156,12 @@ where
                 operation: "manifest verification",
             });
         };
-        let verified: RemoteManifest = serde_json::from_slice(&remote_manifest.body).map_err(|error| {
-            NextcloudProviderError::InvalidConfiguration(format!(
-                "uploaded artifact manifest is invalid: {error}"
-            ))
-        })?;
+        let verified: RemoteManifest =
+            serde_json::from_slice(&remote_manifest.body).map_err(|error| {
+                NextcloudProviderError::InvalidConfiguration(format!(
+                    "uploaded artifact manifest is invalid: {error}"
+                ))
+            })?;
         if verified.artifact_id != artifact.id.value()
             || verified.manifest_hash != hex_hash(request.manifest_hash())
         {
@@ -334,7 +350,9 @@ fn build_manifest(
         manifest_hash: hex_hash(manifest_hash),
         production_id: artifact.production_id().map(str::to_owned),
         recording_id: artifact.recording_id().map(str::to_owned),
-        recording_started_at: metadata.recording_started_at.map(|value| value.to_rfc3339()),
+        recording_started_at: metadata
+            .recording_started_at
+            .map(|value| value.to_rfc3339()),
         display_name: metadata.display_name.clone(),
         tracks: artifact
             .tracks()
@@ -371,9 +389,11 @@ fn build_manifest(
 fn map_provider_error(error: NextcloudProviderError) -> ArtifactTransferResult {
     match error {
         NextcloudProviderError::Authentication
-        | NextcloudProviderError::InvalidConfiguration(_) => ArtifactTransferResult::PermanentFailure {
-            reason: error.to_string(),
-        },
+        | NextcloudProviderError::InvalidConfiguration(_) => {
+            ArtifactTransferResult::PermanentFailure {
+                reason: error.to_string(),
+            }
+        }
         NextcloudProviderError::Remote { status, .. } if status == 409 => {
             ArtifactTransferResult::Conflict {
                 reason: error.to_string(),
