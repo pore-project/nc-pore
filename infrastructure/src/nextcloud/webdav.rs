@@ -30,9 +30,9 @@ pub struct HttpWebDavTransport {
 
 impl HttpWebDavTransport {
     fn new(config: &NextcloudConnectionConfig) -> Result<Self, NextcloudProviderError> {
-        let client = Client::builder()
-            .build()
-            .map_err(|error| WebDavTransportError::new(error.to_string()))?;
+        let client = Client::builder().build().map_err(|error| {
+            NextcloudProviderError::Transport(WebDavTransportError::new(error.to_string()))
+        })?;
         Ok(Self {
             client,
             username: config.username().to_owned(),
@@ -49,10 +49,10 @@ impl WebDavTransport for HttpWebDavTransport {
         headers: &[(&str, &str)],
         body: Option<Vec<u8>>,
     ) -> Result<WebDavEntry, WebDavTransportError> {
-        let mut request = self.client.request(method, url).basic_auth(
-            &self.username,
-            Some(&self.app_password),
-        );
+        let mut request = self
+            .client
+            .request(method, url)
+            .basic_auth(&self.username, Some(&self.app_password));
         for (name, value) in headers {
             request = request.header(*name, *value);
         }
@@ -107,24 +107,25 @@ impl<T: WebDavTransport> WebDavClient<T> {
             &path,
             &[("Depth", "0")],
             None,
-            "authenticate",
+            "authentication",
         )?;
-        match response.status {
-            200..=299 => Ok(()),
-            401 | 403 => Err(NextcloudProviderError::Authentication),
-            status => Err(NextcloudProviderError::Remote {
-                status,
+        if (200..=299).contains(&response.status) {
+            Ok(())
+        } else {
+            Err(NextcloudProviderError::Remote {
+                status: response.status,
                 operation: "authentication",
-            }),
+            })
         }
     }
 
     pub fn propfind(&self, path: &str, depth: u8) -> Result<WebDavEntry, NextcloudProviderError> {
         let method = Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method");
+        let depth = depth.to_string();
         self.request(
             method,
             path,
-            &[("Depth", &depth.to_string())],
+            &[("Depth", &depth)],
             None,
             "PROPFIND",
         )
@@ -133,7 +134,9 @@ impl<T: WebDavTransport> WebDavClient<T> {
     pub fn mkcol(&self, path: &str) -> Result<(), NextcloudProviderError> {
         let method = Method::from_bytes(b"MKCOL").expect("MKCOL is a valid HTTP method");
         let response = self.request(method, path, &[], None, "MKCOL")?;
-        if response.status == StatusCode::CREATED.as_u16() || response.status == StatusCode::NO_CONTENT.as_u16() {
+        if response.status == StatusCode::CREATED.as_u16()
+            || response.status == StatusCode::NO_CONTENT.as_u16()
+        {
             return Ok(());
         }
         Err(NextcloudProviderError::Remote {
@@ -172,7 +175,7 @@ impl<T: WebDavTransport> WebDavClient<T> {
             .map_err(|error| NextcloudProviderError::InvalidConfiguration(error.to_string()))?;
         self.transport
             .execute(method, url, headers, body)
-            .map_err(|error| NextcloudProviderError::Transport(error))
+            .map_err(NextcloudProviderError::Transport)
             .and_then(|response| {
                 if response.status == 401 || response.status == 403 {
                     Err(NextcloudProviderError::Authentication)
@@ -193,9 +196,9 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    #[derive(Clone, Default)]
+    #[derive(Clone)]
     struct FakeTransport {
-        requests: Arc<Mutex<Vec<(Method, String, Vec<(String, String)>, Option<Vec<u8>>)>>> ,
+        requests: Arc<Mutex<Vec<(Method, String, Vec<(String, String)>, Option<Vec<u8>>)>>>,
         response: WebDavEntry,
     }
 
@@ -244,11 +247,16 @@ mod tests {
         let transport = FakeTransport::new(207);
         let requests = Arc::clone(&transport.requests);
         let client = WebDavClient::with_transport(&config(), transport).unwrap();
-        let response = client.propfind("remote.php/dav/files/host-user/", 0).unwrap();
+        let response = client
+            .propfind("remote.php/dav/files/host-user/", 0)
+            .unwrap();
         assert_eq!(response.status, 207);
         let request = requests.lock().unwrap().last().unwrap().clone();
         assert_eq!(request.0, Method::from_bytes(b"PROPFIND").unwrap());
-        assert_eq!(request.1, "https://cloud.example.test/remote.php/dav/files/host-user/");
+        assert_eq!(
+            request.1,
+            "https://cloud.example.test/remote.php/dav/files/host-user/"
+        );
         assert_eq!(request.2, vec![("Depth".into(), "0".into())]);
     }
 
