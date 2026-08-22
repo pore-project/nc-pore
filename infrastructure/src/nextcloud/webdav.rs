@@ -98,6 +98,12 @@ impl<T: WebDavTransport> WebDavClient<T> {
         })
     }
 
+    pub(crate) fn url_for(&self, path: &str) -> Result<Url, NextcloudProviderError> {
+        self.base_url
+            .join(path.trim_start_matches('/'))
+            .map_err(|error| NextcloudProviderError::InvalidConfiguration(error.to_string()))
+    }
+
     pub fn authenticate(&self, username: &str) -> Result<(), NextcloudProviderError> {
         let path = format!("{DAV_ROOT}{username}/");
         let response = self.request(
@@ -124,8 +130,16 @@ impl<T: WebDavTransport> WebDavClient<T> {
     }
 
     pub fn mkcol(&self, path: &str) -> Result<(), NextcloudProviderError> {
+        self.mkcol_with_headers(path, &[])
+    }
+
+    pub fn mkcol_with_headers(
+        &self,
+        path: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<(), NextcloudProviderError> {
         let method = Method::from_bytes(b"MKCOL").expect("MKCOL is a valid HTTP method");
-        let response = self.request(method, path, &[], None, "MKCOL")?;
+        let response = self.request(method, path, headers, None, "MKCOL")?;
         if response.status == StatusCode::CREATED.as_u16()
             || response.status == StatusCode::NO_CONTENT.as_u16()
         {
@@ -138,7 +152,16 @@ impl<T: WebDavTransport> WebDavClient<T> {
     }
 
     pub fn put(&self, path: &str, body: Vec<u8>) -> Result<(), NextcloudProviderError> {
-        let response = self.request(Method::PUT, path, &[], Some(body), "PUT")?;
+        self.put_with_headers(path, body, &[])
+    }
+
+    pub fn put_with_headers(
+        &self,
+        path: &str,
+        body: Vec<u8>,
+        headers: &[(&str, &str)],
+    ) -> Result<(), NextcloudProviderError> {
+        let response = self.request(Method::PUT, path, headers, Some(body), "PUT")?;
         if matches!(response.status, 200 | 201 | 204) {
             return Ok(());
         }
@@ -153,6 +176,35 @@ impl<T: WebDavTransport> WebDavClient<T> {
         Ok(response.status)
     }
 
+    pub fn get_optional(&self, path: &str) -> Result<Option<WebDavEntry>, NextcloudProviderError> {
+        let response = self.request_raw(Method::GET, path, &[], None)?;
+        match response.status {
+            404 => Ok(None),
+            401 | 403 => Err(NextcloudProviderError::Authentication),
+            status if status >= 400 => Err(NextcloudProviderError::Remote {
+                status,
+                operation: "GET",
+            }),
+            _ => Ok(Some(response)),
+        }
+    }
+
+    pub fn move_with_headers(
+        &self,
+        path: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<(), NextcloudProviderError> {
+        let method = Method::from_bytes(b"MOVE").expect("MOVE is a valid HTTP method");
+        let response = self.request(method, path, headers, None, "MOVE")?;
+        if matches!(response.status, 200 | 201 | 204) {
+            return Ok(());
+        }
+        Err(NextcloudProviderError::Remote {
+            status: response.status,
+            operation: "MOVE",
+        })
+    }
+
     fn request(
         &self,
         method: Method,
@@ -161,25 +213,30 @@ impl<T: WebDavTransport> WebDavClient<T> {
         body: Option<Vec<u8>>,
         operation: &'static str,
     ) -> Result<WebDavEntry, NextcloudProviderError> {
-        let url = self
-            .base_url
-            .join(path.trim_start_matches('/'))
-            .map_err(|error| NextcloudProviderError::InvalidConfiguration(error.to_string()))?;
+        let response = self.request_raw(method, path, headers, body)?;
+        if response.status == 401 || response.status == 403 {
+            Err(NextcloudProviderError::Authentication)
+        } else if response.status >= 400 {
+            Err(NextcloudProviderError::Remote {
+                status: response.status,
+                operation,
+            })
+        } else {
+            Ok(response)
+        }
+    }
+
+    fn request_raw(
+        &self,
+        method: Method,
+        path: &str,
+        headers: &[(&str, &str)],
+        body: Option<Vec<u8>>,
+    ) -> Result<WebDavEntry, NextcloudProviderError> {
+        let url = self.url_for(path)?;
         self.transport
             .execute(method, url, headers, body)
             .map_err(NextcloudProviderError::Transport)
-            .and_then(|response| {
-                if response.status == 401 || response.status == 403 {
-                    Err(NextcloudProviderError::Authentication)
-                } else if response.status >= 400 {
-                    Err(NextcloudProviderError::Remote {
-                        status: response.status,
-                        operation,
-                    })
-                } else {
-                    Ok(response)
-                }
-            })
     }
 }
 
@@ -265,6 +322,46 @@ mod tests {
     fn put_accepts_created_response() {
         let client = WebDavClient::with_transport(&config(), FakeTransport::new(201)).unwrap();
         assert_eq!(client.put("audio/test.bin", b"data".to_vec()), Ok(()));
+    }
+
+    #[test]
+    fn optional_get_maps_not_found_to_none() {
+        let client = WebDavClient::with_transport(&config(), FakeTransport::new(404)).unwrap();
+        assert_eq!(client.get_optional("audio/manifest.json").unwrap(), None);
+    }
+
+    #[test]
+    fn move_accepts_created_response_and_preserves_headers() {
+        let transport = FakeTransport::new(201);
+        let requests = Arc::clone(&transport.requests);
+        let client = WebDavClient::with_transport(&config(), transport).unwrap();
+        client
+            .move_with_headers(
+                "remote.php/dav/uploads/host-user/upload/.file",
+                &[("Destination", "https://cloud.example.test/dest")],
+            )
+            .unwrap();
+        let request = requests.lock().unwrap().last().unwrap().clone();
+        assert_eq!(request.0, Method::from_bytes(b"MOVE").unwrap());
+        assert_eq!(
+            request.2,
+            vec![(
+                "Destination".into(),
+                "https://cloud.example.test/dest".into()
+            )]
+        );
+    }
+
+    #[test]
+    fn url_for_resolves_absolute_webdav_paths() {
+        let client = WebDavClient::with_transport(&config(), FakeTransport::new(200)).unwrap();
+        assert_eq!(
+            client
+                .url_for("remote.php/dav/files/host-user/audio/test.bin")
+                .unwrap()
+                .as_str(),
+            "https://cloud.example.test/remote.php/dav/files/host-user/audio/test.bin"
+        );
     }
 
     #[test]
