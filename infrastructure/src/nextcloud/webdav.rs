@@ -345,7 +345,10 @@ mod tests {
         assert_eq!(request.0, Method::from_bytes(b"MOVE").unwrap());
         assert_eq!(
             request.2,
-            vec![("Destination".into(), "https://cloud.example.test/dest".into())]
+            vec![(
+                "Destination".into(),
+                "https://cloud.example.test/dest".into()
+            )]
         );
     }
 
