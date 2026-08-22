@@ -83,9 +83,9 @@ impl NextcloudConnectionConfig {
 
     pub(crate) fn validate(&self) -> Result<(), NextcloudProviderError> {
         let url = self.base_url()?;
-        if !matches!(url.scheme(), "https" | "http") {
+        if url.scheme() != "https" {
             return Err(NextcloudProviderError::InvalidConfiguration(
-                "Nextcloud endpoint must use http or https".into(),
+                "Nextcloud endpoint must use https".into(),
             ));
         }
         if self.credentials.username().trim().is_empty() {
@@ -127,6 +127,12 @@ mod tests {
             config.base_url().unwrap().as_str(),
             "https://cloud.example.test/"
         );
+    }
+
+    #[test]
+    fn https_is_required() {
+        let config = NextcloudConnectionConfig::new("http://cloud.example.test", credentials());
+        assert!(config.validate().is_err());
     }
 
     #[test]
