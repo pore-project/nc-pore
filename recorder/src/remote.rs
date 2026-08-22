@@ -105,7 +105,10 @@ mod tests {
     // TEST-03: Providers receive the complete artifact as the transfer unit.
     #[test]
     fn remote_view_keeps_artifact_as_transfer_unit() {
-        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+        let artifact = RecordingArtifact::new(
+            "artifact-001",
+            RecordingSessionId::new("session-001"),
+        );
         let remote = RemoteArtifact::new(&artifact, SystemTime::UNIX_EPOCH, None);
 
         assert_eq!(remote.artifact().id.value(), "artifact-001");
