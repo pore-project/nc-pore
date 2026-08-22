@@ -4,7 +4,8 @@ fn main() {
     let host = cpal::default_host();
     let default_name = host
         .default_input_device()
-        .and_then(|device| device.name().ok());
+        .and_then(|device| device.description().ok())
+        .map(|description| description.to_string());
 
     println!("CPAL Host: {:?}", host.id());
     println!(
@@ -23,7 +24,8 @@ fn main() {
     for (index, device) in devices.enumerate() {
         count += 1;
         let name = device
-            .name()
+            .description()
+            .map(|description| description.to_string())
             .unwrap_or_else(|_| "<unbekannt>".to_string());
         let marker = if default_name.as_deref() == Some(name.as_str()) {
             " [DEFAULT]"
@@ -46,7 +48,7 @@ fn main() {
                     );
                 }
             }
-            Err(error) => println!("      Konfigurationen: <Fehler: {error}>") ,
+            Err(error) => println!("      Konfigurationen: <Fehler: {error}>"),
         }
     }
 
