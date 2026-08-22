@@ -1,10 +1,20 @@
 use crate::nextcloud::NextcloudProviderError;
 use reqwest::Url;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct NextcloudCredentials {
     username: String,
     app_password: String,
+}
+
+impl std::fmt::Debug for NextcloudCredentials {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("NextcloudCredentials")
+            .field("username", &self.username)
+            .field("app_password", &"<redacted>")
+            .finish()
+    }
 }
 
 impl NextcloudCredentials {
@@ -102,5 +112,13 @@ mod tests {
             NextcloudCredentials::new("user", ""),
         );
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn credentials_debug_output_redacts_password() {
+        let credentials = credentials();
+        let output = format!("{credentials:?}");
+        assert!(!output.contains("password"));
+        assert!(output.contains("<redacted>"));
     }
 }
