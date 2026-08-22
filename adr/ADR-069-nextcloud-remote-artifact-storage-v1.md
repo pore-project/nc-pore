@@ -445,5 +445,3 @@ This decision leads to the following technical work:
 7. Add end-to-end tests from locally persisted artifact to confirmed remote state.
 
 These are implementation tasks and are not claimed as already implemented by this ADR.
-
----
