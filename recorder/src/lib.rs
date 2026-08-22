@@ -10,6 +10,7 @@ pub mod audio;
 pub mod export;
 pub mod metadata;
 pub mod persistence;
+pub mod remote;
 pub mod session;
 pub mod storage;
 pub mod workflow;
