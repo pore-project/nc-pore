@@ -3,7 +3,7 @@ use chrono::{DateTime, FixedOffset};
 use nc_pore_application::{ArtifactTransfer, ArtifactTransferRequest, ArtifactTransferResult};
 use recorder::artifact::RecordingArtifact;
 use recorder::persistence::{PersistenceLoadResult, PersistenceProvider};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const LARGE_FILE_THRESHOLD: usize = 10 * 1024 * 1024;
@@ -63,7 +63,7 @@ where
             }
         };
 
-        if artifact.id != *request.artifact_id() {
+        if artifact.id.value() != request.artifact_id().value() {
             return ArtifactTransferResult::IntegrityFailure {
                 reason: "loaded artifact identity does not match synchronization request".into(),
             };
@@ -287,7 +287,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 struct RemoteManifest {
     artifact_id: String,
     manifest_hash: String,
@@ -298,7 +298,7 @@ struct RemoteManifest {
     tracks: Vec<RemoteTrack>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 struct RemoteTrack {
     index: usize,
     track_id: String,
@@ -306,7 +306,7 @@ struct RemoteTrack {
     chunks: Vec<RemoteChunk>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 struct RemoteRecordingConfiguration {
     sample_rate_hz: u32,
     channels: u16,
@@ -314,7 +314,7 @@ struct RemoteRecordingConfiguration {
     chunk_duration_seconds: u32,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 struct RemoteChunk {
     index: usize,
     sequence: u32,
