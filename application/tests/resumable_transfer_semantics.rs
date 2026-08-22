@@ -72,10 +72,8 @@ impl ArtifactTransfer for DeterministicRemote {
             };
         }
 
-        self.objects.insert(
-            request.artifact_id().clone(),
-            *request.manifest_hash(),
-        );
+        self.objects
+            .insert(request.artifact_id().clone(), *request.manifest_hash());
         ArtifactTransferResult::Succeeded
     }
 }
@@ -112,7 +110,10 @@ fn incompatible_remote_representation_is_a_deterministic_conflict() {
     let id = artifact_id("artifact-conflict");
 
     let original = ArtifactTransferRequest::new(id.clone(), manifest_hash(2));
-    assert_eq!(remote.transfer(&original), ArtifactTransferResult::Succeeded);
+    assert_eq!(
+        remote.transfer(&original),
+        ArtifactTransferResult::Succeeded
+    );
 
     let incompatible = ArtifactTransferRequest::new(id.clone(), manifest_hash(3));
     assert_eq!(
@@ -142,8 +143,7 @@ fn integrity_failure_does_not_create_or_modify_remote_artifact() {
 
 #[test]
 fn transfer_outcomes_drive_the_persistent_lifecycle_without_mutating_local_identity() {
-    let mut queue =
-        PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
+    let mut queue = PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
     let id = artifact_id("artifact-lifecycle");
     let hash = manifest_hash(5);
 
@@ -159,7 +159,10 @@ fn transfer_outcomes_drive_the_persistent_lifecycle_without_mutating_local_ident
         )
         .unwrap();
 
-    assert_eq!(work.status(), RecordingArtifactSynchronizationStatus::Failed);
+    assert_eq!(
+        work.status(),
+        RecordingArtifactSynchronizationStatus::Failed
+    );
     assert_eq!(work.artifact_id(), &id);
     assert_eq!(work.manifest_hash(), &hash);
 }
