@@ -3,8 +3,9 @@ pub mod session_repository;
 pub mod synchronization_work_store;
 
 pub use nextcloud::{
-    HttpWebDavTransport, NextcloudConnection, NextcloudConnectionConfig, NextcloudCredentials,
-    NextcloudProviderError, WebDavClient, WebDavEntry, WebDavTransport, WebDavTransportError,
+    HttpWebDavTransport, NextcloudArtifactTransfer, NextcloudConnection,
+    NextcloudConnectionConfig, NextcloudCredentials, NextcloudProviderError,
+    NextcloudTransferMetadata, WebDavClient, WebDavEntry, WebDavTransport, WebDavTransportError,
 };
 pub use session_repository::{
     FileProductionSessionRepository, FileProductionSessionRepositoryError,
