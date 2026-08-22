@@ -1,11 +1,17 @@
 mod artifact_transfer;
 mod config;
 mod error;
+mod synchronization;
 mod webdav;
 
 pub use artifact_transfer::{NextcloudArtifactTransfer, NextcloudTransferMetadata};
 pub use config::{NextcloudConnectionConfig, NextcloudCredentials};
 pub use error::{NextcloudProviderError, WebDavTransportError};
+pub use synchronization::{
+    new_nextcloud_synchronization_orchestrator, NextcloudSynchronizationError,
+    NextcloudSynchronizationOrchestrator, NextcloudSynchronizationOutcome,
+    NextcloudTransferResult,
+};
 pub use webdav::{HttpWebDavTransport, WebDavClient, WebDavEntry, WebDavTransport};
 
 /// A configured Nextcloud connection for the v1 provider.
