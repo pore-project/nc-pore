@@ -20,12 +20,8 @@ use crate::synchronization::{
 pub enum SynchronizationProcessOutcome {
     NoPendingWork,
     Synchronized,
-    Retryable {
-        reason: String,
-    },
-    Failed {
-        reason: String,
-    },
+    Retryable { reason: String },
+    Failed { reason: String },
 }
 
 /// Errors raised while preparing or executing one orchestration step.
@@ -57,11 +53,7 @@ where
     P: PersistenceProvider,
     T: ArtifactTransfer,
 {
-    pub fn new(
-        queue: PersistentSynchronizationQueue<W>,
-        persistence: P,
-        transfer: T,
-    ) -> Self {
+    pub fn new(queue: PersistentSynchronizationQueue<W>, persistence: P, transfer: T) -> Self {
         Self {
             queue,
             persistence,
@@ -173,7 +165,9 @@ mod tests {
     }
 
     fn enqueue_artifact(
-        queue: &mut PersistentSynchronizationQueue<crate::synchronization::InMemorySynchronizationWorkStore>,
+        queue: &mut PersistentSynchronizationQueue<
+            crate::synchronization::InMemorySynchronizationWorkStore,
+        >,
         artifact: &RecordingArtifact,
     ) {
         queue
@@ -198,7 +192,10 @@ mod tests {
     }
 
     impl ArtifactTransfer for ScriptedTransfer {
-        fn transfer(&mut self, _request: &crate::synchronization::ArtifactTransferRequest) -> ArtifactTransferResult {
+        fn transfer(
+            &mut self,
+            _request: &crate::synchronization::ArtifactTransferRequest,
+        ) -> ArtifactTransferResult {
             self.results
                 .pop_front()
                 .unwrap_or(ArtifactTransferResult::PermanentFailure {
