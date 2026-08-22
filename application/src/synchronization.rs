@@ -30,7 +30,11 @@ pub struct SynchronizationWork {
 
 impl SynchronizationWork {
     pub fn new(artifact_id: RecordingArtifactId, manifest_hash: [u8; 32]) -> Self {
-        Self::new_with_metadata(artifact_id, manifest_hash, ArtifactTransferMetadata::default())
+        Self::new_with_metadata(
+            artifact_id,
+            manifest_hash,
+            ArtifactTransferMetadata::default(),
+        )
     }
 
     pub fn new_with_metadata(
@@ -221,7 +225,8 @@ where
             return Err(SynchronizationQueueError::ArtifactVersionConflict { artifact_id });
         }
 
-        let mut work = SynchronizationWork::new_with_metadata(artifact_id, manifest_hash, metadata);
+        let mut work =
+            SynchronizationWork::new_with_metadata(artifact_id, manifest_hash, metadata);
         let mut lifecycle = work.lifecycle();
         lifecycle
             .queue()
@@ -688,7 +693,11 @@ mod tests {
         );
 
         let work = queue
-            .enqueue_with_metadata(artifact_id("artifact-013"), manifest_hash(13), metadata.clone())
+            .enqueue_with_metadata(
+                artifact_id("artifact-013"),
+                manifest_hash(13),
+                metadata.clone(),
+            )
             .unwrap();
         let request = work.transfer_request();
 
