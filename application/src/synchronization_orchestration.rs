@@ -7,7 +7,6 @@
 //!
 //! See ADR-068 and #66 / #146.
 
-use nc_pore_core::recording::RecordingArtifactSynchronizationStatus;
 use recorder::persistence::{PersistenceLoadResult, PersistenceProvider};
 
 use crate::synchronization::{
@@ -156,9 +155,10 @@ mod tests {
     use super::*;
     use std::collections::VecDeque;
 
-    use nc_pore_core::recording::{RecordingArtifactId, RecordingSessionId};
+    use nc_pore_core::recording::RecordingArtifactId;
     use recorder::artifact::RecordingArtifact;
     use recorder::persistence::InMemoryPersistenceProvider;
+    use recorder::session::RecordingSessionId;
 
     fn artifact(value: &str) -> RecordingArtifact {
         RecordingArtifact::new(value, RecordingSessionId::new("session-146"))
@@ -227,7 +227,7 @@ mod tests {
         );
         assert_eq!(
             orchestrator.queue().list().unwrap()[0].status(),
-            RecordingArtifactSynchronizationStatus::Synchronized
+            nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Synchronized
         );
     }
 
@@ -261,7 +261,7 @@ mod tests {
         ));
         assert_eq!(
             orchestrator.queue().list().unwrap()[0].status(),
-            RecordingArtifactSynchronizationStatus::Pending
+            nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Pending
         );
     }
 
@@ -347,7 +347,7 @@ mod tests {
         ));
         assert_eq!(
             orchestrator.queue().list().unwrap()[0].status(),
-            RecordingArtifactSynchronizationStatus::Failed
+            nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Failed
         );
     }
 
@@ -377,7 +377,7 @@ mod tests {
         ));
         assert_eq!(
             orchestrator.queue().list().unwrap()[0].status(),
-            RecordingArtifactSynchronizationStatus::Failed
+            nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Failed
         );
         assert_eq!(stored.id.value(), "artifact-146-06");
     }
