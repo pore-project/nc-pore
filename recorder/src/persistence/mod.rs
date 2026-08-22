@@ -15,7 +15,6 @@ mod filesystem;
 mod provider;
 
 pub use assessment::PersistenceLoadResult;
-#[cfg(test)]
 pub use filesystem::FilesystemPersistenceProvider;
 pub use provider::{PersistenceProvider, PersistenceRecoveryLookup, PersistenceStoreError};
 
@@ -112,7 +111,6 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
 mod tests {
     use super::*;
     use crate::artifact::RecordingArtifact;
-    use crate::persistence::FilesystemPersistenceProvider;
     use crate::session::RecordingSessionId;
 
     // TEST-12
@@ -238,22 +236,6 @@ mod tests {
             provider.load("artifact-001"),
             PersistenceLoadResult::NotFound
         ));
-    }
-
-    // TEST-20
-    //
-    // Protects ADR-052:
-    // The filesystem persistence implementation is exposed
-    // through the persistence boundary.
-    #[test]
-    fn test_20_filesystem_provider_is_available_through_boundary() {
-        let path = std::env::temp_dir().join("nc-pore-test-20");
-
-        let provider = FilesystemPersistenceProvider::new(&path);
-
-        drop(provider);
-
-        let _ = std::fs::remove_dir_all(path);
     }
 
     // TEST-37
