@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nc-pore-core = { package = "core", path = "../core" }
 nc-pore-application = { path = "../application" }
 recorder = { path = "../recorder" }
