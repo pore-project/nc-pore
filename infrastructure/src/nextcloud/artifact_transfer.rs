@@ -1,6 +1,8 @@
 use crate::nextcloud::{NextcloudConnection, NextcloudProviderError, WebDavClient};
 use chrono::{DateTime, FixedOffset};
-use nc_pore_application::{ArtifactTransfer, ArtifactTransferRequest, ArtifactTransferResult};
+use nc_pore_application::synchronization::{
+    ArtifactTransfer, ArtifactTransferRequest, ArtifactTransferResult,
+};
 use recorder::artifact::RecordingArtifact;
 use recorder::persistence::{PersistenceLoadResult, PersistenceProvider};
 use serde::{Deserialize, Serialize};
