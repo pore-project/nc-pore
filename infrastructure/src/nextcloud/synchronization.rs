@@ -141,10 +141,8 @@ mod tests {
             super::super::NextcloudCredentials::new("host", "app-password"),
         ))
         .unwrap();
-        let mut transfer = NextcloudMetadataTransfer::new(
-            connection,
-            InMemoryPersistenceProvider::new(),
-        );
+        let mut transfer =
+            NextcloudMetadataTransfer::new(connection, InMemoryPersistenceProvider::new());
 
         assert!(matches!(
             transfer.transfer(&request),
