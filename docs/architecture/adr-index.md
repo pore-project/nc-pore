@@ -84,6 +84,7 @@ This document provides an overview and navigation entry.
 - ADR-066 Application and Infrastructure Boundaries
 - ADR-067 Session Context and External Provider Contract
 - ADR-068 Recording Start and Audio Synchronization Signet
+- ADR-069 Nextcloud Remote Artifact Storage v1
 
 ---
 
