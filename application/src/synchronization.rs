@@ -225,8 +225,7 @@ where
             return Err(SynchronizationQueueError::ArtifactVersionConflict { artifact_id });
         }
 
-        let mut work =
-            SynchronizationWork::new_with_metadata(artifact_id, manifest_hash, metadata);
+        let mut work = SynchronizationWork::new_with_metadata(artifact_id, manifest_hash, metadata);
         let mut lifecycle = work.lifecycle();
         lifecycle
             .queue()
