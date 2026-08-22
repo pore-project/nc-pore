@@ -98,6 +98,12 @@ impl<T: WebDavTransport> WebDavClient<T> {
         })
     }
 
+    pub(crate) fn url_for(&self, path: &str) -> Result<Url, NextcloudProviderError> {
+        self.base_url
+            .join(path.trim_start_matches('/'))
+            .map_err(|error| NextcloudProviderError::InvalidConfiguration(error.to_string()))
+    }
+
     pub fn authenticate(&self, username: &str) -> Result<(), NextcloudProviderError> {
         let path = format!("{DAV_ROOT}{username}/");
         let response = self.request(
@@ -227,10 +233,7 @@ impl<T: WebDavTransport> WebDavClient<T> {
         headers: &[(&str, &str)],
         body: Option<Vec<u8>>,
     ) -> Result<WebDavEntry, NextcloudProviderError> {
-        let url = self
-            .base_url
-            .join(path.trim_start_matches('/'))
-            .map_err(|error| NextcloudProviderError::InvalidConfiguration(error.to_string()))?;
+        let url = self.url_for(path)?;
         self.transport
             .execute(method, url, headers, body)
             .map_err(NextcloudProviderError::Transport)
@@ -343,6 +346,18 @@ mod tests {
         assert_eq!(
             request.2,
             vec![("Destination".into(), "https://cloud.example.test/dest".into())]
+        );
+    }
+
+    #[test]
+    fn url_for_resolves_absolute_webdav_paths() {
+        let client = WebDavClient::with_transport(&config(), FakeTransport::new(200)).unwrap();
+        assert_eq!(
+            client
+                .url_for("remote.php/dav/files/host-user/audio/test.bin")
+                .unwrap()
+                .as_str(),
+            "https://cloud.example.test/remote.php/dav/files/host-user/audio/test.bin"
         );
     }
 
