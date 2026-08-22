@@ -99,7 +99,10 @@ impl NextcloudConnectionConfig {
             ));
         }
         if self.remote_root.trim().is_empty()
-            || self.remote_root.split('/').any(|part| part == "." || part == "..")
+            || self
+                .remote_root
+                .split('/')
+                .any(|part| part == "." || part == "..")
         {
             return Err(NextcloudProviderError::InvalidConfiguration(
                 "Nextcloud remote root must be a non-empty relative path".into(),
