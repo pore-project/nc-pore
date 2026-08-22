@@ -11,11 +11,19 @@ pub struct ArtifactTransferMetadata {
 
 impl ArtifactTransferMetadata {
     pub fn new(display_name: Option<String>, recorded_at: Option<String>) -> Self {
-        Self { display_name, recorded_at }
+        Self {
+            display_name,
+            recorded_at,
+        }
     }
 
-    pub fn display_name(&self) -> Option<&str> { self.display_name.as_deref() }
-    pub fn recorded_at(&self) -> Option<&str> { self.recorded_at.as_deref() }
+    pub fn display_name(&self) -> Option<&str> {
+        self.display_name.as_deref()
+    }
+
+    pub fn recorded_at(&self) -> Option<&str> {
+        self.recorded_at.as_deref()
+    }
 }
 
 #[cfg(test)]
