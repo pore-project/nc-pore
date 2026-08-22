@@ -102,7 +102,10 @@ mod tests {
     #[test]
     fn endpoint_path_is_normalized() {
         let config = NextcloudConnectionConfig::new("https://cloud.example.test/", credentials());
-        assert_eq!(config.base_url().unwrap().as_str(), "https://cloud.example.test/");
+        assert_eq!(
+            config.base_url().unwrap().as_str(),
+            "https://cloud.example.test/"
+        );
     }
 
     #[test]
