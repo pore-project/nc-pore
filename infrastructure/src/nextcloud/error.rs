@@ -12,11 +12,16 @@ pub enum NextcloudProviderError {
 impl std::fmt::Display for NextcloudProviderError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidConfiguration(message) => write!(formatter, "invalid Nextcloud configuration: {message}"),
+            Self::InvalidConfiguration(message) => {
+                write!(formatter, "invalid Nextcloud configuration: {message}")
+            }
             Self::Transport(error) => write!(formatter, "Nextcloud transport error: {error}"),
             Self::Authentication => write!(formatter, "Nextcloud authentication failed"),
             Self::Remote { status, operation } => {
-                write!(formatter, "Nextcloud {operation} request failed with HTTP status {status}")
+                write!(
+                    formatter,
+                    "Nextcloud {operation} request failed with HTTP status {status}"
+                )
             }
         }
     }
