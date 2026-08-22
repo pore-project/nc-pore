@@ -41,7 +41,7 @@ impl RemoteArtifactMetadata {
 /// metadata is deliberately supplied alongside it so providers can use
 /// recording information without introducing provider-specific fields into
 /// the artifact model.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RemoteArtifact<'a> {
     artifact: &'a RecordingArtifact,
     metadata: RemoteArtifactMetadata,
@@ -105,7 +105,8 @@ mod tests {
     // TEST-03: Providers receive the complete artifact as the transfer unit.
     #[test]
     fn remote_view_keeps_artifact_as_transfer_unit() {
-        let artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+        let artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
         let remote = RemoteArtifact::new(&artifact, SystemTime::UNIX_EPOCH, None);
 
         assert_eq!(remote.artifact().id.value(), "artifact-001");
