@@ -78,6 +78,11 @@ fn run_record_test(mut args: impl Iterator<Item = String>) {
         std::process::exit(1);
     }
 
+    if let Err(error) = application.ready() {
+        eprintln!("Recorder konnte nicht READY werden: {error:?}");
+        std::process::exit(1);
+    }
+
     println!("Aufnahme läuft – bitte jetzt sprechen oder Musik abspielen.");
     std::thread::sleep(std::time::Duration::from_secs(duration_seconds));
     println!("Stoppe Aufnahme...");
