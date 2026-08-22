@@ -1,7 +1,9 @@
+mod artifact_transfer;
 mod config;
 mod error;
 mod webdav;
 
+pub use artifact_transfer::{NextcloudArtifactTransfer, NextcloudTransferMetadata};
 pub use config::{NextcloudConnectionConfig, NextcloudCredentials};
 pub use error::{NextcloudProviderError, WebDavTransportError};
 pub use webdav::{HttpWebDavTransport, WebDavClient, WebDavEntry, WebDavTransport};
