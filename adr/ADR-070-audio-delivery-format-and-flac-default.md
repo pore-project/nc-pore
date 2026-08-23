@@ -14,7 +14,7 @@ Architecture / Audio
 
 ## Supersedes
 
-ADR-002 — **with regard to the audio format and delivery-format decision only**.
+ADR-002 — limited to the audio format and delivery-format decision.
 
 The track concept and other architectural aspects of ADR-002 remain valid unless explicitly superseded by a later decision.
 
