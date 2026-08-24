@@ -107,6 +107,7 @@ impl PersistedRecordingConfiguration {
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedRecordingChunk {
     sequence: u32,
+    sample_offset: u64,
     payload_reference: String,
     payload_size_bytes: u64,
     payload_hash: [u8; 32],
@@ -135,6 +136,7 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
                         .iter()
                         .map(|chunk| PersistedRecordingChunk {
                             sequence: chunk.sequence,
+                            sample_offset: chunk.sample_offset(),
                             payload_reference: chunk.payload().reference().value().to_string(),
                             payload_size_bytes: chunk.payload().size_bytes(),
                             payload_hash: *chunk.payload().hash().as_bytes(),
@@ -191,8 +193,9 @@ impl PersistedRecordingArtifact {
                     return PersistenceLoadResult::Inconsistent;
                 }
 
-                track.add_chunk(RecordingChunk::with_payload(
+                track.add_chunk(RecordingChunk::with_sample_offset(
                     persisted_chunk.sequence,
+                    persisted_chunk.sample_offset,
                     persisted_chunk.payload_reference,
                     payload,
                 ));
