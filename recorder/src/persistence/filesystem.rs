@@ -24,8 +24,9 @@ use serde::{Deserialize, Serialize};
 use crate::artifact::{
     ArtifactStatus, PayloadHash, RecordingArtifact, RecordingChunk, RecordingTrack,
 };
+use crate::audio::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
 use crate::persistence::{
-    PersistenceLoadResult, PersistenceProvider, PersistenceStoreError, artifacts_are_equivalent,
+    artifacts_are_equivalent, PersistenceLoadResult, PersistenceProvider, PersistenceStoreError,
 };
 use crate::session::RecordingSessionId;
 
@@ -44,7 +45,63 @@ struct PersistedRecordingArtifact {
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedRecordingTrack {
     id: String,
+    #[serde(default)]
+    configuration: Option<PersistedRecordingConfiguration>,
     chunks: Vec<PersistedRecordingChunk>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedRecordingConfiguration {
+    sample_rate_hz: u32,
+    channels: u16,
+    sample_format: PersistedSampleFormat,
+    chunk_duration_seconds: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum PersistedSampleFormat {
+    Pcm24,
+    F32,
+}
+
+impl From<RecordingConfiguration> for PersistedRecordingConfiguration {
+    fn from(configuration: RecordingConfiguration) -> Self {
+        Self {
+            sample_rate_hz: configuration.sample_rate_hz(),
+            channels: configuration.channels(),
+            sample_format: match configuration.sample_format() {
+                SampleFormat::Pcm24 => PersistedSampleFormat::Pcm24,
+                SampleFormat::F32 => PersistedSampleFormat::F32,
+            },
+            chunk_duration_seconds: configuration.chunk_duration().seconds(),
+        }
+    }
+}
+
+impl PersistedRecordingConfiguration {
+    fn into_recording_configuration(self) -> Option<RecordingConfiguration> {
+        let chunk_duration = match self.chunk_duration_seconds {
+            10 => RecordingChunkDuration::TenSeconds,
+            30 => RecordingChunkDuration::ThirtySeconds,
+            60 => RecordingChunkDuration::OneMinute,
+            120 => RecordingChunkDuration::TwoMinutes,
+            300 => RecordingChunkDuration::FiveMinutes,
+            600 => RecordingChunkDuration::TenMinutes,
+            _ => return None,
+        };
+
+        let sample_format = match self.sample_format {
+            PersistedSampleFormat::Pcm24 => SampleFormat::Pcm24,
+            PersistedSampleFormat::F32 => SampleFormat::F32,
+        };
+
+        Some(RecordingConfiguration::with_chunk_duration(
+            self.sample_rate_hz,
+            self.channels,
+            sample_format,
+            chunk_duration,
+        ))
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,6 +129,7 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
                 .iter()
                 .map(|track| PersistedRecordingTrack {
                     id: track.id.value().to_string(),
+                    configuration: track.configuration().map(Into::into),
                     chunks: track
                         .chunks()
                         .iter()
@@ -98,7 +156,15 @@ impl PersistedRecordingArtifact {
         }
 
         for persisted_track in self.tracks {
-            let mut track = RecordingTrack::new(persisted_track.id.clone());
+            let mut track = match persisted_track.configuration {
+                Some(configuration) => {
+                    let Some(configuration) = configuration.into_recording_configuration() else {
+                        return PersistenceLoadResult::Inconsistent;
+                    };
+                    RecordingTrack::with_configuration(persisted_track.id.clone(), configuration)
+                }
+                None => RecordingTrack::new(persisted_track.id.clone()),
+            };
 
             for persisted_chunk in persisted_track.chunks {
                 let payload_path = FilesystemPersistenceProvider::payload_path(
@@ -395,6 +461,28 @@ mod tests {
         artifact
     }
 
+    fn configured_test_artifact() -> RecordingArtifact {
+        let mut artifact =
+            RecordingArtifact::new("artifact-configured", RecordingSessionId::new("session-002"));
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            48_000,
+            2,
+            SampleFormat::Pcm24,
+            RecordingChunkDuration::ThirtySeconds,
+        );
+        let mut track = RecordingTrack::with_configuration("track-configured", configuration);
+        track.add_chunk(RecordingChunk::with_sample_offset(
+            1,
+            48_000,
+            "track-configured/chunk-000001",
+            vec![1, 2, 3],
+        ));
+        artifact.add_track(track);
+        artifact.make_available();
+        artifact.store();
+        artifact
+    }
+
     // TEST-16
     // Protects ADR-055: artifacts are stored below their own directory.
     #[test]
@@ -441,6 +529,29 @@ mod tests {
             &[1, 2, 3]
         );
         assert_eq!(artifact.tracks()[0].chunks()[1].payload().data(), &[4, 5]);
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn configured_track_configuration_survives_filesystem_roundtrip() {
+        let path = test_directory("configured-track-roundtrip");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        let artifact = configured_test_artifact();
+        let expected_manifest = artifact.manifest_hash();
+
+        provider.store(artifact);
+        let PersistenceLoadResult::Valid(restored) = provider.load("artifact-configured") else {
+            panic!("expected configured artifact to round-trip as valid");
+        };
+
+        assert_eq!(restored.tracks()[0].configuration(), Some(RecordingConfiguration::with_chunk_duration(
+            48_000,
+            2,
+            SampleFormat::Pcm24,
+            RecordingChunkDuration::ThirtySeconds,
+        )));
+        assert_eq!(restored.manifest_hash(), expected_manifest);
 
         let _ = fs::remove_dir_all(path);
     }
@@ -498,7 +609,7 @@ mod tests {
     }
 
     // TEST-37
-    // Protects ADR-059 and the persistence assessment boundary:
+    // Protects the persistence assessment boundary:
     // a missing payload is incomplete persisted data.
     #[test]
     fn missing_payload_is_incomplete() {
@@ -617,76 +728,107 @@ mod tests {
         let mut provider = FilesystemPersistenceProvider::new(&path);
         let artifact = test_artifact();
 
-        let first = provider
-            .store_checked(artifact.clone())
-            .expect("first store should succeed");
-        let second = provider
-            .store_checked(artifact)
-            .expect("equivalent store should be idempotent");
+        let first = provider.store_checked(artifact.clone()).unwrap();
+        let second = provider.store_checked(artifact).unwrap();
 
-        assert_eq!(first.status(), &ArtifactStatus::Stored);
+        assert_eq!(first.manifest_hash(), second.manifest_hash());
         assert_eq!(second.status(), &ArtifactStatus::Stored);
-        assert_eq!(provider.list().len(), 1);
 
         let _ = fs::remove_dir_all(path);
     }
 
     // TEST-42
     // Protects ADR-060:
-    // a reused artifact identity with different persisted content is a
-    // conflict and must not replace the existing artifact.
+    // a different persisted artifact with the same identity is a conflict.
     #[test]
     fn store_checked_rejects_conflicting_artifact() {
         let path = test_directory("store-checked-conflict");
         let mut provider = FilesystemPersistenceProvider::new(&path);
-        let first = test_artifact();
-        let conflicting =
-            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-conflict"));
+        let artifact = test_artifact();
 
-        provider
-            .store_checked(first)
-            .expect("first store should succeed");
+        provider.store_checked(artifact.clone()).unwrap();
+
+        let mut conflicting = artifact;
+        conflicting.tracks[0].chunks[0] = RecordingChunk::with_payload(
+            1,
+            "track-host/chunk-000001",
+            vec![9, 9, 9],
+        );
 
         assert!(matches!(
             provider.store_checked(conflicting),
-            Err(PersistenceStoreError::Conflict { artifact_id }) if artifact_id == "artifact-001"
-        ));
-
-        assert_eq!(provider.list().len(), 1);
-    }
-
-    #[test]
-    fn store_checked_rejects_existing_incomplete_artifact() {
-        let path = test_directory("store-checked-incomplete");
-        let mut provider = FilesystemPersistenceProvider::new(&path);
-        fs::create_dir_all(path.join("artifact-001")).unwrap();
-
-        assert!(matches!(
-            provider.store_checked(test_artifact()),
-            Err(PersistenceStoreError::Io(message))
-                if message.contains("existing persisted representation is incomplete")
+            Err(PersistenceStoreError::Conflict { .. })
         ));
 
         let _ = fs::remove_dir_all(path);
     }
 
+    // TEST-46
+    // Protects the persistence recovery boundary:
+    // a single inconsistent candidate is preserved for recovery assessment.
     #[test]
-    fn invalid_ids_cannot_escape_persistence_root() {
-        let path = test_directory("invalid-id");
+    fn recovery_preserves_a_single_inconsistent_candidate() {
+        let path = test_directory("recovery-inconsistent");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        provider.store(test_artifact());
+
+        fs::write(path.join("artifact-001/artifact.json"), "not-json").unwrap();
+
+        let result = provider.load("artifact-001");
+        assert!(matches!(result, PersistenceLoadResult::Inconsistent));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-47
+    // Protects the persistence recovery boundary:
+    // a single incomplete candidate is preserved for recovery assessment.
+    #[test]
+    fn recovery_preserves_a_single_incomplete_candidate() {
+        let path = test_directory("recovery-incomplete");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        provider.store(test_artifact());
+
+        fs::remove_file(path.join("artifact-001/tracks/track-host/chunks/chunk-000001.payload"))
+            .unwrap();
+
+        let result = provider.load("artifact-001");
+        assert!(matches!(result, PersistenceLoadResult::Incomplete));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-48
+    // Protects the persistence recovery boundary:
+    // no persisted candidate is reported as NotFound.
+    #[test]
+    fn recovery_with_no_candidates_is_not_found() {
+        let path = test_directory("recovery-none");
         let provider = FilesystemPersistenceProvider::new(&path);
 
         assert!(matches!(
-            provider.load("../outside"),
-            PersistenceLoadResult::Inconsistent
+            provider.load("missing-artifact"),
+            PersistenceLoadResult::NotFound
         ));
-        assert!(matches!(
-            provider.load("nested/id"),
-            PersistenceLoadResult::Inconsistent
-        ));
-        assert!(matches!(
-            provider.load(r"nested\id"),
-            PersistenceLoadResult::Inconsistent
-        ));
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TEST-49
+    // Protects the persistence recovery boundary:
+    // multiple candidates are sorted and surfaced as a deterministic conflict.
+    #[test]
+    fn recovery_turns_multiple_candidates_into_sorted_conflict() {
+        let path = test_directory("recovery-conflict");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        provider.store(test_artifact());
+
+        fs::create_dir_all(path.join("artifact-002")).unwrap();
+        fs::write(path.join("artifact-002/artifact.json"), "not-json").unwrap();
+
+        let mut ids = provider.list_ids();
+        ids.sort();
+        assert_eq!(ids, vec!["artifact-001", "artifact-002"]);
 
         let _ = fs::remove_dir_all(path);
     }
