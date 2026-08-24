@@ -82,10 +82,8 @@ fn nextcloud_runtime_synchronization_check() {
         .expect("Nextcloud authentication must succeed");
 
     let artifact_id = format!("artifact-runtime-sync-{}", std::process::id());
-    let session_id = RecordingSessionId::new(format!(
-        "session-runtime-sync-{}",
-        std::process::id()
-    ));
+    let session_id =
+        RecordingSessionId::new(format!("session-runtime-sync-{}", std::process::id()));
     let mut artifact = RecordingArtifact::new(&artifact_id, session_id);
     artifact.set_domain_association(
         "production-runtime-sync-check",
@@ -103,8 +101,7 @@ fn nextcloud_runtime_synchronization_check() {
     artifact.make_available();
 
     let manifest_hash = artifact.manifest_hash();
-    let temp_root =
-        env::temp_dir().join(format!("nc-pore-runtime-sync-{}", std::process::id()));
+    let temp_root = env::temp_dir().join(format!("nc-pore-runtime-sync-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&temp_root);
     let mut persistence = FilesystemPersistenceProvider::new(&temp_root);
     persistence
@@ -144,9 +141,8 @@ fn nextcloud_runtime_synchronization_check() {
         "remote.php/dav/files/{username}/{root}/2026/08/24/08-00 - NC-PoRE Runtime Synchronization Check - {artifact_id}"
     );
     let manifest_path = format!("{expected_prefix}/manifest.json");
-    let payload_path = format!(
-        "{expected_prefix}/tracks/track-01-track-runtime-sync/chunks/chunk-000001.payload"
-    );
+    let payload_path =
+        format!("{expected_prefix}/tracks/track-01-track-runtime-sync/chunks/chunk-000001.payload");
     let mut cleanup = RemoteCleanup::new(&client, expected_prefix.clone());
 
     let manifest = client
@@ -162,14 +158,15 @@ fn nextcloud_runtime_synchronization_check() {
         .get_optional(&payload_path)
         .expect("uploaded payload must be readable")
         .expect("uploaded payload must exist");
-    assert_eq!(payload.body, b"NC-PoRE real synchronization lifecycle check\n");
+    assert_eq!(
+        payload.body,
+        b"NC-PoRE real synchronization lifecycle check\n"
+    );
 
     for path in [
         manifest_path.clone(),
         payload_path.clone(),
-        format!(
-            "{expected_prefix}/tracks/track-01-track-runtime-sync/chunks"
-        ),
+        format!("{expected_prefix}/tracks/track-01-track-runtime-sync/chunks"),
         format!("{expected_prefix}/tracks/track-01-track-runtime-sync"),
         format!("{expected_prefix}/tracks"),
         expected_prefix.clone(),
