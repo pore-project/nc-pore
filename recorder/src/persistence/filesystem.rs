@@ -533,10 +533,6 @@ mod tests {
         let _ = fs::remove_dir_all(path);
     }
 
-    fn assert_test_directory_removed(path: &Path) {
-        let _ = fs::remove_dir_all(path);
-    }
-
     #[test]
     fn configured_track_configuration_survives_filesystem_roundtrip() {
         let path = test_directory("configured-track-roundtrip");
@@ -560,7 +556,7 @@ mod tests {
         );
         assert_eq!(restored.manifest_hash(), expected_manifest);
 
-        assert_test_directory_removed(&path);
+        let _ = fs::remove_dir_all(path);
     }
 
     // TEST-18
