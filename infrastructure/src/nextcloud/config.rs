@@ -138,20 +138,21 @@ impl NextcloudConnectionConfig {
 }
 
 fn required_environment(name: &str) -> Result<String, NextcloudProviderError> {
-    env::var(name).map_err(|_| {
-        NextcloudProviderError::InvalidConfiguration(format!(
-            "missing environment variable {name}"
-        ))
-    })
-    .and_then(|value| {
-        if value.trim().is_empty() {
-            Err(NextcloudProviderError::InvalidConfiguration(format!(
-                "environment variable {name} must not be empty"
-            )))
-        } else {
-            Ok(value)
-        }
-    })
+    env::var(name)
+        .map_err(|_| {
+            NextcloudProviderError::InvalidConfiguration(format!(
+                "missing environment variable {name}"
+            ))
+        })
+        .and_then(|value| {
+            if value.trim().is_empty() {
+                Err(NextcloudProviderError::InvalidConfiguration(format!(
+                    "environment variable {name} must not be empty"
+                )))
+            } else {
+                Ok(value)
+            }
+        })
 }
 
 #[cfg(test)]
