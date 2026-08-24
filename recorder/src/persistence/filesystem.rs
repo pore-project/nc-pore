@@ -462,8 +462,10 @@ mod tests {
     }
 
     fn configured_test_artifact() -> RecordingArtifact {
-        let mut artifact =
-            RecordingArtifact::new("artifact-configured", RecordingSessionId::new("session-002"));
+        let mut artifact = RecordingArtifact::new(
+            "artifact-configured",
+            RecordingSessionId::new("session-002"),
+        );
         let configuration = RecordingConfiguration::with_chunk_duration(
             48_000,
             2,
