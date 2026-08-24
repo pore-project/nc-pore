@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use crate::artifact::{
     ArtifactStatus, PayloadHash, RecordingArtifact, RecordingChunk, RecordingTrack,
 };
+use crate::audio::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
 use crate::persistence::{
     PersistenceLoadResult, PersistenceProvider, PersistenceStoreError, artifacts_are_equivalent,
 };
@@ -44,12 +45,69 @@ struct PersistedRecordingArtifact {
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedRecordingTrack {
     id: String,
+    #[serde(default)]
+    configuration: Option<PersistedRecordingConfiguration>,
     chunks: Vec<PersistedRecordingChunk>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedRecordingConfiguration {
+    sample_rate_hz: u32,
+    channels: u16,
+    sample_format: PersistedSampleFormat,
+    chunk_duration_seconds: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum PersistedSampleFormat {
+    Pcm24,
+    F32,
+}
+
+impl From<RecordingConfiguration> for PersistedRecordingConfiguration {
+    fn from(configuration: RecordingConfiguration) -> Self {
+        Self {
+            sample_rate_hz: configuration.sample_rate_hz(),
+            channels: configuration.channels(),
+            sample_format: match configuration.sample_format() {
+                SampleFormat::Pcm24 => PersistedSampleFormat::Pcm24,
+                SampleFormat::F32 => PersistedSampleFormat::F32,
+            },
+            chunk_duration_seconds: configuration.chunk_duration().seconds(),
+        }
+    }
+}
+
+impl PersistedRecordingConfiguration {
+    fn into_recording_configuration(self) -> Option<RecordingConfiguration> {
+        let chunk_duration = match self.chunk_duration_seconds {
+            10 => RecordingChunkDuration::TenSeconds,
+            30 => RecordingChunkDuration::ThirtySeconds,
+            60 => RecordingChunkDuration::OneMinute,
+            120 => RecordingChunkDuration::TwoMinutes,
+            300 => RecordingChunkDuration::FiveMinutes,
+            600 => RecordingChunkDuration::TenMinutes,
+            _ => return None,
+        };
+
+        let sample_format = match self.sample_format {
+            PersistedSampleFormat::Pcm24 => SampleFormat::Pcm24,
+            PersistedSampleFormat::F32 => SampleFormat::F32,
+        };
+
+        Some(RecordingConfiguration::with_chunk_duration(
+            self.sample_rate_hz,
+            self.channels,
+            sample_format,
+            chunk_duration,
+        ))
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedRecordingChunk {
     sequence: u32,
+    sample_offset: u64,
     payload_reference: String,
     payload_size_bytes: u64,
     payload_hash: [u8; 32],
@@ -72,11 +130,13 @@ impl From<&RecordingArtifact> for PersistedRecordingArtifact {
                 .iter()
                 .map(|track| PersistedRecordingTrack {
                     id: track.id.value().to_string(),
+                    configuration: track.configuration().map(Into::into),
                     chunks: track
                         .chunks()
                         .iter()
                         .map(|chunk| PersistedRecordingChunk {
                             sequence: chunk.sequence,
+                            sample_offset: chunk.sample_offset(),
                             payload_reference: chunk.payload().reference().value().to_string(),
                             payload_size_bytes: chunk.payload().size_bytes(),
                             payload_hash: *chunk.payload().hash().as_bytes(),
@@ -98,7 +158,15 @@ impl PersistedRecordingArtifact {
         }
 
         for persisted_track in self.tracks {
-            let mut track = RecordingTrack::new(persisted_track.id.clone());
+            let mut track = match persisted_track.configuration {
+                Some(configuration) => {
+                    let Some(configuration) = configuration.into_recording_configuration() else {
+                        return PersistenceLoadResult::Inconsistent;
+                    };
+                    RecordingTrack::with_configuration(persisted_track.id.clone(), configuration)
+                }
+                None => RecordingTrack::new(persisted_track.id.clone()),
+            };
 
             for persisted_chunk in persisted_track.chunks {
                 let payload_path = FilesystemPersistenceProvider::payload_path(
@@ -125,8 +193,9 @@ impl PersistedRecordingArtifact {
                     return PersistenceLoadResult::Inconsistent;
                 }
 
-                track.add_chunk(RecordingChunk::with_payload(
+                track.add_chunk(RecordingChunk::with_sample_offset(
                     persisted_chunk.sequence,
+                    persisted_chunk.sample_offset,
                     persisted_chunk.payload_reference,
                     payload,
                 ));
@@ -395,6 +464,30 @@ mod tests {
         artifact
     }
 
+    fn configured_test_artifact() -> RecordingArtifact {
+        let mut artifact = RecordingArtifact::new(
+            "artifact-configured",
+            RecordingSessionId::new("session-002"),
+        );
+        let configuration = RecordingConfiguration::with_chunk_duration(
+            48_000,
+            2,
+            SampleFormat::Pcm24,
+            RecordingChunkDuration::ThirtySeconds,
+        );
+        let mut track = RecordingTrack::with_configuration("track-configured", configuration);
+        track.add_chunk(RecordingChunk::with_sample_offset(
+            1,
+            48_000,
+            "track-configured/chunk-000001",
+            vec![1, 2, 3],
+        ));
+        artifact.add_track(track);
+        artifact.make_available();
+        artifact.store();
+        artifact
+    }
+
     // TEST-16
     // Protects ADR-055: artifacts are stored below their own directory.
     #[test]
@@ -441,6 +534,32 @@ mod tests {
             &[1, 2, 3]
         );
         assert_eq!(artifact.tracks()[0].chunks()[1].payload().data(), &[4, 5]);
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn configured_track_configuration_survives_filesystem_roundtrip() {
+        let path = test_directory("configured-track-roundtrip");
+        let mut provider = FilesystemPersistenceProvider::new(&path);
+        let artifact = configured_test_artifact();
+        let expected_manifest = artifact.manifest_hash();
+
+        provider.store(artifact);
+        let PersistenceLoadResult::Valid(restored) = provider.load("artifact-configured") else {
+            panic!("expected configured artifact to round-trip as valid");
+        };
+
+        assert_eq!(
+            restored.tracks()[0].configuration(),
+            Some(RecordingConfiguration::with_chunk_duration(
+                48_000,
+                2,
+                SampleFormat::Pcm24,
+                RecordingChunkDuration::ThirtySeconds,
+            ))
+        );
+        assert_eq!(restored.manifest_hash(), expected_manifest);
 
         let _ = fs::remove_dir_all(path);
     }
@@ -653,6 +772,8 @@ mod tests {
         ));
 
         assert_eq!(provider.list().len(), 1);
+
+        let _ = fs::remove_dir_all(path);
     }
 
     #[test]
