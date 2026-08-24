@@ -45,10 +45,7 @@ impl Drop for RemoteCleanup<'_> {
                 "{}/tracks/track-01-track-runtime-check/chunks",
                 self.artifact_path
             ),
-            format!(
-                "{}/tracks/track-01-track-runtime-check",
-                self.artifact_path
-            ),
+            format!("{}/tracks/track-01-track-runtime-check", self.artifact_path),
             format!("{}/tracks", self.artifact_path),
             self.artifact_path.clone(),
         ];
