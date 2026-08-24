@@ -130,6 +130,9 @@ impl<T: WebDavTransport> WebDavClient<T> {
     }
 
     pub fn mkcol(&self, path: &str) -> Result<(), NextcloudProviderError> {
+        if is_dav_infrastructure_path(path) {
+            return Ok(());
+        }
         self.mkcol_with_headers(path, &[])
     }
 
@@ -139,11 +142,17 @@ impl<T: WebDavTransport> WebDavClient<T> {
         headers: &[(&str, &str)],
     ) -> Result<(), NextcloudProviderError> {
         let method = Method::from_bytes(b"MKCOL").expect("MKCOL is a valid HTTP method");
-        let response = self.request(method, path, headers, None, "MKCOL")?;
+        let response = self.request_raw(method, path, headers, None)?;
         if response.status == StatusCode::CREATED.as_u16()
             || response.status == StatusCode::NO_CONTENT.as_u16()
         {
             return Ok(());
+        }
+        if response.status == StatusCode::NOT_FOUND.as_u16() && is_dav_infrastructure_path(path) {
+            return Ok(());
+        }
+        if response.status == 401 || response.status == 403 {
+            return Err(NextcloudProviderError::Authentication);
         }
         Err(NextcloudProviderError::Remote {
             status: response.status,
@@ -187,6 +196,17 @@ impl<T: WebDavTransport> WebDavClient<T> {
             }),
             _ => Ok(Some(response)),
         }
+    }
+
+    pub fn delete(&self, path: &str) -> Result<(), NextcloudProviderError> {
+        let response = self.request(Method::DELETE, path, &[], None, "DELETE")?;
+        if matches!(response.status, 200 | 204) {
+            return Ok(());
+        }
+        Err(NextcloudProviderError::Remote {
+            status: response.status,
+            operation: "DELETE",
+        })
     }
 
     pub fn move_with_headers(
@@ -238,6 +258,17 @@ impl<T: WebDavTransport> WebDavClient<T> {
             .execute(method, url, headers, body)
             .map_err(NextcloudProviderError::Transport)
     }
+}
+
+fn is_dav_infrastructure_path(path: &str) -> bool {
+    let components: Vec<_> = path.trim_matches('/').split('/').collect();
+    matches!(
+        components.as_slice(),
+        ["remote.php"]
+            | ["remote.php", "dav"]
+            | ["remote.php", "dav", "files"]
+            | ["remote.php", "dav", "files", _]
+    )
 }
 
 #[cfg(test)]
@@ -331,6 +362,12 @@ mod tests {
     }
 
     #[test]
+    fn delete_accepts_no_content_response() {
+        let client = WebDavClient::with_transport(&config(), FakeTransport::new(204)).unwrap();
+        assert_eq!(client.delete("audio/test.bin"), Ok(()));
+    }
+
+    #[test]
     fn move_accepts_created_response_and_preserves_headers() {
         let transport = FakeTransport::new(201);
         let requests = Arc::clone(&transport.requests);
@@ -362,6 +399,12 @@ mod tests {
                 .as_str(),
             "https://cloud.example.test/remote.php/dav/files/host-user/audio/test.bin"
         );
+    }
+
+    #[test]
+    fn missing_dav_infrastructure_mkcol_is_ignored() {
+        let client = WebDavClient::with_transport(&config(), FakeTransport::new(404)).unwrap();
+        assert_eq!(client.mkcol("remote.php/dav/files/host-user"), Ok(()));
     }
 
     #[test]

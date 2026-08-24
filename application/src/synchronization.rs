@@ -16,20 +16,36 @@ use nc_pore_core::recording::{
     RecordingArtifactSynchronizationStatus,
 };
 
+pub use crate::synchronization_metadata::ArtifactTransferMetadata;
+
 /// Stable reference to one persisted local artifact version that requires
 /// synchronization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SynchronizationWork {
     artifact_id: RecordingArtifactId,
     manifest_hash: [u8; 32],
+    metadata: ArtifactTransferMetadata,
     status: RecordingArtifactSynchronizationStatus,
 }
 
 impl SynchronizationWork {
     pub fn new(artifact_id: RecordingArtifactId, manifest_hash: [u8; 32]) -> Self {
+        Self::new_with_metadata(
+            artifact_id,
+            manifest_hash,
+            ArtifactTransferMetadata::default(),
+        )
+    }
+
+    pub fn new_with_metadata(
+        artifact_id: RecordingArtifactId,
+        manifest_hash: [u8; 32],
+        metadata: ArtifactTransferMetadata,
+    ) -> Self {
         Self {
             artifact_id,
             manifest_hash,
+            metadata,
             status: RecordingArtifactSynchronizationStatus::Local,
         }
     }
@@ -40,9 +56,24 @@ impl SynchronizationWork {
         manifest_hash: [u8; 32],
         status: RecordingArtifactSynchronizationStatus,
     ) -> Self {
+        Self::reconstitute_with_metadata(
+            artifact_id,
+            manifest_hash,
+            ArtifactTransferMetadata::default(),
+            status,
+        )
+    }
+
+    pub fn reconstitute_with_metadata(
+        artifact_id: RecordingArtifactId,
+        manifest_hash: [u8; 32],
+        metadata: ArtifactTransferMetadata,
+        status: RecordingArtifactSynchronizationStatus,
+    ) -> Self {
         Self {
             artifact_id,
             manifest_hash,
+            metadata,
             status,
         }
     }
@@ -55,12 +86,20 @@ impl SynchronizationWork {
         &self.manifest_hash
     }
 
+    pub fn metadata(&self) -> &ArtifactTransferMetadata {
+        &self.metadata
+    }
+
     pub fn status(&self) -> RecordingArtifactSynchronizationStatus {
         self.status
     }
 
     pub fn transfer_request(&self) -> ArtifactTransferRequest {
-        ArtifactTransferRequest::new(self.artifact_id.clone(), self.manifest_hash)
+        ArtifactTransferRequest::new_with_metadata(
+            self.artifact_id.clone(),
+            self.manifest_hash,
+            self.metadata.clone(),
+        )
     }
 
     fn lifecycle(&self) -> RecordingArtifactSynchronization {
@@ -157,6 +196,22 @@ where
         artifact_id: RecordingArtifactId,
         manifest_hash: [u8; 32],
     ) -> Result<SynchronizationWork, SynchronizationQueueError> {
+        self.enqueue_with_metadata(
+            artifact_id,
+            manifest_hash,
+            ArtifactTransferMetadata::default(),
+        )
+    }
+
+    /// Enqueues a completed local artifact together with provider-neutral
+    /// metadata. The metadata is persisted and passed unchanged to the
+    /// eventual transfer connector.
+    pub fn enqueue_with_metadata(
+        &mut self,
+        artifact_id: RecordingArtifactId,
+        manifest_hash: [u8; 32],
+        metadata: ArtifactTransferMetadata,
+    ) -> Result<SynchronizationWork, SynchronizationQueueError> {
         if let Some(existing) = self
             .store
             .list()
@@ -170,7 +225,7 @@ where
             return Err(SynchronizationQueueError::ArtifactVersionConflict { artifact_id });
         }
 
-        let mut work = SynchronizationWork::new(artifact_id, manifest_hash);
+        let mut work = SynchronizationWork::new_with_metadata(artifact_id, manifest_hash, metadata);
         let mut lifecycle = work.lifecycle();
         lifecycle
             .queue()
@@ -289,13 +344,27 @@ where
 pub struct ArtifactTransferRequest {
     artifact_id: RecordingArtifactId,
     manifest_hash: [u8; 32],
+    metadata: ArtifactTransferMetadata,
 }
 
 impl ArtifactTransferRequest {
     pub fn new(artifact_id: RecordingArtifactId, manifest_hash: [u8; 32]) -> Self {
+        Self::new_with_metadata(
+            artifact_id,
+            manifest_hash,
+            ArtifactTransferMetadata::default(),
+        )
+    }
+
+    pub fn new_with_metadata(
+        artifact_id: RecordingArtifactId,
+        manifest_hash: [u8; 32],
+        metadata: ArtifactTransferMetadata,
+    ) -> Self {
         Self {
             artifact_id,
             manifest_hash,
+            metadata,
         }
     }
 
@@ -305,6 +374,10 @@ impl ArtifactTransferRequest {
 
     pub fn manifest_hash(&self) -> &[u8; 32] {
         &self.manifest_hash
+    }
+
+    pub fn metadata(&self) -> &ArtifactTransferMetadata {
+        &self.metadata
     }
 }
 
@@ -482,6 +555,7 @@ mod tests {
 
         assert_eq!(request.artifact_id().value(), "artifact-008");
         assert_eq!(request.manifest_hash(), &manifest_hash(8));
+        assert_eq!(request.metadata(), &ArtifactTransferMetadata::default());
     }
 
     // TEST-08
@@ -604,5 +678,28 @@ mod tests {
             )),
             ArtifactTransferResult::Succeeded
         );
+    }
+
+    // TEST-META-03: metadata survives the application queue and reaches the
+    // transport-neutral transfer request unchanged.
+    #[test]
+    fn metadata_is_carried_from_enqueue_to_transfer_request() {
+        let mut queue =
+            PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
+        let metadata = ArtifactTransferMetadata::new(
+            Some("Interview mit Frizz".to_owned()),
+            Some("2026-08-22T18:30:00+02:00".to_owned()),
+        );
+
+        let work = queue
+            .enqueue_with_metadata(
+                artifact_id("artifact-013"),
+                manifest_hash(13),
+                metadata.clone(),
+            )
+            .unwrap();
+        let request = work.transfer_request();
+
+        assert_eq!(request.metadata(), &metadata);
     }
 }

@@ -4,7 +4,7 @@ mod error;
 mod synchronization;
 mod webdav;
 
-pub use artifact_transfer::{NextcloudArtifactTransfer, NextcloudTransferMetadata};
+pub use artifact_transfer::NextcloudArtifactTransfer;
 pub use config::{NextcloudConnectionConfig, NextcloudCredentials};
 pub use error::{NextcloudProviderError, WebDavTransportError};
 pub use synchronization::{

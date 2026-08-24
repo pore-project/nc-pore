@@ -8,5 +8,6 @@ pub mod session_context;
 #[cfg(test)]
 mod session_context_contract_tests;
 pub mod synchronization;
+pub mod synchronization_metadata;
 pub mod synchronization_orchestration;
 pub mod synchronization_persistence;
