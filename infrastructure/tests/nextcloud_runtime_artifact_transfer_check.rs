@@ -36,6 +36,11 @@ impl Drop for RemoteCleanup<'_> {
             return;
         }
         let paths = [
+            format!("{}/manifest.json", self.artifact_path),
+            format!(
+                "{}/tracks/track-01-track-runtime-check/chunks/chunk-000001.payload",
+                self.artifact_path
+            ),
             format!(
                 "{}/tracks/track-01-track-runtime-check/chunks",
                 self.artifact_path
@@ -47,7 +52,7 @@ impl Drop for RemoteCleanup<'_> {
             format!("{}/tracks", self.artifact_path),
             self.artifact_path.clone(),
         ];
-        for path in paths.into_iter().rev() {
+        for path in paths {
             let _ = self.client.delete(&path);
         }
     }
