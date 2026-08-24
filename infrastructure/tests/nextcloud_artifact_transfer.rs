@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use nc_pore_application::synchronization::{
-    ArtifactTransfer, ArtifactTransferMetadata, ArtifactTransferRequest, ArtifactTransferResult,
+    ArtifactTransferMetadata, ArtifactTransferRequest, ArtifactTransferResult,
 };
 use nc_pore_core::recording::RecordingArtifactId;
 use nc_pore_infrastructure::nextcloud::{
@@ -71,7 +71,7 @@ impl WebDavTransport for RecordingTransport {
             });
         }
 
-        if method == Method::MKCOL {
+        if method == Method::from_bytes(b"MKCOL").unwrap() {
             return Ok(WebDavEntry {
                 status: 201,
                 body: Vec::new(),
