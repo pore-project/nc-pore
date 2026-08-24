@@ -93,8 +93,10 @@ impl WebDavTransport for RecordingTransport {
 }
 
 fn test_artifact() -> RecordingArtifact {
-    let mut artifact =
-        RecordingArtifact::new("artifact-e2e-001", RecordingSessionId::new("session-e2e-001"));
+    let mut artifact = RecordingArtifact::new(
+        "artifact-e2e-001",
+        RecordingSessionId::new("session-e2e-001"),
+    );
     artifact.set_domain_association("production-e2e-001", "recording-e2e-001");
 
     let mut track = RecordingTrack::new("track-host");
@@ -163,7 +165,10 @@ fn complete_artifact_transfer_is_deterministic_and_idempotent() {
             request.method == Method::PUT && request.url.ends_with("/chunk-000001.payload")
         })
         .expect("payload upload request");
-    assert_eq!(payload_request.body.as_deref(), Some(b"deterministic-audio-payload".as_slice()));
+    assert_eq!(
+        payload_request.body.as_deref(),
+        Some(b"deterministic-audio-payload".as_slice())
+    );
     assert!(payload_request
         .headers
         .iter()
