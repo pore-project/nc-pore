@@ -12,7 +12,7 @@ use recorder::artifact::processing::RecordingArtifactProcessor;
 use recorder::audio::{
     CpalCaptureProvider, RecordingChunkDuration, RecordingConfiguration, SampleFormat,
 };
-use recorder::persistence::{FilesystemPersistenceProvider, PersistenceProvider};
+use recorder::persistence::FilesystemPersistenceProvider;
 use recorder::session::RecordingSession;
 use recorder::workflow::{
     recording_start::{RecordingParticipantId, RecordingStartCoordinator},
@@ -84,7 +84,7 @@ fn runtime_configuration(provider: &CpalCaptureProvider) -> Option<RecordingConf
                     rate,
                     capability.channels(),
                     format,
-                    RecordingChunkDuration::TenSeconds,
+                    RecordingChunkDuration::ThirtySeconds,
                 );
                 if recorder::audio::find_exact_input_configuration(&configuration, &capabilities)
                     .is_some()
