@@ -20,7 +20,11 @@ Die aktuelle Implementierung umfasst inzwischen die zentrale Domain- und Recorde
 
 NC-PoRe befindet sich in der **V1-Härtungs- und Produktisierungsphase**.
 
-Die technische Grundlage für lokale Aufnahme, persistierte Recording-Artefakte und die Synchronisation nach Nextcloud ist implementiert. Der nächste Schwerpunkt liegt auf Integritäts- und End-to-End-Härtung, Bereinigung von Legacy-Bestandteilen, konsistenter Projektdokumentation und der Fertigstellung des ersten nutzbaren Clients.
+Der vollständige reale technische Pfad von lokaler CPAL-Aufnahme über RecordingArtifact-Erzeugung, lokale Persistenz, Synchronisation und Nextcloud-Transfer bis zur Remote-Verifikation und Bereinigung wurde am 2026-08-24 erfolgreich validiert.
+
+Die technische Grundlage für lokale Aufnahme, persistierte Recording-Artefakte und die Synchronisation nach Nextcloud ist damit nicht nur durch Tests, sondern auch durch einen realen End-to-End-Reality-Check abgesichert. Die ursprünglich als nächste Synchronisationsarbeiten dokumentierten Issues #143–#146 sind abgeschlossen.
+
+Der nächste Entwicklungsschnitt wird daher aus einer kritischen Bestandsaufnahme des aktuellen Architektur- und Implementierungsstands sowie der verbleibenden V1-Lücken bestimmt.
 
 Für eine öffentliche V1-Freigabe gelten insbesondere:
 
@@ -32,7 +36,8 @@ Für eine öffentliche V1-Freigabe gelten insbesondere:
 
 Weitere Informationen:
 
-* `docs/project-status.md` — aktueller Projektstand
+* `docs/project-status-2026-08-24.md` — aktueller Projektstand
+* `docs/project-status.md` — historischer Statusstand vom 2026-08-21
 * `docs/architecture/` — Architektur und technische Grundlagen
 * `docs/implementation/` — Umsetzung und V1-Planung
 * `adr/` — Architecture Decision Records
@@ -73,7 +78,11 @@ The current implementation includes the core domain and recorder foundation, loc
 
 NC-PoRe is currently in the **V1 hardening and productization phase**.
 
-The technical foundation for local recording, persisted recording artifacts, and synchronization to Nextcloud is implemented. The next focus is integrity and end-to-end hardening, cleanup of legacy components, documentation consolidation, and completion of the first usable client.
+As of 2026-08-24, the complete real technical path from local CPAL capture through RecordingArtifact creation, local persistence, synchronization, Nextcloud transfer, remote verification and cleanup has been successfully validated.
+
+The technical foundation for local recording, persisted recording artifacts, and synchronization to Nextcloud is therefore validated by both automated tests and a real end-to-end reality check. The previously listed synchronization issues #143–#146 are completed.
+
+The next development slice will be selected from a critical review of the current architecture and implementation state and the remaining V1 gaps.
 
 For a public V1 release, the following principles apply in particular:
 
@@ -85,7 +94,8 @@ For a public V1 release, the following principles apply in particular:
 
 Further information:
 
-* `docs/project-status.md` — current project status
+* `docs/project-status-2026-08-24.md` — current project status
+* `docs/project-status.md` — historical status snapshot from 2026-08-21
 * `docs/architecture/` — architecture and technical foundations
 * `docs/implementation/` — implementation and V1 planning
 * `adr/` — Architecture Decision Records
