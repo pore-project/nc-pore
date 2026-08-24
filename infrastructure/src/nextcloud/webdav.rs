@@ -189,6 +189,17 @@ impl<T: WebDavTransport> WebDavClient<T> {
         }
     }
 
+    pub fn delete(&self, path: &str) -> Result<(), NextcloudProviderError> {
+        let response = self.request(Method::DELETE, path, &[], None, "DELETE")?;
+        if matches!(response.status, 200 | 204) {
+            return Ok(());
+        }
+        Err(NextcloudProviderError::Remote {
+            status: response.status,
+            operation: "DELETE",
+        })
+    }
+
     pub fn move_with_headers(
         &self,
         path: &str,
@@ -328,6 +339,12 @@ mod tests {
     fn optional_get_maps_not_found_to_none() {
         let client = WebDavClient::with_transport(&config(), FakeTransport::new(404)).unwrap();
         assert_eq!(client.get_optional("audio/manifest.json").unwrap(), None);
+    }
+
+    #[test]
+    fn delete_accepts_no_content_response() {
+        let client = WebDavClient::with_transport(&config(), FakeTransport::new(204)).unwrap();
+        assert_eq!(client.delete("audio/test.bin"), Ok(()));
     }
 
     #[test]
