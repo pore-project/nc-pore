@@ -1,7 +1,7 @@
 use crate::nextcloud::{NextcloudConnection, NextcloudProviderError, WebDavClient};
 use chrono::{DateTime, FixedOffset};
 use nc_pore_application::synchronization::{
-    ArtifactTransfer, ArtifactTransferRequest, ArtifactTransferResult,
+    ArtifactTransfer, ArtifactTransferMetadata, ArtifactTransferRequest, ArtifactTransferResult,
 };
 use recorder::artifact::RecordingArtifact;
 use recorder::persistence::{PersistenceLoadResult, PersistenceProvider};
@@ -10,16 +10,6 @@ use sha2::{Digest, Sha256};
 
 const LARGE_FILE_THRESHOLD: usize = 10 * 1024 * 1024;
 const CHUNK_SIZE: usize = 10 * 1024 * 1024;
-
-/// Human-readable information supplied to a provider when available.
-///
-/// The provider decides how this information is represented remotely. It is
-/// intentionally not part of the Nextcloud remote artifact identity.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NextcloudTransferMetadata {
-    pub recording_started_at: Option<DateTime<FixedOffset>>,
-    pub display_name: Option<String>,
-}
 
 /// Transfers complete local recording artifacts into a Nextcloud account.
 ///
@@ -41,10 +31,28 @@ where
         }
     }
 
+    /// Transfers an artifact using the configured real HTTP WebDAV transport.
     pub fn transfer_with_metadata(
         &mut self,
         request: &ArtifactTransferRequest,
-        metadata: &NextcloudTransferMetadata,
+        metadata: &ArtifactTransferMetadata,
+    ) -> ArtifactTransferResult {
+        let client = match self.connection.client() {
+            Ok(client) => client,
+            Err(error) => return map_provider_error(error),
+        };
+        self.transfer_with_client(&client, request, metadata)
+    }
+
+    /// Testable infrastructure entry point.
+    ///
+    /// The application boundary remains transport-neutral while infrastructure
+    /// tests can inject a deterministic WebDAV client backed by a fake transport.
+    pub fn transfer_with_client<T: crate::nextcloud::WebDavTransport>(
+        &mut self,
+        client: &WebDavClient<T>,
+        request: &ArtifactTransferRequest,
+        metadata: &ArtifactTransferMetadata,
     ) -> ArtifactTransferResult {
         let artifact = match self.persistence.load(request.artifact_id().value()) {
             PersistenceLoadResult::Valid(artifact) => artifact,
@@ -80,12 +88,7 @@ where
             };
         }
 
-        let client = match self.connection.client() {
-            Ok(client) => client,
-            Err(error) => return map_provider_error(error),
-        };
-
-        match self.transfer_artifact(&client, &artifact, request, metadata) {
+        match self.transfer_artifact(client, &artifact, request, metadata) {
             Ok(()) => ArtifactTransferResult::Succeeded,
             Err(error) => map_provider_error(error),
         }
@@ -96,7 +99,7 @@ where
         client: &WebDavClient<T>,
         artifact: &RecordingArtifact,
         request: &ArtifactTransferRequest,
-        metadata: &NextcloudTransferMetadata,
+        metadata: &ArtifactTransferMetadata,
     ) -> Result<(), NextcloudProviderError>
     where
         T: crate::nextcloud::WebDavTransport,
@@ -179,19 +182,24 @@ where
     fn artifact_path(
         &self,
         artifact: &RecordingArtifact,
-        metadata: &NextcloudTransferMetadata,
+        metadata: &ArtifactTransferMetadata,
     ) -> Result<String, NextcloudProviderError> {
         let root = self.connection.config().remote_root().trim_matches('/');
-        let date_path = metadata
-            .recording_started_at
+        let recorded_at = metadata
+            .recorded_at()
+            .map(|value| value.parse::<DateTime<FixedOffset>>())
+            .transpose()
+            .map_err(|error| {
+                NextcloudProviderError::InvalidConfiguration(format!(
+                    "recorded_at is not a valid RFC3339 timestamp: {error}"
+                ))
+            })?;
+        let date_path = recorded_at
             .map(|timestamp| timestamp.format("%Y/%m/%d").to_string())
             .unwrap_or_else(|| "undated".to_owned());
-        let minute = metadata
-            .recording_started_at
-            .map(|timestamp| timestamp.format("%H-%M").to_string());
+        let minute = recorded_at.map(|timestamp| timestamp.format("%H-%M").to_string());
         let display_name = metadata
-            .display_name
-            .as_deref()
+            .display_name()
             .map(sanitize_component)
             .filter(|value| !value.is_empty());
         let artifact_id = sanitize_component(artifact.id.value());
@@ -301,7 +309,11 @@ where
     P: PersistenceProvider,
 {
     fn transfer(&mut self, request: &ArtifactTransferRequest) -> ArtifactTransferResult {
-        self.transfer_with_metadata(request, &NextcloudTransferMetadata::default())
+        let client = match self.connection.client() {
+            Ok(client) => client,
+            Err(error) => return map_provider_error(error),
+        };
+        self.transfer_with_client(&client, request, request.metadata())
     }
 }
 
@@ -345,17 +357,15 @@ struct RemoteChunk {
 fn build_manifest(
     artifact: &RecordingArtifact,
     manifest_hash: &[u8; 32],
-    metadata: &NextcloudTransferMetadata,
+    metadata: &ArtifactTransferMetadata,
 ) -> RemoteManifest {
     RemoteManifest {
         artifact_id: artifact.id.value().to_owned(),
         manifest_hash: hex_hash(manifest_hash),
         production_id: artifact.production_id().map(str::to_owned),
         recording_id: artifact.recording_id().map(str::to_owned),
-        recording_started_at: metadata
-            .recording_started_at
-            .map(|value| value.to_rfc3339()),
-        display_name: metadata.display_name.clone(),
+        recording_started_at: metadata.recorded_at().map(str::to_owned),
+        display_name: metadata.display_name().map(str::to_owned),
         tracks: artifact
             .tracks()
             .iter()
