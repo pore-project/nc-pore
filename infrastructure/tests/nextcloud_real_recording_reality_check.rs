@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, SecondsFormat};
+use chrono::{DateTime, SecondsFormat};
 use nc_pore_application::synchronization::{
     ArtifactTransferMetadata, InMemorySynchronizationWorkStore, PersistentSynchronizationQueue,
 };
@@ -21,7 +21,7 @@ use recorder::workflow::{
 };
 use std::env;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 struct RemoteCleanup<'a> {
     client: &'a WebDavClient,
@@ -86,9 +86,7 @@ fn runtime_configuration(provider: &CpalCaptureProvider) -> Option<RecordingConf
                     format,
                     RecordingChunkDuration::ThirtySeconds,
                 );
-                if recorder::audio::find_exact_input_configuration(&configuration, &capabilities)
-                    .is_some()
-                {
+                if capability.matches_recording_configuration(&configuration) {
                     return Some(configuration);
                 }
             }
@@ -188,7 +186,7 @@ fn nextcloud_real_recording_reality_check() {
         .expect("real capture must become a persisted RecordingArtifact");
 
     let manifest_hash = artifact.manifest_hash();
-    let recorded_at: DateTime<Local> = Local::now();
+    let recorded_at: DateTime<chrono::Utc> = SystemTime::now().into();
     let recorded_at = recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true);
     let display_name = "NC-PoRE Real Recording Reality Check".to_owned();
     let metadata =
