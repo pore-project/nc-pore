@@ -10,7 +10,9 @@ fn main() {
     println!("CPAL Host: {:?}", host.id());
     println!(
         "CPAL Default Input: {}",
-        default_name.as_deref().unwrap_or("<kein Standard-Eingabegerät>")
+        default_name
+            .as_deref()
+            .unwrap_or("<kein Standard-Eingabegerät>")
     );
     println!();
     println!("Verfügbare CPAL-Eingabegeräte:");
