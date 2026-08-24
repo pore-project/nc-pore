@@ -191,13 +191,10 @@ fn nextcloud_real_recording_reality_check() {
     let recorded_at: DateTime<Local> = Local::now();
     let recorded_at = recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true);
     let display_name = "NC-PoRE Real Recording Reality Check".to_owned();
-    let metadata = ArtifactTransferMetadata::new(
-        Some(display_name.clone()),
-        Some(recorded_at.clone()),
-    );
+    let metadata =
+        ArtifactTransferMetadata::new(Some(display_name.clone()), Some(recorded_at.clone()));
 
-    let mut queue =
-        PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
+    let mut queue = PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
     queue
         .enqueue_with_metadata(
             nc_pore_core::recording::RecordingArtifactId::new(&artifact_id_value),
