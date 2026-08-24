@@ -1,6 +1,6 @@
 # ADR-071 Recording Capture, Preservation and Transport Formats
 
-* Status: Proposed
+* Status: Accepted
 * Date: 2026-08-24
 * Decision Type: Architecture
 
