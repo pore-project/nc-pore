@@ -1,7 +1,7 @@
 use nc_pore_application::synchronization::{
     ArtifactTransferMetadata, InMemorySynchronizationWorkStore, PersistentSynchronizationQueue,
-    SynchronizationProcessOutcome,
 };
+use nc_pore_application::synchronization_orchestration::SynchronizationProcessOutcome;
 use nc_pore_infrastructure::nextcloud::{
     new_nextcloud_synchronization_orchestrator, NextcloudConnection, NextcloudConnectionConfig,
     WebDavClient,
@@ -19,7 +19,11 @@ struct RemoteCleanup<'a> {
 
 impl<'a> RemoteCleanup<'a> {
     fn new(client: &'a WebDavClient, artifact_path: String) -> Self {
-        Self { client, artifact_path, active: true }
+        Self {
+            client,
+            artifact_path,
+            active: true,
+        }
     }
 
     fn disarm(&mut self) {
@@ -38,7 +42,10 @@ impl Drop for RemoteCleanup<'_> {
                 "{}/tracks/track-01-track-runtime-sync/chunks/chunk-000001.payload",
                 self.artifact_path
             ),
-            format!("{}/tracks/track-01-track-runtime-sync/chunks", self.artifact_path),
+            format!(
+                "{}/tracks/track-01-track-runtime-sync/chunks",
+                self.artifact_path
+            ),
             format!("{}/tracks/track-01-track-runtime-sync", self.artifact_path),
             format!("{}/tracks", self.artifact_path),
             self.artifact_path.clone(),
@@ -70,12 +77,20 @@ fn nextcloud_runtime_synchronization_check() {
     let connection = NextcloudConnection::new(config.clone())
         .expect("Nextcloud connection configuration must be valid");
     let client = WebDavClient::new(&config).expect("Nextcloud client must be constructible");
-    client.authenticate(&username).expect("Nextcloud authentication must succeed");
+    client
+        .authenticate(&username)
+        .expect("Nextcloud authentication must succeed");
 
     let artifact_id = format!("artifact-runtime-sync-{}", std::process::id());
-    let session_id = RecordingSessionId::new(format!("session-runtime-sync-{}", std::process::id()));
+    let session_id = RecordingSessionId::new(format!(
+        "session-runtime-sync-{}",
+        std::process::id()
+    ));
     let mut artifact = RecordingArtifact::new(&artifact_id, session_id);
-    artifact.set_domain_association("production-runtime-sync-check", "recording-runtime-sync-check");
+    artifact.set_domain_association(
+        "production-runtime-sync-check",
+        "recording-runtime-sync-check",
+    );
 
     let mut track = RecordingTrack::new("track-runtime-sync");
     track.add_chunk(RecordingChunk::with_sample_offset(
@@ -152,7 +167,9 @@ fn nextcloud_runtime_synchronization_check() {
     for path in [
         manifest_path.clone(),
         payload_path.clone(),
-        format!("{expected_prefix}/tracks/track-01-track-runtime-sync/chunks"),
+        format!(
+            "{expected_prefix}/tracks/track-01-track-runtime-sync/chunks"
+        ),
         format!("{expected_prefix}/tracks/track-01-track-runtime-sync"),
         format!("{expected_prefix}/tracks"),
         expected_prefix.clone(),
