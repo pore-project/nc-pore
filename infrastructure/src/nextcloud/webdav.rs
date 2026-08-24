@@ -130,6 +130,9 @@ impl<T: WebDavTransport> WebDavClient<T> {
     }
 
     pub fn mkcol(&self, path: &str) -> Result<(), NextcloudProviderError> {
+        if is_dav_infrastructure_path(path) {
+            return Ok(());
+        }
         self.mkcol_with_headers(path, &[])
     }
 
