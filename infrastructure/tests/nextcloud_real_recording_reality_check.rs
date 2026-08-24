@@ -147,7 +147,7 @@ fn nextcloud_real_recording_reality_check() {
         .ready_and_maybe_opening_signet(&mut start_coordinator, &participant)
         .expect("real capture must reach READY and emit opening signet");
 
-    thread::sleep(Duration::from_secs(11));
+    thread::sleep(Duration::from_secs(9));
 
     let mut stop_coordinator = RecordingStopCoordinator::new([participant.clone()]);
     let (_closing_signet, capture_result) = workflow
