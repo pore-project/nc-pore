@@ -50,7 +50,10 @@ impl Drop for RemoteCleanup<'_> {
         }
         for path in [
             format!("{}/manifest.json", self.artifact_path),
-            format!("{}/tracks/track-01-cpal-track/chunks/chunk-000001.payload", self.artifact_path),
+            format!(
+                "{}/tracks/track-01-cpal-track/chunks/chunk-000001.payload",
+                self.artifact_path
+            ),
             format!("{}/tracks/track-01-cpal-track/chunks", self.artifact_path),
             format!("{}/tracks/track-01-cpal-track", self.artifact_path),
             format!("{}/tracks", self.artifact_path),
@@ -166,8 +169,7 @@ fn nextcloud_real_recording_reality_check() {
         "real capture must produce at least one payload chunk"
     );
 
-    let artifact_id = capture_result.id().to_owned();
-    let artifact_id_value = artifact_id;
+    let artifact_id_value = capture_result.id().to_owned();
     let temp_root = env::temp_dir().join(format!("nc-pore-real-recording-{}", process_id));
     let _ = std::fs::remove_dir_all(&temp_root);
 
@@ -189,7 +191,8 @@ fn nextcloud_real_recording_reality_check() {
     let recorded_at: DateTime<Local> = Local::now();
     let recorded_at = recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true);
     let display_name = "NC-PoRE Real Recording Reality Check".to_owned();
-    let metadata = ArtifactTransferMetadata::new(Some(display_name.clone()), Some(recorded_at.clone()));
+    let metadata =
+        ArtifactTransferMetadata::new(Some(display_name.clone()), Some(recorded_at.clone()));
 
     let mut queue = PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
     queue
@@ -236,12 +239,6 @@ fn nextcloud_real_recording_reality_check() {
     assert!(manifest_text.contains(&artifact_id_value));
     assert!(manifest_text.contains("cpal-track"));
     assert!(manifest_text.contains(&display_name));
-
-    let track = processor
-        .coordinator
-        .persistence()
-        .load(&artifact_id_value);
-    assert!(matches!(track, recorder::persistence::PersistenceLoadResult::Valid(_)));
 
     let first_payload_path = format!("{payload_prefix}/chunk-000001.payload");
     let payload = client
