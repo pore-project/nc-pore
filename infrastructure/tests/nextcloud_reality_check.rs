@@ -9,7 +9,9 @@ fn nextcloud_runtime_reality_check() {
         "NC_PORE_NEXTCLOUD_APP_PASSWORD",
     ];
     if required.iter().any(|name| env::var(name).is_err()) {
-        eprintln!("Nextcloud runtime reality check skipped: required credentials are not configured.");
+        eprintln!(
+            "Nextcloud runtime reality check skipped: required credentials are not configured."
+        );
         return;
     }
 
