@@ -31,7 +31,9 @@ fn main() {
         Some("record-test") => run_record_test(args),
         Some(command) => {
             eprintln!("Unbekannter Befehl: {command}");
-            eprintln!("Verwendung: recorder [inspect-audio|test-audio-stream|record-test [sekunden]]");
+            eprintln!(
+                "Verwendung: recorder [inspect-audio|test-audio-stream|record-test [sekunden]]"
+            );
             std::process::exit(2);
         }
         None => {
