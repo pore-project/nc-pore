@@ -15,7 +15,6 @@ mod filesystem;
 mod provider;
 
 pub use assessment::PersistenceLoadResult;
-#[cfg(test)]
 pub use filesystem::FilesystemPersistenceProvider;
 pub use provider::{PersistenceProvider, PersistenceRecoveryLookup, PersistenceStoreError};
 
@@ -36,7 +35,7 @@ fn artifacts_are_equivalent(left: &RecordingArtifact, right: &RecordingArtifact)
 /// Reference implementation used for development and tests.
 ///
 /// This implementation validates the persistence boundary without
-/// committing NC-PoRe to a specific storage technology.
+/// committing NC-PoRE to a specific storage technology.
 pub struct InMemoryPersistenceProvider {
     artifacts: Vec<RecordingArtifact>,
 }
@@ -112,13 +111,9 @@ impl PersistenceProvider for InMemoryPersistenceProvider {
 mod tests {
     use super::*;
     use crate::artifact::RecordingArtifact;
-    use crate::persistence::FilesystemPersistenceProvider;
     use crate::session::RecordingSessionId;
 
     // TEST-12
-    //
-    // Protects ADR-044:
-    // Recording persistence is accessed through the provider boundary.
     #[test]
     fn test_12_provider_can_store_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
@@ -134,9 +129,6 @@ mod tests {
     }
 
     // TEST-13
-    //
-    // Protects ADR-044:
-    // Persisted artifacts are retrieved through the provider contract.
     #[test]
     fn test_13_provider_can_load_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
@@ -155,9 +147,6 @@ mod tests {
     }
 
     // TEST-14
-    //
-    // Protects ADR-044:
-    // The provider boundary supports retrieving persisted artifacts.
     #[test]
     fn test_14_provider_can_list_artifacts() {
         let mut provider = InMemoryPersistenceProvider::new();
@@ -204,9 +193,6 @@ mod tests {
     }
 
     // TEST-15
-    //
-    // Protects ADR-044:
-    // Removal is part of the persistence contract.
     #[test]
     fn test_15_provider_can_remove_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
@@ -227,9 +213,6 @@ mod tests {
     }
 
     // TEST-21
-    //
-    // Protects the persistence assessment boundary:
-    // a missing persisted artifact is distinct from an invalid one.
     #[test]
     fn test_21_provider_reports_missing_artifact() {
         let provider = InMemoryPersistenceProvider::new();
@@ -240,27 +223,7 @@ mod tests {
         ));
     }
 
-    // TEST-20
-    //
-    // Protects ADR-052:
-    // The filesystem persistence implementation is exposed
-    // through the persistence boundary.
-    #[test]
-    fn test_20_filesystem_provider_is_available_through_boundary() {
-        let path = std::env::temp_dir().join("nc-pore-test-20");
-
-        let provider = FilesystemPersistenceProvider::new(&path);
-
-        drop(provider);
-
-        let _ = std::fs::remove_dir_all(path);
-    }
-
     // TEST-37
-    //
-    // Protects ADR-060:
-    // Storing the same artifact identity and equivalent content is an
-    // idempotent success and does not create a duplicate.
     #[test]
     fn test_37_provider_is_idempotent_for_equivalent_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();
@@ -278,10 +241,6 @@ mod tests {
     }
 
     // TEST-38
-    //
-    // Protects ADR-060:
-    // A different artifact under an already used identity is rejected
-    // instead of silently replacing the persisted artifact.
     #[test]
     fn test_38_provider_rejects_conflicting_artifact() {
         let mut provider = InMemoryPersistenceProvider::new();

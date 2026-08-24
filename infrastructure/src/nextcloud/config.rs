@@ -1,5 +1,6 @@
 use crate::nextcloud::NextcloudProviderError;
 use reqwest::Url;
+use std::env;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct NextcloudCredentials {
@@ -48,6 +49,30 @@ impl NextcloudConnectionConfig {
             credentials,
             remote_root: "audio".to_owned(),
         }
+    }
+
+    /// Builds a connection configuration from runtime environment variables.
+    ///
+    /// No credential value is stored in source control. The following variables
+    /// are required:
+    /// - `NC_PORE_NEXTCLOUD_URL`
+    /// - `NC_PORE_NEXTCLOUD_USER`
+    /// - `NC_PORE_NEXTCLOUD_APP_PASSWORD`
+    ///
+    /// `NC_PORE_NEXTCLOUD_REMOTE_ROOT` is optional and defaults to `audio`.
+    pub fn from_environment() -> Result<Self, NextcloudProviderError> {
+        let endpoint = required_environment("NC_PORE_NEXTCLOUD_URL")?;
+        let username = required_environment("NC_PORE_NEXTCLOUD_USER")?;
+        let app_password = required_environment("NC_PORE_NEXTCLOUD_APP_PASSWORD")?;
+        let remote_root = env::var("NC_PORE_NEXTCLOUD_REMOTE_ROOT")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "audio".to_owned());
+
+        let config = Self::new(endpoint, NextcloudCredentials::new(username, app_password))
+            .with_remote_root(remote_root);
+        config.validate()?;
+        Ok(config)
     }
 
     pub fn with_remote_root(mut self, remote_root: impl Into<String>) -> Self {
@@ -110,6 +135,24 @@ impl NextcloudConnectionConfig {
         }
         Ok(())
     }
+}
+
+fn required_environment(name: &str) -> Result<String, NextcloudProviderError> {
+    env::var(name)
+        .map_err(|_| {
+            NextcloudProviderError::InvalidConfiguration(format!(
+                "missing environment variable {name}"
+            ))
+        })
+        .and_then(|value| {
+            if value.trim().is_empty() {
+                Err(NextcloudProviderError::InvalidConfiguration(format!(
+                    "environment variable {name} must not be empty"
+                )))
+            } else {
+                Ok(value)
+            }
+        })
 }
 
 #[cfg(test)]

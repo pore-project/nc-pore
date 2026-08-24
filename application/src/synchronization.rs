@@ -16,7 +16,7 @@ use nc_pore_core::recording::{
     RecordingArtifactSynchronizationStatus,
 };
 
-use crate::synchronization_metadata::ArtifactTransferMetadata;
+pub use crate::synchronization_metadata::ArtifactTransferMetadata;
 
 /// Stable reference to one persisted local artifact version that requires
 /// synchronization.
