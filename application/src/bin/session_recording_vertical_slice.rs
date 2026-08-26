@@ -1,8 +1,8 @@
 //! Browser-to-recorder vertical slice for one local production recording.
 //!
-//! This deliberately proves the next boundary:
-//! browser -> READY -> application recording orchestration -> recorder -> artifact.
-//! Authentication, production persistence and WebSocket transport remain outside it.
+//! This proves: browser -> READY -> application recording orchestration ->
+//! recorder -> artifact. Authentication, production persistence and WebSocket
+//! transport remain outside this slice.
 
 use nc_pore_application::client::{ClientRole, ClientSessionError, ClientSessionService};
 use nc_pore_application::recording::execute_recording;
@@ -43,7 +43,11 @@ impl ProductionSessionRepository for InMemoryRepository {
     type Error = &'static str;
 
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        if self.sessions.iter().any(|existing| existing.id == session.id) {
+        if self
+            .sessions
+            .iter()
+            .any(|existing| existing.id == session.id)
+        {
             return Err("session already exists");
         }
         self.sessions.push(session.clone());
@@ -89,10 +93,7 @@ impl CaptureProvider for TimedCpalCaptureProvider {
     }
 }
 
-type Recorder = RecorderApplication<
-    TimedCpalCaptureProvider,
-    InMemoryPersistenceProvider,
->;
+type Recorder = RecorderApplication<TimedCpalCaptureProvider, InMemoryPersistenceProvider>;
 
 struct ServerState {
     repository: InMemoryRepository,
@@ -101,7 +102,9 @@ struct ServerState {
 }
 
 fn main() -> std::io::Result<()> {
-    let mut repository = InMemoryRepository { sessions: Vec::new() };
+    let mut repository = InMemoryRepository {
+        sessions: Vec::new(),
+    };
     let mut client = ClientSessionService::new(&mut repository);
     client
         .create(SESSION_ID, OWNER_ID)
@@ -122,19 +125,7 @@ fn main() -> std::io::Result<()> {
         .update(&session)
         .expect("vertical-slice session update must succeed");
 
-    let persistence = InMemoryPersistenceProvider::new();
-    let coordinator = ArtifactCoordinator::new(persistence);
-    let processor = RecordingArtifactProcessor::new(coordinator);
-    let capture = TimedCpalCaptureProvider {
-        provider: CpalCaptureProvider::new(),
-        duration: CAPTURE_DURATION,
-    };
-    let recorder = RecorderApplication::new(
-        RecordingSession::new(recording_id.value()),
-        capture,
-        processor,
-    );
-
+    let recorder = new_recorder();
     let listener = TcpListener::bind(ADDRESS)?;
     println!("NC-PoRe session recording vertical slice: http://{ADDRESS}/");
     println!("Bob can open: http://{ADDRESS}/");
@@ -179,10 +170,18 @@ fn handle_connection(mut stream: TcpStream, state: &mut ServerState) {
 
     let (status, content_type, body) = match (method, path) {
         ("GET", "/") => (200, "text/html; charset=utf-8", INDEX_HTML.to_owned()),
-        ("GET", path) if path.starts_with("/api/sessions/") => get_session_or_context(path, state),
-        ("POST", "/api/sessions/recording-vertical-slice-session/join") => join_session(state, body),
-        ("POST", "/api/sessions/recording-vertical-slice-session/ready") => mark_ready(state, body),
-        ("POST", "/api/sessions/recording-vertical-slice-session/record") => record(state, body),
+        ("GET", path) if path.starts_with("/api/sessions/") => {
+            get_session_or_context(path, state)
+        }
+        ("POST", "/api/sessions/recording-vertical-slice-session/join") => {
+            join_session(state, body)
+        }
+        ("POST", "/api/sessions/recording-vertical-slice-session/ready") => {
+            mark_ready(state, body)
+        }
+        ("POST", "/api/sessions/recording-vertical-slice-session/record") => {
+            record(state, body)
+        }
         _ => response(404, r#"{"error":"not_found"}"#),
     };
 
@@ -202,21 +201,31 @@ fn get_session_or_context(path: &str, state: &mut ServerState) -> (u16, &'static
     if parts.len() < 3 || parts[0] != "api" || parts[1] != "sessions" {
         return response(404, r#"{"error":"not_found"}"#);
     }
+
     let session_id = parts[2];
     let actor_id = query_value(query, "actor").unwrap_or_else(|| "bob-1".to_owned());
     if parts.len() == 4 && parts[3] == "context" {
         let provider = ProductionSessionContextProvider::new(&state.repository);
         return match provider.resolve(session_id, &actor_id) {
             Ok(context) => (200, "application/json; charset=utf-8", context_json(&context)),
-            Err(ProductionSessionContextError::SessionNotFound) => response(404, r#"{"error":"session_not_found"}"#),
-            Err(ProductionSessionContextError::ActorNotFound) => response(404, r#"{"error":"actor_not_found"}"#),
-            Err(ProductionSessionContextError::Repository(_)) => response(500, r#"{"error":"application_error"}"#),
+            Err(ProductionSessionContextError::SessionNotFound) => {
+                response(404, r#"{"error":"session_not_found"}"#)
+            }
+            Err(ProductionSessionContextError::ActorNotFound) => {
+                response(404, r#"{"error":"actor_not_found"}"#)
+            }
+            Err(ProductionSessionContextError::Repository(_)) => {
+                response(500, r#"{"error":"application_error"}"#)
+            }
         };
     }
+
     let client = ClientSessionService::new(&mut state.repository);
     match client.get(session_id) {
         Ok(session) => (200, "application/json; charset=utf-8", session_json(&session)),
-        Err(ClientSessionError::SessionNotFound) => response(404, r#"{"error":"session_not_found"}"#),
+        Err(ClientSessionError::SessionNotFound) => {
+            response(404, r#"{"error":"session_not_found"}"#)
+        }
         Err(_) => response(500, r#"{"error":"application_error"}"#),
     }
 }
@@ -226,11 +235,21 @@ fn join_session(state: &mut ServerState, body: &str) -> (u16, &'static str, Stri
         Some(value) if !value.is_empty() => value,
         _ => return response(400, r#"{"error":"invalid_request"}"#),
     };
+
     let mut client = ClientSessionService::new(&mut state.repository);
-    match client.add_participant(SESSION_ID, OWNER_ID, &participant_id, [ClientRole::Participant]) {
+    match client.add_participant(
+        SESSION_ID,
+        OWNER_ID,
+        &participant_id,
+        [ClientRole::Participant],
+    ) {
         Ok(session) => (200, "application/json; charset=utf-8", session_json(&session)),
-        Err(ClientSessionError::ParticipantAlreadyExists) => response(409, r#"{"error":"participant_already_exists"}"#),
-        Err(ClientSessionError::SessionNotFound) => response(404, r#"{"error":"session_not_found"}"#),
+        Err(ClientSessionError::ParticipantAlreadyExists) => {
+            response(409, r#"{"error":"participant_already_exists"}"#)
+        }
+        Err(ClientSessionError::SessionNotFound) => {
+            response(404, r#"{"error":"session_not_found"}"#)
+        }
         Err(_) => response(500, r#"{"error":"application_error"}"#),
     }
 }
@@ -240,16 +259,29 @@ fn mark_ready(state: &mut ServerState, body: &str) -> (u16, &'static str, String
         Some(value) if !value.is_empty() => value,
         _ => return response(400, r#"{"error":"invalid_request"}"#),
     };
+
     let provider = ProductionSessionContextProvider::new(&state.repository);
     let context = match provider.resolve(SESSION_ID, &participant_id) {
         Ok(context) => context,
-        Err(ProductionSessionContextError::ActorNotFound) => return response(404, r#"{"error":"actor_not_found"}"#),
-        Err(ProductionSessionContextError::SessionNotFound) => return response(404, r#"{"error":"session_not_found"}"#),
-        Err(ProductionSessionContextError::Repository(_)) => return response(500, r#"{"error":"application_error"}"#),
+        Err(ProductionSessionContextError::ActorNotFound) => {
+            return response(404, r#"{"error":"actor_not_found"}"#)
+        }
+        Err(ProductionSessionContextError::SessionNotFound) => {
+            return response(404, r#"{"error":"session_not_found"}"#)
+        }
+        Err(ProductionSessionContextError::Repository(_)) => {
+            return response(500, r#"{"error":"application_error"}"#)
+        }
     };
-    if context.state != SessionState::Available || !context.capabilities.contains(&SessionCapability::ParticipateInRecording) {
+
+    if context.state != SessionState::Available
+        || !context
+            .capabilities
+            .contains(&SessionCapability::ParticipateInRecording)
+    {
         return response(409, r#"{"error":"not_ready_for_recording"}"#);
     }
+
     state.ready_participants.insert(participant_id.clone());
     (
         200,
@@ -271,18 +303,7 @@ fn record(state: &mut ServerState, body: &str) -> (u16, &'static str, String) {
         return response(409, r#"{"error":"participant_not_ready"}"#);
     }
 
-    let mut recorder = std::mem::replace(
-        &mut state.recorder,
-        RecorderApplication::new(
-            RecordingSession::new(RECORDING_ID),
-            TimedCpalCaptureProvider {
-                provider: CpalCaptureProvider::new(),
-                duration: CAPTURE_DURATION,
-            },
-            RecordingArtifactProcessor::new(ArtifactCoordinator::new(InMemoryPersistenceProvider::new())),
-        ),
-    );
-
+    let mut recorder = std::mem::replace(&mut state.recorder, new_recorder());
     let result = execute_recording(
         &mut state.repository,
         &ProductionId::new(SESSION_ID),
@@ -312,12 +333,28 @@ fn record(state: &mut ServerState, body: &str) -> (u16, &'static str, String) {
                 ),
             )
         }
-        Err(error) => response(500, &format!("{{\"error\":\"{}\"}}", json_escape(&format!("{error:?}")))),
+        Err(error) => response(
+            500,
+            format!(
+                "{{\"error\":\"{}\"}}",
+                json_escape(&format!("{error:?}"))
+            ),
+        ),
     }
 }
 
-fn response(status: u16, body: &'static str) -> (u16, &'static str, String) {
-    (status, "application/json; charset=utf-8", body.to_owned())
+fn new_recorder() -> Recorder {
+    let persistence = InMemoryPersistenceProvider::new();
+    let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(persistence));
+    let capture = TimedCpalCaptureProvider {
+        provider: CpalCaptureProvider::new(),
+        duration: CAPTURE_DURATION,
+    };
+    RecorderApplication::new(RecordingSession::new(RECORDING_ID), capture, processor)
+}
+
+fn response(status: u16, body: impl Into<String>) -> (u16, &'static str, String) {
+    (status, "application/json; charset=utf-8", body.into())
 }
 
 fn query_value(query: &str, key: &str) -> Option<String> {
@@ -336,45 +373,108 @@ fn json_field(body: &str, field: &str) -> Option<String> {
 }
 
 fn reason_phrase(status: u16) -> &'static str {
-    match status { 200 => "OK", 400 => "Bad Request", 404 => "Not Found", 409 => "Conflict", 500 => "Internal Server Error", _ => "Unknown" }
+    match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        409 => "Conflict",
+        500 => "Internal Server Error",
+        _ => "Unknown",
+    }
 }
 
 fn session_json(session: &nc_pore_application::client::ClientProductionSession) -> String {
-    let participants = session.participants.iter().map(|participant| {
-        let roles = participant.roles.iter().map(|role| format!("\"{}\"", role_name(*role))).collect::<Vec<_>>().join(",");
-        format!("{{\"id\":\"{}\",\"roles\":[{}]}}", json_escape(&participant.id), roles)
-    }).collect::<Vec<_>>().join(",");
-    format!("{{\"id\":\"{}\",\"status\":\"{:?}\",\"participants\":[{}]}}", json_escape(&session.id), session.status, participants)
+    let participants = session
+        .participants
+        .iter()
+        .map(|participant| {
+            let roles = participant
+                .roles
+                .iter()
+                .map(|role| format!("\"{}\"", role_name(*role)))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "{{\"id\":\"{}\",\"roles\":[{}]}}",
+                json_escape(&participant.id),
+                roles
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"id\":\"{}\",\"status\":\"{:?}\",\"participants\":[{}]}}",
+        json_escape(&session.id),
+        session.status,
+        participants
+    )
 }
 
 fn context_json(context: &SessionContext) -> String {
-    let capabilities = context.capabilities.iter().map(|capability| format!("\"{}\"", capability_name(*capability))).collect::<Vec<_>>().join(",");
-    let participants = context.participants.iter().map(|participant| format!("\"{}\"", json_escape(&participant.id))).collect::<Vec<_>>().join(",");
-    format!("{{\"session_id\":\"{}\",\"state\":\"{:?}\",\"actor_id\":\"{}\",\"participants\":[{}],\"capabilities\":[{}]}}", json_escape(&context.session_id), context.state, json_escape(&context.actor_id), participants, capabilities)
+    let capabilities = context
+        .capabilities
+        .iter()
+        .map(|capability| format!("\"{}\"", capability_name(*capability)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let participants = context
+        .participants
+        .iter()
+        .map(|participant| format!("\"{}\"", json_escape(&participant.id)))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"session_id\":\"{}\",\"state\":\"{:?}\",\"actor_id\":\"{}\",\"participants\":[{}],\"capabilities\":[{}]}}",
+        json_escape(&context.session_id),
+        context.state,
+        json_escape(&context.actor_id),
+        participants,
+        capabilities
+    )
 }
 
 fn role_name(role: ClientRole) -> &'static str {
-    match role { ClientRole::Owner => "Owner", ClientRole::Producer => "Producer", ClientRole::Participant => "Participant", ClientRole::Guest => "Guest" }
+    match role {
+        ClientRole::Owner => "Owner",
+        ClientRole::Producer => "Producer",
+        ClientRole::Participant => "Participant",
+        ClientRole::Guest => "Guest",
+    }
 }
 
 fn capability_name(capability: SessionCapability) -> &'static str {
-    match capability { SessionCapability::StartSession => "StartSession", SessionCapability::CompleteSession => "CompleteSession", SessionCapability::ManageParticipants => "ManageParticipants", SessionCapability::ManageRecordings => "ManageRecordings", SessionCapability::ParticipateInRecording => "ParticipateInRecording" }
+    match capability {
+        SessionCapability::StartSession => "StartSession",
+        SessionCapability::CompleteSession => "CompleteSession",
+        SessionCapability::ManageParticipants => "ManageParticipants",
+        SessionCapability::ManageRecordings => "ManageRecordings",
+        SessionCapability::ParticipateInRecording => "ParticipateInRecording",
+    }
 }
 
 fn json_escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t")
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 const INDEX_HTML: &str = r#"<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC-PoRe Session Recording</title></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NC-PoRe Session Recording</title>
+</head>
 <body>
-<h1>NC-PoRe session recording vertical slice</h1>
-<p id="status">Opening session…</p>
-<button id="join">Join as Bob</button>
-<button id="ready" disabled>Ready</button>
-<button id="record" disabled>Start Recording</button>
-<pre id="result"></pre>
+  <h1>NC-PoRe session recording vertical slice</h1>
+  <p id="status">Opening session…</p>
+  <button id="join">Join as Bob</button>
+  <button id="ready" disabled>Ready</button>
+  <button id="record" disabled>Start Recording</button>
+  <pre id="result"></pre>
 <script>
 const session = 'recording-vertical-slice-session';
 const actor = `bob-${crypto.randomUUID()}`;
@@ -395,53 +495,84 @@ async function refresh() {
     result.textContent = JSON.stringify(context, null, 2);
     status.textContent = `Session ${context.state}; actor ${context.actor_id}`;
     ready.disabled = !context.capabilities.includes('ParticipateInRecording');
-  } catch (error) { status.textContent = `Session not joined: ${error}`; }
+  } catch (error) {
+    status.textContent = `Session not joined: ${error}`;
+  }
 }
 join.onclick = async () => {
   try {
-    await api(`/api/sessions/${session}/join`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({participant_id:actor})});
-    join.disabled = true; await refresh();
-  } catch (error) { status.textContent = `Join failed: ${error}`; }
+    await api(`/api/sessions/${session}/join`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({participant_id: actor})
+    });
+    join.disabled = true;
+    await refresh();
+  } catch (error) {
+    status.textContent = `Join failed: ${error}`;
+  }
 };
 ready.onclick = async () => {
   try {
-    const value = await api(`/api/sessions/${session}/ready`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({participant_id:actor})});
-    result.textContent = JSON.stringify(value, null, 2); status.textContent = 'Bob = READY'; ready.disabled = true; record.disabled = false;
-  } catch (error) { status.textContent = `Ready failed: ${error}`; }
+    const value = await api(`/api/sessions/${session}/ready`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({participant_id: actor})
+    });
+    result.textContent = JSON.stringify(value, null, 2);
+    status.textContent = 'Bob = READY';
+    ready.disabled = true;
+    record.disabled = false;
+  } catch (error) {
+    status.textContent = `Ready failed: ${error}`;
+  }
 };
 record.onclick = async () => {
   try {
-    record.disabled = true; status.textContent = 'Recording…';
-    const value = await api(`/api/sessions/${session}/record`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({participant_id:actor})});
-    result.textContent = JSON.stringify(value, null, 2); status.textContent = 'Recording COMPLETED';
-  } catch (error) { status.textContent = `Recording failed: ${error}`; record.disabled = false; }
+    record.disabled = true;
+    status.textContent = 'Recording…';
+    const value = await api(`/api/sessions/${session}/record`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({participant_id: actor})
+    });
+    result.textContent = JSON.stringify(value, null, 2);
+    status.textContent = 'Recording COMPLETED';
+  } catch (error) {
+    status.textContent = `Recording failed: ${error}`;
+    record.disabled = false;
+  }
 };
 refresh();
 </script>
-</body></html>"#;
+</body>
+</html>"#;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn state() -> ServerState {
-        let mut repository = InMemoryRepository { sessions: Vec::new() };
+        let mut repository = InMemoryRepository {
+            sessions: Vec::new(),
+        };
         let mut client = ClientSessionService::new(&mut repository);
         client.create(SESSION_ID, OWNER_ID).unwrap();
         drop(client);
+
         let production_id = ProductionId::new(SESSION_ID);
         let owner = ParticipantId::new(OWNER_ID);
         let mut session = repository.get(&production_id).unwrap().unwrap();
-        session.add_recording_by(&owner, Recording::new(RECORDING_ID)).unwrap();
+        session
+            .add_recording_by(&owner, Recording::new(RECORDING_ID))
+            .unwrap();
         repository.update(&session).unwrap();
-        let persistence = InMemoryPersistenceProvider::new();
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(persistence));
-        let recorder = RecorderApplication::new(
-            RecordingSession::new(RECORDING_ID),
-            TimedCpalCaptureProvider { provider: CpalCaptureProvider::new(), duration: Duration::from_millis(1) },
-            processor,
-        );
-        ServerState { repository, ready_participants: HashSet::new(), recorder }
+
+        ServerState {
+            repository,
+            ready_participants: HashSet::new(),
+            recorder: new_recorder(),
+        }
     }
 
     #[test]
@@ -455,7 +586,10 @@ mod tests {
     #[test]
     fn participant_can_cross_ready_boundary() {
         let mut state = state();
-        assert_eq!(join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0, 200);
+        assert_eq!(
+            join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0,
+            200
+        );
         let ready = mark_ready(&mut state, r#"{"participant_id":"bob-1"}"#);
         assert_eq!(ready.0, 200);
         assert!(state.ready_participants.contains("bob-1"));
