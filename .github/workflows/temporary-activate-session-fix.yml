@@ -1,0 +1,36 @@
+name: Temporary Session Activation Fix
+
+on:
+  push:
+    branches:
+      - fix/session-recording-activate-session
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, 'activate production session') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Activate production session in vertical slice
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('application/src/bin/session_recording_vertical_slice.rs')
+          text = path.read_text()
+          needle = '    let mut session = repository\n'
+          replacement = needle + '    session.start_by(&owner).expect("vertical-slice session must be active before recording");\n'
+          if 'vertical-slice session must be active before recording' not in text:
+              text = text.replace(needle, replacement, 1)
+              path.write_text(text)
+          PY
+      - name: Commit fix and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add application/src/bin/session_recording_vertical_slice.rs .github/workflows/temporary-activate-session-fix.yml
+          git rm .github/workflows/temporary-activate-session-fix.yml
+          git commit -m 'fix: activate production session before recording'
+          git push
