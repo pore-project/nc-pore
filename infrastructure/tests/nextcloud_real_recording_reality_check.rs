@@ -177,6 +177,15 @@ fn nextcloud_real_recording_reality_check() {
         .process_next()
         .expect("real artifact synchronization orchestration must succeed");
     assert_eq!(result, SynchronizationProcessOutcome::Synchronized);
+    let synchronized_work = orchestrator
+        .queue()
+        .list()
+        .expect("synchronization queue must remain readable");
+    assert_eq!(synchronized_work.len(), 1);
+    assert_eq!(
+        synchronized_work[0].status(),
+        nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Synchronized
+    );
 
     let recorded_at = recorded_at
         .parse::<DateTime<chrono::FixedOffset>>()
