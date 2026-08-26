@@ -411,12 +411,18 @@ mod tests {
             nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Pending
         );
 
-        let recovered_queue = first.queue.clone();
-        let recovered_persistence = first.persistence().clone();
+        let recovered_work = first.queue().list().unwrap();
+        let mut recovered_store = crate::synchronization::InMemorySynchronizationWorkStore::new();
+        for work in recovered_work {
+            recovered_store.save(work).unwrap();
+        }
         drop(first);
 
+        let mut recovered_persistence = InMemoryPersistenceProvider::new();
+        recovered_persistence.store_checked(stored).unwrap();
+
         let mut second = SynchronizationOrchestrator::new(
-            recovered_queue,
+            PersistentSynchronizationQueue::new(recovered_store),
             recovered_persistence,
             ScriptedTransfer::with_results([ArtifactTransferResult::Succeeded]),
         );
