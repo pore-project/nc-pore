@@ -38,7 +38,10 @@ fn main() {
         .iter()
         .any(|capability| capability.matches_recording_configuration(&configuration))
     {
-        fail("No exact native input configuration matches the requested recording configuration.".to_owned());
+        fail(
+            "No exact native input configuration matches the requested recording configuration."
+                .to_owned(),
+        );
     }
 
     println!("Exact native recording configuration: available");
@@ -48,7 +51,10 @@ fn main() {
     }
 
     println!("Local capture: ACTIVE");
-    println!("Recording real input for {} seconds...", CAPTURE_DURATION.as_secs());
+    println!(
+        "Recording real input for {} seconds...",
+        CAPTURE_DURATION.as_secs()
+    );
 
     thread::sleep(CAPTURE_DURATION);
 
