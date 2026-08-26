@@ -31,7 +31,11 @@ impl ProductionSessionRepository for InMemoryRepository {
     type Error = &'static str;
 
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        if self.sessions.iter().any(|existing| existing.id == session.id) {
+        if self
+            .sessions
+            .iter()
+            .any(|existing| existing.id == session.id)
+        {
             return Err("session already exists");
         }
         self.sessions.push(session.clone());
@@ -63,7 +67,9 @@ struct ServerState {
 }
 
 fn main() -> std::io::Result<()> {
-    let mut repository = InMemoryRepository { sessions: Vec::new() };
+    let mut repository = InMemoryRepository {
+        sessions: Vec::new(),
+    };
     let mut client = ClientSessionService::new(&mut repository);
     client
         .create(SESSION_ID, OWNER_ID)
@@ -114,9 +120,7 @@ fn handle_connection(mut stream: TcpStream, state: &mut ServerState) {
 
     let (status, content_type, body) = match (method, path) {
         ("GET", "/") => (200, "text/html; charset=utf-8", INDEX_HTML.to_owned()),
-        ("GET", path) if path.starts_with("/api/sessions/") => {
-            get_session_or_context(path, state)
-        }
+        ("GET", path) if path.starts_with("/api/sessions/") => get_session_or_context(path, state),
         ("POST", "/api/sessions/vertical-slice-session/join") => join_session(state, body),
         ("POST", "/api/sessions/vertical-slice-session/ready") => mark_ready(state, body),
         _ => (
@@ -150,7 +154,11 @@ fn get_session_or_context(path: &str, state: &ServerState) -> (u16, &'static str
     if parts.len() == 4 && parts[3] == "context" {
         let provider = ProductionSessionContextProvider::new(&state.repository);
         return match provider.resolve(session_id, &actor_id) {
-            Ok(context) => (200, "application/json; charset=utf-8", context_json(&context)),
+            Ok(context) => (
+                200,
+                "application/json; charset=utf-8",
+                context_json(&context),
+            ),
             Err(ProductionSessionContextError::SessionNotFound) => {
                 response(404, r#"{"error":"session_not_found"}"#)
             }
@@ -165,7 +173,11 @@ fn get_session_or_context(path: &str, state: &ServerState) -> (u16, &'static str
 
     let client = ClientSessionService::new(&state.repository);
     match client.get(session_id) {
-        Ok(session) => (200, "application/json; charset=utf-8", session_json(&session)),
+        Ok(session) => (
+            200,
+            "application/json; charset=utf-8",
+            session_json(&session),
+        ),
         Err(ClientSessionError::SessionNotFound) => {
             response(404, r#"{"error":"session_not_found"}"#)
         }
@@ -186,7 +198,11 @@ fn join_session(state: &mut ServerState, body: &str) -> (u16, &'static str, Stri
         &participant_id,
         [ClientRole::Participant],
     ) {
-        Ok(session) => (200, "application/json; charset=utf-8", session_json(&session)),
+        Ok(session) => (
+            200,
+            "application/json; charset=utf-8",
+            session_json(&session),
+        ),
         Err(ClientSessionError::ParticipantAlreadyExists) => {
             response(409, r#"{"error":"participant_already_exists"}"#)
         }
@@ -426,7 +442,9 @@ mod tests {
     use super::*;
 
     fn state() -> ServerState {
-        let mut repository = InMemoryRepository { sessions: Vec::new() };
+        let mut repository = InMemoryRepository {
+            sessions: Vec::new(),
+        };
         let mut client = ClientSessionService::new(&mut repository);
         client
             .create(SESSION_ID, OWNER_ID)
@@ -451,7 +469,10 @@ mod tests {
     #[test]
     fn participant_can_join_and_resolve_recording_capability() {
         let mut state = state();
-        assert_eq!(join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0, 200);
+        assert_eq!(
+            join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0,
+            200
+        );
 
         let response = get_session_or_context(
             "/api/sessions/vertical-slice-session/context?actor=bob-1",
@@ -466,7 +487,10 @@ mod tests {
     #[test]
     fn participant_can_be_marked_ready() {
         let mut state = state();
-        assert_eq!(join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0, 200);
+        assert_eq!(
+            join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0,
+            200
+        );
 
         let ready = mark_ready(&mut state, r#"{"participant_id":"bob-1"}"#);
 
