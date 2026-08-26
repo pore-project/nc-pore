@@ -85,8 +85,8 @@ fn nextcloud_existing_artifact_reality_check() {
         for chunk in track.chunks() {
             let payload_path = format!(
                 "{expected_prefix}/tracks/track-{:02}-{}/chunks/chunk-{:06}.payload",
-                artifact.tracks().iter().position(|candidate| candidate.id() == track.id()).unwrap() + 1,
-                track.id().value(),
+                artifact.tracks().iter().position(|candidate| candidate.id == track.id).unwrap() + 1,
+                track.id.value(),
                 chunk.sequence
             );
             let payload = client
