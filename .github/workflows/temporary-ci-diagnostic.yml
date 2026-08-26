@@ -1,0 +1,47 @@
+name: Temporary CI Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/session-client-vertical-slice
+
+permissions:
+  contents: write
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/session-client-vertical-slice
+          fetch-depth: 0
+      - name: Install system dependencies
+        run: |
+          set -euo pipefail
+          for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors.txt; do
+            [ -f "$file" ] || continue
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$file"
+          done
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt
+      - name: Cargo check diagnostic
+        id: check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --workspace 2>&1 | tee ci-diagnostic.txt
+      - name: Commit diagnostic
+        if: steps.check.outcome == 'failure'
+        run: |
+          git config user.name "Pore Project"
+          git config user.email "pore@mediaoffice-zimmer.de"
+          git add ci-diagnostic.txt
+          git commit -m "chore: capture temporary CI diagnostic"
+          git push origin HEAD:feat/session-client-vertical-slice
