@@ -171,7 +171,9 @@ fn handle_connection(mut stream: TcpStream, state: &mut ServerState) {
     let (status, content_type, body) = match (method, path) {
         ("GET", "/") => (200, "text/html; charset=utf-8", INDEX_HTML.to_owned()),
         ("GET", path) if path.starts_with("/api/sessions/") => get_session_or_context(path, state),
-        ("POST", "/api/sessions/recording-vertical-slice-session/join") => join_session(state, body),
+        ("POST", "/api/sessions/recording-vertical-slice-session/join") => {
+            join_session(state, body)
+        }
         ("POST", "/api/sessions/recording-vertical-slice-session/ready") => mark_ready(state, body),
         ("POST", "/api/sessions/recording-vertical-slice-session/record") => record(state, body),
         _ => response(404, r#"{"error":"not_found"}"#),
