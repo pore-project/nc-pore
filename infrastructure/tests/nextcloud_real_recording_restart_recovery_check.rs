@@ -1,5 +1,7 @@
 use chrono::{DateTime, SecondsFormat};
-use nc_pore_application::synchronization::{ArtifactTransferMetadata, PersistentSynchronizationQueue};
+use nc_pore_application::synchronization::{
+    ArtifactTransferMetadata, PersistentSynchronizationQueue, SynchronizationWorkStore,
+};
 use nc_pore_application::synchronization_orchestration::SynchronizationProcessOutcome;
 use nc_pore_infrastructure::nextcloud::{
     new_nextcloud_synchronization_orchestrator, NextcloudConnection, NextcloudConnectionConfig,
@@ -7,7 +9,9 @@ use nc_pore_infrastructure::nextcloud::{
 use nc_pore_infrastructure::synchronization_work_store::FilesystemSynchronizationWorkStore;
 use recorder::artifact::coordination::ArtifactCoordinator;
 use recorder::artifact::processing::RecordingArtifactProcessor;
-use recorder::audio::{CpalCaptureProvider, RecordingChunkDuration, RecordingConfiguration, SampleFormat};
+use recorder::audio::{
+    CpalCaptureProvider, RecordingChunkDuration, RecordingConfiguration, SampleFormat,
+};
 use recorder::persistence::FilesystemPersistenceProvider;
 use recorder::session::RecordingSession;
 use recorder::workflow::{
@@ -66,7 +70,7 @@ fn nextcloud_real_recording_restart_recovery_check() {
 
     let config = NextcloudConnectionConfig::from_environment()
         .expect("Nextcloud runtime configuration must be valid");
-    let connection = NextcloudConnection::new(config.clone())
+    let connection = NextcloudConnection::new(config)
         .expect("Nextcloud connection configuration must be valid");
     let capture = CpalCaptureProvider::new();
     let Some(configuration) = runtime_configuration(&capture) else { return; };
@@ -86,7 +90,9 @@ fn nextcloud_real_recording_restart_recovery_check() {
     let (_closing_signet, capture_result) = workflow
         .stop_with_coordinator(&mut stop_coordinator)
         .expect("real capture must stop");
-    stop_coordinator.confirm_ok(&participant).expect("stop confirmation must succeed");
+    stop_coordinator
+        .confirm_ok(&participant)
+        .expect("stop confirmation must succeed");
 
     let artifact_id = capture_result.id().to_owned();
     let temp_root = env::temp_dir().join(format!("nc-pore-restart-recovery-{process_id}"));
@@ -106,13 +112,14 @@ fn nextcloud_real_recording_restart_recovery_check() {
         .expect("real capture must become a persisted RecordingArtifact");
 
     let recorded_at: DateTime<chrono::Utc> = SystemTime::now().into();
-    let recorded_at = recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true);
     let metadata = ArtifactTransferMetadata::new(
         Some("NC-PoRE Restart Recovery Reality Check".to_owned()),
-        Some(recorded_at),
+        Some(recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true)),
     );
     let work_store_root = temp_root.join("sync-work");
-    let mut queue = PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(&work_store_root));
+    let mut queue = PersistentSynchronizationQueue::new(
+        FilesystemSynchronizationWorkStore::new(&work_store_root),
+    );
     queue
         .enqueue_with_metadata(
             nc_pore_core::recording::RecordingArtifactId::new(&artifact_id),
@@ -121,16 +128,16 @@ fn nextcloud_real_recording_restart_recovery_check() {
         )
         .expect("real artifact must be queued");
 
-    let orchestration_persistence = FilesystemPersistenceProvider::new(&temp_root);
-    let transfer_persistence = FilesystemPersistenceProvider::new(&temp_root);
     let mut first = new_nextcloud_synchronization_orchestrator(
         queue,
-        orchestration_persistence,
-        transfer_persistence,
+        FilesystemPersistenceProvider::new(&temp_root),
+        FilesystemPersistenceProvider::new(&temp_root),
         connection.clone(),
     );
     assert_eq!(
-        first.process_next().expect("first synchronization must succeed"),
+        first
+            .process_next()
+            .expect("first synchronization must succeed"),
         SynchronizationProcessOutcome::Synchronized
     );
     drop(first);
@@ -138,7 +145,9 @@ fn nextcloud_real_recording_restart_recovery_check() {
     let reconstructed_queue = PersistentSynchronizationQueue::new(
         FilesystemSynchronizationWorkStore::new(&work_store_root),
     );
-    let persisted_work = reconstructed_queue.list().expect("reconstructed queue must be readable");
+    let persisted_work = reconstructed_queue
+        .list()
+        .expect("reconstructed queue must be readable");
     assert_eq!(persisted_work.len(), 1);
     assert_eq!(
         persisted_work[0].status(),
@@ -152,7 +161,9 @@ fn nextcloud_real_recording_restart_recovery_check() {
         connection,
     );
     assert_eq!(
-        second.process_next().expect("restarted synchronization must be readable"),
+        second
+            .process_next()
+            .expect("restarted synchronization must be readable"),
         SynchronizationProcessOutcome::NoPendingWork
     );
 
@@ -164,5 +175,7 @@ fn nextcloud_real_recording_restart_recovery_check() {
     );
 
     let _ = std::fs::remove_dir_all(&temp_root);
-    println!("Nextcloud restart recovery check passed: artifact='{artifact_id}' survived synchronization restart as Synchronized.");
+    println!(
+        "Nextcloud restart recovery check passed: artifact='{artifact_id}' survived synchronization restart as Synchronized."
+    );
 }
