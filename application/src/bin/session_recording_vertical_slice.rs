@@ -283,7 +283,7 @@ fn mark_ready(state: &mut ServerState, body: &str) -> (u16, &'static str, String
         }
     };
 
-    if context.state != SessionState::Available
+    if context.state == SessionState::Completed
         || !context
             .capabilities
             .contains(&SessionCapability::ParticipateInRecording)
@@ -569,6 +569,7 @@ mod tests {
         let production_id = ProductionId::new(SESSION_ID);
         let owner = ParticipantId::new(OWNER_ID);
         let mut session = repository.get(&production_id).unwrap().unwrap();
+        session.start_by(&owner).unwrap();
         session
             .add_recording_by(&owner, Recording::new(RECORDING_ID))
             .unwrap();
