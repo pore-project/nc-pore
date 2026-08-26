@@ -141,7 +141,7 @@ fn handle_connection(mut stream: TcpStream, state: &mut ServerState) {
     }
 }
 
-fn get_session_or_context(path: &str, state: &ServerState) -> (u16, &'static str, String) {
+fn get_session_or_context(path: &str, state: &mut ServerState) -> (u16, &'static str, String) {
     let (route, query) = path.split_once('?').unwrap_or((path, ""));
     let parts: Vec<_> = route.trim_start_matches('/').split('/').collect();
     if parts.len() < 3 || parts[0] != "api" || parts[1] != "sessions" {
