@@ -1,6 +1,6 @@
-//! Minimal browser/client vertical slice for the first real end-to-end session path.
+//! Minimal browser/client vertical slice for the first real session path.
 //!
-//! This is deliberately small and experimental. It proves:
+//! This deliberately proves only the boundary:
 //! browser -> HTTP -> application client facade -> Core -> browser state.
 //! Authentication, production persistence, WebSocket transport and recording
 //! remain outside this slice.
@@ -13,9 +13,6 @@ use nc_pore_application::session_context::{
     SessionContext, SessionContextProvider, SessionState,
 };
 use nc_pore_core::identity::ProductionId;
-use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::participation::Participation;
-use nc_pore_core::role::ParticipantRole;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSession;
 use std::collections::HashSet;
@@ -34,11 +31,7 @@ impl ProductionSessionRepository for InMemoryRepository {
     type Error = &'static str;
 
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        if self
-            .sessions
-            .iter()
-            .any(|existing| existing.id == session.id)
-        {
+        if self.sessions.iter().any(|existing| existing.id == session.id) {
             return Err("session already exists");
         }
         self.sessions.push(session.clone());
@@ -70,9 +63,7 @@ struct ServerState {
 }
 
 fn main() -> std::io::Result<()> {
-    let mut repository = InMemoryRepository {
-        sessions: Vec::new(),
-    };
+    let mut repository = InMemoryRepository { sessions: Vec::new() };
     let mut client = ClientSessionService::new(&mut repository);
     client
         .create(SESSION_ID, OWNER_ID)
@@ -81,8 +72,6 @@ fn main() -> std::io::Result<()> {
 
     let listener = TcpListener::bind(ADDRESS)?;
     println!("NC-PoRe session/client vertical slice: http://{ADDRESS}/");
-    println!("Host session: {SESSION_ID}");
-    println!("Host identity: {OWNER_ID}");
     println!("Bob can open: http://{ADDRESS}/?session={SESSION_ID}");
 
     let mut state = ServerState {
@@ -125,7 +114,9 @@ fn handle_connection(mut stream: TcpStream, state: &mut ServerState) {
 
     let (status, content_type, body) = match (method, path) {
         ("GET", "/") => (200, "text/html; charset=utf-8", INDEX_HTML.to_owned()),
-        ("GET", path) if path.starts_with("/api/sessions/") => get_session_or_context(path, state),
+        ("GET", path) if path.starts_with("/api/sessions/") => {
+            get_session_or_context(path, state)
+        }
         ("POST", "/api/sessions/vertical-slice-session/join") => join_session(state, body),
         ("POST", "/api/sessions/vertical-slice-session/ready") => mark_ready(state, body),
         _ => (
@@ -136,7 +127,7 @@ fn handle_connection(mut stream: TcpStream, state: &mut ServerState) {
     };
 
     let response = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len(),
         reason = reason_phrase(status),
     );
@@ -146,78 +137,46 @@ fn handle_connection(mut stream: TcpStream, state: &mut ServerState) {
     }
 }
 
-fn get_session_or_context(
-    path: &str,
-    state: &ServerState,
-) -> (u16, &'static str, String) {
-    let parts: Vec<_> = path.trim_start_matches('/').split('/').collect();
+fn get_session_or_context(path: &str, state: &ServerState) -> (u16, &'static str, String) {
+    let (route, query) = path.split_once('?').unwrap_or((path, ""));
+    let parts: Vec<_> = route.trim_start_matches('/').split('/').collect();
     if parts.len() < 3 || parts[0] != "api" || parts[1] != "sessions" {
-        return (
-            404,
-            "application/json; charset=utf-8",
-            r#"{"error":"not_found"}"#.to_owned(),
-        );
+        return response(404, r#"{"error":"not_found"}"#);
     }
 
     let session_id = parts[2];
-    let actor_id = query_value(path, "actor").unwrap_or_else(|| "bob-1".to_owned());
+    let actor_id = query_value(query, "actor").unwrap_or_else(|| "bob-1".to_owned());
 
     if parts.len() == 4 && parts[3] == "context" {
         let provider = ProductionSessionContextProvider::new(&state.repository);
         return match provider.resolve(session_id, &actor_id) {
-            Ok(context) => (
-                200,
-                "application/json; charset=utf-8",
-                context_json(&context),
-            ),
-            Err(ProductionSessionContextError::SessionNotFound) => (
-                404,
-                "application/json; charset=utf-8",
-                r#"{"error":"session_not_found"}"#.to_owned(),
-            ),
-            Err(ProductionSessionContextError::ActorNotFound) => (
-                404,
-                "application/json; charset=utf-8",
-                r#"{"error":"actor_not_found"}"#.to_owned(),
-            ),
-            Err(ProductionSessionContextError::Repository(_)) => (
-                500,
-                "application/json; charset=utf-8",
-                r#"{"error":"application_error"}"#.to_owned(),
-            ),
+            Ok(context) => (200, "application/json; charset=utf-8", context_json(&context)),
+            Err(ProductionSessionContextError::SessionNotFound) => {
+                response(404, r#"{"error":"session_not_found"}"#)
+            }
+            Err(ProductionSessionContextError::ActorNotFound) => {
+                response(404, r#"{"error":"actor_not_found"}"#)
+            }
+            Err(ProductionSessionContextError::Repository(_)) => {
+                response(500, r#"{"error":"application_error"}"#)
+            }
         };
     }
 
     let client = ClientSessionService::new(&state.repository);
     match client.get(session_id) {
-        Ok(session) => (
-            200,
-            "application/json; charset=utf-8",
-            session_json(&session),
-        ),
-        Err(ClientSessionError::SessionNotFound) => (
-            404,
-            "application/json; charset=utf-8",
-            r#"{"error":"session_not_found"}"#.to_owned(),
-        ),
-        Err(_) => (
-            500,
-            "application/json; charset=utf-8",
-            r#"{"error":"application_error"}"#.to_owned(),
-        ),
+        Ok(session) => (200, "application/json; charset=utf-8", session_json(&session)),
+        Err(ClientSessionError::SessionNotFound) => {
+            response(404, r#"{"error":"session_not_found"}"#)
+        }
+        Err(_) => response(500, r#"{"error":"application_error"}"#),
     }
 }
 
 fn join_session(state: &mut ServerState, body: &str) -> (u16, &'static str, String) {
     let participant_id = match json_field(body, "participant_id") {
         Some(value) if !value.is_empty() => value,
-        _ => {
-            return (
-                400,
-                "application/json; charset=utf-8",
-                r#"{"error":"invalid_request"}"#.to_owned(),
-            )
-        }
+        _ => return response(400, r#"{"error":"invalid_request"}"#),
     };
 
     let mut client = ClientSessionService::new(&mut state.repository);
@@ -227,64 +186,34 @@ fn join_session(state: &mut ServerState, body: &str) -> (u16, &'static str, Stri
         &participant_id,
         [ClientRole::Participant],
     ) {
-        Ok(session) => (
-            200,
-            "application/json; charset=utf-8",
-            session_json(&session),
-        ),
-        Err(ClientSessionError::ParticipantAlreadyExists) => (
-            409,
-            "application/json; charset=utf-8",
-            r#"{"error":"participant_already_exists"}"#.to_owned(),
-        ),
-        Err(ClientSessionError::SessionNotFound) => (
-            404,
-            "application/json; charset=utf-8",
-            r#"{"error":"session_not_found"}"#.to_owned(),
-        ),
-        Err(_) => (
-            500,
-            "application/json; charset=utf-8",
-            r#"{"error":"application_error"}"#.to_owned(),
-        ),
+        Ok(session) => (200, "application/json; charset=utf-8", session_json(&session)),
+        Err(ClientSessionError::ParticipantAlreadyExists) => {
+            response(409, r#"{"error":"participant_already_exists"}"#)
+        }
+        Err(ClientSessionError::SessionNotFound) => {
+            response(404, r#"{"error":"session_not_found"}"#)
+        }
+        Err(_) => response(500, r#"{"error":"application_error"}"#),
     }
 }
 
 fn mark_ready(state: &mut ServerState, body: &str) -> (u16, &'static str, String) {
     let participant_id = match json_field(body, "participant_id") {
         Some(value) if !value.is_empty() => value,
-        _ => {
-            return (
-                400,
-                "application/json; charset=utf-8",
-                r#"{"error":"invalid_request"}"#.to_owned(),
-            )
-        }
+        _ => return response(400, r#"{"error":"invalid_request"}"#),
     };
 
     let provider = ProductionSessionContextProvider::new(&state.repository);
     let context = match provider.resolve(SESSION_ID, &participant_id) {
         Ok(context) => context,
         Err(ProductionSessionContextError::ActorNotFound) => {
-            return (
-                404,
-                "application/json; charset=utf-8",
-                r#"{"error":"actor_not_found"}"#.to_owned(),
-            )
+            return response(404, r#"{"error":"actor_not_found"}"#)
         }
         Err(ProductionSessionContextError::SessionNotFound) => {
-            return (
-                404,
-                "application/json; charset=utf-8",
-                r#"{"error":"session_not_found"}"#.to_owned(),
-            )
+            return response(404, r#"{"error":"session_not_found"}"#)
         }
         Err(ProductionSessionContextError::Repository(_)) => {
-            return (
-                500,
-                "application/json; charset=utf-8",
-                r#"{"error":"application_error"}"#.to_owned(),
-            )
+            return response(500, r#"{"error":"application_error"}"#)
         }
     };
 
@@ -293,11 +222,7 @@ fn mark_ready(state: &mut ServerState, body: &str) -> (u16, &'static str, String
             .capabilities
             .contains(&SessionCapability::ParticipateInRecording)
     {
-        return (
-            409,
-            "application/json; charset=utf-8",
-            r#"{"error":"not_ready_for_recording"}"#.to_owned(),
-        );
+        return response(409, r#"{"error":"not_ready_for_recording"}"#);
     }
 
     state.ready_participants.insert(participant_id.clone());
@@ -312,8 +237,11 @@ fn mark_ready(state: &mut ServerState, body: &str) -> (u16, &'static str, String
     )
 }
 
-fn query_value(path: &str, key: &str) -> Option<String> {
-    let query = path.split_once('?')?.1;
+fn response(status: u16, body: &'static str) -> (u16, &'static str, String) {
+    (status, "application/json; charset=utf-8", body.to_owned())
+}
+
+fn query_value(query: &str, key: &str) -> Option<String> {
     query.split('&').find_map(|item| {
         let (name, value) = item.split_once('=')?;
         (name == key).then(|| value.to_owned())
@@ -428,7 +356,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
 </head>
 <body>
   <h1>NC-PoRe session client</h1>
-  <p id="status">Connecting…</p>
+  <p id="status">Opening session…</p>
   <button id="join">Join as Bob</button>
   <button id="ready" disabled>Ready</button>
   <pre id="result"></pre>
@@ -455,7 +383,7 @@ async function refresh() {
     status.textContent = `Session ${context.state}; actor ${context.actor_id}`;
     ready.disabled = !context.capabilities.includes('ParticipateInRecording');
   } catch (error) {
-    status.textContent = `Not joined yet: ${error}`;
+    status.textContent = `Session not joined: ${error}`;
   }
 }
 
@@ -498,9 +426,7 @@ mod tests {
     use super::*;
 
     fn state() -> ServerState {
-        let mut repository = InMemoryRepository {
-            sessions: Vec::new(),
-        };
+        let mut repository = InMemoryRepository { sessions: Vec::new() };
         let mut client = ClientSessionService::new(&mut repository);
         client
             .create(SESSION_ID, OWNER_ID)
@@ -512,7 +438,7 @@ mod tests {
         }
     }
 
-    // TEST-01: The vertical-slice server exposes a browser-readable session state.
+    // TEST-01: The browser boundary can read the Core-backed session state.
     #[test]
     fn session_can_be_created_and_read_through_application_boundary() {
         let state = state();
@@ -525,8 +451,7 @@ mod tests {
     #[test]
     fn participant_can_join_and_resolve_recording_capability() {
         let mut state = state();
-        let join = join_session(&mut state, r#"{"participant_id":"bob-1"}"#);
-        assert_eq!(join.0, 200);
+        assert_eq!(join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0, 200);
 
         let response = get_session_or_context(
             "/api/sessions/vertical-slice-session/context?actor=bob-1",
@@ -537,11 +462,11 @@ mod tests {
         assert!(response.2.contains(r#""state":"Available""#));
     }
 
-    // TEST-03: Bob can cross the client readiness boundary only after capability resolution.
+    // TEST-03: Bob crosses the readiness boundary only after capability resolution.
     #[test]
     fn participant_can_be_marked_ready() {
         let mut state = state();
-        join_session(&mut state, r#"{"participant_id":"bob-1"}"#);
+        assert_eq!(join_session(&mut state, r#"{"participant_id":"bob-1"}"#).0, 200);
 
         let ready = mark_ready(&mut state, r#"{"participant_id":"bob-1"}"#);
 
@@ -550,7 +475,7 @@ mod tests {
         assert!(state.ready_participants.contains("bob-1"));
     }
 
-    // TEST-04: A non-participant cannot cross the readiness boundary.
+    // TEST-04: An unknown actor cannot cross the readiness boundary.
     #[test]
     fn unknown_actor_cannot_be_marked_ready() {
         let mut state = state();
