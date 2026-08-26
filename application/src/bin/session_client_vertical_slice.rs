@@ -171,7 +171,7 @@ fn get_session_or_context(path: &str, state: &mut ServerState) -> (u16, &'static
         };
     }
 
-    let client = ClientSessionService::new(&state.repository);
+    let client = ClientSessionService::new(&mut state.repository);
     match client.get(session_id) {
         Ok(session) => (
             200,
