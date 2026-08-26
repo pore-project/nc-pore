@@ -26,3 +26,11 @@ jobs:
           NC_PORE_NEXTCLOUD_APP_PASSWORD: ${{ secrets.NC_PORE_NEXTCLOUD_APP_PASSWORD }}
           NC_PORE_NEXTCLOUD_REMOTE_ROOT: ${{ secrets.NC_PORE_NEXTCLOUD_REMOTE_ROOT }}
         run: cargo test --workspace --test nextcloud_reality_check -- --nocapture
+
+      - name: Run Nextcloud real recording reality check
+        env:
+          NC_PORE_NEXTCLOUD_URL: ${{ secrets.NC_PORE_NEXTCLOUD_URL }}
+          NC_PORE_NEXTCLOUD_USER: ${{ secrets.NC_PORE_NEXTCLOUD_USER }}
+          NC_PORE_NEXTCLOUD_APP_PASSWORD: ${{ secrets.NC_PORE_NEXTCLOUD_APP_PASSWORD }}
+          NC_PORE_NEXTCLOUD_REMOTE_ROOT: ${{ secrets.NC_PORE_NEXTCLOUD_REMOTE_ROOT }}
+        run: cargo test --workspace --test nextcloud_real_recording_reality_check -- --nocapture
