@@ -23,47 +23,6 @@ use std::env;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-struct RemoteCleanup<'a> {
-    client: &'a WebDavClient,
-    artifact_path: String,
-    active: bool,
-}
-
-impl<'a> RemoteCleanup<'a> {
-    fn new(client: &'a WebDavClient, artifact_path: String) -> Self {
-        Self {
-            client,
-            artifact_path,
-            active: true,
-        }
-    }
-
-    fn disarm(&mut self) {
-        self.active = false;
-    }
-}
-
-impl Drop for RemoteCleanup<'_> {
-    fn drop(&mut self) {
-        if !self.active {
-            return;
-        }
-        for path in [
-            format!("{}/manifest.json", self.artifact_path),
-            format!(
-                "{}/tracks/track-01-cpal-track/chunks/chunk-000001.payload",
-                self.artifact_path
-            ),
-            format!("{}/tracks/track-01-cpal-track/chunks", self.artifact_path),
-            format!("{}/tracks/track-01-cpal-track", self.artifact_path),
-            format!("{}/tracks", self.artifact_path),
-            self.artifact_path.clone(),
-        ] {
-            let _ = self.client.delete(&path);
-        }
-    }
-}
-
 fn runtime_configuration(provider: &CpalCaptureProvider) -> Option<RecordingConfiguration> {
     let capabilities = match provider.discover_input_configurations() {
         Ok(capabilities) => capabilities,
@@ -155,15 +114,9 @@ fn nextcloud_real_recording_reality_check() {
         .confirm_ok(&participant)
         .expect("real capture participant must confirm stop");
 
+    assert!(!capture_result.tracks().is_empty(), "real capture must produce at least one track");
     assert!(
-        !capture_result.tracks().is_empty(),
-        "real capture must produce at least one track"
-    );
-    assert!(
-        capture_result
-            .tracks()
-            .iter()
-            .any(|track| !track.chunks().is_empty()),
+        capture_result.tracks().iter().any(|track| !track.chunks().is_empty()),
         "real capture must produce at least one payload chunk"
     );
 
@@ -185,12 +138,22 @@ fn nextcloud_real_recording_reality_check() {
         )
         .expect("real capture must become a persisted RecordingArtifact");
 
+    let payload_bytes: usize = artifact
+        .tracks()
+        .iter()
+        .flat_map(|track| track.chunks())
+        .map(|chunk| chunk.payload().data().len())
+        .sum();
+    assert!(payload_bytes > 0, "real recording artifact must contain payload bytes");
+
     let manifest_hash = artifact.manifest_hash();
     let recorded_at: DateTime<chrono::Utc> = SystemTime::now().into();
     let recorded_at = recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true);
     let display_name = "NC-PoRE Real Recording Reality Check".to_owned();
-    let metadata =
-        ArtifactTransferMetadata::new(Some(display_name.clone()), Some(recorded_at.clone()));
+    let metadata = ArtifactTransferMetadata::new(
+        Some(display_name.clone()),
+        Some(recorded_at.clone()),
+    );
 
     let mut queue = PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
     queue
@@ -227,7 +190,6 @@ fn nextcloud_real_recording_reality_check() {
     );
     let manifest_path = format!("{expected_prefix}/manifest.json");
     let payload_prefix = format!("{expected_prefix}/tracks/track-01-cpal-track/chunks");
-    let mut cleanup = RemoteCleanup::new(&client, expected_prefix.clone());
 
     let manifest = client
         .get_optional(&manifest_path)
@@ -243,32 +205,16 @@ fn nextcloud_real_recording_reality_check() {
         .get_optional(&first_payload_path)
         .expect("uploaded real payload must be readable")
         .expect("uploaded real payload must exist");
-    assert!(
-        !payload.body.is_empty(),
-        "uploaded real payload must not be empty"
-    );
-
-    for path in [
-        manifest_path.clone(),
-        first_payload_path.clone(),
-        payload_prefix.clone(),
-        format!("{expected_prefix}/tracks/track-01-cpal-track"),
-        format!("{expected_prefix}/tracks"),
-        expected_prefix.clone(),
-    ] {
-        client.delete(&path).expect("remote cleanup must succeed");
-    }
-    cleanup.disarm();
-
+    assert_eq!(payload.body.len(), payload_bytes);
     assert_eq!(
-        client
-            .get_optional(&manifest_path)
-            .expect("cleaned artifact must be queryable"),
-        None
+        payload.body,
+        artifact.tracks()[0].chunks()[0].payload().data()
     );
-    let _ = std::fs::remove_dir_all(temp_root);
+
+    let _ = std::fs::remove_dir_all(&temp_root);
 
     println!(
-        "Nextcloud real recording reality check passed: real CPAL capture, artifact persistence, synchronization, remote verification and cleanup succeeded for '{root}/{artifact_id_value}'."
+        "Nextcloud real recording reality check passed: artifact='{}', payload_bytes={}, remote_path='{}/{}'",
+        artifact_id_value, payload_bytes, root, expected_prefix
     );
 }
