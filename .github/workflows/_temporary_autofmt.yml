@@ -1,0 +1,38 @@
+name: Temporary PR autofmt
+
+on:
+  push:
+    branches:
+      - fix/session-recording-activate-session
+
+permissions:
+  contents: write
+
+jobs:
+  autofmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/session-recording-activate-session
+          fetch-depth: 0
+
+      - name: Install rustfmt
+        run: rustup component add rustfmt
+
+      - name: Format Rust
+        run: cargo fmt --all
+
+      - name: Commit formatted source and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/_temporary_autofmt.yml
+          if git diff --cached --quiet && git diff --quiet; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git add -A
+          git commit -m "style: format session recording vertical slice"
+          git push origin HEAD:fix/session-recording-activate-session
