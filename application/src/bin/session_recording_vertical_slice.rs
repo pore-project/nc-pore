@@ -119,6 +119,9 @@ fn main() -> std::io::Result<()> {
         .expect("session lookup must succeed")
         .expect("vertical-slice session must exist");
     session
+        .start_by(&owner)
+        .expect("vertical-slice session must be active before recording");
+    session
         .add_recording_by(&owner, Recording::new(RECORDING_ID))
         .expect("vertical-slice recording must be creatable");
     repository
