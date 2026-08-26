@@ -459,7 +459,7 @@ mod tests {
     // TEST-01: The browser boundary can read the Core-backed session state.
     #[test]
     fn session_can_be_created_and_read_through_application_boundary() {
-        let state = state();
+        let mut state = state();
         let response = get_session_or_context("/api/sessions/vertical-slice-session", &mut state);
         assert_eq!(response.0, 200);
         assert!(response.2.contains(r#""status":"Created""#));
