@@ -115,6 +115,7 @@ fn main() -> std::io::Result<()> {
     let owner = ParticipantId::new(OWNER_ID);
     let recording_id = RecordingId::new(RECORDING_ID);
     let mut session = repository
+    session.start_by(&owner).expect("vertical-slice session must be active before recording");
         .get(&production_id)
         .expect("session lookup must succeed")
         .expect("vertical-slice session must exist");
