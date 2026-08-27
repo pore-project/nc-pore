@@ -110,10 +110,7 @@ fn nextcloud_provider_errors_have_stable_retry_classification() {
                 result,
                 ArtifactTransferResult::PermanentFailure { .. }
             )),
-            "conflict" => assert!(matches!(
-                result,
-                ArtifactTransferResult::Conflict { .. }
-            )),
+            "conflict" => assert!(matches!(result, ArtifactTransferResult::Conflict { .. })),
             "retryable" => assert!(matches!(
                 result,
                 ArtifactTransferResult::RetryableFailure { .. }

@@ -114,9 +114,15 @@ fn nextcloud_real_recording_reality_check() {
         .confirm_ok(&participant)
         .expect("real capture participant must confirm stop");
 
-    assert!(!capture_result.tracks().is_empty(), "real capture must produce at least one track");
     assert!(
-        capture_result.tracks().iter().any(|track| !track.chunks().is_empty()),
+        !capture_result.tracks().is_empty(),
+        "real capture must produce at least one track"
+    );
+    assert!(
+        capture_result
+            .tracks()
+            .iter()
+            .any(|track| !track.chunks().is_empty()),
         "real capture must produce at least one payload chunk"
     );
 
@@ -144,16 +150,17 @@ fn nextcloud_real_recording_reality_check() {
         .flat_map(|track| track.chunks())
         .map(|chunk| chunk.payload().data().len())
         .sum();
-    assert!(payload_bytes > 0, "real recording artifact must contain payload bytes");
+    assert!(
+        payload_bytes > 0,
+        "real recording artifact must contain payload bytes"
+    );
 
     let manifest_hash = artifact.manifest_hash();
     let recorded_at: DateTime<chrono::Utc> = SystemTime::now().into();
     let recorded_at = recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true);
     let display_name = "NC-PoRE Real Recording Reality Check".to_owned();
-    let metadata = ArtifactTransferMetadata::new(
-        Some(display_name.clone()),
-        Some(recorded_at.clone()),
-    );
+    let metadata =
+        ArtifactTransferMetadata::new(Some(display_name.clone()), Some(recorded_at.clone()));
 
     let mut queue = PersistentSynchronizationQueue::new(InMemorySynchronizationWorkStore::new());
     queue
