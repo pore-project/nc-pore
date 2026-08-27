@@ -54,13 +54,10 @@ fn nextcloud_real_recording_idempotency_check() {
         "NC_PORE_NEXTCLOUD_REMOTE_ROOT",
     ];
     if required.iter().any(|name| env::var(name).is_err()) {
-        eprintln!(
-            "Nextcloud idempotency check skipped: credentials are not configured."
-        );
+        eprintln!("Nextcloud idempotency check skipped: credentials are not configured.");
         return;
     }
-    let config =
-        NextcloudConnectionConfig::from_environment().expect("valid Nextcloud config");
+    let config = NextcloudConnectionConfig::from_environment().expect("valid Nextcloud config");
     let capture = CpalCaptureProvider::new();
     let Some(configuration) = runtime_configuration(&capture) else {
         return;
