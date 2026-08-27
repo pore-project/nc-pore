@@ -122,7 +122,7 @@ impl RecordingWorkflow {
         }
         self.recording.start()?;
         self.status = RecordingWorkflowStatus::Recording;
-        Ok(RecordingSyncSignet::opening())
+        Ok(RecordingSyncSignet::Opening)
     }
 
     /// Starts recording after the READY barrier without exposing the signet.
@@ -229,7 +229,7 @@ mod tests {
 
         let signet = workflow.start_recording_with_signet().unwrap();
 
-        assert_eq!(signet, RecordingSyncSignet::opening());
+        assert_eq!(signet, RecordingSyncSignet::Opening);
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
     }
 
