@@ -12,7 +12,7 @@ use recorder::artifact::processing::RecordingArtifactProcessor;
 use recorder::audio::{
     CpalCaptureProvider, RecordingChunkDuration, RecordingConfiguration, SampleFormat,
 };
-use recorder::persistence::FilesystemPersistenceProvider;
+use recorder::persistence::{FilesystemPersistenceProvider, PersistenceLoadResult};
 use recorder::session::RecordingSession;
 use recorder::workflow::{
     recording_start::{RecordingParticipantId, RecordingStartCoordinator},
@@ -143,6 +143,19 @@ fn nextcloud_real_recording_reality_check() {
             ),
         )
         .expect("real capture must become a persisted RecordingArtifact");
+
+    let reloaded = FilesystemPersistenceProvider::new(&temp_root).load(&artifact_id_value);
+    match reloaded {
+        PersistenceLoadResult::Valid(reloaded_artifact) => {
+            assert_eq!(reloaded_artifact.id().value(), artifact_id_value);
+            assert_eq!(reloaded_artifact.manifest_hash(), artifact.manifest_hash());
+            assert_eq!(
+                reloaded_artifact.tracks()[0].chunks()[0].payload().data(),
+                artifact.tracks()[0].chunks()[0].payload().data()
+            );
+        }
+        other => panic!("real recording artifact must survive persistence reload: {other:?}"),
+    }
 
     let payload_bytes: usize = artifact
         .tracks()
