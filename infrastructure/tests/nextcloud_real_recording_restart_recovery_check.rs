@@ -51,7 +51,9 @@ fn runtime_configuration(provider: &CpalCaptureProvider) -> Option<RecordingConf
         }
     }
 
-    eprintln!("Nextcloud restart recovery check skipped: no supported exact recording configuration found.");
+    eprintln!(
+        "Nextcloud restart recovery check skipped: no supported exact recording configuration found."
+    );
     None
 }
 
@@ -64,7 +66,9 @@ fn nextcloud_real_recording_restart_recovery_check() {
         "NC_PORE_NEXTCLOUD_REMOTE_ROOT",
     ];
     if required.iter().any(|name| env::var(name).is_err()) {
-        eprintln!("Nextcloud restart recovery check skipped: required credentials are not configured.");
+        eprintln!(
+            "Nextcloud restart recovery check skipped: required credentials are not configured."
+        );
         return;
     }
 
@@ -73,13 +77,17 @@ fn nextcloud_real_recording_restart_recovery_check() {
     let connection = NextcloudConnection::new(config)
         .expect("Nextcloud connection configuration must be valid");
     let capture = CpalCaptureProvider::new();
-    let Some(configuration) = runtime_configuration(&capture) else { return; };
+    let Some(configuration) = runtime_configuration(&capture) else {
+        return;
+    };
 
     let process_id = std::process::id();
     let session_value = format!("session-restart-recovery-{process_id}");
     let participant = RecordingParticipantId::new("participant-restart-recovery");
     let mut workflow = RecorderWorkflow::new(RecordingSession::new(&session_value), capture);
-    workflow.start(&configuration).expect("real CPAL capture must start");
+    workflow
+        .start(&configuration)
+        .expect("real CPAL capture must start");
     let mut start_coordinator = RecordingStartCoordinator::new([participant.clone()]);
     workflow
         .ready_and_maybe_opening_signet(&mut start_coordinator, &participant)
@@ -117,9 +125,9 @@ fn nextcloud_real_recording_restart_recovery_check() {
         Some(recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true)),
     );
     let work_store_root = temp_root.join("sync-work");
-    let mut queue = PersistentSynchronizationQueue::new(
-        FilesystemSynchronizationWorkStore::new(&work_store_root),
-    );
+    let mut queue = PersistentSynchronizationQueue::new(FilesystemSynchronizationWorkStore::new(
+        &work_store_root,
+    ));
     queue
         .enqueue_with_metadata(
             nc_pore_core::recording::RecordingArtifactId::new(&artifact_id),
@@ -167,7 +175,10 @@ fn nextcloud_real_recording_restart_recovery_check() {
         SynchronizationProcessOutcome::NoPendingWork
     );
 
-    let final_work = second.queue().list().expect("final queue must be readable");
+    let final_work = second
+        .queue()
+        .list()
+        .expect("final queue must be readable");
     assert_eq!(final_work.len(), 1);
     assert_eq!(
         final_work[0].status(),
