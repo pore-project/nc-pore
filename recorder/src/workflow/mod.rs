@@ -191,7 +191,8 @@ mod tests {
         active: bool,
         fail_on_start: bool,
         fail_on_stop: bool,
-        fail_on_signet: bool,
+        fail_on_opening_signet: bool,
+        fail_on_closing_signet: bool,
         events: Rc<RefCell<Vec<&'static str>>>,
     }
 
@@ -201,7 +202,8 @@ mod tests {
                 active: false,
                 fail_on_start: false,
                 fail_on_stop: false,
-                fail_on_signet: false,
+                fail_on_opening_signet: false,
+                fail_on_closing_signet: false,
                 events: Rc::new(RefCell::new(Vec::new())),
             }
         }
@@ -234,8 +236,14 @@ mod tests {
         }
 
         fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
-            if self.fail_on_signet {
-                return Err(SyncSignetEmissionError::Unsupported);
+            match signet.kind() {
+                crate::audio::SyncSignetKind::Opening if self.fail_on_opening_signet => {
+                    return Err(SyncSignetEmissionError::Unsupported);
+                }
+                crate::audio::SyncSignetKind::Closing if self.fail_on_closing_signet => {
+                    return Err(SyncSignetEmissionError::Unsupported);
+                }
+                _ => {}
             }
             self.events.borrow_mut().push(match signet.kind() {
                 crate::audio::SyncSignetKind::Opening => "opening",
@@ -317,7 +325,7 @@ mod tests {
         let p = participant("p1");
         let mut coordinator = RecordingStartCoordinator::new([p.clone()]);
         let mut capture = TestCapture::new();
-        capture.fail_on_signet = true;
+        capture.fail_on_opening_signet = true;
         let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
 
@@ -355,12 +363,23 @@ mod tests {
         let mut start = RecordingStartCoordinator::new([p.clone()]);
         let mut stop = RecordingStopCoordinator::new([p.clone()]);
         let mut capture = TestCapture::new();
-        capture.fail_on_signet = true;
+        capture.fail_on_closing_signet = true;
+        let events = Rc::clone(&capture.events);
         let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
         workflow
             .ready_and_maybe_opening_signet(&mut start, &p)
-            .unwrap_err();
+            .unwrap();
+
+        let (signet, result) = workflow.stop_with_coordinator(&mut stop).unwrap();
+
+        assert_eq!(signet, Some(SyncSignet::closing()));
+        assert!(matches!(
+            result.status(),
+            crate::audio::CaptureStatus::Completed
+        ));
+        assert_eq!(&*events.borrow(), &["opening", "stop"]);
+        assert_eq!(workflow.session().status(), &SessionStatus::Completed);
     }
 
     // TEST-07: Stop can complete without invoking the optional C-Signet.
@@ -368,22 +387,16 @@ mod tests {
     fn coordinated_stop_can_complete_without_closing_signet() {
         let p = participant("p1");
         let mut start = RecordingStartCoordinator::new([p.clone()]);
-        let mut stop = RecordingStopCoordinator::new([p.clone()]);
-        let capture = TestCapture::new();
-        let events = Rc::clone(&capture.events);
-        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
+        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         workflow.start(&RecordingConfiguration::default()).unwrap();
         workflow
             .ready_and_maybe_opening_signet(&mut start, &p)
             .unwrap();
-        // The optional C-Signet is simply not requested by this lower-level
-        // stop path; technical completion remains valid.
+
         let result = workflow.stop().status();
 
         assert!(matches!(result, crate::audio::CaptureStatus::Completed));
-        assert_eq!(&*events.borrow(), &["opening", "stop"]);
         assert_eq!(workflow.session().status(), &SessionStatus::Completed);
-        assert!(!stop.all_completed());
     }
 
     // TEST-08: Stop is rejected before consuming the closing signet.
