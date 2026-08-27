@@ -29,7 +29,15 @@ jobs:
           fi
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: |
+          set -euo pipefail
+          # The GitHub-hosted runner may contain unrelated third-party apt
+          # repositories. Restrict the update to Ubuntu sources so a transient
+          # failure in an unrelated repository cannot block our build.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="/etc/apt/sources.list" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y libasound2-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.97.1
