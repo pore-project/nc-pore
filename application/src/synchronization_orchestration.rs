@@ -381,4 +381,59 @@ mod tests {
         );
         assert_eq!(stored.id.value(), "artifact-146-06");
     }
+
+    // TEST-07
+    #[test]
+    fn retryable_work_survives_orchestrator_restart_before_recovery() {
+        let mut persistence = InMemoryPersistenceProvider::new();
+        let artifact = artifact("artifact-146-07");
+        let stored = persistence.store_checked(artifact.clone()).unwrap();
+        let mut queue = PersistentSynchronizationQueue::new(
+            crate::synchronization::InMemorySynchronizationWorkStore::new(),
+        );
+        enqueue_artifact(&mut queue, &stored);
+
+        let mut first = SynchronizationOrchestrator::new(
+            queue,
+            persistence,
+            ScriptedTransfer::with_results([ArtifactTransferResult::RetryableFailure {
+                reason: "offline".to_owned(),
+                continuation: None,
+            }]),
+        );
+
+        assert!(matches!(
+            first.process_next().unwrap(),
+            SynchronizationProcessOutcome::Retryable { reason } if reason == "offline"
+        ));
+        assert_eq!(
+            first.queue().list().unwrap()[0].status(),
+            nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Pending
+        );
+
+        let recovered_work = first.queue().list().unwrap();
+        let mut recovered_store = crate::synchronization::InMemorySynchronizationWorkStore::new();
+        for work in recovered_work {
+            recovered_store.save(work).unwrap();
+        }
+        drop(first);
+
+        let mut recovered_persistence = InMemoryPersistenceProvider::new();
+        recovered_persistence.store_checked(stored).unwrap();
+
+        let mut second = SynchronizationOrchestrator::new(
+            PersistentSynchronizationQueue::new(recovered_store),
+            recovered_persistence,
+            ScriptedTransfer::with_results([ArtifactTransferResult::Succeeded]),
+        );
+
+        assert_eq!(
+            second.process_next().unwrap(),
+            SynchronizationProcessOutcome::Synchronized
+        );
+        assert_eq!(
+            second.queue().list().unwrap()[0].status(),
+            nc_pore_core::recording::RecordingArtifactSynchronizationStatus::Synchronized
+        );
+    }
 }
