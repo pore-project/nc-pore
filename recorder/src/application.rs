@@ -21,7 +21,7 @@
 
 use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
-use crate::audio::{CaptureProvider, CaptureStatus, RecordingConfiguration};
+use crate::audio::{CaptureProvider, CaptureStatus, RecordingConfiguration, SyncSignet, SyncSignetEmissionError};
 use crate::persistence::PersistenceProvider;
 use crate::persistence::PersistenceStoreError;
 use crate::session::{RecordingSession, RecordingSessionId};
@@ -31,6 +31,7 @@ use crate::workflow::RecorderWorkflow;
 pub enum RecorderApplicationError {
     Capture(String),
     Persistence(PersistenceStoreError),
+    SignetEmission(SyncSignetEmissionError),
 }
 
 impl From<PersistenceStoreError> for RecorderApplicationError {
@@ -84,6 +85,18 @@ where
         self.workflow.ready()
     }
 
+    /// Injects a synchronization signet into the currently active local
+    /// capture. The caller is responsible for deciding which signet the
+    /// distributed recording workflow requires.
+    pub fn emit_sync_signet(
+        &mut self,
+        signet: &SyncSignet,
+    ) -> Result<(), RecorderApplicationError> {
+        self.workflow
+            .emit_sync_signet(signet)
+            .map_err(RecorderApplicationError::SignetEmission)
+    }
+
     /// Stops the local recording and persists an artifact associated with
     /// the originating domain production and recording.
     pub fn stop(
@@ -114,14 +127,32 @@ mod tests {
     use crate::artifact::coordination::ArtifactCoordinator;
     use crate::audio::{CaptureProvider, CaptureResult};
     use crate::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
-    struct TestCaptureProvider;
+    struct TestCaptureProvider {
+        signets: Rc<RefCell<Vec<SyncSignet>>>,
+    }
+
+    impl TestCaptureProvider {
+        fn new(signet_sink: Rc<RefCell<Vec<SyncSignet>>>) -> Self {
+            Self { signets: signet_sink }
+        }
+    }
 
     impl CaptureProvider for TestCaptureProvider {
         fn start_capture(
             &mut self,
             _configuration: &RecordingConfiguration,
         ) -> Result<(), crate::audio::CaptureStartError> {
+            Ok(())
+        }
+
+        fn emit_sync_signet(
+            &mut self,
+            signet: &SyncSignet,
+        ) -> Result<(), SyncSignetEmissionError> {
+            self.signets.borrow_mut().push(*signet);
             Ok(())
         }
 
@@ -176,7 +207,7 @@ mod tests {
     fn application_processes_recording_flow() {
         let session = RecordingSession::new("session-001");
 
-        let capture = TestCaptureProvider;
+        let capture = TestCaptureProvider::new(Rc::new(RefCell::new(Vec::new())));
 
         let persistence = InMemoryPersistenceProvider::new();
 
@@ -211,7 +242,7 @@ mod tests {
     fn application_stores_processed_artifact() {
         let session = RecordingSession::new("session-002");
 
-        let capture = TestCaptureProvider;
+        let capture = TestCaptureProvider::new(Rc::new(RefCell::new(Vec::new())));
 
         let persistence = InMemoryPersistenceProvider::new();
 
@@ -236,6 +267,28 @@ mod tests {
         assert_eq!(artifact.recording_session_id.value(), "session-002");
         assert_eq!(artifact.production_id(), Some("production-002"));
         assert_eq!(artifact.recording_id(), Some("recording-018"));
+    }
+
+    // TEST-26
+    //
+    // Verify: The application boundary can inject the required Opening
+    // Signet into an already active local capture without owning audio logic.
+    #[test]
+    fn application_emits_opening_signet_into_active_capture() {
+        let signets = Rc::new(RefCell::new(Vec::new()));
+        let capture = TestCaptureProvider::new(Rc::clone(&signets));
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            InMemoryPersistenceProvider::new(),
+        ));
+        let mut application =
+            RecorderApplication::new(RecordingSession::new("session-signet"), capture, processor);
+
+        application
+            .start(&RecordingConfiguration::default())
+            .unwrap();
+        application.emit_sync_signet(&SyncSignet::opening()).unwrap();
+
+        assert_eq!(&*signets.borrow(), &[SyncSignet::opening()]);
     }
 
     #[test]

@@ -6,11 +6,11 @@ use super::recording_start::RecordingParticipantId;
 
 /// Coordinates the logical stop of one concrete distributed recording.
 ///
-/// The participant set is frozen for this stop attempt. The coordinator emits
-/// the Closing Sync Signet exactly once while all affected local recorders are
-/// still expected to be active. The outer transport layer can then repeat the
-/// technical stop command for the participants that have not acknowledged
-/// completion yet.
+/// The participant set is frozen for this stop attempt. The Closing Sync Signet
+/// is an optional synchronization anchor: when emitted, it is emitted at most
+/// once while the affected local recorders are still expected to be active.
+/// The technical stop and its completion acknowledgements do not depend on the
+/// Closing Sync Signet being emitted or received.
 #[derive(Debug)]
 pub struct RecordingStopCoordinator {
     participants: BTreeSet<RecordingParticipantId>,
@@ -41,11 +41,14 @@ impl RecordingStopCoordinator {
         &self.completed
     }
 
-    /// Emits the Closing Sync Signet exactly once.
+    /// Optionally emits the Closing Sync Signet exactly once.
     ///
-    /// The outer layer must call this before sending the technical stop command
-    /// to any participant, so that all affected local recorders can capture the
-    /// shared logical end marker.
+    /// If the caller chooses to emit the signet, this method must be called
+    /// before sending the technical stop command so that active local recorders
+    /// have an opportunity to capture the shared logical end marker.
+    ///
+    /// Not calling this method is valid and must not prevent technical stop or
+    /// completion of the recording.
     pub fn closing_sync_signet(&mut self) -> Option<SyncSignet> {
         if self.closing_signet_emitted || self.participants.is_empty() {
             return None;
@@ -57,6 +60,9 @@ impl RecordingStopCoordinator {
 
     /// Confirms that one recording participant has actually finished local
     /// capture. Repeated confirmations are idempotent.
+    ///
+    /// Completion does not require a Closing Sync Signet to have been emitted
+    /// or captured by the participant.
     pub fn confirm_ok(
         &mut self,
         participant: &RecordingParticipantId,
@@ -151,6 +157,25 @@ mod tests {
     }
 
     // TEST-03 / CUE30
+    // Verify: Completion does not require a Closing Sync Signet.
+    #[test]
+    fn stop_completes_without_closing_signet() {
+        let first = participant("participant-1");
+        let second = participant("participant-2");
+        let mut coordinator = RecordingStopCoordinator::new([first.clone(), second.clone()]);
+
+        assert_eq!(
+            coordinator.confirm_ok(&first),
+            Ok(StopStatus::WaitingForParticipants)
+        );
+        assert_eq!(
+            coordinator.confirm_ok(&second),
+            Ok(StopStatus::AllParticipantsCompleted)
+        );
+        assert!(coordinator.all_completed());
+    }
+
+    // TEST-04 / CUE30
     // Verify: A participant outside the frozen recording set cannot complete the stop.
     #[test]
     fn non_recording_participant_cannot_confirm_stop() {
@@ -165,7 +190,7 @@ mod tests {
         assert!(!coordinator.all_completed());
     }
 
-    // TEST-04 / CUE30
+    // TEST-05 / CUE30
     // Verify: Repeated technical completion confirmations are idempotent.
     #[test]
     fn repeated_ok_is_idempotent() {
@@ -183,7 +208,7 @@ mod tests {
         assert_eq!(coordinator.completed_participants().len(), 1);
     }
 
-    // TEST-05 / CUE30
+    // TEST-06 / CUE30
     // Verify: An empty stop participant set cannot emit a Closing Sync Signet.
     #[test]
     fn empty_stop_has_no_closing_signet() {

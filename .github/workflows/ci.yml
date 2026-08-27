@@ -29,7 +29,12 @@ jobs:
           fi
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: |
+          set -euo pipefail
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="/etc/apt/sources.list" \
+            -o Dir::Etc::sourceparts="/etc/apt/sources.list.d"
+          sudo apt-get install -y libasound2-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.97.1
