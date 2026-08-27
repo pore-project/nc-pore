@@ -175,10 +175,7 @@ fn nextcloud_real_recording_restart_recovery_check() {
         SynchronizationProcessOutcome::NoPendingWork
     );
 
-    let final_work = second
-        .queue()
-        .list()
-        .expect("final queue must be readable");
+    let final_work = second.queue().list().expect("final queue must be readable");
     assert_eq!(final_work.len(), 1);
     assert_eq!(
         final_work[0].status(),
