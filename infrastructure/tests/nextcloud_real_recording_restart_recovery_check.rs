@@ -74,8 +74,8 @@ fn nextcloud_real_recording_restart_recovery_check() {
 
     let config = NextcloudConnectionConfig::from_environment()
         .expect("Nextcloud runtime configuration must be valid");
-    let connection = NextcloudConnection::new(config)
-        .expect("Nextcloud connection configuration must be valid");
+    let connection =
+        NextcloudConnection::new(config).expect("Nextcloud connection configuration must be valid");
     let capture = CpalCaptureProvider::new();
     let Some(configuration) = runtime_configuration(&capture) else {
         return;
