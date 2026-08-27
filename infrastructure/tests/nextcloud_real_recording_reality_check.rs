@@ -12,7 +12,9 @@ use recorder::artifact::processing::RecordingArtifactProcessor;
 use recorder::audio::{
     CpalCaptureProvider, RecordingChunkDuration, RecordingConfiguration, SampleFormat,
 };
-use recorder::persistence::{FilesystemPersistenceProvider, PersistenceLoadResult, PersistenceProvider};
+use recorder::persistence::{
+    FilesystemPersistenceProvider, PersistenceLoadResult, PersistenceProvider,
+};
 use recorder::session::RecordingSession;
 use recorder::workflow::{
     recording_start::{RecordingParticipantId, RecordingStartCoordinator},
