@@ -31,12 +31,9 @@ jobs:
       - name: Install system dependencies
         run: |
           set -euo pipefail
-          # The GitHub-hosted runner may contain unrelated third-party apt
-          # repositories. Restrict the update to Ubuntu sources so a transient
-          # failure in an unrelated repository cannot block our build.
           sudo apt-get update \
             -o Dir::Etc::sourcelist="/etc/apt/sources.list" \
-            -o Dir::Etc::sourceparts="-"
+            -o Dir::Etc::sourceparts="/etc/apt/sources.list.d"
           sudo apt-get install -y libasound2-dev
 
       - name: Install Rust
