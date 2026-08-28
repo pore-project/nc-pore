@@ -1,12 +1,10 @@
 /*
  * NC-PoRe — early Talk microphone capture hook
  *
- * This file is intentionally tiny. It is loaded before Nextcloud Talk's
- * normal client bundle and observes microphone MediaStreams at the browser
- * capture boundary. PoRE receives a clone of the captured audio track while
- * Talk keeps the original stream and its normal processing pipeline.
- *
- * No PoRE recording, signalling, or UI logic belongs here.
+ * Intentionally limited to the browser capture boundary. It observes
+ * audio-capable getUserMedia() calls, clones the captured microphone track,
+ * and publishes the clone for PoRE. The original stream is returned unchanged
+ * so Nextcloud Talk keeps its normal media pipeline.
  */
 
 (() => {
@@ -27,7 +25,7 @@
 		}
 
 		const audioTrack = stream.getAudioTracks()[0];
-		if (!audioTrack) {
+		if (!audioTrack || typeof audioTrack.clone !== 'function') {
 			return stream;
 		}
 
