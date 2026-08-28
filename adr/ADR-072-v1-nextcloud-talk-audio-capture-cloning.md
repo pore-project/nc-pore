@@ -1,28 +1,24 @@
-# ADR-072: V1 Nextcloud Talk Audio Capture Cloning
+# ADR-072 V1 Nextcloud Talk Audio Capture Cloning
 
-## Status
-
-Accepted
-
-## Date
-
-2026-08-27
-
-## Decision Type
-
-Architecture
+* Status: Accepted
+* Date: 2026-08-27
+* Decision Type: Architecture
 
 ---
 
-# Deutsch
+# Deutsch ([English version below](#english-version))
 
-## Kontext
+---
+
+# Kontext
 
 NC-PoRe V1 verwendet Nextcloud Talk für die Teilnehmerkommunikation. Talk bleibt für Call, WebRTC, HPB und die Verteilung von Audio und Video zuständig. NC-PoRe muss gleichzeitig jede eigene Audiospur lokal beim jeweiligen Teilnehmer aufzeichnen.
 
 Für diese lokale Aufnahme benötigt NC-PoRe das unverarbeitete Mikrofon-Audiosignal. Es darf daher nicht erst aus einem von Talk bereits bearbeiteten Audio-Track, aus einem serverseitigen Audiopfad oder aus einer späteren Talk-Schnittstelle gewonnen werden.
 
-## Entscheidung
+---
+
+# Entscheidung
 
 NC-PoRe verwendet für V1 **einen gemeinsamen browserseitigen Mikrofon-Capture und klont den lokalen Mikrofon-Audio-Track unmittelbar nach dessen Erzeugung durch `getUserMedia()`**.
 
@@ -86,7 +82,9 @@ Das standardkonforme Verhalten von `MediaStreamTrack.clone()` wird für V1 als G
 
 NC-PoRe verlangt keine bitweise identische Container- oder Recorder-Ausgabe. Entscheidend ist, dass beide Tracks aus derselben Capture-Source stammen und als unabhängige Consumer dieser Source verwendet werden können.
 
-## Integrationspriorität
+---
+
+# Integrationspriorität
 
 1. **Primär:** Mikrofon-Capture → Track Clone unmittelbar nach `getUserMedia()` → Talk und NC-PoRe als getrennte Consumer.
 2. **Fallback:** NC-PoRe übernimmt den lokalen Mikrofon-Capture und stellt Talk einen geeigneten Audio-Track zur Verfügung, falls der frühe gemeinsame Capture in der Talk-Integration nicht erreichbar ist.
@@ -94,7 +92,9 @@ NC-PoRe verlangt keine bitweise identische Container- oder Recorder-Ausgabe. Ent
 
 Die Fallbacks werden nicht verfolgt, solange der Primärweg umsetzbar ist.
 
-## Konsequenzen
+---
+
+# Konsequenzen
 
 - NC-PoRe erhält das lokale Mikrofon-Audio vor Talk-eigener Audioverarbeitung.
 - Talk kann seine vorhandene Audio-, Video-, WebRTC- und HPB-Infrastruktur weiterverwenden.
@@ -103,7 +103,9 @@ Die Fallbacks werden nicht verfolgt, solange der Primärweg umsetzbar ist.
 - Firefox, Chromium und Safari/WebKit werden durch dieselbe standardbasierte Architektur adressiert.
 - Die praktische Validierung erfolgt bei der Live-Integration.
 
-## Abgrenzung
+---
+
+# Abgrenzung
 
 Diese ADR legt nicht fest, welche konkrete Talk-Frontend-Klasse oder welches Integrationsmodul den frühen Capture bereitstellt. Sie legt auch weder das Aufnahmecontainerformat noch spätere automatische Synchronisations- oder Driftkorrekturverfahren fest.
 
@@ -111,15 +113,19 @@ Die technische Integrationsstelle muss jedoch die zentrale Entscheidung erfülle
 
 ---
 
-# English Version
+# English Version ([deutsche Version oben](#deutsch))
 
-## Context
+---
+
+# Context
 
 NC-PoRe V1 uses Nextcloud Talk for participant communication. Talk remains responsible for the call, WebRTC, HPB, and audio/video distribution. NC-PoRe must record each participant's own audio locally.
 
 NC-PoRe requires the unprocessed microphone signal. It must not depend on a Talk-processed audio track, a server-side audio path, or a later Talk integration point.
 
-## Decision
+---
+
+# Decision
 
 For V1, NC-PoRe uses **one browser-side microphone capture and clones the local microphone audio track immediately after it is created by `getUserMedia()`**.
 
@@ -153,7 +159,9 @@ The target browsers are Firefox, Chromium-based browsers, and Safari/WebKit. V1 
 
 Bit-identical container output is not required. The requirement is that both tracks originate from the same capture source and can be used as independent consumers of that source.
 
-## Integration priority
+---
+
+# Integration Priority
 
 1. **Primary:** microphone capture → immediate track clone → Talk and NC-PoRe as separate consumers.
 2. **Fallback:** NC-PoRe owns the microphone capture and provides Talk with a suitable audio track if the early shared capture cannot be reached cleanly.
@@ -161,6 +169,19 @@ Bit-identical container output is not required. The requirement is that both tra
 
 Fallback paths are not pursued while the primary path remains implementable.
 
-## Boundary
+---
+
+# Consequences
+
+- NC-PoRe receives local microphone audio before Talk-specific audio processing.
+- Talk can continue using its existing audio, video, WebRTC, and HPB infrastructure.
+- NC-PoRe can record locally without relying on server-side recording.
+- Audio and video can be handled separately for V1.
+- Firefox, Chromium, and Safari/WebKit are addressed through the same standards-based architecture.
+- Practical validation occurs during live integration.
+
+---
+
+# Boundary
 
 The exact Talk frontend integration point is an implementation detail. The architectural requirement is fixed: **the NC-PoRe clone is created immediately at browser microphone capture and before Talk-specific audio processing.**
