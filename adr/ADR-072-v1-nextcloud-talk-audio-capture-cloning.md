@@ -84,6 +84,37 @@ NC-PoRe verlangt keine bitweise identische Container- oder Recorder-Ausgabe. Ent
 
 ---
 
+# Live-Validierung
+
+Am 29.08.2026 wurde die Clone-Entscheidung in einer realen lokalen Nextcloud-Talk-Installation validiert.
+
+**Testumgebung:**
+
+- Nextcloud 34.0.3 als Docker-Instanz
+- Nextcloud Talk aktiviert
+- Firefox 154.0
+- HTTPS über Caddy mit lokalem `mkcert`-Zertifikat
+- LAN-Zugriff über `A-desktop-G.local` / `192.168.192.126`
+- reales Audioeingabegerät: RØDECaster Pro Analoges Stereo
+- NC-PoRe App 0.1.0 mit frühem `getUserMedia()`-Hook
+
+**Beobachtung:**
+
+Talks reale `getUserMedia()`-Aufrufe wurden durch den NC-PoRe-Hook abgefangen. Für Audio-Aufrufe wurde jeweils ein eigener `MediaStreamTrack` erfolgreich mit `MediaStreamTrack.clone()` erzeugt. Der ursprüngliche Stream wurde unverändert an Talk zurückgegeben.
+
+Der Clone wurde anschließend unabhängig über `MediaStream` und `MediaRecorder` aufgezeichnet. Die resultierende Testdatei `pore-talk-clone-test.ogx` enthielt 52,54 Sekunden reales Audio:
+
+- Ogg Container
+- Opus Codec
+- Stereo
+- 48 kHz Input Sample Rate
+- ca. 130 kbit/s
+- Encoder: Mozilla Firefox 154.0
+
+Damit ist der primäre Capture-/Clone-Mechanismus unter realen Nextcloud-Talk-Bedingungen technisch nachgewiesen. Der Test beweist noch nicht die produktive PoRE-Aufnahmelogik, Chunk-Persistenz, Signet-Synchronisation oder die spätere Artifact-/Transportintegration.
+
+---
+
 # Integrationspriorität
 
 1. **Primär:** Mikrofon-Capture → Track Clone unmittelbar nach `getUserMedia()` → Talk und NC-PoRe als getrennte Consumer.
@@ -161,6 +192,37 @@ Bit-identical container output is not required. The requirement is that both tra
 
 ---
 
+# Live Validation
+
+On 2026-08-29, the clone decision was validated in a real local Nextcloud Talk installation.
+
+**Test environment:**
+
+- Nextcloud 34.0.3 running in Docker
+- Nextcloud Talk enabled
+- Firefox 154.0
+- HTTPS through Caddy with a local `mkcert` certificate
+- LAN access through `A-desktop-G.local` / `192.168.192.126`
+- real audio input device: RØDECaster Pro Analog Stereo
+- NC-PoRe app 0.1.0 with the early `getUserMedia()` hook
+
+**Observation:**
+
+Real Talk `getUserMedia()` calls were intercepted by the NC-PoRe hook. For audio calls, an independent `MediaStreamTrack` was successfully created using `MediaStreamTrack.clone()`. The original stream was returned unchanged to Talk.
+
+The clone was then recorded independently through `MediaStream` and `MediaRecorder`. The resulting test file `pore-talk-clone-test.ogx` contained 52.54 seconds of real audio:
+
+- Ogg container
+- Opus codec
+- stereo
+- 48 kHz input sample rate
+- approximately 130 kbit/s
+- encoder: Mozilla Firefox 154.0
+
+This establishes the primary capture/clone mechanism under real Nextcloud Talk conditions. It does not yet validate the production PoRE recording lifecycle, chunk persistence, signet synchronization, or later artifact/transport integration.
+
+---
+
 # Integration Priority
 
 1. **Primary:** microphone capture → immediate track clone → Talk and NC-PoRe as separate consumers.
@@ -177,7 +239,7 @@ Fallback paths are not pursued while the primary path remains implementable.
 - Talk can continue using its existing audio, video, WebRTC, and HPB infrastructure.
 - NC-PoRe can record locally without relying on server-side recording.
 - Audio and video can be handled separately for V1.
-- Firefox, Chromium, and Safari/WebKit are addressed through the same standards-based architecture.
+- Firefox, Chromium and Safari/WebKit are addressed through the same standards-based architecture.
 - Practical validation occurs during live integration.
 
 ---
