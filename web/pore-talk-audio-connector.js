@@ -1,10 +1,8 @@
 /*
  * NC-PoRe — Nextcloud Talk audio connector
  *
- * This file is loaded as an early Nextcloud init script. It deliberately uses
- * no ES-module syntax because Nextcloud's init-script loader supplies classic
- * scripts. The connector is exposed only as a small browser integration object;
- * PoRE's generic recording code does not depend on Talk.
+ * Talk-specific lifecycle policy lives here. The connector observes the
+ * browser capture boundary but does not alter Talk's returned MediaStream.
  */
 
 (() => {
@@ -28,11 +26,22 @@
 				return null
 			}
 
-			if (this._current?.sourceTrack === sourceTrack) {
-				return this._current.cloneTrack
-			}
+			// Do not replace a live PoRE capture merely because Talk asked for
+			// another stream. Talk can create auxiliary getUserMedia streams.
+			// The first live audio source is therefore retained until its own
+			// lifecycle ends. A subsequent distinct track becomes eligible only
+			// after the current source has ended.
+			if (this._current) {
+				if (this._current.sourceTrack === sourceTrack) {
+					return this._current.cloneTrack
+				}
 
-			this._replaceCurrent(null)
+				if (this._current.sourceTrack.readyState !== 'ended') {
+					return null
+				}
+
+				this._replaceCurrent(null)
+			}
 
 			const cloneTrack = sourceTrack.clone()
 			const current = {
