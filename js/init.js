@@ -9,6 +9,8 @@
 (() => {
 	'use strict'
 
+	console.log('PoRE: ADR073 CONNECTOR INIT')
+
 	const mediaDevices = navigator.mediaDevices
 	const Connector = window.PoRETalkAudioCaptureConnector
 
