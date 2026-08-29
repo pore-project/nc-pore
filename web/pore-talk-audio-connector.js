@@ -1,95 +1,101 @@
 /*
  * NC-PoRe — Nextcloud Talk audio connector
  *
- * The connector observes audio-capable getUserMedia() results at the browser
- * capture boundary. Talk owns the original track; PoRE owns its clone.
- *
- * This layer deliberately contains the Talk-specific lifecycle policy. The
- * generic PoRE recording path only receives the currently selected clone.
+ * This file is loaded as an early Nextcloud init script. It deliberately uses
+ * no ES-module syntax because Nextcloud's init-script loader supplies classic
+ * scripts. The connector is exposed only as a small browser integration object;
+ * PoRE's generic recording code does not depend on Talk.
  */
 
-export const PORE_TALK_AUDIO_TRACK_EVENT = 'pore:talk-audio-track'
+(() => {
+	'use strict'
 
-export class TalkAudioCaptureConnector {
-	constructor({ dispatchEvent = window.dispatchEvent.bind(window) } = {}) {
-		this._dispatchEvent = dispatchEvent
-		this._current = null
-	}
+	const PORE_TALK_AUDIO_TRACK_EVENT = 'pore:talk-audio-track'
 
-	acceptStream(stream, constraints) {
-		if (!constraints?.audio || !stream || typeof stream.getAudioTracks !== 'function') {
-			return null
+	class TalkAudioCaptureConnector {
+		constructor({ dispatchEvent = window.dispatchEvent.bind(window) } = {}) {
+			this._dispatchEvent = dispatchEvent
+			this._current = null
 		}
 
-		const sourceTrack = stream.getAudioTracks()[0]
-		if (!sourceTrack || typeof sourceTrack.clone !== 'function') {
-			return null
-		}
+		acceptStream(stream, constraints) {
+			if (!constraints?.audio || !stream || typeof stream.getAudioTracks !== 'function') {
+				return null
+			}
 
-		if (this._current?.sourceTrack === sourceTrack) {
-			return this._current.cloneTrack
-		}
+			const sourceTrack = stream.getAudioTracks()[0]
+			if (!sourceTrack || typeof sourceTrack.clone !== 'function') {
+				return null
+			}
 
-		this._replaceCurrent(null)
-
-		const cloneTrack = sourceTrack.clone()
-		const current = {
-			sourceTrack,
-			cloneTrack,
-			onEnded: null,
-		}
-
-		current.onEnded = () => {
-			if (this._current !== current) {
-				return
+			if (this._current?.sourceTrack === sourceTrack) {
+				return this._current.cloneTrack
 			}
 
 			this._replaceCurrent(null)
-		}
 
-		if (typeof sourceTrack.addEventListener === 'function') {
-			sourceTrack.addEventListener('ended', current.onEnded)
-		}
-
-		this._current = current
-		this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_TRACK_EVENT, {
-			detail: {
-				track: cloneTrack,
+			const cloneTrack = sourceTrack.clone()
+			const current = {
 				sourceTrack,
-				stream,
-				constraints,
-			},
-		}))
+				cloneTrack,
+				onEnded: null,
+			}
 
-		return cloneTrack
-	}
+			current.onEnded = () => {
+				if (this._current !== current) {
+					return
+				}
 
-	getCurrentSourceTrack() {
-		return this._current?.sourceTrack ?? null
-	}
+				this._replaceCurrent(null)
+			}
 
-	getCurrentCloneTrack() {
-		return this._current?.cloneTrack ?? null
-	}
+			if (typeof sourceTrack.addEventListener === 'function') {
+				sourceTrack.addEventListener('ended', current.onEnded)
+			}
 
-	dispose() {
-		this._replaceCurrent(null)
-	}
+			this._current = current
+			this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_TRACK_EVENT, {
+				detail: {
+					track: cloneTrack,
+					sourceTrack,
+					stream,
+					constraints,
+				},
+			}))
 
-	_replaceCurrent(next) {
-		const previous = this._current
-		this._current = next
-
-		if (!previous) {
-			return
+			return cloneTrack
 		}
 
-		if (previous.onEnded && typeof previous.sourceTrack.removeEventListener === 'function') {
-			previous.sourceTrack.removeEventListener('ended', previous.onEnded)
+		getCurrentSourceTrack() {
+			return this._current?.sourceTrack ?? null
 		}
 
-		if (previous.cloneTrack && typeof previous.cloneTrack.stop === 'function') {
-			previous.cloneTrack.stop()
+		getCurrentCloneTrack() {
+			return this._current?.cloneTrack ?? null
+		}
+
+		dispose() {
+			this._replaceCurrent(null)
+		}
+
+		_replaceCurrent(next) {
+			const previous = this._current
+			this._current = next
+
+			if (!previous) {
+				return
+			}
+
+			if (previous.onEnded && typeof previous.sourceTrack.removeEventListener === 'function') {
+				previous.sourceTrack.removeEventListener('ended', previous.onEnded)
+			}
+
+			if (previous.cloneTrack && typeof previous.cloneTrack.stop === 'function') {
+				previous.cloneTrack.stop()
+			}
 		}
 	}
-}
+
+	window.PoRETalkAudioCaptureConnector = TalkAudioCaptureConnector
+	window.PoRETalkAudioTrackEvent = PORE_TALK_AUDIO_TRACK_EVENT
+})()
