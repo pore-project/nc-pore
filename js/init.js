@@ -6,13 +6,13 @@
  * media pipeline to pass through unchanged.
  */
 
-import { TalkAudioCaptureConnector } from '../web/pore-talk-audio-connector.js'
-
 (() => {
 	'use strict'
 
 	const mediaDevices = navigator.mediaDevices
-	if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
+	const Connector = window.PoRETalkAudioCaptureConnector
+
+	if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function' || !Connector) {
 		return
 	}
 
@@ -21,7 +21,7 @@ import { TalkAudioCaptureConnector } from '../web/pore-talk-audio-connector.js'
 	}
 
 	const originalGetUserMedia = mediaDevices.getUserMedia.bind(mediaDevices)
-	const connector = new TalkAudioCaptureConnector()
+	const connector = new Connector()
 
 	const poreGetUserMedia = async function (constraints) {
 		const stream = await originalGetUserMedia(constraints)
