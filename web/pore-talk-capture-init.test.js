@@ -1,4 +1,4 @@
-import './pore-talk-audio-connector.js'
+import '../js/pore-talk-audio-connector.js'
 
 describe('Nextcloud Talk audio connector', () => {
 	const Connector = window.PoRETalkAudioCaptureConnector
