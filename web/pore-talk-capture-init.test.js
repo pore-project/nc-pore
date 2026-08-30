@@ -48,7 +48,7 @@ describe('Nextcloud Talk audio connector', () => {
 			}),
 			emitTrack: (nextTrack) => {
 				enabler.getOutputTrack.mockReturnValue(nextTrack)
-				listeners.get('outputTrackSet')?.(enabler, 'default', nextTrack)
+				listeners.get('outputTrackSet')?.('default', nextTrack)
 			},
 			_sink: sink,
 		}
@@ -124,7 +124,7 @@ describe('Nextcloud Talk audio connector', () => {
 	})
 
 	// TEST-05: Connector detaches cleanly without touching Talk's source track.
-	it('disconnects cleanly and leaves the Talk source track untouched', () => {
+	it('disconnects cleanly without stopping the Talk source track', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
 		const enabler = createTrackEnabler(first.track)
 		installTalk(enabler)
