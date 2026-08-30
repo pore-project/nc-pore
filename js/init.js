@@ -4,8 +4,8 @@
  * The UI consumes the neutral track event from the Talk connector and delegates
  * recording lifecycle to the generic browser recording controller.
  *
- * ADR-074i: "Aufnahme beenden" is the PoRE stop boundary. Ending the Talk
- * room is deliberately not wired to recording stop.
+ * "Aufnahme beenden" is the PoRE stop boundary. Ending the Talk room is not
+ * wired to recording stop.
  */
 
 (() => {
@@ -22,7 +22,6 @@
 	const connector = new Connector()
 	const recorder = new Recorder()
 	let currentTrack = null
-	let currentSourceTrack = null
 
 	window.__poreTalkAudioConnector = connector
 	window.__poreRecordingController = recorder
@@ -127,11 +126,9 @@
 
 	window.addEventListener(trackEventName, event => {
 		const nextTrack = event.detail?.track || null
-		const nextSourceTrack = event.detail?.sourceTrack || null
 		const replaced = currentTrack && nextTrack && nextTrack !== currentTrack
 
 		currentTrack = nextTrack
-		currentSourceTrack = nextSourceTrack
 
 		if (replaced && recorder.isRecording()) {
 			setStatus('Talk-Audioquelle wurde ersetzt – Aufnahme wird abgeschlossen')
@@ -149,7 +146,7 @@
 
 	const tryAttach = () => {
 		if (connector.attachToTalk()) {
-			console.log('PoRE: ADR073 TrackEnabler sink attached')
+			console.log('PoRE: Talk audio capture boundary attached')
 			refreshUi()
 			return
 		}
