@@ -24,9 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.1
+          toolchain: 1.97.1
+          components: rustfmt
       - name: Check workspace
         run: cargo check --workspace
       - name: Test workspace
