@@ -45,7 +45,7 @@
 	const createControls = () => {
 		const root = document.createElement('div')
 		root.id = 'pore-talk-recording-controls'
-		root.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:100000;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-main-background,#fff);border:1px solid var(--color-border,#bbb);border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.18);'
+		root.style.cssText = 'position:fixed;right:24px;bottom:100px;z-index:100000;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-main-background,#fff);border:1px solid var(--color-border,#bbb);border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.18);'
 
 		const startButton = document.createElement('button')
 		startButton.type = 'button'
@@ -95,7 +95,7 @@
 		link.href = url
 		link.download = `pore-talk-${artifact.sequence}.webm`
 		link.textContent = `Aufnahme gespeichert (${Math.round(artifact.size / 1024)} kB)`
-		link.style.cssText = 'position:fixed;right:24px;bottom:78px;z-index:100001;padding:8px 10px;background:var(--color-primary-element,#0082c9);color:var(--color-primary-element-text,#fff);border-radius:6px;text-decoration:none;'
+		link.style.cssText = 'position:fixed;right:24px;bottom:154px;z-index:100001;padding:8px 10px;background:var(--color-primary-element,#0082c9);color:var(--color-primary-element-text,#fff);border-radius:6px;text-decoration:none;'
 		link.addEventListener('click', () => window.setTimeout(() => URL.revokeObjectURL(url), 1000), { once: true })
 		document.body.appendChild(link)
 		window.setTimeout(() => link.remove(), 30000)
