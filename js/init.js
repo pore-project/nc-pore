@@ -1,9 +1,8 @@
 /*
- * NC-PoRE — early browser microphone capture integration.
+ * NC-PoRE — Talk audio integration.
  *
- * The Talk-specific lifecycle policy lives in the connector. This bootstrap
- * only installs the browser capture boundary early enough for Talk's normal
- * media pipeline to pass through unchanged.
+ * The Talk-specific connector attaches to Talk's TrackEnabler output rather
+ * than intercepting getUserMedia().
  */
 
 (() => {
@@ -11,27 +10,23 @@
 
 	console.log('PoRE: ADR073 CONNECTOR INIT')
 
-	const mediaDevices = navigator.mediaDevices
 	const Connector = window.PoRETalkAudioCaptureConnector
 
-	if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function' || !Connector) {
+	if (!Connector) {
 		return
 	}
 
-	if (mediaDevices.getUserMedia.__poreTalkConnectorInstalled) {
-		return
-	}
-
-	const originalGetUserMedia = mediaDevices.getUserMedia.bind(mediaDevices)
 	const connector = new Connector()
+	window.__poreTalkAudioConnector = connector
 
-	const poreGetUserMedia = async function (constraints) {
-		const stream = await originalGetUserMedia(constraints)
-		connector.acceptStream(stream, constraints)
-		return stream
+	const tryAttach = () => {
+		if (connector.attachToTalk()) {
+			console.log('PoRE: ADR073 TrackEnabler sink attached')
+			return
+		}
+
+		window.setTimeout(tryAttach, 100)
 	}
 
-	poreGetUserMedia.__poreTalkConnectorInstalled = true
-	mediaDevices.getUserMedia = poreGetUserMedia
-	window.__poreTalkAudioConnector = connector
+	tryAttach()
 })()
