@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>pore</id>
+	<name>NC-PoRe</name>
+	<summary>Professional local podcast recording integration for Nextcloud Talk</summary>
+	<description>NC-PoRe provides local podcast recording and synchronization capabilities for Nextcloud-based production workflows.</description>
+	<version>0.1.0-dev.1</version>
+	<licence>agpl</licence>
+	<author>NC-PoRe</author>
+	<namespace>PoRe</namespace>
+	<category>multimedia</category>
+	<dependencies>
+		<nextcloud min-version="30" max-version="34" />
+	</dependencies>
+</info>
