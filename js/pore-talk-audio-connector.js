@@ -81,6 +81,7 @@
 
 			this._trackEnabler = trackEnabler
 			this._trackSink = sink
+		sink._handleOutputTrackSet("default", trackEnabler.getOutputTrack("default"))
 			return true
 		}
 

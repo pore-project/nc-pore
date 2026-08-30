@@ -43,10 +43,6 @@
 
 	const refreshUi = () => {
 		const existing = findControls()
-		if (!isHost()) {
-			existing?.remove()
-			return
-		}
 
 		const root = existing || createControls()
 		const recording = recorder.isRecording()
