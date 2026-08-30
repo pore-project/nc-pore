@@ -30,7 +30,7 @@ describe('Nextcloud Talk audio connector', () => {
 	const createTrackEnabler = (track) => {
 		const listeners = new Map()
 		const sink = { current: null }
-		return {
+		const enabler = {
 			connectTrackSink: jest.fn((inputTrackId, trackSink) => {
 				sink.current = trackSink
 				trackSink.connectTrackSource(inputTrackId, enabler, 'default')
@@ -52,7 +52,7 @@ describe('Nextcloud Talk audio connector', () => {
 			},
 			_sink: sink,
 		}
-		function enabler() {}
+		return enabler
 	}
 
 	const installTalk = (trackEnabler) => {
