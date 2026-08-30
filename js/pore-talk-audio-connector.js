@@ -1,238 +1,168 @@
 /*
- * NC-PoRE — Nextcloud Talk host connector.
+ * NC-PoRe — Nextcloud Talk audio connector
  *
- * ADR-073i: integrate at the currently active Talk TrackEnabler output.
- * ADR-074i: recording stop is an explicit host action; ending the Talk room
- * is not the recording boundary.
+ * Talk-specific lifecycle policy lives here. The connector attaches to
+ * Talk's audio pipeline after TrackEnabler and before NoiseSuppressor.
+ *
+ * ADR-073i: the connector owns Talk track discovery and replacement only.
+ * ADR-074i: recording stop remains outside Talk room termination.
  */
 
 (() => {
 	'use strict'
 
-	class PoRETalkAudioCaptureConnector {
-		constructor() {
-			this.trackEnabler = null
-			this.currentTrack = null
-			this.attached = false
-			this.uiObserver = null
-			this.recordingController = null
-			this._outputTrackSetHandler = this._handleOutputTrackSet.bind(this)
-			this._outputTrackEnabledHandler = this._handleOutputTrackEnabled.bind(this)
+	const PORE_TALK_AUDIO_TRACK_EVENT = 'pore:talk-audio-track'
+
+	class TalkAudioTrackSink {
+		constructor(onTrack) {
+			this._onTrack = onTrack
+			this._source = null
+			this._outputTrackId = null
 		}
 
-		attachToTalk() {
-			const webrtc = window.OCA?.Talk?.SimpleWebRTC?.webrtc
-			const enabler = webrtc?._audioTrackEnabler
-			const controller = window.PoREBrowserRecordingController
-
-			if (!enabler || !controller) {
-				return false
-			}
-
-			if (!this.attached) {
-				this.trackEnabler = enabler
-				this.recordingController = new controller()
-				this._installSink()
-				this._refreshTrack()
-				this._installUiObserver()
-				this.attached = true
-				console.log('PoRE: Talk TrackEnabler integration ready')
-			}
-
-			this._refreshTrack()
-			this._refreshUi()
-			return !!this.currentTrack
-		}
-
-		/* TrackSource sink contract used by Talk's TrackEnabler.connectTrackSink(). */
 		connectTrackSource(inputTrackId, trackSource, outputTrackId = 'default') {
-			if (trackSource !== this.trackEnabler || outputTrackId !== 'default') {
-				return
+			if (inputTrackId !== 'default' || this._source) {
+				throw new Error('PoRE Talk audio sink can only be connected once to the default input')
 			}
-			this._setCurrentTrack(trackSource.getOutputTrack(outputTrackId))
+
+			this._source = trackSource
+			this._outputTrackId = outputTrackId
+			trackSource.on('outputTrackSet', this._handleOutputTrackSet)
+			trackSource.on('outputTrackEnabled', this._handleOutputTrackEnabled)
+			this._onTrack(trackSource.getOutputTrack(outputTrackId))
 		}
 
 		disconnectTrackSource(inputTrackId, trackSource, outputTrackId = 'default') {
-			if (trackSource === this.trackEnabler && outputTrackId === 'default') {
-				this._setCurrentTrack(null)
-			}
-		}
-
-		on(event, handler) {
-			if (event === 'outputTrackSet') {
-				this._outputTrackSetHandler = handler
-			}
-			if (event === 'outputTrackEnabled') {
-				this._outputTrackEnabledHandler = handler
-			}
-		}
-
-		_handleOutputTrackSet(trackId, track) {
-			if (trackId === 'default') {
-				this._setCurrentTrack(track)
-			}
-		}
-
-		_handleOutputTrackEnabled(trackId, enabled) {
-			if (trackId === 'default' && this.currentTrack) {
-				this.currentTrack.enabled = enabled
-			}
-		}
-
-		_installSink() {
-			/*
-			 * Use Talk's own TrackSource/Sink wiring instead of replacing
-			 * getUserMedia() or touching the RTCPeerConnection sender.
-			 */
-			this.trackEnabler.connectTrackSink('default', this, 'default')
-			this.trackEnabler.on?.('outputTrackSet', this._outputTrackSetHandler)
-			this.trackEnabler.on?.('outputTrackEnabled', this._outputTrackEnabledHandler)
-		}
-
-		_refreshTrack() {
-			if (!this.trackEnabler) {
+			if (inputTrackId !== 'default' || this._source !== trackSource || this._outputTrackId !== outputTrackId) {
 				return
 			}
-			try {
-				this._setCurrentTrack(this.trackEnabler.getOutputTrack('default'))
-			} catch {
-				this._setCurrentTrack(null)
+
+			trackSource.off('outputTrackSet', this._handleOutputTrackSet)
+			trackSource.off('outputTrackEnabled', this._handleOutputTrackEnabled)
+			this._source = null
+			this._outputTrackId = null
+			this._onTrack(null)
+		}
+
+		_handleOutputTrackSet = (trackSource, outputTrackId, track) => {
+			if (trackSource === this._source && outputTrackId === this._outputTrackId) {
+				this._onTrack(track)
 			}
 		}
 
-		_setCurrentTrack(track) {
-			if (track && (track.kind !== 'audio' || track.readyState === 'ended')) {
-				track = null
+		_handleOutputTrackEnabled = () => {}
+	}
+
+	class TalkAudioCaptureConnector {
+		constructor({ dispatchEvent = window.dispatchEvent.bind(window) } = {}) {
+			this._dispatchEvent = dispatchEvent
+			this._current = null
+			this._talkWebRTC = null
+			this._trackEnabler = null
+			this._trackSink = null
+		}
+
+		attachToTalk() {
+			const talkWebRTC = window.OCA?.Talk?.SimpleWebRTC?.webrtc
+			const trackEnabler = talkWebRTC?._audioTrackEnabler
+
+			if (!trackEnabler || typeof trackEnabler.connectTrackSink !== 'function'
+				|| typeof trackEnabler.disconnectTrackSink !== 'function') {
+				return false
 			}
-			this.currentTrack = track || null
-			window.dispatchEvent(new CustomEvent('pore:talk-audio-track-changed', {
-				detail: {
-					track: this.currentTrack,
-					trackId: this.currentTrack?.id || null,
-					trackLabel: this.currentTrack?.label || null,
-				},
+
+			if (this._trackEnabler === trackEnabler) {
+				return true
+			}
+
+			this._detachFromTalk()
+
+			const sink = new TalkAudioTrackSink((track) => this._acceptTrack(track))
+			trackEnabler.connectTrackSink('default', sink)
+
+			this._talkWebRTC = talkWebRTC
+			this._trackEnabler = trackEnabler
+			this._trackSink = sink
+			return true
+		}
+
+		detachFromTalk() {
+			this._detachFromTalk()
+		}
+
+		_acceptTrack(sourceTrack) {
+			if (!sourceTrack || typeof sourceTrack.clone !== 'function') {
+				this._replaceCurrent(null)
+				return null
+			}
+
+			if (this._current?.sourceTrack === sourceTrack) {
+				return this._current.cloneTrack
+			}
+
+			this._replaceCurrent(null)
+
+			const cloneTrack = sourceTrack.clone()
+			const current = { sourceTrack, cloneTrack, onEnded: null }
+
+			current.onEnded = () => {
+				if (this._current === current) {
+					this._replaceCurrent(null)
+				}
+			}
+
+			if (typeof sourceTrack.addEventListener === 'function') {
+				sourceTrack.addEventListener('ended', current.onEnded)
+			}
+
+			this._current = current
+			this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_TRACK_EVENT, {
+				detail: { track: cloneTrack, sourceTrack },
 			}))
-			this._refreshUi()
+
+			return cloneTrack
 		}
 
-		_installUiObserver() {
-			this.uiObserver = new MutationObserver(() => this._refreshUi())
-			this.uiObserver.observe(document.documentElement, { childList: true, subtree: true })
-			window.addEventListener('pore:recording-started', () => this._refreshUi())
-			window.addEventListener('pore:recording-finalized', event => this._offerArtifact(event.detail))
-			window.addEventListener('pore:recording-error', event => this._showError(event.detail?.error))
+		getCurrentSourceTrack() {
+			return this._current?.sourceTrack ?? null
 		}
 
-		_refreshUi() {
-			if (!this.attached) {
+		getCurrentCloneTrack() {
+			return this._current?.cloneTrack ?? null
+		}
+
+		dispose() {
+			this._detachFromTalk()
+			this._replaceCurrent(null)
+		}
+
+		_detachFromTalk() {
+			if (this._trackEnabler && this._trackSink) {
+				this._trackEnabler.disconnectTrackSink('default', this._trackSink)
+			}
+			this._talkWebRTC = null
+			this._trackEnabler = null
+			this._trackSink = null
+		}
+
+		_replaceCurrent(next) {
+			const previous = this._current
+			this._current = next
+
+			if (!previous) {
 				return
 			}
 
-			const host = this._isHost()
-			const existing = document.getElementById('pore-talk-recording-controls')
-			if (!host) {
-				existing?.remove()
-				return
+			if (previous.onEnded && typeof previous.sourceTrack.removeEventListener === 'function') {
+				previous.sourceTrack.removeEventListener('ended', previous.onEnded)
 			}
 
-			const container = existing || this._createControls()
-			const recording = this.recordingController?.isRecording() === true
-			const canStart = !!this.currentTrack && this.currentTrack.readyState === 'live' && !recording
-
-			container.startButton.disabled = !canStart
-			container.startButton.hidden = recording
-			container.stopButton.hidden = !recording
-			container.status.textContent = recording ? 'Aufnahme läuft' : 'Keine Aufnahme'
-		}
-
-		_isHost() {
-			const buttons = [...document.querySelectorAll('button, [role="button"]')]
-			return buttons.some(button => {
-				const text = [button.textContent, button.getAttribute('aria-label'), button.getAttribute('title')]
-					.filter(Boolean).join(' ').toLowerCase()
-				return text.includes('end meeting for everyone') ||
-					text.includes('für alle beenden') ||
-					text.includes('meeting für alle') ||
-					text.includes('besprechung für alle') ||
-					text.includes('anruf für alle')
-			})
-		}
-
-		_createControls() {
-			const root = document.createElement('div')
-			root.id = 'pore-talk-recording-controls'
-			root.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:100000;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-main-background,#fff);border:1px solid var(--color-border,#bbb);border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.18);'
-
-			const startButton = document.createElement('button')
-			startButton.type = 'button'
-			startButton.textContent = 'Aufnahme starten'
-			startButton.addEventListener('click', () => this._startRecording())
-
-			const stopButton = document.createElement('button')
-			stopButton.type = 'button'
-			stopButton.textContent = 'Aufnahme beenden'
-			stopButton.addEventListener('click', () => this._stopRecording())
-
-			const status = document.createElement('span')
-			status.setAttribute('role', 'status')
-			status.textContent = 'Keine Aufnahme'
-
-			root.append(startButton, stopButton, status)
-			document.body.appendChild(root)
-			root.startButton = startButton
-			root.stopButton = stopButton
-			root.status = status
-			return root
-		}
-
-		_startRecording() {
-			if (!this.currentTrack) {
-				this._showError(new Error('Kein aktiver Talk-Audio-Track verfügbar'))
-				return
-			}
-			try {
-				this.recordingController.start(this.currentTrack)
-				this._refreshUi()
-			} catch (error) {
-				this._showError(error)
-			}
-		}
-
-		_stopRecording() {
-			/*
-			 * This is deliberately the PoRE recording boundary. Do not call
-			 * webrtc.stop() and do not leave the Talk room here.
-			 */
-			this.recordingController.stop('host').catch(error => this._showError(error))
-		}
-
-		_offerArtifact(artifact) {
-			const url = URL.createObjectURL(artifact.blob)
-			const link = document.createElement('a')
-			link.href = url
-			link.download = `pore-talk-${artifact.sequence}.webm`
-			link.textContent = `Aufnahme gespeichert (${Math.round(artifact.size / 1024)} kB)`
-			link.style.cssText = 'position:fixed;right:24px;bottom:78px;z-index:100001;padding:8px 10px;background:var(--color-primary-element,#0082c9);color:var(--color-primary-element-text,#fff);border-radius:6px;text-decoration:none;'
-			link.addEventListener('click', () => window.setTimeout(() => URL.revokeObjectURL(url), 1000), { once: true })
-			document.body.appendChild(link)
-			window.setTimeout(() => link.remove(), 30000)
-			this._refreshUi()
-			console.log('PoRE: recording finalized', {
-				sequence: artifact.sequence,
-				size: artifact.size,
-				type: artifact.format,
-				stopReason: artifact.stopReason,
-			})
-		}
-
-		_showError(error) {
-			console.error('PoRE: recording error', error)
-			const root = document.getElementById('pore-talk-recording-controls')
-			if (root?.status) {
-				root.status.textContent = `Fehler: ${error?.message || error || 'unbekannt'}`
+			if (previous.cloneTrack && typeof previous.cloneTrack.stop === 'function') {
+				previous.cloneTrack.stop()
 			}
 		}
 	}
 
-	window.PoRETalkAudioCaptureConnector = PoRETalkAudioCaptureConnector
+	window.PoRETalkAudioCaptureConnector = TalkAudioCaptureConnector
+	window.PoRETalkAudioTrackEvent = PORE_TALK_AUDIO_TRACK_EVENT
 })()
