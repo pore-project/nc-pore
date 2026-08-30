@@ -123,7 +123,7 @@ describe('Nextcloud Talk audio connector', () => {
 		expect(connector.getCurrentCloneTrack()).toBeNull()
 	})
 
-	// TEST-05: Connector detaches cleanly without touching Talk's source track.
+	// TEST-05: Detaching releases the PoRE clone while leaving the Talk source track intact.
 	it('disconnects cleanly without stopping the Talk source track', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
 		const enabler = createTrackEnabler(first.track)
@@ -135,8 +135,9 @@ describe('Nextcloud Talk audio connector', () => {
 
 		expect(enabler.disconnectTrackSink).toHaveBeenCalledTimes(1)
 		expect(first.track.clone).toHaveBeenCalledTimes(1)
-		expect(first.cloneStop).not.toHaveBeenCalled()
-		expect(connector.getCurrentSourceTrack()).toBe(first.track)
+		expect(first.cloneStop).toHaveBeenCalledTimes(1)
+		expect(connector.getCurrentSourceTrack()).toBeNull()
+		expect(connector.getCurrentCloneTrack()).toBeNull()
 	})
 
 	// TEST-06: Dispose releases the PoRE-owned clone.
