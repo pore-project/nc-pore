@@ -44,8 +44,9 @@
 			this._onTrack(null)
 		}
 
-		_handleOutputTrackSet = (trackSource, outputTrackId, track) => {
-			if (trackSource === this._source && outputTrackId === this._outputTrackId) {
+		// TrackSource emits (outputTrackId, track), not the source object.
+		_handleOutputTrackSet = (outputTrackId, track) => {
+			if (outputTrackId === this._outputTrackId) {
 				this._onTrack(track)
 			}
 		}
