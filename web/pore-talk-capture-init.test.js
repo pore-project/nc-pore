@@ -27,55 +27,95 @@ describe('Nextcloud Talk audio connector', () => {
 		}
 	}
 
-	it('clones the current audio track and leaves the Talk stream unchanged', () => {
+	const createTrackEnabler = (track) => {
+		const listeners = new Map()
+		const sink = { current: null }
+		return {
+			connectTrackSink: jest.fn((inputTrackId, trackSink) => {
+				sink.current = trackSink
+				trackSink.connectTrackSource(inputTrackId, enabler, 'default')
+			}),
+			disconnectTrackSink: jest.fn((inputTrackId, trackSink) => {
+				trackSink.disconnectTrackSource(inputTrackId, enabler, 'default')
+				sink.current = null
+			}),
+			getOutputTrack: jest.fn(() => track),
+			on: jest.fn((event, handler) => listeners.set(event, handler)),
+			off: jest.fn((event, handler) => {
+				if (listeners.get(event) === handler) {
+					listeners.delete(event)
+				}
+			}),
+			emitTrack: (nextTrack) => {
+				enabler.getOutputTrack.mockReturnValue(nextTrack)
+				listeners.get('outputTrackSet')?.(enabler, 'default', nextTrack)
+			},
+			_sink: sink,
+		}
+		function enabler() {}
+	}
+
+	const installTalk = (trackEnabler) => {
+		window.OCA = { Talk: { SimpleWebRTC: { webrtc: { _audioTrackEnabler: trackEnabler } } } }
+	}
+
+	beforeEach(() => {
+		window.OCA = undefined
+	})
+
+	// TEST-01: Connector attaches to Talk's current TrackEnabler output and clones it.
+	it('clones the current TrackEnabler audio output', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
-		const stream = { getAudioTracks: () => [first.track] }
+		const enabler = createTrackEnabler(first.track)
 		const events = []
-		const connector = new Connector({
-			dispatchEvent: (event) => events.push(event),
-		})
+		installTalk(enabler)
+		const connector = new Connector({ dispatchEvent: event => events.push(event) })
 
-		const clone = connector.acceptStream(stream, { audio: true, video: true })
-
-		expect(clone).toBe(first.cloneTrack)
+		expect(connector.attachToTalk()).toBe(true)
 		expect(first.track.clone).toHaveBeenCalledTimes(1)
 		expect(connector.getCurrentSourceTrack()).toBe(first.track)
+		expect(connector.getCurrentCloneTrack()).toBe(first.cloneTrack)
 		expect(events).toHaveLength(1)
 		expect(events[0].type).toBe(eventName)
-		expect(events[0].detail.track).toBe(first.cloneTrack)
-		expect(events[0].detail.sourceTrack).toBe(first.track)
 	})
 
+	// TEST-02: The same Talk track is not cloned repeatedly.
 	it('does not clone the same Talk track twice', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
+		const enabler = createTrackEnabler(first.track)
+		installTalk(enabler)
 		const connector = new Connector({ dispatchEvent: jest.fn() })
-		const stream = { getAudioTracks: () => [first.track] }
 
-		const firstClone = connector.acceptStream(stream, { audio: true })
-		const secondClone = connector.acceptStream(stream, { audio: true })
+		connector.attachToTalk()
+		connector.attachToTalk()
 
-		expect(firstClone).toBe(secondClone)
 		expect(first.track.clone).toHaveBeenCalledTimes(1)
 	})
 
-	it('stops the previous PoRE clone when Talk supplies a replacement track', () => {
+	// TEST-03: Talk track replacement releases the old PoRE clone.
+	it('stops the previous PoRE clone when Talk replaces the output track', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
 		const second = createTrack({ id: 'talk-b', cloneTrackId: 'pore-b' })
+		const enabler = createTrackEnabler(first.track)
+		installTalk(enabler)
 		const connector = new Connector({ dispatchEvent: jest.fn() })
 
-		connector.acceptStream({ getAudioTracks: () => [first.track] }, { audio: true })
-		const replacement = connector.acceptStream({ getAudioTracks: () => [second.track] }, { audio: true })
+		connector.attachToTalk()
+		enabler.emitTrack(second.track)
 
 		expect(first.cloneStop).toHaveBeenCalledTimes(1)
-		expect(replacement).toBe(second.cloneTrack)
 		expect(connector.getCurrentSourceTrack()).toBe(second.track)
+		expect(connector.getCurrentCloneTrack()).toBe(second.cloneTrack)
 	})
 
+	// TEST-04: Ending the Talk source track releases the PoRE clone.
 	it('stops its clone when the Talk source track ends', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
+		const enabler = createTrackEnabler(first.track)
+		installTalk(enabler)
 		const connector = new Connector({ dispatchEvent: jest.fn() })
 
-		connector.acceptStream({ getAudioTracks: () => [first.track] }, { audio: true })
+		connector.attachToTalk()
 		first.end()
 
 		expect(first.cloneStop).toHaveBeenCalledTimes(1)
@@ -83,23 +123,30 @@ describe('Nextcloud Talk audio connector', () => {
 		expect(connector.getCurrentCloneTrack()).toBeNull()
 	})
 
-	it('ignores video-only capture requests', () => {
+	// TEST-05: Connector detaches cleanly without touching Talk's source track.
+	it('disconnects cleanly and leaves the Talk source track untouched', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
+		const enabler = createTrackEnabler(first.track)
+		installTalk(enabler)
 		const connector = new Connector({ dispatchEvent: jest.fn() })
 
-		expect(connector.acceptStream(
-			{ getAudioTracks: () => [first.track] },
-			{ video: true },
-		)).toBeNull()
+		connector.attachToTalk()
+		connector.detachFromTalk()
 
-		expect(first.track.clone).not.toHaveBeenCalled()
+		expect(enabler.disconnectTrackSink).toHaveBeenCalledTimes(1)
+		expect(first.track.clone).toHaveBeenCalledTimes(1)
+		expect(first.cloneStop).not.toHaveBeenCalled()
+		expect(connector.getCurrentSourceTrack()).toBe(first.track)
 	})
 
+	// TEST-06: Dispose releases the PoRE-owned clone.
 	it('disposes the current clone', () => {
 		const first = createTrack({ id: 'talk-a', cloneTrackId: 'pore-a' })
+		const enabler = createTrackEnabler(first.track)
+		installTalk(enabler)
 		const connector = new Connector({ dispatchEvent: jest.fn() })
 
-		connector.acceptStream({ getAudioTracks: () => [first.track] }, { audio: true })
+		connector.attachToTalk()
 		connector.dispose()
 
 		expect(first.cloneStop).toHaveBeenCalledTimes(1)
