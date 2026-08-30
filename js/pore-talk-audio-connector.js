@@ -81,12 +81,30 @@
 
 			this._trackEnabler = trackEnabler
 			this._trackSink = sink
-		sink._handleOutputTrackSet("default", trackEnabler.getOutputTrack("default"))
+			this._syncCurrentTrack(trackEnabler)
 			return true
 		}
 
 		detachFromTalk() {
 			this._detachFromTalk()
+		}
+
+		_syncCurrentTrack(trackEnabler) {
+			const sync = () => {
+				if (this._trackEnabler !== trackEnabler) {
+					return
+				}
+
+				const track = trackEnabler.getOutputTrack?.('default') || null
+				if (track) {
+					this._acceptTrack(track)
+					return
+				}
+
+				window.setTimeout(sync, 100)
+			}
+
+			sync()
 		}
 
 		_acceptTrack(sourceTrack) {
