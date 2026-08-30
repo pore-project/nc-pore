@@ -15,7 +15,6 @@
 			this.currentTrack = null
 			this.attached = false
 			this.uiObserver = null
-			this.recording = null
 			this.recordingController = null
 			this._outputTrackSetHandler = this._handleOutputTrackSet.bind(this)
 			this._outputTrackEnabledHandler = this._handleOutputTrackEnabled.bind(this)
@@ -151,7 +150,11 @@
 			return buttons.some(button => {
 				const text = [button.textContent, button.getAttribute('aria-label'), button.getAttribute('title')]
 					.filter(Boolean).join(' ').toLowerCase()
-				return text.includes('end meeting for everyone') || text.includes('besprechung für alle beenden') || text.includes('meeting für alle beenden')
+				return text.includes('end meeting for everyone') ||
+					text.includes('für alle beenden') ||
+					text.includes('meeting für alle') ||
+					text.includes('besprechung für alle') ||
+					text.includes('anruf für alle')
 			})
 		}
 
