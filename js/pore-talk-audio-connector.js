@@ -2,10 +2,10 @@
  * NC-PoRe — Nextcloud Talk audio connector
  *
  * Talk-specific lifecycle policy lives here. The connector attaches to
- * Talk's audio pipeline after TrackEnabler and before NoiseSuppressor.
+ * Talk's audio pipeline at the TrackEnabler boundary.
  *
- * ADR-073i: the connector owns Talk track discovery and replacement only.
- * ADR-074i: recording stop remains outside Talk room termination.
+ * The connector owns Talk track discovery and replacement only. Recording stop
+ * remains outside Talk room termination.
  */
 
 (() => {
@@ -44,7 +44,6 @@
 			this._onTrack(null)
 		}
 
-		// TrackSource emits (outputTrackId, track), not the source object.
 		_handleOutputTrackSet = (outputTrackId, track) => {
 			if (outputTrackId === this._outputTrackId) {
 				this._onTrack(track)
@@ -58,7 +57,6 @@
 		constructor({ dispatchEvent = window.dispatchEvent.bind(window) } = {}) {
 			this._dispatchEvent = dispatchEvent
 			this._current = null
-			this._talkWebRTC = null
 			this._trackEnabler = null
 			this._trackSink = null
 		}
@@ -81,7 +79,6 @@
 			const sink = new TalkAudioTrackSink((track) => this._acceptTrack(track))
 			trackEnabler.connectTrackSink('default', sink)
 
-			this._talkWebRTC = talkWebRTC
 			this._trackEnabler = trackEnabler
 			this._trackSink = sink
 			return true
@@ -141,7 +138,6 @@
 			if (this._trackEnabler && this._trackSink) {
 				this._trackEnabler.disconnectTrackSink('default', this._trackSink)
 			}
-			this._talkWebRTC = null
 			this._trackEnabler = null
 			this._trackSink = null
 		}
