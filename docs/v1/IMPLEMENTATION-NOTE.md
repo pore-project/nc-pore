@@ -26,6 +26,27 @@ V1 therefore follows:
 
 These observations are implementation evidence, not an API guarantee of future Talk versions. They must be revalidated when the Talk/Spreed runtime changes.
 
+## V1 connector boundary
+
+The production connector clones the current `TrackEnabler` output and exposes that PoRE-owned clone through a neutral browser event. Talk retains ownership of its original track.
+
+Connector boundary tests cover:
+
+- initial TrackEnabler attachment and cloning,
+- repeated attachment without duplicate cloning,
+- TrackEnabler output replacement and release of the previous PoRE clone,
+- source-track termination,
+- clean connector detachment,
+- disposal of the PoRE-owned clone.
+
+## V1 UI boundary
+
+Host controls are injected only when Talk exposes the host-level action for ending the meeting for everyone. The controls are explicitly **Aufnahme starten** and **Aufnahme beenden**; during an active recording the state is shown as **Aufnahme läuft**.
+
+`Aufnahme beenden` stops the PoRE recording controller only. It does not call Talk's `webrtc.stop()` and does not end the Talk room.
+
+If Talk replaces the active source track while a recording is running, V1 finalizes the current recording with the explicit reason `talk-track-replaced` rather than continuing silently from a stale source.
+
 ## V1 boundary
 
-V1 deliberately does not make room termination the primary recording control. It also does not require modifying Talk's WebRTC implementation itself. The connector consumes the exposed media pipeline boundary and owns the PoRE recording lifecycle.
+V1 deliberately does not make room termination the primary recording control. It also does not require modifying Talk's WebRTC implementation itself. The connector consumes the exposed media pipeline boundary and owns only the host-integration side; the generic recording controller remains separate from Talk-specific logic.
