@@ -1,13 +1,14 @@
 # NC-PoRe browser integration
 
-## Early microphone capture hook
+The production Nextcloud Talk connector lives in `js/pore-talk-audio-connector.js`.
 
-`pore-talk-capture-init.js` is deliberately limited to the browser capture boundary.
+The connector attaches to Talk's current audio `TrackEnabler` output, clones the
+current source track and exposes the clone through the `pore:talk-audio-track`
+event. Talk retains ownership of its original track and media lifecycle.
 
-When an audio-capable `getUserMedia()` call succeeds, it creates a clone of the
-captured microphone `MediaStreamTrack` and publishes that clone through the
-`pore:microphone-clone` browser event. The original stream is returned unchanged
-so Nextcloud Talk retains its normal media pipeline.
+`pore-talk-capture-init.test.js` contains the browser-side connector boundary tests.
+The test suite deliberately exercises the TrackEnabler integration point rather
+than the older global `getUserMedia()` proof-of-concept hook.
 
-This is an integration spike for ADR-072. It is not yet the production loader,
-recording implementation, or signalling implementation.
+The generic browser recording lifecycle is implemented separately in
+`js/pore-recording-controller.js` and knows nothing about Talk.
