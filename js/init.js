@@ -1,11 +1,14 @@
 /*
- * NC-PoRe — Talk recording UI bootstrap.
+ * NC-PoRE — Talk recording UI bootstrap.
  *
  * The UI consumes the neutral track event from the Talk connector and delegates
  * recording lifecycle to the generic browser recording controller.
  *
  * "Aufnahme beenden" is the PoRE stop boundary. Ending the Talk room is not
  * wired to recording stop.
+ *
+ * The UI is event-driven: Talk track events and recording lifecycle events are
+ * the only refresh boundaries. It deliberately does not observe the Talk DOM.
  */
 
 (() => {
@@ -26,25 +29,10 @@
 	window.__poreTalkAudioConnector = connector
 	window.__poreRecordingController = recorder
 
-	const isHost = () => {
-		const buttons = [...document.querySelectorAll('button, [role="button"]')]
-		return buttons.some(button => {
-			const text = [button.textContent, button.getAttribute('aria-label'), button.getAttribute('title')]
-				.filter(Boolean).join(' ').toLowerCase()
-			return text.includes('end meeting for everyone') ||
-				text.includes('für alle beenden') ||
-				text.includes('meeting für alle') ||
-				text.includes('besprechung für alle') ||
-				text.includes('anruf für alle')
-		})
-	}
-
 	const findControls = () => document.getElementById('pore-talk-recording-controls')
 
 	const refreshUi = () => {
-		const existing = findControls()
-
-		const root = existing || createControls()
+		const root = findControls() || createControls()
 		const recording = recorder.isRecording()
 		const canStart = !!currentTrack && currentTrack.readyState === 'live' && !recording
 
@@ -136,9 +124,6 @@
 
 	window.addEventListener('pore:recording-finalized', event => offerArtifact(event.detail))
 	window.addEventListener('pore:recording-error', event => setStatus(`Fehler: ${event.detail?.error?.message || event.detail?.error || 'unbekannt'}`))
-
-	const observer = new MutationObserver(() => refreshUi())
-	observer.observe(document.documentElement, { childList: true, subtree: true })
 
 	const tryAttach = () => {
 		if (connector.attachToTalk()) {
