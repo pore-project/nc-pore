@@ -5,9 +5,8 @@
  * provide a MediaStreamTrack; this controller owns the browser-side recording
  * lifecycle and emits a finalized artifact event.
  *
- * ADR-073i / ADR-074i: the Talk connector remains responsible for discovering
- * the current Talk track. The recording stop boundary is owned here by the
- * explicit PoRE recording-stop action, not by Talk room termination.
+ * The recording stop boundary is owned by the explicit PoRE recording-stop
+ * action, not by Talk room termination.
  */
 
 (() => {
@@ -36,7 +35,7 @@
 			if (this.isRecording()) {
 				throw new Error('PoRE recording is already active')
 			}
-			if (!(track instanceof MediaStreamTrack) || track.kind !== 'audio') {
+			if (!track || track.kind !== 'audio' || typeof track.clone !== 'function') {
 				throw new Error('PoRE requires a live audio MediaStreamTrack')
 			}
 			if (track.readyState !== 'live') {
@@ -54,33 +53,25 @@
 			this.sequence += 1
 
 			const options = mimeType ? { mimeType } : undefined
-			this.mediaRecorder = new MediaRecorder(this.stream, options)
-			this.mediaRecorder.addEventListener('dataavailable', event => {
-				if (event.data && event.data.size > 0) {
-					this.chunks.push(event.data)
-					window.dispatchEvent(new CustomEvent('pore:recording-chunk', {
-						detail: { sequence: this.sequence, size: event.data.size },
-					}))
-				}
-			})
-			this.mediaRecorder.addEventListener('error', event => {
-				this.state = 'error'
-				window.dispatchEvent(new CustomEvent('pore:recording-error', {
-					detail: { error: event.error || event },
+			try {
+				this.mediaRecorder = new MediaRecorder(this.stream, options)
+				this._bindRecorderEvents()
+				this.mediaRecorder.start(1000)
+				this.state = 'recording'
+				window.dispatchEvent(new CustomEvent('pore:recording-started', {
+					detail: {
+						sequence: this.sequence,
+						startedAt: this.startedAt,
+						mimeType: this.mediaRecorder.mimeType,
+						trackId: track.id,
+						trackLabel: track.label,
+					},
 				}))
-			})
-
-			this.mediaRecorder.start(1000)
-			this.state = 'recording'
-			window.dispatchEvent(new CustomEvent('pore:recording-started', {
-				detail: {
-					sequence: this.sequence,
-					startedAt: this.startedAt,
-					mimeType: this.mediaRecorder.mimeType,
-					trackId: track.id,
-					trackLabel: track.label,
-				},
-			}))
+			} catch (error) {
+				this.state = 'error'
+				this._cleanup()
+				throw error
+			}
 		}
 
 		stop(reason = 'host') {
@@ -93,7 +84,7 @@
 
 			return new Promise((resolve, reject) => {
 				const recorder = this.mediaRecorder
-				recorder.addEventListener('stop', () => {
+				const finalize = () => {
 					try {
 						const blob = new Blob(this.chunks, { type: recorder.mimeType || 'audio/webm' })
 						const artifact = {
@@ -113,12 +104,34 @@
 						resolve(artifact)
 					} catch (error) {
 						this.state = 'error'
+						this._cleanup()
 						reject(error)
 					}
-				})
+				}
 
-				recorder.addEventListener('error', reject, { once: true })
+				const fail = event => {
+					this.state = 'error'
+					this._cleanup()
+					window.dispatchEvent(new CustomEvent('pore:recording-error', {
+						detail: { error: event?.error || event },
+					}))
+					reject(event?.error || event)
+				}
+
+				recorder.addEventListener('stop', finalize, { once: true })
+				recorder.addEventListener('error', fail, { once: true })
 				recorder.stop()
+			})
+		}
+
+		_bindRecorderEvents() {
+			this.mediaRecorder.addEventListener('dataavailable', event => {
+				if (event.data && event.data.size > 0) {
+					this.chunks.push(event.data)
+					window.dispatchEvent(new CustomEvent('pore:recording-chunk', {
+						detail: { sequence: this.sequence, size: event.data.size },
+					}))
+				}
 			})
 		}
 
