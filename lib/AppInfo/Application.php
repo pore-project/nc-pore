@@ -21,7 +21,8 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function boot(IBootContext $context): void {
-		// The Talk connector must be defined before the capture bootstrap runs.
+		// Keep the generic recording boundary separate from the Talk-specific connector.
+		Util::addInitScript(self::APP_ID, 'pore-recording-controller');
 		Util::addInitScript(self::APP_ID, 'pore-talk-audio-connector');
 		Util::addInitScript(self::APP_ID, 'init');
 	}
