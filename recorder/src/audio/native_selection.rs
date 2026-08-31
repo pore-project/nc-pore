@@ -145,9 +145,11 @@ pub fn select_best_native_capture(
             (
                 channel_penalty(selection.channels(), requested.channels()),
                 format_penalty(selection.sample_format(), requested.sample_format()),
-                u64::from(selection
-                    .sample_rate_hz()
-                    .abs_diff(requested.sample_rate_hz())),
+                u64::from(
+                    selection
+                        .sample_rate_hz()
+                        .abs_diff(requested.sample_rate_hz()),
+                ),
                 lower_rate_penalty(selection.sample_rate_hz(), requested.sample_rate_hz()),
                 std::cmp::Reverse(selection.sample_format().quality_rank()),
                 std::cmp::Reverse(selection.channels()),
