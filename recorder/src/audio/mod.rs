@@ -16,6 +16,7 @@
 
 mod configuration;
 mod cpal;
+mod native_selection;
 mod result;
 mod signet;
 
@@ -23,6 +24,10 @@ pub use configuration::{RecordingChunkDuration, RecordingConfiguration, SampleFo
 pub use cpal::inspect_default_input_device;
 pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
+pub use native_selection::{
+    select_best_native_capture, NativeAudioCapability, NativeCaptureConfiguration,
+    NativeSampleFormat,
+};
 pub use result::{CaptureChunk, CaptureTrack};
 pub use result::{CaptureResult, CaptureStatus};
 pub use signet::{SignetEvent, SyncSignet, SyncSignetKind};
