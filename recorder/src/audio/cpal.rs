@@ -76,9 +76,7 @@ impl CpalInputConfiguration {
     }
 }
 
-fn native_capabilities(
-    configurations: &[CpalInputConfiguration],
-) -> Vec<NativeAudioCapability> {
+fn native_capabilities(configurations: &[CpalInputConfiguration]) -> Vec<NativeAudioCapability> {
     configurations
         .iter()
         .filter_map(CpalInputConfiguration::native_capability)
@@ -200,12 +198,7 @@ impl CaptureChunkBuffer {
     }
 }
 
-fn render_signet(
-    signet: SyncSignet,
-    rate: u32,
-    channels: u16,
-    format: SampleFormat,
-) -> Vec<u8> {
+fn render_signet(signet: SyncSignet, rate: u32, channels: u16, format: SampleFormat) -> Vec<u8> {
     let bps = match format {
         SampleFormat::Pcm16 => 2,
         SampleFormat::Pcm24 => 3,
@@ -293,7 +286,9 @@ fn mix_signet_into_chunk(
             SampleFormat::Pcm16 => {
                 let a = i16::from_ne_bytes(payload[po..po + 2].try_into().unwrap()) as i32;
                 let b = i16::from_ne_bytes(signet_payload[so..so + 2].try_into().unwrap()) as i32;
-                let value = a.saturating_add(b).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
+                let value =
+                    a.saturating_add(b)
+                        .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
                 payload[po..po + 2].copy_from_slice(&value.to_ne_bytes());
             }
         }
@@ -337,7 +332,9 @@ impl CpalCaptureProvider {
             .ok_or_else(|| "Kein Standard-Eingabegerät gefunden.".to_string())?;
         device
             .supported_input_configs()
-            .map_err(|e| format!("Unterstützte Eingabekonfigurationen konnten nicht gelesen werden: {e}"))
+            .map_err(|e| {
+                format!("Unterstützte Eingabekonfigurationen konnten nicht gelesen werden: {e}")
+            })
             .map(|configs| {
                 configs
                     .map(|c| CpalInputConfiguration::from_supported_config(&c))
@@ -345,10 +342,7 @@ impl CpalCaptureProvider {
             })
     }
 
-    pub fn emit_sync_signet(
-        &mut self,
-        signet: &SyncSignet,
-    ) -> Result<(), SyncSignetEmissionError> {
+    pub fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
         self.chunk_buffer
             .lock()
             .unwrap()
@@ -423,10 +417,7 @@ impl CaptureProvider for CpalCaptureProvider {
         Ok(())
     }
 
-    fn emit_sync_signet(
-        &mut self,
-        signet: &SyncSignet,
-    ) -> Result<(), SyncSignetEmissionError> {
+    fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
         self.emit_sync_signet(signet)
     }
 
