@@ -34,21 +34,37 @@
 	const refreshUi = () => {
 		const root = findControls() || createControls()
 		const recording = recorder.isRecording()
-		const canStart = !!currentTrack && currentTrack.readyState === 'live' && !recording
+		const liveTrack = !!currentTrack && currentTrack.readyState === 'live'
+		const canStart = liveTrack && !recording
 
+		root.dataset.recording = recording ? 'true' : 'false'
 		root.startButton.disabled = !canStart
 		root.startButton.hidden = recording
 		root.stopButton.hidden = !recording
-		root.status.textContent = recording ? 'Aufnahme läuft' : 'Keine Aufnahme'
+		root.status.textContent = recording ? 'Lokale Aufnahme läuft' : 'Keine lokale Aufnahme'
+		root.source.textContent = liveTrack
+			? `Talk-Audio: ${currentTrack.label || currentTrack.id || 'verbunden'}`
+			: 'Talk-Audio: nicht verbunden'
 	}
 
 	const createControls = () => {
 		const root = document.createElement('div')
 		root.id = 'pore-talk-recording-controls'
-		root.style.cssText = 'position:fixed;right:24px;bottom:100px;z-index:100000;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-main-background,#fff);border:1px solid var(--color-border,#bbb);border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.18);'
+		root.className = 'pore-talk-recording-controls'
+		root.setAttribute('aria-label', 'NC-PoRe Aufnahme')
+
+		const status = document.createElement('span')
+		status.className = 'pore-talk-recording-controls__status'
+		status.setAttribute('role', 'status')
+		status.textContent = 'Keine lokale Aufnahme'
+
+		const source = document.createElement('span')
+		source.className = 'pore-talk-recording-controls__source'
+		source.textContent = 'Talk-Audio: wird gesucht'
 
 		const startButton = document.createElement('button')
 		startButton.type = 'button'
+		startButton.className = 'pore-talk-recording-controls__button pore-talk-recording-controls__button--start primary'
 		startButton.textContent = 'Aufnahme starten'
 		startButton.addEventListener('click', () => {
 			if (!currentTrack) {
@@ -65,20 +81,18 @@
 
 		const stopButton = document.createElement('button')
 		stopButton.type = 'button'
+		stopButton.className = 'pore-talk-recording-controls__button pore-talk-recording-controls__button--stop'
 		stopButton.textContent = 'Aufnahme beenden'
 		stopButton.addEventListener('click', () => {
 			recorder.stop('host').then(() => refreshUi()).catch(error => setStatus(`Fehler: ${error?.message || error}`))
 		})
 
-		const status = document.createElement('span')
-		status.setAttribute('role', 'status')
-		status.textContent = 'Keine Aufnahme'
-
-		root.append(startButton, stopButton, status)
+		root.append(status, source, startButton, stopButton)
 		document.body.appendChild(root)
 		root.startButton = startButton
 		root.stopButton = stopButton
 		root.status = status
+		root.source = source
 		return root
 	}
 
@@ -95,7 +109,7 @@
 		link.href = url
 		link.download = `pore-talk-${artifact.sequence}.webm`
 		link.textContent = `Aufnahme gespeichert (${Math.round(artifact.size / 1024)} kB)`
-		link.style.cssText = 'position:fixed;right:24px;bottom:154px;z-index:100001;padding:8px 10px;background:var(--color-primary-element,#0082c9);color:var(--color-primary-element-text,#fff);border-radius:6px;text-decoration:none;'
+		link.className = 'pore-talk-recording-result'
 		link.addEventListener('click', () => window.setTimeout(() => URL.revokeObjectURL(url), 1000), { once: true })
 		document.body.appendChild(link)
 		window.setTimeout(() => link.remove(), 30000)
