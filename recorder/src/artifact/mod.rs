@@ -325,6 +325,7 @@ impl RecordingArtifact {
                     append_u32(&mut bytes, configuration.sample_rate_hz());
                     append_u16(&mut bytes, configuration.channels());
                     bytes.push(match configuration.sample_format() {
+                        SampleFormat::Pcm16 => 0,
                         SampleFormat::Pcm24 => 1,
                         SampleFormat::F32 => 2,
                     });
