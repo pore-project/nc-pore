@@ -1,0 +1,94 @@
+.pore-talk-recording-controls {
+	position: fixed;
+	right: 24px;
+	bottom: 100px;
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	background: var(--color-main-background, #fff);
+	border: 1px solid var(--color-border, #bbb);
+	border-radius: var(--border-radius-large, 10px);
+	box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+	font-size: 13px;
+}
+
+.pore-talk-recording-controls__status {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 150px;
+	font-weight: 600;
+}
+
+.pore-talk-recording-controls__status::before {
+	content: '';
+	width: 8px;
+	height: 8px;
+	flex: 0 0 8px;
+	border-radius: 50%;
+	background: var(--color-text-maxcontrast, #999);
+}
+
+.pore-talk-recording-controls[data-recording='true'] .pore-talk-recording-controls__status::before {
+	background: var(--color-error, #d00);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error, #d00) 15%, transparent);
+}
+
+.pore-talk-recording-controls__source {
+	max-width: 180px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-maxcontrast, #666);
+}
+
+.pore-talk-recording-controls__button {
+	min-height: 36px;
+}
+
+.pore-talk-recording-controls__button--start {
+	font-weight: 600;
+}
+
+.pore-talk-recording-controls__button--stop {
+	font-weight: 600;
+}
+
+.pore-talk-recording-result {
+	position: fixed;
+	right: 24px;
+	bottom: 154px;
+	z-index: 100001;
+	max-width: 320px;
+	padding: 10px 12px;
+	background: var(--color-main-background, #fff);
+	border: 1px solid var(--color-border, #bbb);
+	border-radius: var(--border-radius-large, 10px);
+	box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+}
+
+.pore-talk-recording-result a {
+	color: var(--color-primary-element, #0082c9);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.pore-talk-recording-result a:hover {
+	text-decoration: underline;
+}
+
+@media (max-width: 700px) {
+	.pore-talk-recording-controls {
+		right: 12px;
+		left: 12px;
+		bottom: 76px;
+		flex-wrap: wrap;
+	}
+
+	.pore-talk-recording-controls__source {
+		max-width: 100%;
+		flex: 1 1 100%;
+	}
+}
