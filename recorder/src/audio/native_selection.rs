@@ -171,11 +171,13 @@ fn channel_penalty(actual: u16, preferred: u16) -> u8 {
 
 fn format_penalty(actual: NativeSampleFormat, preferred: SampleFormat) -> u8 {
     match (actual, preferred) {
-        (NativeSampleFormat::Pcm24, SampleFormat::Pcm24)
-        | (NativeSampleFormat::F32, SampleFormat::F32)
-        | (NativeSampleFormat::Pcm16, SampleFormat::Pcm16) => 0,
+        (NativeSampleFormat::Pcm16, SampleFormat::Pcm16)
+        | (NativeSampleFormat::Pcm24, SampleFormat::Pcm24)
+        | (NativeSampleFormat::F32, SampleFormat::F32) => 0,
         (NativeSampleFormat::F32, SampleFormat::Pcm24)
-        | (NativeSampleFormat::Pcm24, SampleFormat::F32) => 1,
+        | (NativeSampleFormat::Pcm24, SampleFormat::F32)
+        | (NativeSampleFormat::Pcm24, SampleFormat::Pcm16)
+        | (NativeSampleFormat::F32, SampleFormat::Pcm16) => 1,
         (NativeSampleFormat::Pcm16, _) => 2,
     }
 }
