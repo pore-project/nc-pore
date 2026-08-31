@@ -6,9 +6,9 @@
 //! No resampling or bit-depth expansion is performed here.
 
 use crate::audio::{
-    select_best_native_capture, CaptureChunk, CaptureProvider, CaptureResult, CaptureStartError,
-    CaptureTrack, NativeAudioCapability, NativeSampleFormat, RecordingConfiguration, SampleFormat,
-    SyncSignet, SyncSignetEmissionError, SyncSignetKind,
+    CaptureChunk, CaptureProvider, CaptureResult, CaptureStartError, CaptureTrack,
+    NativeAudioCapability, NativeSampleFormat, RecordingConfiguration, SampleFormat, SyncSignet,
+    SyncSignetEmissionError, SyncSignetKind, select_best_native_capture,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
@@ -64,10 +64,7 @@ impl CpalInputConfiguration {
         ))
     }
 
-    pub fn stream_config_for_sample_rate(
-        &self,
-        sample_rate_hz: u32,
-    ) -> Option<cpal::StreamConfig> {
+    pub fn stream_config_for_sample_rate(&self, sample_rate_hz: u32) -> Option<cpal::StreamConfig> {
         let range = cpal::SupportedStreamConfigRange::new(
             self.channels,
             self.min_sample_rate_hz,
@@ -142,7 +139,12 @@ impl CaptureChunkBuffer {
     fn request_signet(&mut self, signet: SyncSignet) {
         self.pending_signets.push(PendingSignet {
             offset_bytes: self.captured_bytes,
-            payload: render_signet(signet, self.sample_rate_hz, self.channels, self.sample_format),
+            payload: render_signet(
+                signet,
+                self.sample_rate_hz,
+                self.channels,
+                self.sample_format,
+            ),
         });
     }
 
@@ -291,10 +293,7 @@ fn mix_signet_into_chunk(
             SampleFormat::Pcm16 => {
                 let a = i16::from_ne_bytes(payload[po..po + 2].try_into().unwrap()) as i32;
                 let b = i16::from_ne_bytes(signet_payload[so..so + 2].try_into().unwrap()) as i32;
-                let value = a
-                    .saturating_add(b)
-                    .clamp(i32::from(i16::MIN), i32::from(i16::MAX))
-                    as i16;
+                let value = a.saturating_add(b).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
                 payload[po..po + 2].copy_from_slice(&value.to_ne_bytes());
             }
         }
@@ -307,7 +306,12 @@ fn encode_i24_sample(value: i32) -> [u8; 3] {
 }
 
 fn decode_i24(bytes: &[u8]) -> i32 {
-    i32::from_ne_bytes([bytes[0], bytes[1], bytes[2], if bytes[2] & 0x80 != 0 { 0xff } else { 0 }])
+    i32::from_ne_bytes([
+        bytes[0],
+        bytes[1],
+        bytes[2],
+        if bytes[2] & 0x80 != 0 { 0xff } else { 0 },
+    ])
 }
 
 pub struct CpalCaptureProvider {
