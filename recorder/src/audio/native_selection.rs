@@ -6,7 +6,6 @@
 
 use super::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
 
-/// Sample representation exposed by a native capture backend.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeSampleFormat {
     Pcm16,
@@ -15,7 +14,6 @@ pub enum NativeSampleFormat {
 }
 
 impl NativeSampleFormat {
-    /// Higher means more native sample precision is available.
     pub const fn quality_rank(self) -> u8 {
         match self {
             Self::Pcm16 => 1,
@@ -32,14 +30,12 @@ impl NativeSampleFormat {
         }
     }
 
-    /// Returns whether the representation can cross the mandatory V1 FLAC
-    /// transport boundary without a lossy sample conversion.
+    /// Whether this representation can be transported losslessly as FLAC.
     pub const fn supports_lossless_flac_transport(self) -> bool {
         matches!(self, Self::Pcm16 | Self::Pcm24)
     }
 }
 
-/// One native capability reported by an audio backend.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeAudioCapability {
     channels: u16,
@@ -55,32 +51,15 @@ impl NativeAudioCapability {
         max_sample_rate_hz: u32,
         sample_format: NativeSampleFormat,
     ) -> Self {
-        Self {
-            channels,
-            min_sample_rate_hz,
-            max_sample_rate_hz,
-            sample_format,
-        }
+        Self { channels, min_sample_rate_hz, max_sample_rate_hz, sample_format }
     }
 
-    pub const fn channels(self) -> u16 {
-        self.channels
-    }
-
-    pub const fn min_sample_rate_hz(self) -> u32 {
-        self.min_sample_rate_hz
-    }
-
-    pub const fn max_sample_rate_hz(self) -> u32 {
-        self.max_sample_rate_hz
-    }
-
-    pub const fn sample_format(self) -> NativeSampleFormat {
-        self.sample_format
-    }
+    pub const fn channels(self) -> u16 { self.channels }
+    pub const fn min_sample_rate_hz(self) -> u32 { self.min_sample_rate_hz }
+    pub const fn max_sample_rate_hz(self) -> u32 { self.max_sample_rate_hz }
+    pub const fn sample_format(self) -> NativeSampleFormat { self.sample_format }
 }
 
-/// The concrete native configuration selected for a recording.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeCaptureConfiguration {
     capability: NativeAudioCapability,
@@ -94,45 +73,23 @@ impl NativeCaptureConfiguration {
         sample_rate_hz: u32,
         chunk_duration: RecordingChunkDuration,
     ) -> Self {
-        Self {
-            capability,
-            sample_rate_hz,
-            chunk_duration,
-        }
+        Self { capability, sample_rate_hz, chunk_duration }
     }
 
-    pub const fn capability(self) -> NativeAudioCapability {
-        self.capability
-    }
-
-    pub const fn sample_rate_hz(self) -> u32 {
-        self.sample_rate_hz
-    }
-
-    pub const fn channels(self) -> u16 {
-        self.capability.channels()
-    }
-
-    pub const fn sample_format(self) -> NativeSampleFormat {
-        self.capability.sample_format()
-    }
-
-    pub const fn recording_sample_format(self) -> SampleFormat {
-        self.sample_format().as_recording_format()
-    }
-
-    pub const fn chunk_duration(self) -> RecordingChunkDuration {
-        self.chunk_duration
-    }
+    pub const fn capability(self) -> NativeAudioCapability { self.capability }
+    pub const fn sample_rate_hz(self) -> u32 { self.sample_rate_hz }
+    pub const fn channels(self) -> u16 { self.capability.channels() }
+    pub const fn sample_format(self) -> NativeSampleFormat { self.capability.sample_format() }
+    pub const fn recording_sample_format(self) -> SampleFormat { self.sample_format().as_recording_format() }
+    pub const fn chunk_duration(self) -> RecordingChunkDuration { self.chunk_duration }
 }
 
 /// Select the best native capability for a preferred recording profile.
 ///
-/// V1 capture must remain losslessly transportable as FLAC. F32 capture is
-/// therefore excluded from this selection: FLAC cannot represent floating
-/// point samples losslessly, and converting F32 to integer PCM here would
-/// violate the capture/preservation boundary. A future transport contract
-/// may explicitly permit another representation.
+/// Capture selection is independent of transport encoding. Native F32 must
+/// remain selectable when that is what the device provides best; the FLAC
+/// transport boundary is enforced later by the transport encoder rather than
+/// by changing the captured representation.
 pub fn select_best_native_capture(
     requested: &RecordingConfiguration,
     capabilities: &[NativeAudioCapability],
@@ -140,11 +97,6 @@ pub fn select_best_native_capture(
     capabilities
         .iter()
         .copied()
-        .filter(|capability| {
-            capability
-                .sample_format()
-                .supports_lossless_flac_transport()
-        })
         .filter(|capability| capability.min_sample_rate_hz() <= capability.max_sample_rate_hz())
         .map(|capability| {
             NativeCaptureConfiguration::new(
@@ -157,11 +109,7 @@ pub fn select_best_native_capture(
             (
                 channel_penalty(selection.channels(), requested.channels()),
                 format_penalty(selection.sample_format(), requested.sample_format()),
-                u64::from(
-                    selection
-                        .sample_rate_hz()
-                        .abs_diff(requested.sample_rate_hz()),
-                ),
+                u64::from(selection.sample_rate_hz().abs_diff(requested.sample_rate_hz())),
                 lower_rate_penalty(selection.sample_rate_hz(), requested.sample_rate_hz()),
                 std::cmp::Reverse(selection.sample_format().quality_rank()),
                 std::cmp::Reverse(selection.channels()),
@@ -171,15 +119,10 @@ pub fn select_best_native_capture(
 }
 
 fn closest_native_rate(capability: NativeAudioCapability, preferred: u32) -> u32 {
-    preferred.clamp(
-        capability.min_sample_rate_hz(),
-        capability.max_sample_rate_hz(),
-    )
+    preferred.clamp(capability.min_sample_rate_hz(), capability.max_sample_rate_hz())
 }
 
-fn channel_penalty(actual: u16, preferred: u16) -> u8 {
-    u8::from(actual != preferred)
-}
+fn channel_penalty(actual: u16, preferred: u16) -> u8 { u8::from(actual != preferred) }
 
 fn format_penalty(actual: NativeSampleFormat, preferred: SampleFormat) -> u8 {
     match (actual, preferred) {
@@ -194,9 +137,7 @@ fn format_penalty(actual: NativeSampleFormat, preferred: SampleFormat) -> u8 {
     }
 }
 
-fn lower_rate_penalty(actual: u32, preferred: u32) -> u8 {
-    u8::from(actual < preferred)
-}
+fn lower_rate_penalty(actual: u32, preferred: u32) -> u8 { u8::from(actual < preferred) }
 
 #[cfg(test)]
 mod tests {
@@ -204,10 +145,7 @@ mod tests {
 
     fn requested(rate: u32, channels: u16, format: SampleFormat) -> RecordingConfiguration {
         RecordingConfiguration::with_chunk_duration(
-            rate,
-            channels,
-            format,
-            RecordingChunkDuration::OneMinute,
+            rate, channels, format, RecordingChunkDuration::OneMinute,
         )
     }
 
@@ -217,9 +155,9 @@ mod tests {
             NativeAudioCapability::new(2, 48_000, 48_000, NativeSampleFormat::Pcm24),
             NativeAudioCapability::new(1, 48_000, 48_000, NativeSampleFormat::Pcm24),
         ];
-        let selected =
-            select_best_native_capture(&requested(48_000, 1, SampleFormat::Pcm24), &capabilities)
-                .unwrap();
+        let selected = select_best_native_capture(
+            &requested(48_000, 1, SampleFormat::Pcm24), &capabilities,
+        ).unwrap();
         assert_eq!(selected.channels(), 1);
         assert_eq!(selected.sample_rate_hz(), 48_000);
         assert_eq!(selected.sample_format(), NativeSampleFormat::Pcm24);
@@ -228,58 +166,42 @@ mod tests {
     #[test]
     fn native_lower_rate_is_used_instead_of_resampling() {
         let capabilities = [NativeAudioCapability::new(
-            1,
-            44_100,
-            44_100,
-            NativeSampleFormat::Pcm24,
+            1, 44_100, 44_100, NativeSampleFormat::Pcm24,
         )];
-        let selected =
-            select_best_native_capture(&requested(48_000, 1, SampleFormat::Pcm24), &capabilities)
-                .unwrap();
+        let selected = select_best_native_capture(
+            &requested(48_000, 1, SampleFormat::Pcm24), &capabilities,
+        ).unwrap();
         assert_eq!(selected.sample_rate_hz(), 44_100);
     }
 
     #[test]
     fn native_16_bit_is_preserved_as_a_real_recording_format() {
         let capability = NativeAudioCapability::new(1, 48_000, 48_000, NativeSampleFormat::Pcm16);
-        assert_eq!(
-            capability.sample_format().as_recording_format(),
-            SampleFormat::Pcm16
-        );
-        assert!(
-            capability
-                .sample_format()
-                .supports_lossless_flac_transport()
-        );
+        assert_eq!(capability.sample_format().as_recording_format(), SampleFormat::Pcm16);
+        assert!(capability.sample_format().supports_lossless_flac_transport());
         assert_eq!(capability.sample_format().quality_rank(), 1);
     }
 
     #[test]
-    fn native_float_is_not_selected_for_mandatory_lossless_flac_transport() {
+    fn native_float_remains_selectable_at_the_capture_boundary() {
         let capabilities = [NativeAudioCapability::new(
-            1,
-            48_000,
-            48_000,
-            NativeSampleFormat::F32,
+            1, 48_000, 48_000, NativeSampleFormat::F32,
         )];
-        assert!(
-            select_best_native_capture(&requested(48_000, 1, SampleFormat::F32), &capabilities)
-                .is_none()
-        );
+        let selected = select_best_native_capture(
+            &requested(48_000, 1, SampleFormat::F32), &capabilities,
+        ).unwrap();
+        assert_eq!(selected.sample_format(), NativeSampleFormat::F32);
         assert!(!NativeSampleFormat::F32.supports_lossless_flac_transport());
     }
 
     #[test]
     fn native_stereo_is_retained_when_mono_is_unavailable() {
         let capabilities = [NativeAudioCapability::new(
-            2,
-            48_000,
-            48_000,
-            NativeSampleFormat::Pcm24,
+            2, 48_000, 48_000, NativeSampleFormat::Pcm24,
         )];
-        let selected =
-            select_best_native_capture(&requested(48_000, 1, SampleFormat::Pcm24), &capabilities)
-                .unwrap();
+        let selected = select_best_native_capture(
+            &requested(48_000, 1, SampleFormat::Pcm24), &capabilities,
+        ).unwrap();
         assert_eq!(selected.channels(), 2);
     }
 
@@ -289,9 +211,9 @@ mod tests {
             NativeAudioCapability::new(1, 48_000, 48_000, NativeSampleFormat::Pcm16),
             NativeAudioCapability::new(1, 48_000, 48_000, NativeSampleFormat::Pcm24),
         ];
-        let selected =
-            select_best_native_capture(&requested(48_000, 1, SampleFormat::Pcm24), &capabilities)
-                .unwrap();
+        let selected = select_best_native_capture(
+            &requested(48_000, 1, SampleFormat::Pcm24), &capabilities,
+        ).unwrap();
         assert_eq!(selected.sample_format(), NativeSampleFormat::Pcm24);
     }
 
@@ -301,9 +223,9 @@ mod tests {
             NativeAudioCapability::new(1, 44_000, 44_000, NativeSampleFormat::Pcm24),
             NativeAudioCapability::new(1, 52_000, 52_000, NativeSampleFormat::Pcm24),
         ];
-        let selected =
-            select_best_native_capture(&requested(48_000, 1, SampleFormat::Pcm24), &capabilities)
-                .unwrap();
+        let selected = select_best_native_capture(
+            &requested(48_000, 1, SampleFormat::Pcm24), &capabilities,
+        ).unwrap();
         assert_eq!(selected.sample_rate_hz(), 52_000);
     }
 }
