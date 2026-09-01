@@ -13,6 +13,7 @@
 	'use strict'
 
 	const PORE_TALK_AUDIO_TRACK_EVENT = 'pore:talk-audio-track'
+	const PORE_TALK_AUDIO_CAPTURE_ERROR_EVENT = 'pore:talk-audio-capture-error'
 
 	class TalkAudioCaptureConnector {
 		constructor({
@@ -46,25 +47,25 @@
 			this._detachFromTalk()
 
 			const sink = {
-			connectTrackSource: (inputTrackId, source, outputTrackId = 'default') => {
-				if (inputTrackId !== 'default') {
-					throw new Error('PoRE Talk audio connector requires the default audio input')
-				}
-				this._source = source
-				this._outputTrackId = outputTrackId
-				source.on('outputTrackSet', this._handleOutputTrackSet)
-				this._acceptTalkTrack(source.getOutputTrack(outputTrackId))
-			},
-			disconnectTrackSource: (inputTrackId, source, outputTrackId = 'default') => {
-				if (inputTrackId !== 'default' || this._source !== source || this._outputTrackId !== outputTrackId) {
-					return
-				}
-				source.off('outputTrackSet', this._handleOutputTrackSet)
-				this._source = null
-				this._outputTrackId = null
-				this._replaceCurrent(null)
-			},
-		}
+				connectTrackSource: (inputTrackId, source, outputTrackId = 'default') => {
+					if (inputTrackId !== 'default') {
+						throw new Error('PoRE Talk audio connector requires the default audio input')
+					}
+					this._source = source
+					this._outputTrackId = outputTrackId
+					source.on('outputTrackSet', this._handleOutputTrackSet)
+					this._acceptTalkTrack(source.getOutputTrack(outputTrackId))
+				},
+				disconnectTrackSource: (inputTrackId, source, outputTrackId = 'default') => {
+					if (inputTrackId !== 'default' || this._source !== source || this._outputTrackId !== outputTrackId) {
+						return
+					}
+					source.off('outputTrackSet', this._handleOutputTrackSet)
+					this._source = null
+					this._outputTrackId = null
+					this._replaceCurrent(null)
+				},
+			}
 			sink._handleOutputTrackSet = (trackSource, outputTrackId, track) => {
 				if (trackSource === this._source && outputTrackId === this._outputTrackId) {
 					this._acceptTalkTrack(track)
@@ -129,6 +130,9 @@
 				if (!captureTrack) {
 					stream.getTracks().forEach(track => track.stop())
 					this._replaceCurrent(null)
+					this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_CAPTURE_ERROR_EVENT, {
+						detail: { error: new Error('PoRE capture returned no audio track'), deviceId },
+					}))
 					return
 				}
 
@@ -136,10 +140,14 @@
 				this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_TRACK_EVENT, {
 					detail: { track: captureTrack, sourceTrack },
 				}))
-			}).catch(() => {
-				if (generation === this._captureGeneration) {
-					this._replaceCurrent(null)
+			}).catch(error => {
+				if (generation !== this._captureGeneration) {
+					return
 				}
+				this._replaceCurrent(null)
+				this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_CAPTURE_ERROR_EVENT, {
+					detail: { error, deviceId },
+				}))
 			})
 		}
 
@@ -172,4 +180,5 @@
 
 	window.PoRETalkAudioCaptureConnector = TalkAudioCaptureConnector
 	window.PoRETalkAudioTrackEvent = PORE_TALK_AUDIO_TRACK_EVENT
+	window.PoRETalkAudioCaptureErrorEvent = PORE_TALK_AUDIO_CAPTURE_ERROR_EVENT
 })()
