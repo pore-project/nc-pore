@@ -1,14 +1,18 @@
 # NC-PoRe browser integration
 
-The production Nextcloud Talk connector lives in `js/pore-talk-audio-connector.js`.
+The Nextcloud Talk integration is a device-selection observer. PoRE does **not**
+record Talk's communication track: that path is allowed to apply communication
+processing and encoding that are unsuitable as the PoRE recording source.
 
-The connector attaches to Talk's current audio `TrackEnabler` output, clones the
-current source track and exposes the clone through the `pore:talk-audio-track`
-event. Talk retains ownership of its original track and media lifecycle.
+The connector observes Talk's selected microphone only to identify the device.
+PoRE then opens its own `getUserMedia()` capture for that device with communication
+processing disabled where the browser exposes those constraints. The resulting
+track is owned by PoRE and is the recording source.
+
+When Talk changes its selected microphone, the connector opens a new independent
+PoRE capture for the new device and retires the previous PoRE capture. The Talk
+track itself is never stopped or recorded by PoRE.
 
 `pore-talk-capture-init.test.js` contains the browser-side connector boundary tests.
-The test suite deliberately exercises the TrackEnabler integration point rather
-than the older global `getUserMedia()` proof-of-concept hook.
-
 The generic browser recording lifecycle is implemented separately in
 `js/pore-recording-controller.js` and knows nothing about Talk.
