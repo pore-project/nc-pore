@@ -37,7 +37,7 @@
 }
 
 .pore-talk-recording-controls__source {
-	max-width: 180px;
+	max-width: 280px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -48,10 +48,7 @@
 	min-height: 36px;
 }
 
-.pore-talk-recording-controls__button--start {
-	font-weight: 600;
-}
-
+.pore-talk-recording-controls__button--start,
 .pore-talk-recording-controls__button--stop {
 	font-weight: 600;
 }
