@@ -1,5 +1,5 @@
 /*
- * NC-PoRE — Talk recording UI bootstrap.
+ * NC-PoRe — Talk recording UI bootstrap.
  *
  * The UI consumes the neutral track event from the Talk connector and delegates
  * recording lifecycle to the generic browser recording controller.
@@ -136,17 +136,23 @@
 			size: artifact.size,
 			type: artifact.format,
 			stopReason: artifact.stopReason,
+			sourceChanges: artifact.sourceChanges,
 		})
 	}
 
 	window.addEventListener(trackEventName, event => {
 		const nextTrack = event.detail?.track || null
-		const replaced = currentTrack && nextTrack && nextTrack !== currentTrack
+		const previousTrack = currentTrack
+		const replaced = previousTrack && nextTrack && nextTrack !== previousTrack
+
+		if (replaced && recorder.isRecording()) {
+			recorder.noteSourceChange(previousTrack, nextTrack)
+			setStatus('Mikrofon wurde gewechselt – Aufnahme wird abgeschlossen')
+		}
 
 		currentTrack = nextTrack
 
 		if (replaced && recorder.isRecording()) {
-			setStatus('Mikrofon wurde gewechselt – Aufnahme wird abgeschlossen')
 			recorder.stop('talk-track-replaced').catch(error => setStatus(`Fehler: ${error?.message || error}`))
 		}
 
