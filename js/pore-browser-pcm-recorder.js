@@ -2,7 +2,7 @@
 (() => {
 	'use strict'
 	class PoREBrowserPcmRecorder {
-		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = 'js/pore-browser-pcm-worklet.js' } = {}) {
+		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = 'pore-browser-pcm-worklet.js' } = {}) {
 			this.AudioContextClass = AudioContextClass; this.workletUrl = workletUrl; this.state = 'idle'; this.context = null; this.source = null; this.worklet = null; this.stream = null; this.parts = []; this.sampleRate = null; this.channels = 1; this.startedAt = null; this.stoppedAt = null; this.sequence = 0
 		}
 		getState() { return this.state }
