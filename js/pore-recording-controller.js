@@ -22,25 +22,27 @@
 			this.stoppedAt = null
 			this.sequence = 0
 			this.sourceChanges = []
+			this.initialSource = null
 		}
 
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
 
-		start(track) {
+		start(track, sourceMetadata = {}) {
 			if (this.isRecording()) throw new Error('PoRE recording is already active')
 			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
 			if (track.readyState !== 'live') throw new Error('PoRE cannot start from an ended audio track')
 			if (!window.MediaRecorder) throw new Error('MediaRecorder is not available in this browser')
 
 			const mimeType = this._selectMimeType()
-			// The Talk connector already owns the clone. Do not clone it again here.
+			// The Talk connector already owns the capture track. Do not clone it again here.
 			this.stream = new MediaStream([track])
 			this.chunks = []
 			this.sourceChanges = []
 			this.startedAt = new Date().toISOString()
 			this.stoppedAt = null
 			this.sequence += 1
+			this.initialSource = this._sourceMetadata(track, sourceMetadata)
 
 			try {
 				this.mediaRecorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined)
@@ -51,8 +53,7 @@
 					sequence: this.sequence,
 					startedAt: this.startedAt,
 					mimeType: this.mediaRecorder.mimeType,
-					trackId: track.id,
-					trackLabel: track.label,
+					source: this.initialSource,
 				} }))
 			} catch (error) {
 				this.state = 'error'
@@ -61,21 +62,15 @@
 			}
 		}
 
-		noteSourceChange(previousTrack, nextTrack, occurredAt = new Date().toISOString()) {
+		noteSourceChange(previousTrack, nextTrack, occurredAt = new Date().toISOString(), metadata = {}) {
 			if (!this.isRecording()) return null
 
 			const change = {
 				type: 'audio-source-change',
 				occurredAt,
 				elapsedMs: Math.max(0, new Date(occurredAt).getTime() - new Date(this.startedAt).getTime()),
-				from: {
-					trackId: previousTrack?.id || null,
-					trackLabel: previousTrack?.label || null,
-				},
-				to: {
-					trackId: nextTrack?.id || null,
-					trackLabel: nextTrack?.label || null,
-				},
+				from: this._sourceMetadata(previousTrack, metadata.from || {}),
+				to: this._sourceMetadata(nextTrack, metadata.to || {}),
 			}
 			this.sourceChanges.push(change)
 			window.dispatchEvent(new CustomEvent('pore:recording-source-change', { detail: {
@@ -97,8 +92,15 @@
 					try {
 						const blob = new Blob(this.chunks, { type: recorder.mimeType || 'audio/webm' })
 						const artifact = {
-							kind: 'audio', format: blob.type, size: blob.size, sequence: this.sequence,
-							startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, blob,
+							kind: 'audio',
+							format: blob.type,
+							size: blob.size,
+							sequence: this.sequence,
+							startedAt: this.startedAt,
+							stoppedAt: this.stoppedAt,
+							stopReason: reason,
+							blob,
+							source: this.initialSource,
 							sourceChanges: this.sourceChanges.slice(),
 						}
 						this._cleanup()
@@ -132,6 +134,18 @@
 			})
 		}
 
+		_sourceMetadata(track, metadata = {}) {
+			const settings = track?.getSettings?.() || {}
+			return {
+				trackId: track?.id || null,
+				trackLabel: track?.label || null,
+				deviceId: metadata.deviceId || settings.deviceId || null,
+				sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
+				sampleSize: Number.isFinite(settings.sampleSize) ? settings.sampleSize : null,
+				channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,
+			}
+		}
+
 		_selectMimeType() {
 			const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
 			return candidates.find(type => MediaRecorder.isTypeSupported(type)) || ''
@@ -143,6 +157,7 @@
 			this.mediaRecorder = null
 			this.chunks = []
 			this.sourceChanges = []
+			this.initialSource = null
 		}
 	}
 
