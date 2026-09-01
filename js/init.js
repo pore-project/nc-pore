@@ -7,7 +7,7 @@
  * "Aufnahme beenden" is the PoRE stop boundary. Ending the Talk room is not
  * wired to recording stop.
  *
- * The UI is event-driven: Talk track events and recording lifecycle events are
+ * The UI is event-driven: Talk source events and recording lifecycle events are
  * the only refresh boundaries. It deliberately does not observe the Talk DOM.
  */
 
@@ -17,6 +17,7 @@
 	const Connector = window.PoRETalkAudioCaptureConnector
 	const Recorder = window.PoREBrowserRecordingController
 	const trackEventName = window.PoRETalkAudioTrackEvent || 'pore:talk-audio-track'
+	const captureErrorEventName = window.PoRETalkAudioCaptureErrorEvent || 'pore:talk-audio-capture-error'
 
 	if (!Connector || !Recorder) {
 		return
@@ -31,11 +32,27 @@
 
 	const findControls = () => document.getElementById('pore-talk-recording-controls')
 
+	const formatCaptureSettings = track => {
+		const settings = track?.getSettings?.() || {}
+		const parts = []
+		if (Number.isFinite(settings.sampleRate)) {
+			parts.push(`${Math.round(settings.sampleRate / 1000)} kHz`)
+		}
+		if (Number.isFinite(settings.sampleSize)) {
+			parts.push(`${settings.sampleSize} bit`)
+		}
+		if (Number.isFinite(settings.channelCount)) {
+			parts.push(settings.channelCount === 1 ? 'Mono' : `${settings.channelCount} Kanäle`)
+		}
+		return parts.join(' · ')
+	}
+
 	const refreshUi = () => {
 		const root = findControls() || createControls()
 		const recording = recorder.isRecording()
 		const liveTrack = !!currentTrack && currentTrack.readyState === 'live'
 		const canStart = liveTrack && !recording
+		const settings = formatCaptureSettings(currentTrack)
 
 		root.dataset.recording = recording ? 'true' : 'false'
 		root.startButton.disabled = !canStart
@@ -43,8 +60,8 @@
 		root.stopButton.hidden = !recording
 		root.status.textContent = recording ? 'Lokale Aufnahme läuft' : 'Keine lokale Aufnahme'
 		root.source.textContent = liveTrack
-			? `Talk-Audio: ${currentTrack.label || currentTrack.id || 'verbunden'}`
-			: 'Talk-Audio: nicht verbunden'
+			? `Mikrofon: ${currentTrack.label || currentTrack.id || 'verbunden'}${settings ? ` · ${settings}` : ''}`
+			: 'Mikrofon: wird gesucht'
 	}
 
 	const createControls = () => {
@@ -60,7 +77,7 @@
 
 		const source = document.createElement('span')
 		source.className = 'pore-talk-recording-controls__source'
-		source.textContent = 'Talk-Audio: wird gesucht'
+		source.textContent = 'Mikrofon: wird gesucht'
 
 		const startButton = document.createElement('button')
 		startButton.type = 'button'
@@ -68,7 +85,7 @@
 		startButton.textContent = 'Aufnahme starten'
 		startButton.addEventListener('click', () => {
 			if (!currentTrack) {
-				setStatus('Kein aktiver Talk-Audio-Track verfügbar')
+				setStatus('Kein aktiver PoRE-Mikrofoneingang verfügbar')
 				return
 			}
 			try {
@@ -129,10 +146,18 @@
 		currentTrack = nextTrack
 
 		if (replaced && recorder.isRecording()) {
-			setStatus('Talk-Audioquelle wurde ersetzt – Aufnahme wird abgeschlossen')
+			setStatus('Mikrofon wurde gewechselt – Aufnahme wird abgeschlossen')
 			recorder.stop('talk-track-replaced').catch(error => setStatus(`Fehler: ${error?.message || error}`))
 		}
 
+		refreshUi()
+	})
+
+	window.addEventListener(captureErrorEventName, event => {
+		if (recorder.isRecording()) {
+			recorder.stop('talk-capture-error').catch(error => setStatus(`Fehler: ${error?.message || error}`))
+		}
+		setStatus(`Mikrofon konnte für PoRE nicht geöffnet werden: ${event.detail?.error?.message || 'unbekannter Fehler'}`)
 		refreshUi()
 	})
 
@@ -141,7 +166,7 @@
 
 	const tryAttach = () => {
 		if (connector.attachToTalk()) {
-			console.log('PoRE: Talk audio capture boundary attached')
+			console.log('PoRE: Talk microphone selection boundary attached')
 			refreshUi()
 			return
 		}
