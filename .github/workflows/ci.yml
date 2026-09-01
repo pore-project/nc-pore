@@ -36,15 +36,6 @@ jobs:
         with:
           components: rustfmt
 
-      - name: Format working tree for artifact extraction
-        run: cargo fmt
-
-      - name: Upload formatted CPAL source
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-cpal-source
-          path: recorder/src/audio/cpal.rs
-
       - name: Check formatting
         run: cargo fmt --check
 
