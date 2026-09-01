@@ -246,11 +246,7 @@ mod tests {
             capability.sample_format().as_recording_format(),
             SampleFormat::Pcm16
         );
-        assert!(
-            capability
-                .sample_format()
-                .supports_lossless_flac_transport()
-        );
+        assert!(capability.sample_format().supports_lossless_flac_transport());
         assert_eq!(capability.sample_format().quality_rank(), 1);
     }
 
