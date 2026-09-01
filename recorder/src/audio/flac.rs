@@ -82,12 +82,12 @@ pub fn encode_chunks(
 
     let config = flacenc::config::Encoder::default()
         .into_verified()
-        .map_err(|error| FlacEncodeError::Configuration(error.to_string()))?;
+        .map_err(|error| FlacEncodeError::Configuration(format!("{error:?}")))?;
     let source = flacenc::source::MemSource::from_samples(
         &samples,
-        configuration.channels(),
-        bits_per_sample,
-        configuration.sample_rate_hz(),
+        channels,
+        usize::from(bits_per_sample),
+        configuration.sample_rate_hz() as usize,
     );
     let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
         .map_err(|error| FlacEncodeError::Encoding(error.to_string()))?;
