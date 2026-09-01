@@ -21,6 +21,7 @@
 			this.startedAt = null
 			this.stoppedAt = null
 			this.sequence = 0
+			this.sourceChanges = []
 		}
 
 		getState() { return this.state }
@@ -36,6 +37,7 @@
 			// The Talk connector already owns the clone. Do not clone it again here.
 			this.stream = new MediaStream([track])
 			this.chunks = []
+			this.sourceChanges = []
 			this.startedAt = new Date().toISOString()
 			this.stoppedAt = null
 			this.sequence += 1
@@ -59,6 +61,30 @@
 			}
 		}
 
+		noteSourceChange(previousTrack, nextTrack, occurredAt = new Date().toISOString()) {
+			if (!this.isRecording()) return null
+
+			const change = {
+				type: 'audio-source-change',
+				occurredAt,
+				elapsedMs: Math.max(0, new Date(occurredAt).getTime() - new Date(this.startedAt).getTime()),
+				from: {
+					trackId: previousTrack?.id || null,
+					trackLabel: previousTrack?.label || null,
+				},
+				to: {
+					trackId: nextTrack?.id || null,
+					trackLabel: nextTrack?.label || null,
+				},
+			}
+			this.sourceChanges.push(change)
+			window.dispatchEvent(new CustomEvent('pore:recording-source-change', { detail: {
+				sequence: this.sequence,
+				change,
+			} }))
+			return change
+		}
+
 		stop(reason = 'host') {
 			if (!this.mediaRecorder || !this.isRecording()) return Promise.resolve(null)
 
@@ -73,6 +99,7 @@
 						const artifact = {
 							kind: 'audio', format: blob.type, size: blob.size, sequence: this.sequence,
 							startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, blob,
+							sourceChanges: this.sourceChanges.slice(),
 						}
 						this._cleanup()
 						this.state = 'idle'
@@ -115,6 +142,7 @@
 			this.stream = null
 			this.mediaRecorder = null
 			this.chunks = []
+			this.sourceChanges = []
 		}
 	}
 
