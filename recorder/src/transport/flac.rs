@@ -46,12 +46,12 @@ pub fn encode_chunks(
     chunks: &[CaptureChunk],
     configuration: RecordingConfiguration,
 ) -> Result<Vec<u8>, FlacEncodeError> {
-    let bits_per_sample = match configuration.sample_format() {
+    let bits_per_sample: usize = match configuration.sample_format() {
         SampleFormat::Pcm16 => 16,
         SampleFormat::Pcm24 => 24,
         SampleFormat::F32 => return Err(FlacEncodeError::UnsupportedSampleFormat),
     };
-    let bytes_per_sample = usize::from(bits_per_sample / 8);
+    let bytes_per_sample = bits_per_sample / 8;
     let channels = usize::from(configuration.channels());
     let frame_width = bytes_per_sample * channels;
     if frame_width == 0 {
@@ -86,7 +86,7 @@ pub fn encode_chunks(
     let source = flacenc::source::MemSource::from_samples(
         &samples,
         channels,
-        usize::from(bits_per_sample),
+        bits_per_sample,
         configuration.sample_rate_hz() as usize,
     );
     let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
