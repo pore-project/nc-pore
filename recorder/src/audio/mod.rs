@@ -16,6 +16,7 @@
 
 mod configuration;
 mod cpal;
+mod flac;
 mod native_selection;
 mod result;
 mod signet;
@@ -24,6 +25,7 @@ pub use configuration::{RecordingChunkDuration, RecordingConfiguration, SampleFo
 pub use cpal::inspect_default_input_device;
 pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
+pub use flac::{encode_chunks as encode_flac_transport, FlacEncodeError};
 pub use native_selection::{
     NativeAudioCapability, NativeCaptureConfiguration, NativeSampleFormat,
     select_best_native_capture,
