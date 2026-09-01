@@ -108,7 +108,9 @@ fn mix_signet_into_chunk(payload: &mut [u8], chunk_start: usize, chunk_end: usiz
     for absolute in (aligned_start..aligned_end).step_by(bps) { let po = absolute - chunk_start; let so = absolute - signet_offset; match format {
         SampleFormat::F32 => { let a = f32::from_ne_bytes(payload[po..po + 4].try_into().unwrap()); let b = f32::from_ne_bytes(signet_payload[so..so + 4].try_into().unwrap()); payload[po..po + 4].copy_from_slice(&(a + b).clamp(-1.0, 1.0).to_ne_bytes()); }
         SampleFormat::Pcm24 => { let a = decode_i24(&payload[po..po + 3]); let b = decode_i24(&signet_payload[so..so + 3]); payload[po..po + 3].copy_from_slice(&encode_i24_sample(a.saturating_add(b))); }
-        SampleFormat::Pcm16 => { let a = i16::from_ne_bytes(payload[po..po + 2].try_into().unwrap()) as i32; let b = i16::from_ne_bytes(signet_payload[so..so + 2].try_into().unwrap()) as i32; let value = a.saturating_add(b).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16; payload[po..po + 2].copy_from_slice(&value.to_ne_bytes()); }
+        SampleFormat::Pcm16 => { let a = i16::from_ne_bytes(payload[po..po + 2].try_into().unwrap()) as i32; let b = i16::from_ne_bytes(signet_payload[so..so + 2].try_into().unwrap()) as i32; let value =
+                a.saturating_add(b)
+                    .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16; payload[po..po + 2].copy_from_slice(&value.to_ne_bytes()); }
     }}
 }
 fn encode_i24_sample(value: i32) -> [u8; 3] { let bytes = value.clamp(-8_388_608, 8_388_607).to_ne_bytes(); [bytes[0], bytes[1], bytes[2]] }
