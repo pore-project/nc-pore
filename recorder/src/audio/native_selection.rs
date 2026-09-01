@@ -140,7 +140,11 @@ pub fn select_best_native_capture(
     capabilities
         .iter()
         .copied()
-        .filter(|capability| capability.sample_format().supports_lossless_flac_transport())
+        .filter(|capability| {
+            capability
+                .sample_format()
+                .supports_lossless_flac_transport()
+        })
         .filter(|capability| capability.min_sample_rate_hz() <= capability.max_sample_rate_hz())
         .map(|capability| {
             NativeCaptureConfiguration::new(
@@ -242,7 +246,11 @@ mod tests {
             capability.sample_format().as_recording_format(),
             SampleFormat::Pcm16
         );
-        assert!(capability.sample_format().supports_lossless_flac_transport());
+        assert!(
+            capability
+                .sample_format()
+                .supports_lossless_flac_transport()
+        );
         assert_eq!(capability.sample_format().quality_rank(), 1);
     }
 
