@@ -1,14 +1,14 @@
 /*
  * NC-PoRe — Talk recording UI bootstrap.
  *
- * The UI consumes the neutral track event from the Talk connector and delegates
+ * The UI consumes the neutral capture event from the Talk connector and delegates
  * recording lifecycle to the generic browser recording controller.
  *
  * "Aufnahme beenden" is the PoRE stop boundary. Ending the Talk room is not
  * wired to recording stop.
  *
- * The UI is event-driven: Talk source events and recording lifecycle events are
- * the only refresh boundaries. It deliberately does not observe the Talk DOM.
+ * The connector owns the independent PoRE capture. Talk is observed only for
+ * current microphone selection and replacement events.
  */
 
 (() => {
@@ -26,6 +26,7 @@
 	const connector = new Connector()
 	const recorder = new Recorder()
 	let currentTrack = null
+	let currentSourceMetadata = null
 
 	window.__poreTalkAudioConnector = connector
 	window.__poreRecordingController = recorder
@@ -89,7 +90,7 @@
 				return
 			}
 			try {
-				recorder.start(currentTrack)
+				recorder.start(currentTrack, currentSourceMetadata || {})
 				refreshUi()
 			} catch (error) {
 				setStatus(`Fehler: ${error?.message || error}`)
@@ -136,6 +137,7 @@
 			size: artifact.size,
 			type: artifact.format,
 			stopReason: artifact.stopReason,
+			source: artifact.source,
 			sourceChanges: artifact.sourceChanges,
 		})
 	}
@@ -144,13 +146,20 @@
 		const nextTrack = event.detail?.track || null
 		const previousTrack = currentTrack
 		const replaced = previousTrack && nextTrack && nextTrack !== previousTrack
+		const nextMetadata = {
+			deviceId: event.detail?.deviceId || nextTrack?.getSettings?.()?.deviceId || null,
+		}
 
 		if (replaced && recorder.isRecording()) {
-			recorder.noteSourceChange(previousTrack, nextTrack)
+			recorder.noteSourceChange(previousTrack, nextTrack, new Date().toISOString(), {
+				from: currentSourceMetadata || {},
+				to: nextMetadata,
+			})
 			setStatus('Mikrofon wurde gewechselt – Aufnahme wird abgeschlossen')
 		}
 
 		currentTrack = nextTrack
+		currentSourceMetadata = nextMetadata
 
 		if (replaced && recorder.isRecording()) {
 			recorder.stop('talk-track-replaced').catch(error => setStatus(`Fehler: ${error?.message || error}`))
