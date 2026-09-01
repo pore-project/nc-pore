@@ -24,7 +24,6 @@
 			if (inputTrackId !== 'default' || this._source) {
 				throw new Error('PoRE Talk audio sink can only be connected once to the default input')
 			}
-
 			this._source = trackSource
 			this._outputTrackId = outputTrackId
 			trackSource.on('outputTrackSet', this._handleOutputTrackSet)
@@ -33,10 +32,7 @@
 		}
 
 		disconnectTrackSource(inputTrackId, trackSource, outputTrackId = 'default') {
-			if (inputTrackId !== 'default' || this._source !== trackSource || this._outputTrackId !== outputTrackId) {
-				return
-			}
-
+			if (inputTrackId !== 'default' || this._source !== trackSource || this._outputTrackId !== outputTrackId) return
 			trackSource.off('outputTrackSet', this._handleOutputTrackSet)
 			trackSource.off('outputTrackEnabled', this._handleOutputTrackEnabled)
 			this._source = null
@@ -44,10 +40,8 @@
 			this._onTrack(null)
 		}
 
-		_handleOutputTrackSet = (outputTrackId, track) => {
-			if (outputTrackId === this._outputTrackId) {
-				this._onTrack(track)
-			}
+		_handleOutputTrackSet = (trackSource, outputTrackId, track) => {
+			if (trackSource === this._source && outputTrackId === this._outputTrackId) this._onTrack(track)
 		}
 
 		_handleOutputTrackEnabled = () => {}
@@ -62,48 +56,27 @@
 		}
 
 		attachToTalk() {
-			const talkWebRTC = window.OCA?.Talk?.SimpleWebRTC?.webrtc
-			const trackEnabler = talkWebRTC?._audioTrackEnabler
-
-			if (!trackEnabler || typeof trackEnabler.connectTrackSink !== 'function'
-				|| typeof trackEnabler.disconnectTrackSink !== 'function') {
-				return false
-			}
-
-			if (this._trackEnabler === trackEnabler) {
-				return true
-			}
-
+			const trackEnabler = window.OCA?.Talk?.SimpleWebRTC?.webrtc?._audioTrackEnabler
+			if (!trackEnabler || typeof trackEnabler.connectTrackSink !== 'function' || typeof trackEnabler.disconnectTrackSink !== 'function') return false
+			if (this._trackEnabler === trackEnabler) return true
 			this._detachFromTalk()
-
-			const sink = new TalkAudioTrackSink((track) => this._acceptTrack(track))
+			const sink = new TalkAudioTrackSink(track => this._acceptTrack(track))
 			trackEnabler.connectTrackSink('default', sink)
-
 			this._trackEnabler = trackEnabler
 			this._trackSink = sink
 			this._syncCurrentTrack(trackEnabler)
 			return true
 		}
 
-		detachFromTalk() {
-			this._detachFromTalk()
-		}
+		detachFromTalk() { this._detachFromTalk() }
 
 		_syncCurrentTrack(trackEnabler) {
 			const sync = () => {
-				if (this._trackEnabler !== trackEnabler) {
-					return
-				}
-
+				if (this._trackEnabler !== trackEnabler) return
 				const track = trackEnabler.getOutputTrack?.('default') || null
-				if (track) {
-					this._acceptTrack(track)
-					return
-				}
-
+				if (track) { this._acceptTrack(track); return }
 				window.setTimeout(sync, 100)
 			}
-
 			sync()
 		}
 
@@ -112,41 +85,19 @@
 				this._replaceCurrent(null)
 				return null
 			}
-
-			if (this._current?.sourceTrack === sourceTrack) {
-				return this._current.cloneTrack
-			}
-
+			if (this._current?.sourceTrack === sourceTrack) return this._current.cloneTrack
 			this._replaceCurrent(null)
-
 			const cloneTrack = sourceTrack.clone()
 			const current = { sourceTrack, cloneTrack, onEnded: null }
-
-			current.onEnded = () => {
-				if (this._current === current) {
-					this._replaceCurrent(null)
-				}
-			}
-
-			if (typeof sourceTrack.addEventListener === 'function') {
-				sourceTrack.addEventListener('ended', current.onEnded)
-			}
-
+			current.onEnded = () => { if (this._current === current) this._replaceCurrent(null) }
+			if (typeof sourceTrack.addEventListener === 'function') sourceTrack.addEventListener('ended', current.onEnded)
 			this._current = current
-			this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_TRACK_EVENT, {
-				detail: { track: cloneTrack, sourceTrack },
-			}))
-
+			this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_TRACK_EVENT, { detail: { track: cloneTrack, sourceTrack } }))
 			return cloneTrack
 		}
 
-		getCurrentSourceTrack() {
-			return this._current?.sourceTrack ?? null
-		}
-
-		getCurrentCloneTrack() {
-			return this._current?.cloneTrack ?? null
-		}
+		getCurrentSourceTrack() { return this._current?.sourceTrack ?? null }
+		getCurrentCloneTrack() { return this._current?.cloneTrack ?? null }
 
 		dispose() {
 			this._detachFromTalk()
@@ -154,9 +105,7 @@
 		}
 
 		_detachFromTalk() {
-			if (this._trackEnabler && this._trackSink) {
-				this._trackEnabler.disconnectTrackSink('default', this._trackSink)
-			}
+			if (this._trackEnabler && this._trackSink) this._trackEnabler.disconnectTrackSink('default', this._trackSink)
 			this._trackEnabler = null
 			this._trackSink = null
 		}
@@ -164,18 +113,9 @@
 		_replaceCurrent(next) {
 			const previous = this._current
 			this._current = next
-
-			if (!previous) {
-				return
-			}
-
-			if (previous.onEnded && typeof previous.sourceTrack.removeEventListener === 'function') {
-				previous.sourceTrack.removeEventListener('ended', previous.onEnded)
-			}
-
-			if (previous.cloneTrack && typeof previous.cloneTrack.stop === 'function') {
-				previous.cloneTrack.stop()
-			}
+			if (!previous) return
+			if (previous.onEnded && typeof previous.sourceTrack.removeEventListener === 'function') previous.sourceTrack.removeEventListener('ended', previous.onEnded)
+			if (previous.cloneTrack && typeof previous.cloneTrack.stop === 'function') previous.cloneTrack.stop()
 		}
 	}
 
