@@ -1,12 +1,10 @@
 /*
- * NC-PoRE — Nextcloud Talk audio connector
+ * NC-PoRE — Nextcloud Talk device-selection observer
  *
- * Talk is used only as the host-side device/lifecycle signal. PoRE does not
- * record Talk's communication track because that track may already have been
- * processed for communication. The connector observes Talk's selected source
- * track only long enough to identify the microphone and then opens an
- * independent browser capture from that device with communication processing
- * disabled where the browser exposes those controls.
+ * Talk is deliberately NOT the PoRE audio source. The TrackEnabler is observed
+ * only to learn which microphone Talk currently has selected. PoRE opens its
+ * own capture from that device before Talk's communication processing/encoding
+ * path. The resulting capture track is owned by PoRE.
  */
 
 (() => {
@@ -22,7 +20,6 @@
 		} = {}) {
 			this._dispatchEvent = dispatchEvent
 			this._getUserMedia = getUserMedia
-			this._talkWebRTC = null
 			this._trackEnabler = null
 			this._trackSink = null
 			this._source = null
@@ -49,12 +46,17 @@
 			const sink = {
 				connectTrackSource: (inputTrackId, source, outputTrackId = 'default') => {
 					if (inputTrackId !== 'default') {
-						throw new Error('PoRE Talk audio connector requires the default audio input')
+						throw new Error('PoRE Talk device observer requires the default audio input')
 					}
 					this._source = source
 					this._outputTrackId = outputTrackId
+					this._handleOutputTrackSet = (trackSource, selectedOutputTrackId, track) => {
+						if (trackSource === this._source && selectedOutputTrackId === this._outputTrackId) {
+							this._acceptTalkSelection(track)
+						}
+					}
 					source.on('outputTrackSet', this._handleOutputTrackSet)
-					this._acceptTalkTrack(source.getOutputTrack(outputTrackId))
+					this._acceptTalkSelection(source.getOutputTrack(outputTrackId))
 				},
 				disconnectTrackSource: (inputTrackId, source, outputTrackId = 'default') => {
 					if (inputTrackId !== 'default' || this._source !== source || this._outputTrackId !== outputTrackId) {
@@ -63,21 +65,14 @@
 					source.off('outputTrackSet', this._handleOutputTrackSet)
 					this._source = null
 					this._outputTrackId = null
+					this._handleOutputTrackSet = null
 					this._replaceCurrent(null)
 				},
 			}
-			sink._handleOutputTrackSet = (trackSource, outputTrackId, track) => {
-				if (trackSource === this._source && outputTrackId === this._outputTrackId) {
-					this._acceptTalkTrack(track)
-				}
-			}
 
-			this._handleOutputTrackSet = sink._handleOutputTrackSet
-			trackEnabler.connectTrackSink('default', sink)
-
-			this._talkWebRTC = talkWebRTC
-			this._trackEnabler = trackEnabler
 			this._trackSink = sink
+			this._trackEnabler = trackEnabler
+			trackEnabler.connectTrackSink('default', sink)
 			return true
 		}
 
@@ -99,10 +94,9 @@
 
 		dispose() {
 			this._detachFromTalk()
-			this._replaceCurrent(null)
 		}
 
-		_acceptTalkTrack(sourceTrack) {
+		_acceptTalkSelection(sourceTrack) {
 			const generation = ++this._captureGeneration
 
 			if (!sourceTrack || sourceTrack.kind !== 'audio') {
@@ -120,7 +114,7 @@
 				audio.deviceId = { exact: deviceId }
 			}
 
-			this._getUserMedia({ audio }).then((stream) => {
+			this._getUserMedia({ audio }).then(stream => {
 				if (generation !== this._captureGeneration) {
 					stream.getTracks().forEach(track => track.stop())
 					return
@@ -130,25 +124,25 @@
 				if (!captureTrack) {
 					stream.getTracks().forEach(track => track.stop())
 					this._replaceCurrent(null)
-					this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_CAPTURE_ERROR_EVENT, {
-						detail: { error: new Error('PoRE capture returned no audio track'), deviceId },
-					}))
+					this._dispatchCaptureError(new Error('PoRE capture returned no audio track'), deviceId)
 					return
 				}
 
-				this._replaceCurrent({ sourceTrack, captureTrack })
+				this._replaceCurrent({ sourceTrack, captureTrack, deviceId })
 				this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_TRACK_EVENT, {
-					detail: { track: captureTrack, sourceTrack },
+					detail: { track: captureTrack, sourceTrack, deviceId },
 				}))
 			}).catch(error => {
-				if (generation !== this._captureGeneration) {
-					return
-				}
+				if (generation !== this._captureGeneration) return
 				this._replaceCurrent(null)
-				this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_CAPTURE_ERROR_EVENT, {
-					detail: { error, deviceId },
-				}))
+				this._dispatchCaptureError(error, deviceId)
 			})
+		}
+
+		_dispatchCaptureError(error, deviceId) {
+			this._dispatchEvent(new CustomEvent(PORE_TALK_AUDIO_CAPTURE_ERROR_EVENT, {
+				detail: { error, deviceId },
+			}))
 		}
 
 		_detachFromTalk() {
@@ -156,23 +150,18 @@
 			if (this._trackEnabler && this._trackSink) {
 				this._trackEnabler.disconnectTrackSink('default', this._trackSink)
 			}
-			this._talkWebRTC = null
 			this._trackEnabler = null
 			this._trackSink = null
 			this._source = null
 			this._outputTrackId = null
+			this._handleOutputTrackSet = null
 			this._replaceCurrent(null)
 		}
 
 		_replaceCurrent(next) {
 			const previous = this._current
 			this._current = next
-
-			if (!previous?.captureTrack) {
-				return
-			}
-
-			if (previous.captureTrack.readyState !== 'ended' && typeof previous.captureTrack.stop === 'function') {
+			if (previous?.captureTrack?.readyState !== 'ended' && typeof previous?.captureTrack?.stop === 'function') {
 				previous.captureTrack.stop()
 			}
 		}
