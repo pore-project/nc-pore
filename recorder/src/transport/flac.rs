@@ -21,9 +21,15 @@ pub enum FlacEncodeError {
 impl std::fmt::Display for FlacEncodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnsupportedSampleFormat => write!(f, "FLAC transport does not support this sample format"),
-            Self::InvalidPcmPayload => write!(f, "PCM payload does not contain complete samples"),
-            Self::Configuration(error) => write!(f, "invalid FLAC encoder configuration: {error}"),
+            Self::UnsupportedSampleFormat => {
+                write!(f, "FLAC transport does not support this sample format")
+            }
+            Self::InvalidPcmPayload => {
+                write!(f, "PCM payload does not contain complete samples")
+            }
+            Self::Configuration(error) => {
+                write!(f, "invalid FLAC encoder configuration: {error}")
+            }
             Self::Encoding(error) => write!(f, "FLAC encoding failed: {error}"),
         }
     }
@@ -120,13 +126,19 @@ mod tests {
     fn rejects_partial_samples() {
         let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
         let chunks = [CaptureChunk::with_payload(1, vec![0])];
-        assert_eq!(encode_chunks(&chunks, configuration), Err(FlacEncodeError::InvalidPcmPayload));
+        assert_eq!(
+            encode_chunks(&chunks, configuration),
+            Err(FlacEncodeError::InvalidPcmPayload)
+        );
     }
 
     #[test]
     fn rejects_float_transport() {
         let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::F32);
         let chunks = [CaptureChunk::with_payload(1, vec![0; 4])];
-        assert_eq!(encode_chunks(&chunks, configuration), Err(FlacEncodeError::UnsupportedSampleFormat));
+        assert_eq!(
+            encode_chunks(&chunks, configuration),
+            Err(FlacEncodeError::UnsupportedSampleFormat)
+        );
     }
 }
