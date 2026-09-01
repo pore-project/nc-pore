@@ -31,6 +31,12 @@ impl NativeSampleFormat {
             Self::F32 => SampleFormat::F32,
         }
     }
+
+    /// Returns whether the representation can cross the mandatory V1 FLAC
+    /// transport boundary without a lossy sample conversion.
+    pub const fn supports_lossless_flac_transport(self) -> bool {
+        matches!(self, Self::Pcm16 | Self::Pcm24)
+    }
 }
 
 /// One native capability reported by an audio backend.
@@ -122,10 +128,11 @@ impl NativeCaptureConfiguration {
 
 /// Select the best native capability for a preferred recording profile.
 ///
-/// Selection never performs conversion, resampling, channel mixing, or
-/// bit-depth expansion. If the preferred profile is unavailable, the
-/// closest native capability is selected and its actual parameters remain
-/// explicit in the returned configuration.
+/// V1 capture must remain losslessly transportable as FLAC. F32 capture is
+/// therefore excluded from this selection: FLAC cannot represent floating
+/// point samples losslessly, and converting F32 to integer PCM here would
+/// violate the capture/preservation boundary. A future transport contract
+/// may explicitly permit another representation.
 pub fn select_best_native_capture(
     requested: &RecordingConfiguration,
     capabilities: &[NativeAudioCapability],
@@ -133,6 +140,7 @@ pub fn select_best_native_capture(
     capabilities
         .iter()
         .copied()
+        .filter(|capability| capability.sample_format().supports_lossless_flac_transport())
         .filter(|capability| capability.min_sample_rate_hz() <= capability.max_sample_rate_hz())
         .map(|capability| {
             NativeCaptureConfiguration::new(
@@ -234,7 +242,23 @@ mod tests {
             capability.sample_format().as_recording_format(),
             SampleFormat::Pcm16
         );
+        assert!(capability.sample_format().supports_lossless_flac_transport());
         assert_eq!(capability.sample_format().quality_rank(), 1);
+    }
+
+    #[test]
+    fn native_float_is_not_selected_for_mandatory_lossless_flac_transport() {
+        let capabilities = [NativeAudioCapability::new(
+            1,
+            48_000,
+            48_000,
+            NativeSampleFormat::F32,
+        )];
+        assert!(
+            select_best_native_capture(&requested(48_000, 1, SampleFormat::F32), &capabilities)
+                .is_none()
+        );
+        assert!(!NativeSampleFormat::F32.supports_lossless_flac_transport());
     }
 
     #[test]
