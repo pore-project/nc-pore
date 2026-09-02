@@ -82,10 +82,12 @@ impl CompletionJob {
         self.artifact_id = Some(artifact_id.into());
     }
 
-    /// Advances the job to upload preparation and counts one processing attempt.
+    /// Starts or resumes upload preparation and counts one processing attempt.
+    ///
+    /// Any non-terminal state can safely be re-entered after a restart. The
+    /// actual upload remains outside this local state machine.
     pub fn begin_upload_preparation(&mut self) -> Result<(), CompletionJobError> {
-        if !matches!(self.state, CompletionJobState::Pending | CompletionJobState::FailedRetryable)
-        {
+        if !self.state.is_resumable() {
             return Err(CompletionJobError::InvalidTransition);
         }
         self.attempts = self.attempts.saturating_add(1);
@@ -255,12 +257,16 @@ mod tests {
     #[test]
     fn interrupted_jobs_are_resumable() {
         let store = temp_store("resume");
-        let mut pending = CompletionJob::new("job-049-a", "capture-049-a");
-        pending.begin_upload_preparation().unwrap();
-        store.save(&pending).unwrap();
+        let mut preparing = CompletionJob::new("job-049-a", "capture-049-a");
+        preparing.begin_upload_preparation().unwrap();
+        store.save(&preparing).unwrap();
 
-        let uploaded = CompletionJob::new("job-049-b", "capture-049-b");
-        store.save(&uploaded).unwrap();
+        let mut uploading = CompletionJob::new("job-049-b", "capture-049-b");
+        uploading.begin_upload_preparation().unwrap();
+        uploading.mark_ready_for_upload().unwrap();
+        uploading.mark_uploading().unwrap();
+        store.save(&uploading).unwrap();
+
         let mut completed = CompletionJob::new("job-049-c", "capture-049-c");
         completed.begin_upload_preparation().unwrap();
         completed.mark_ready_for_upload().unwrap();
@@ -276,10 +282,27 @@ mod tests {
         let _ = fs::remove_dir_all(store.root);
     }
 
-    // TEST-50: Uploading work can be retried without losing its identity.
+    // TEST-50: An interrupted upload can be resumed without changing identity.
+    #[test]
+    fn interrupted_upload_can_resume() {
+        let mut job = CompletionJob::new("job-050", "capture-050");
+        job.begin_upload_preparation().unwrap();
+        job.mark_ready_for_upload().unwrap();
+        job.mark_uploading().unwrap();
+        let original_id = job.id().to_owned();
+        let original_capture_id = job.capture_id().to_owned();
+        job.begin_upload_preparation().unwrap();
+
+        assert_eq!(job.state(), CompletionJobState::PreparingUpload);
+        assert_eq!(job.id(), original_id);
+        assert_eq!(job.capture_id(), original_capture_id);
+        assert_eq!(job.attempts(), 2);
+    }
+
+    // TEST-51: A retryable failure remains discoverable for a later retry.
     #[test]
     fn retryable_failure_returns_to_resumable_state() {
-        let mut job = CompletionJob::new("job-050", "capture-050");
+        let mut job = CompletionJob::new("job-051", "capture-051");
         job.begin_upload_preparation().unwrap();
         job.mark_ready_for_upload().unwrap();
         job.mark_uploading().unwrap();
