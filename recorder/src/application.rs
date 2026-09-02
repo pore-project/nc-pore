@@ -196,7 +196,7 @@ mod tests {
         application.start(&configuration).unwrap();
         application.ready().unwrap();
         application
-            .emit_sync_signet(&configuration.signets().opening())
+            .emit_sync_signet(&configuration.signets().opening().expect("opening signet"))
             .unwrap();
 
         let artifact = application
@@ -256,10 +256,12 @@ mod tests {
         application.start(&configuration).unwrap();
         application.ready().unwrap();
         application
-            .emit_sync_signet(&configuration.signets().opening())
+            .emit_sync_signet(&configuration.signets().opening().expect("opening signet"))
             .unwrap();
 
-        assert!(!application.emit_optional_sync_signet(&configuration.signets().closing()));
+        assert!(!application.emit_optional_sync_signet(
+            configuration.signets().closing().as_ref().expect("closing signet")
+        ));
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
                 "production-fallback",
