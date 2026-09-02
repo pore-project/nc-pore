@@ -104,6 +104,17 @@ where
         self.session.ready()
     }
 
+    /// Emits a provider-neutral signet description into the active capture.
+    ///
+    /// The supplied signet is owned by recording configuration; this workflow
+    /// method only forwards it to the technical capture boundary.
+    pub fn emit_sync_signet(
+        &mut self,
+        signet: &SyncSignet,
+    ) -> Result<(), SyncSignetEmissionError> {
+        self.capture.emit_sync_signet(signet)
+    }
+
     /// Stops local capture without coordinating the Closing Sync Signet.
     /// Kept for lower-level callers; the ADR-068 path should use
     /// `stop_with_coordinator`.
@@ -251,7 +262,7 @@ mod tests {
         RecordingParticipantId::new(id)
     }
 
-    // TEST-01: Workflow can be created with session and capture.
+    // TEST-01
     #[test]
     fn workflow_can_be_created_with_session_and_capture() {
         let workflow =
@@ -259,7 +270,7 @@ mod tests {
         assert_eq!(workflow.session().status(), &SessionStatus::Prepared);
     }
 
-    // TEST-02: Opening signet is emitted only at the READY barrier.
+    // TEST-02
     #[test]
     fn coordinated_ready_emits_opening_only_at_barrier() {
         let first = participant("p1");
@@ -284,7 +295,7 @@ mod tests {
         assert_eq!(&*events.borrow(), &["opening"]);
     }
 
-    // TEST-03: A non-recording participant cannot complete local READY.
+    // TEST-03
     #[test]
     fn non_recording_participant_cannot_complete_local_ready() {
         let recording = participant("p1");
@@ -303,7 +314,7 @@ mod tests {
         assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
     }
 
-    // TEST-04: Opening signet emission failure does not enter Recording.
+    // TEST-04
     #[test]
     fn opening_signet_emission_failure_does_not_enter_recording_state() {
         let p = participant("p1");
@@ -320,7 +331,7 @@ mod tests {
         assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
     }
 
-    // TEST-05: Closing signet is emitted before technical stop.
+    // TEST-05
     #[test]
     fn coordinated_stop_emits_closing_before_technical_stop() {
         let p = participant("p1");
@@ -340,7 +351,7 @@ mod tests {
         assert_eq!(workflow.session().status(), &SessionStatus::Completed);
     }
 
-    // TEST-06: Stop is rejected before consuming the closing signet.
+    // TEST-06
     #[test]
     fn stop_rejects_non_recording_state_before_consuming_closing_signet() {
         let p = participant("p1");
@@ -354,7 +365,7 @@ mod tests {
         assert!(stop.closing_sync_signet().is_some());
     }
 
-    // TEST-07: Failed capture start marks the session as failed.
+    // TEST-07
     #[test]
     fn failed_capture_start_marks_session_as_failed() {
         let mut workflow = RecorderWorkflow::new(
@@ -369,7 +380,7 @@ mod tests {
         assert_eq!(workflow.session().status(), &SessionStatus::Failed);
     }
 
-    // TEST-08: Failed capture stop marks the session as failed.
+    // TEST-08
     #[test]
     fn failed_capture_stop_marks_session_as_failed() {
         let p = participant("p1");
