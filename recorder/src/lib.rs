@@ -7,6 +7,7 @@
 pub mod application;
 pub mod artifact;
 pub mod audio;
+pub mod completion;
 pub mod export;
 pub mod host;
 pub mod metadata;
