@@ -182,7 +182,10 @@ mod tests {
         let configuration = SyncSignetConfiguration::default();
 
         assert_eq!(configuration.opening().kind(), SyncSignetKind::Opening);
-        assert_eq!(configuration.closing().unwrap().kind(), SyncSignetKind::Closing);
+        assert_eq!(
+            configuration.closing().unwrap().kind(),
+            SyncSignetKind::Closing
+        );
     }
 
     // TEST-04
