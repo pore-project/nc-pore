@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! Local recording preservation boundary.
 //!
 //! Preservation is the first owned representation after capture. It keeps
@@ -116,7 +114,10 @@ mod tests {
         let preserved = CapturePreserver::preserve(capture);
 
         assert_eq!(
-            preserved.tracks()[0].configuration().unwrap().sample_format(),
+            preserved.tracks()[0]
+                .configuration()
+                .unwrap()
+                .sample_format(),
             SampleFormat::F32
         );
     }
