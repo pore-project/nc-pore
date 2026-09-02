@@ -56,7 +56,7 @@ impl Default for RecordingChunkDuration {
 }
 
 /// Recording parameters requested from a capture implementation.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RecordingConfiguration {
     sample_rate_hz: u32,
     channels: u16,
