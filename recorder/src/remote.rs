@@ -159,9 +159,7 @@ where
     ) -> Result<(), UploadCoordinatorError<U::Error>> {
         job.begin_upload_preparation()
             .map_err(UploadCoordinatorError::Job)?;
-        self.jobs
-            .save(job)
-            .map_err(UploadCoordinatorError::Job)?;
+        self.jobs.save(job).map_err(UploadCoordinatorError::Job)?;
         let prepared = match job.prepare_upload(artifact) {
             Ok(upload) => upload,
             Err(error) => {
@@ -172,40 +170,28 @@ where
         };
         job.mark_ready_for_upload()
             .map_err(UploadCoordinatorError::Job)?;
-        self.jobs
-            .save(job)
-            .map_err(UploadCoordinatorError::Job)?;
-        job.mark_uploading()
-            .map_err(UploadCoordinatorError::Job)?;
-        self.jobs
-            .save(job)
-            .map_err(UploadCoordinatorError::Job)?;
+        self.jobs.save(job).map_err(UploadCoordinatorError::Job)?;
+        job.mark_uploading().map_err(UploadCoordinatorError::Job)?;
+        self.jobs.save(job).map_err(UploadCoordinatorError::Job)?;
         let receipt = match self.uploader.upload(&prepared) {
             Ok(receipt) => receipt,
             Err(error) => {
                 job.mark_retryable_failure()
                     .map_err(UploadCoordinatorError::Job)?;
-                self.jobs
-                    .save(job)
-                    .map_err(UploadCoordinatorError::Job)?;
+                self.jobs.save(job).map_err(UploadCoordinatorError::Job)?;
                 return Err(UploadCoordinatorError::Upload(error));
             }
         };
         if let Err(error) = validate_upload_receipt(&prepared, &receipt) {
             job.mark_retryable_failure()
                 .map_err(UploadCoordinatorError::Job)?;
-            self.jobs
-                .save(job)
-                .map_err(UploadCoordinatorError::Job)?;
+            self.jobs.save(job).map_err(UploadCoordinatorError::Job)?;
             return Err(UploadCoordinatorError::Confirmation(error));
         }
         // This is the upload boundary's finalization step. Only after exact
         // remote confirmation may the durable job become `Uploaded`.
-        job.mark_uploaded()
-            .map_err(UploadCoordinatorError::Job)?;
-        self.jobs
-            .save(job)
-            .map_err(UploadCoordinatorError::Job)?;
+        job.mark_uploaded().map_err(UploadCoordinatorError::Job)?;
+        self.jobs.save(job).map_err(UploadCoordinatorError::Job)?;
         Ok(())
     }
 
