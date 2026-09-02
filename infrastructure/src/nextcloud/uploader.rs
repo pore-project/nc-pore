@@ -182,9 +182,7 @@ impl NextcloudArtifactUploader {
         T: crate::nextcloud::WebDavTransport,
     {
         if data.len() < LARGE_FILE_THRESHOLD {
-            let checksum = hex_hash(
-                recorder::artifact::PayloadHash::from_bytes(&data).as_bytes(),
-            );
+            let checksum = hex_hash(recorder::artifact::PayloadHash::from_bytes(&data).as_bytes());
             return client.put_with_headers(
                 destination_path,
                 data,
@@ -323,13 +321,12 @@ mod tests {
     fn path_uses_recording_start_and_default_audio_root() {
         let start = UNIX_EPOCH + Duration::from_secs(1_756_000_000);
         let metadata = RemoteArtifactMetadata::new(start, Some("Interview Frizz Feick".into()));
-        let connection = NextcloudConnection::new(
-            crate::nextcloud::NextcloudConnectionConfig::new(
+        let connection =
+            NextcloudConnection::new(crate::nextcloud::NextcloudConnectionConfig::new(
                 "https://cloud.example.test",
                 crate::nextcloud::NextcloudCredentials::new("host-user", "password"),
-            ),
-        )
-        .unwrap();
+            ))
+            .unwrap();
         let uploader = NextcloudArtifactUploader::new(connection, metadata);
         let path = uploader.artifact_path("artifact-123").unwrap();
         assert!(path.starts_with("remote.php/dav/files/host-user/audio/"));
@@ -342,13 +339,12 @@ mod tests {
             SystemTime::UNIX_EPOCH,
             Some("Frizz Feick / Help the man".into()),
         );
-        let connection = NextcloudConnection::new(
-            crate::nextcloud::NextcloudConnectionConfig::new(
+        let connection =
+            NextcloudConnection::new(crate::nextcloud::NextcloudConnectionConfig::new(
                 "https://cloud.example.test",
                 crate::nextcloud::NextcloudCredentials::new("user", "password"),
-            ),
-        )
-        .unwrap();
+            ))
+            .unwrap();
         let uploader = NextcloudArtifactUploader::new(connection, metadata);
         let path = uploader.artifact_path("artifact-123").unwrap();
         assert!(path.ends_with(" - Frizz Feick _ Help the man - artifact-123"));
