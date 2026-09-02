@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::artifact::{ManifestHash, RecordingArtifact, RecordingTrack};
 use crate::audio::CaptureChunk;
-use crate::transport::{encode_flac, FlacEncodeError};
+use crate::transport::{FlacEncodeError, encode_flac};
 
 /// Stable lifecycle of one local completion job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -226,9 +226,9 @@ impl PreparedUpload {
 }
 
 fn prepare_track(track: &RecordingTrack) -> Result<PreparedUploadTrack, FlacEncodeError> {
-    let configuration = track
-        .configuration()
-        .ok_or(FlacEncodeError::Configuration("track has no recording configuration".into()))?;
+    let configuration = track.configuration().ok_or(FlacEncodeError::Configuration(
+        "track has no recording configuration".into(),
+    ))?;
     let chunks: Vec<CaptureChunk> = track
         .chunks()
         .iter()
@@ -351,8 +351,10 @@ mod tests {
     use crate::session::RecordingSessionId;
 
     fn temp_store(name: &str) -> FilesystemCompletionJobStore {
-        let root =
-            std::env::temp_dir().join(format!("nc-pore-completion-{name}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "nc-pore-completion-{name}-{}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&root);
         FilesystemCompletionJobStore::new(root).unwrap()
     }
