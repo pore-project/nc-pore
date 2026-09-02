@@ -6,10 +6,12 @@
 
 use std::time::SystemTime;
 
-use crate::artifact::{ManifestHash, PayloadHash, RecordingArtifact};
+use crate::artifact::{ManifestHash, PayloadHash, RecordingArtifact, RecordingSessionId};
+use crate::artifact::RecordingArtifactFactory;
 use crate::completion::{
     CompletionJob, CompletionJobError, FilesystemCompletionJobStore, PreparedUpload,
 };
+use crate::preservation::{FilesystemPreservationStore, PreservationLoadResult};
 
 /// Optional provider-neutral recording information for a finished artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -212,6 +214,40 @@ where
         Ok(())
     }
 
+    /// Restores the durable capture named by the completion job, rebuilds the
+    /// artifact from that preserved representation, and then completes it.
+    ///
+    /// The preservation store is the local source of truth after capture. This
+    /// path is therefore suitable for restart recovery without requiring an
+    /// in-memory capture or artifact from the interrupted process.
+    pub fn complete_from_preservation(
+        &mut self,
+        job: &mut CompletionJob,
+        preservation: &FilesystemPreservationStore,
+        recording_session_id: RecordingSessionId,
+    ) -> Result<(), CompletionCoordinatorError<U::Error>> {
+        let preserved = match preservation.load(job.capture_id()) {
+            PreservationLoadResult::Valid(capture) => capture,
+            PreservationLoadResult::Incomplete => {
+                return Err(CompletionCoordinatorError::Preservation(
+                    PreservationCompletionError::Incomplete,
+                ));
+            }
+            PreservationLoadResult::Inconsistent => {
+                return Err(CompletionCoordinatorError::Preservation(
+                    PreservationCompletionError::Inconsistent,
+                ));
+            }
+            PreservationLoadResult::NotFound => {
+                return Err(CompletionCoordinatorError::Preservation(
+                    PreservationCompletionError::NotFound,
+                ));
+            }
+        };
+        let artifact = RecordingArtifactFactory::create(preserved, recording_session_id);
+        self.complete(job, &artifact)
+    }
+
     pub fn uploader(&self) -> &U {
         &self.uploader
     }
@@ -220,8 +256,16 @@ where
 #[derive(Debug, PartialEq, Eq)]
 pub enum CompletionCoordinatorError<E> {
     Job(CompletionJobError),
+    Preservation(PreservationCompletionError),
     Upload(E),
     Confirmation(RemoteUploadValidationError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreservationCompletionError {
+    Incomplete,
+    Inconsistent,
+    NotFound,
 }
 
 /// Validates that the remote receipt confirms exactly the prepared upload.
@@ -269,9 +313,11 @@ fn normalize_display_name(display_name: Option<String>) -> Option<String> {
 mod tests {
     use super::*;
     use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
-    use crate::audio::{RecordingConfiguration, SampleFormat};
+    use crate::audio::{CaptureChunk, CaptureResult, RecordingConfiguration, SampleFormat};
     use crate::completion::CompletionJob;
+    use crate::preservation::CapturePreserver;
     use crate::session::RecordingSessionId;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_upload() -> PreparedUpload {
         let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
@@ -386,10 +432,11 @@ mod tests {
     // TEST-54: Completion reaches Uploaded only after exact remote confirmation.
     #[test]
     fn coordinator_requires_exact_confirmation_before_uploaded() {
-        let store = FilesystemCompletionJobStore::new(
-            std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id())),
-        )
-        .unwrap();
+        let root = std::env::temp_dir().join(format!(
+            "nc-pore-coordinator-{}",
+            std::process::id()
+        ));
+        let store = FilesystemCompletionJobStore::new(&root).unwrap();
         let artifact = test_artifact();
         let mut job = CompletionJob::new("job-054", "capture-054");
         let mut coordinator = CompletionCoordinator::new(&store, ConfirmingUploader);
@@ -397,9 +444,7 @@ mod tests {
         coordinator.complete(&mut job, &artifact).unwrap();
 
         assert_eq!(job.state(), crate::completion::CompletionJobState::Uploaded);
-        let _ = std::fs::remove_dir_all(
-            std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id())),
-        );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     // TEST-55: A mismatching receipt cannot advance the durable job to Uploaded.
@@ -425,6 +470,74 @@ mod tests {
             crate::completion::CompletionJobState::FailedRetryable
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    // TEST-56: Restart recovery reconstructs the artifact from durable preservation.
+    #[test]
+    fn coordinator_can_complete_from_durable_preservation() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let preservation_root = std::env::temp_dir().join(format!("nc-pore-preservation-{}", suffix));
+        let jobs_root = std::env::temp_dir().join(format!("nc-pore-jobs-{}", suffix));
+        let preservation = FilesystemPreservationStore::new(&preservation_root);
+        let jobs = FilesystemCompletionJobStore::new(&jobs_root).unwrap();
+
+        let mut capture = CaptureResult::new("capture-056");
+        let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
+        let mut track = crate::audio::CaptureTrack::with_configuration("track-a", configuration);
+        track.add_chunk(CaptureChunk::with_payload(1, vec![0, 0, 1, 0, 2, 0, 3, 0]));
+        capture.add_track(track);
+        let preserved = CapturePreserver::preserve(capture);
+        preservation.store(&preserved).unwrap();
+
+        let mut job = CompletionJob::new("job-056", "capture-056");
+        let mut coordinator = CompletionCoordinator::new(&jobs, ConfirmingUploader);
+        coordinator
+            .complete_from_preservation(
+                &mut job,
+                &preservation,
+                RecordingSessionId::new("session-056"),
+            )
+            .unwrap();
+
+        assert_eq!(job.state(), crate::completion::CompletionJobState::Uploaded);
+        assert_eq!(job.artifact_id(), Some("capture-056"));
+
+        let _ = std::fs::remove_dir_all(preservation_root);
+        let _ = std::fs::remove_dir_all(jobs_root);
+    }
+
+    #[test]
+    fn missing_durable_capture_is_not_treated_as_upload_failure() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let preservation_root = std::env::temp_dir().join(format!("nc-pore-preservation-missing-{}", suffix));
+        let jobs_root = std::env::temp_dir().join(format!("nc-pore-jobs-missing-{}", suffix));
+        let preservation = FilesystemPreservationStore::new(&preservation_root);
+        let jobs = FilesystemCompletionJobStore::new(&jobs_root).unwrap();
+        let mut job = CompletionJob::new("job-057", "capture-057");
+        let mut coordinator = CompletionCoordinator::new(&jobs, ConfirmingUploader);
+
+        let error = coordinator
+            .complete_from_preservation(
+                &mut job,
+                &preservation,
+                RecordingSessionId::new("session-057"),
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            error,
+            CompletionCoordinatorError::Preservation(PreservationCompletionError::NotFound)
+        );
+        assert_eq!(job.state(), crate::completion::CompletionJobState::Pending);
+
+        let _ = std::fs::remove_dir_all(preservation_root);
+        let _ = std::fs::remove_dir_all(jobs_root);
     }
 
     #[test]
