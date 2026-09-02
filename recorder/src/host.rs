@@ -142,7 +142,11 @@ mod tests {
     fn connector_reports_host_neutral_source_changes() {
         let previous = CaptureSource::new("device-1");
         let current = CaptureSource::new("device-2");
-        let change = CaptureSourceChange::new(1_762_000_000_000, Some(previous.clone()), current.clone());
+        let change = CaptureSourceChange::new(
+            1_762_000_000_000,
+            Some(previous.clone()),
+            current.clone(),
+        );
         let mut connector = FakeHostConnector {
             source: Some(current),
             changes: vec![change],
