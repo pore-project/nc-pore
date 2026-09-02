@@ -325,7 +325,7 @@ mod tests {
         );
         track.add_chunk(CaptureChunk::with_payload(1, vec![1, 2, 3, 4, 5]));
         result.add_track(track);
-        CapturePreserver::preserve(result)
+        super::super::CapturePreserver::preserve(result)
     }
 
     // TEST-45
