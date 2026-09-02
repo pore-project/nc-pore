@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::artifact::{ManifestHash, RecordingArtifact, RecordingTrack};
 use crate::audio::CaptureChunk;
-use crate::transport::{encode_flac, FlacEncodeError};
+use crate::transport::{FlacEncodeError, encode_flac};
 
 /// Stable lifecycle of one local completion job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -351,7 +351,10 @@ mod tests {
     use crate::session::RecordingSessionId;
 
     fn temp_store(name: &str) -> FilesystemCompletionJobStore {
-        let root = std::env::temp_dir().join(format!("nc-pore-completion-{name}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "nc-pore-completion-{name}-{}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&root);
         FilesystemCompletionJobStore::new(root).unwrap()
     }
@@ -460,8 +463,14 @@ mod tests {
         assert_eq!(prepared.manifest_hash(), artifact.manifest_hash());
         assert_eq!(prepared.tracks().len(), 1);
         assert!(!prepared.tracks()[0].data().is_empty());
-        assert_eq!(prepared.tracks()[0].size_bytes(), prepared.tracks()[0].data().len() as u64);
-        assert_ne!(prepared.tracks()[0].hash(), crate::artifact::PayloadHash::from_bytes(b""));
+        assert_eq!(
+            prepared.tracks()[0].size_bytes(),
+            prepared.tracks()[0].data().len() as u64
+        );
+        assert_ne!(
+            prepared.tracks()[0].hash(),
+            crate::artifact::PayloadHash::from_bytes(b"")
+        );
     }
 
     // TEST-53: A resumed job cannot silently switch to another artifact identity.
