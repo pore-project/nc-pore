@@ -7,7 +7,8 @@
 //! and future host integrations out of the capture, preservation, and
 //! transport layers.
 //!
-//! See ADR-078i: Host-neutral Capture, Preservation and Transport.
+//! The host-neutral boundary is part of the recording capture, preservation,
+//! and transport architecture.
 
 /// A host-observed local capture source.
 ///
@@ -116,8 +117,9 @@ mod tests {
 
     // TEST-37
     //
-    // Protects ADR-078i: host integrations expose an opaque capture source,
-    // not an audio payload or a host-specific recording representation.
+    // Protects the host-neutral capture boundary: host integrations expose
+    // an opaque capture source, not an audio payload or a host-specific
+    // recording representation.
     #[test]
     fn connector_exposes_selected_capture_source() {
         let connector = FakeHostConnector {
@@ -136,8 +138,9 @@ mod tests {
 
     // TEST-38
     //
-    // Protects ADR-078i: source changes retain timestamp and both sides of
-    // the transition so provenance can be attached to the recording tracks.
+    // Protects the host-neutral capture boundary: source changes retain
+    // timestamp and both sides of the transition so provenance can be
+    // attached to the recording tracks.
     #[test]
     fn connector_reports_host_neutral_source_changes() {
         let previous = CaptureSource::new("device-1");
