@@ -134,10 +134,7 @@ mod tests {
             Ok(())
         }
 
-        fn emit_sync_signet(
-            &mut self,
-            signet: &SyncSignet,
-        ) -> Result<(), SyncSignetEmissionError> {
+        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
             if signet.kind() == SyncSignetKind::Closing && self.fail_on_closing {
                 return Err(SyncSignetEmissionError::NotCapturing);
             }
@@ -262,9 +259,7 @@ mod tests {
             .emit_sync_signet(&configuration.signets().opening())
             .unwrap();
 
-        assert!(
-            application.emit_optional_sync_signet(&configuration.signets().closing()) == false
-        );
+        assert!(application.emit_optional_sync_signet(&configuration.signets().closing()) == false);
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
                 "production-fallback",
@@ -277,9 +272,8 @@ mod tests {
     #[test]
     fn failed_capture_returns_application_error() {
         let session = RecordingSession::new("session-failed");
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
-            RejectingPersistenceProvider,
-        ));
+        let processor =
+            RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
         application
             .start(&RecordingConfiguration::default())
