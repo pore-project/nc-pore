@@ -36,7 +36,10 @@ pub enum SessionStatus {
     /// Local capture is active and the client is waiting for the coordinated
     /// opening of the recording.
     WaitingForReady,
-    /// The local recorder is active and has reported READY for this recording.
+    /// The local recorder has reported READY and is waiting for Opening
+    /// Signet confirmation before entering stable recording.
+    Opening,
+    /// The local recorder is active after Opening has been confirmed.
     Recording,
     /// The coordinated stop has begun. The closing sync signet is emitted
     /// before the technical recorder is finally stopped.
@@ -93,12 +96,15 @@ impl RecordingSession {
         self.transition(SessionStatus::WaitingForReady, "capture_started")
     }
 
-    /// Records the client's READY confirmation for this recording attempt.
-    ///
-    /// The coordination layer is responsible for ensuring that this READY
-    /// belongs to the current recording participant set and recording start.
+    /// Records that this recorder is locally READY for the coordinated
+    /// Opening Signet. This does not yet enter stable Recording.
     pub fn ready(&mut self) -> Result<(), SessionTransitionError> {
-        self.transition(SessionStatus::Recording, "ready")
+        self.transition(SessionStatus::Opening, "ready")
+    }
+
+    /// Confirms the required Opening Signet and enters stable local recording.
+    pub fn confirm_opening(&mut self) -> Result<(), SessionTransitionError> {
+        self.transition(SessionStatus::Recording, "confirm_opening")
     }
 
     /// Begins the coordinated stop sequence.
@@ -136,7 +142,8 @@ impl RecordingSession {
             (self.status, next),
             (SessionStatus::Prepared, SessionStatus::Starting)
                 | (SessionStatus::Starting, SessionStatus::WaitingForReady)
-                | (SessionStatus::WaitingForReady, SessionStatus::Recording)
+                | (SessionStatus::WaitingForReady, SessionStatus::Opening)
+                | (SessionStatus::Opening, SessionStatus::Recording)
                 | (SessionStatus::Recording, SessionStatus::Stopping)
                 | (SessionStatus::Stopping, SessionStatus::Completed)
         );
@@ -159,7 +166,7 @@ mod tests {
 
     // TEST-01 / CUE30
     // Verify the complete happy-path lifecycle defined by ADR-068:
-    // Prepared -> Starting -> WaitingForReady -> Recording -> Stopping -> Completed.
+    // Prepared -> Starting -> WaitingForReady -> Opening -> Recording -> Stopping -> Completed.
     #[test]
     fn recording_lifecycle_follows_adr_068() {
         let mut session = RecordingSession::new("test-session");
@@ -167,6 +174,7 @@ mod tests {
         session.begin().unwrap();
         session.capture_started().unwrap();
         session.ready().unwrap();
+        session.confirm_opening().unwrap();
         session.begin_stop().unwrap();
         session.complete().unwrap();
 
@@ -200,6 +208,23 @@ mod tests {
     }
 
     // TEST-04 / CUE30
+    // Verify that READY does not itself enter stable recording.
+    #[test]
+    fn ready_waits_for_opening_confirmation() {
+        let mut session = RecordingSession::new("test-session");
+
+        session.begin().unwrap();
+        session.capture_started().unwrap();
+        session.ready().unwrap();
+
+        assert_eq!(session.status(), &SessionStatus::Opening);
+        assert!(session.begin_stop().is_err());
+
+        session.confirm_opening().unwrap();
+        assert_eq!(session.status(), &SessionStatus::Recording);
+    }
+
+    // TEST-05 / CUE30
     // Verify that failure is available during an active lifecycle but cannot
     // resurrect or overwrite a technically completed recording.
     #[test]
@@ -209,6 +234,7 @@ mod tests {
         session.begin().unwrap();
         session.capture_started().unwrap();
         session.ready().unwrap();
+        session.confirm_opening().unwrap();
         session.begin_stop().unwrap();
         session.complete().unwrap();
 
@@ -224,7 +250,7 @@ mod tests {
         assert_eq!(session.status(), &SessionStatus::Completed);
     }
 
-    // TEST-05 / CUE30
+    // TEST-06 / CUE30
     // Verify that a technical failure can be surfaced without inventing a
     // domain state in Core.
     #[test]
