@@ -264,10 +264,8 @@ mod tests {
 
     #[test]
     fn workflow_can_be_created_with_session_and_capture() {
-        let workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            TestCapture::new(),
-        );
+        let workflow =
+            RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         assert_eq!(workflow.session().status(), &SessionStatus::Prepared);
     }
 
@@ -278,10 +276,7 @@ mod tests {
         let mut coordinator = RecordingStartCoordinator::new([first.clone(), second.clone()]);
         let capture = TestCapture::new();
         let events = Rc::clone(&capture.events);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            capture,
-        );
+        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
 
         assert_eq!(
@@ -302,10 +297,8 @@ mod tests {
         let recording = participant("p1");
         let outsider = participant("p2");
         let mut coordinator = RecordingStartCoordinator::new([recording]);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            TestCapture::new(),
-        );
+        let mut workflow =
+            RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         workflow.start(&RecordingConfiguration::default()).unwrap();
 
         assert_eq!(
@@ -323,10 +316,7 @@ mod tests {
         let mut coordinator = RecordingStartCoordinator::new([p.clone()]);
         let mut capture = TestCapture::new();
         capture.fail_on_opening_signet = true;
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            capture,
-        );
+        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
 
         assert!(matches!(
@@ -343,10 +333,7 @@ mod tests {
         let mut stop = RecordingStopCoordinator::new([p.clone()]);
         let capture = TestCapture::new();
         let events = Rc::clone(&capture.events);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            capture,
-        );
+        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
         workflow
             .ready_and_maybe_opening_signet(&mut start, &p)
@@ -367,10 +354,7 @@ mod tests {
         let mut capture = TestCapture::new();
         capture.fail_on_closing_signet = true;
         let events = Rc::clone(&capture.events);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            capture,
-        );
+        let mut workflow = RecorderWorkflow::new(RecordingSession::new("workflow-test"), capture);
         workflow.start(&RecordingConfiguration::default()).unwrap();
         workflow
             .ready_and_maybe_opening_signet(&mut start, &p)
@@ -391,10 +375,8 @@ mod tests {
     fn coordinated_stop_can_complete_without_closing_signet() {
         let p = participant("p1");
         let mut start = RecordingStartCoordinator::new([p.clone()]);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            TestCapture::new(),
-        );
+        let mut workflow =
+            RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         workflow.start(&RecordingConfiguration::default()).unwrap();
         workflow
             .ready_and_maybe_opening_signet(&mut start, &p)
@@ -409,10 +391,8 @@ mod tests {
     fn stop_rejects_non_recording_state_before_consuming_closing_signet() {
         let p = participant("p1");
         let mut stop = RecordingStopCoordinator::new([p]);
-        let mut workflow = RecorderWorkflow::new(
-            RecordingSession::new("workflow-test"),
-            TestCapture::new(),
-        );
+        let mut workflow =
+            RecorderWorkflow::new(RecordingSession::new("workflow-test"), TestCapture::new());
         assert_eq!(
             workflow.stop_with_coordinator(&mut stop),
             Err(WorkflowCoordinationError::InvalidSessionState)
