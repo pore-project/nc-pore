@@ -257,16 +257,7 @@ mod tests {
     fn configured_opening_signet_is_returned_unchanged() {
         let participant = participant("participant-1");
         let mut coordinator = RecordingStartCoordinator::new([participant.clone()]);
-        let configured = SyncSignet::new(
-            SyncSignetKind::Opening,
-            [
-                SignetEvent::new(0, 15),
-                SignetEvent::new(60, 25),
-                SignetEvent::new(140, 35),
-            ],
-            0.05,
-            99,
-        );
+        let configured = SyncSignet::opening();
 
         coordinator.confirm_ready(&participant).unwrap();
 
