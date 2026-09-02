@@ -68,9 +68,10 @@ where
     /// Emits a synchronization signet into the active capture.
     ///
     /// Opening is strict because it is the required ADR-068 start barrier.
-    /// Closing is optional; emission failure is deliberately swallowed so a
-    /// recorder that can no longer hear/capture Closing can still stop and
-    /// complete normally.
+    /// Successful Opening emission confirms the local Opening phase and enters
+    /// stable local Recording. Closing is optional; emission failure is
+    /// deliberately swallowed so a recorder that can no longer hear/capture
+    /// Closing can still stop and complete normally.
     pub fn emit_sync_signet(
         &mut self,
         signet: &SyncSignet,
@@ -226,6 +227,9 @@ mod tests {
         let configuration = RecordingConfiguration::default();
         application.start(&configuration).unwrap();
         application.ready().unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -278,10 +282,12 @@ mod tests {
         let processor =
             RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
-        application
-            .start(&RecordingConfiguration::default())
-            .unwrap();
+        let configuration = RecordingConfiguration::default();
+        application.start(&configuration).unwrap();
         application.ready().unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
         let result = application.stop(RecordingArtifactAssociation::new(
             "production-failed",
