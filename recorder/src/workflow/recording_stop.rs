@@ -109,7 +109,10 @@ mod tests {
         let second = participant("participant-2");
         let mut coordinator = RecordingStopCoordinator::new([first, second]);
 
-        assert_eq!(coordinator.closing_sync_signet(), Some(SyncSignet::closing()));
+        assert_eq!(
+            coordinator.closing_sync_signet(),
+            Some(SyncSignet::closing())
+        );
         assert_eq!(coordinator.closing_sync_signet(), None);
     }
 
@@ -120,10 +123,19 @@ mod tests {
         let mut coordinator = RecordingStopCoordinator::new([first.clone(), second.clone()]);
 
         coordinator.closing_sync_signet();
-        assert_eq!(coordinator.confirm_ok(&first), Ok(StopStatus::WaitingForParticipants));
-        assert_eq!(coordinator.pending_participants(), [second.clone()].into_iter().collect());
+        assert_eq!(
+            coordinator.confirm_ok(&first),
+            Ok(StopStatus::WaitingForParticipants)
+        );
+        assert_eq!(
+            coordinator.pending_participants(),
+            [second.clone()].into_iter().collect()
+        );
         assert!(!coordinator.all_completed());
-        assert_eq!(coordinator.confirm_ok(&second), Ok(StopStatus::AllParticipantsCompleted));
+        assert_eq!(
+            coordinator.confirm_ok(&second),
+            Ok(StopStatus::AllParticipantsCompleted)
+        );
         assert!(coordinator.pending_participants().is_empty());
     }
 
@@ -133,8 +145,14 @@ mod tests {
         let second = participant("participant-2");
         let mut coordinator = RecordingStopCoordinator::new([first.clone(), second.clone()]);
 
-        assert_eq!(coordinator.confirm_ok(&first), Ok(StopStatus::WaitingForParticipants));
-        assert_eq!(coordinator.confirm_ok(&second), Ok(StopStatus::AllParticipantsCompleted));
+        assert_eq!(
+            coordinator.confirm_ok(&first),
+            Ok(StopStatus::WaitingForParticipants)
+        );
+        assert_eq!(
+            coordinator.confirm_ok(&second),
+            Ok(StopStatus::AllParticipantsCompleted)
+        );
         assert!(coordinator.all_completed());
     }
 
@@ -156,8 +174,14 @@ mod tests {
         let participant = participant("participant-1");
         let mut coordinator = RecordingStopCoordinator::new([participant.clone()]);
 
-        assert_eq!(coordinator.confirm_ok(&participant), Ok(StopStatus::AllParticipantsCompleted));
-        assert_eq!(coordinator.confirm_ok(&participant), Ok(StopStatus::AllParticipantsCompleted));
+        assert_eq!(
+            coordinator.confirm_ok(&participant),
+            Ok(StopStatus::AllParticipantsCompleted)
+        );
+        assert_eq!(
+            coordinator.confirm_ok(&participant),
+            Ok(StopStatus::AllParticipantsCompleted)
+        );
         assert_eq!(coordinator.completed_participants().len(), 1);
     }
 
