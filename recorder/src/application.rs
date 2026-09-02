@@ -196,7 +196,7 @@ mod tests {
         application.start(&configuration).unwrap();
         application.ready().unwrap();
         application
-            .emit_sync_signet(&configuration.signets().opening().expect("opening signet"))
+            .emit_sync_signet(&configuration.signets().opening())
             .unwrap();
 
         let artifact = application
@@ -256,7 +256,7 @@ mod tests {
         application.start(&configuration).unwrap();
         application.ready().unwrap();
         application
-            .emit_sync_signet(&configuration.signets().opening().expect("opening signet"))
+            .emit_sync_signet(&configuration.signets().opening())
             .unwrap();
 
         let closing = configuration
