@@ -147,6 +147,7 @@ impl RecordingConfiguration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::{SignetEvent, SyncSignet, SyncSignetKind};
 
     // TEST-01
     // Verify: The default recording configuration reflects ADR-002 and
@@ -164,7 +165,7 @@ mod tests {
         );
         assert_eq!(
             configuration.signets().opening().kind(),
-            super::signet::SyncSignetKind::Opening
+            SyncSignetKind::Opening
         );
     }
 
@@ -205,12 +206,12 @@ mod tests {
     // Verify: An explicit signet configuration can replace the default pattern.
     #[test]
     fn configuration_accepts_custom_signets() {
-        let opening = super::signet::SyncSignet::new(
-            super::signet::SyncSignetKind::Opening,
+        let opening = SyncSignet::new(
+            SyncSignetKind::Opening,
             [
-                super::signet::SignetEvent::new(0, 20),
-                super::signet::SignetEvent::new(80, 20),
-                super::signet::SignetEvent::new(160, 20),
+                SignetEvent::new(0, 20),
+                SignetEvent::new(80, 20),
+                SignetEvent::new(160, 20),
             ],
             0.08,
             42,
