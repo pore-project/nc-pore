@@ -70,7 +70,9 @@ impl CapturePreserver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::{CaptureChunk, CaptureSourceProvenance, RecordingConfiguration, SampleFormat};
+    use crate::audio::{
+        CaptureChunk, CaptureSourceProvenance, RecordingConfiguration, SampleFormat,
+    };
 
     // TEST-42
     //
