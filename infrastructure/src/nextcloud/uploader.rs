@@ -5,7 +5,6 @@ use recorder::remote::{
     RemoteArtifactMetadata, RemoteArtifactUploader, RemoteUploadReceipt, RemoteUploadTrackReceipt,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 const LARGE_FILE_THRESHOLD: usize = 10 * 1024 * 1024;
 const CHUNK_SIZE: usize = 10 * 1024 * 1024;
@@ -98,7 +97,7 @@ impl NextcloudArtifactUploader {
                     operation: "track verification",
                 });
             };
-            let hash = sha256_hash(&remote_track.body);
+            let hash = recorder::artifact::PayloadHash::from_bytes(&remote_track.body);
             if remote_track.body.len() as u64 != track.size_bytes() || hash != track.hash() {
                 return Err(NextcloudProviderError::Remote {
                     status: 409,
@@ -183,7 +182,7 @@ impl NextcloudArtifactUploader {
         T: crate::nextcloud::WebDavTransport,
     {
         if data.len() < LARGE_FILE_THRESHOLD {
-            let checksum = sha256_hex(&data);
+            let checksum = hex_hash(recorder::artifact::PayloadHash::from_bytes(&data).as_bytes());
             return client.put_with_headers(
                 destination_path,
                 data,
@@ -192,7 +191,10 @@ impl NextcloudArtifactUploader {
         }
 
         let destination = client.url_for(destination_path)?.to_string();
-        let upload_id = format!("nc-pore-{}", sha256_hex(destination_path.as_bytes()));
+        let upload_id = format!(
+            "nc-pore-{}",
+            hex_hash(recorder::artifact::PayloadHash::from_bytes(destination_path.as_bytes()).as_bytes())
+        );
         let upload_root = format!(
             "remote.php/dav/uploads/{}/{upload_id}",
             self.connection.config().username()
@@ -309,16 +311,6 @@ fn hex_hash(value: &[u8; 32]) -> String {
     value.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn sha256_hash(data: &[u8]) -> recorder::artifact::PayloadHash {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    recorder::artifact::PayloadHash::from_bytes(&hasher.finalize())
-}
-
-fn sha256_hex(data: &[u8]) -> String {
-    hex_hash(recorder::artifact::PayloadHash::from_bytes(data).as_bytes())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,7 +352,7 @@ mod tests {
     #[test]
     fn receipt_hash_type_remains_sha256() {
         let hash = PayloadHash::from_bytes(b"abc");
-        assert_eq!(hash, sha256_hash(b"abc"));
+        assert_eq!(hash, PayloadHash::from_bytes(b"abc"));
         let receipt = RemoteUploadTrackReceipt::new("track-a", 3, hash);
         assert_eq!(receipt.size_bytes(), 3);
     }
