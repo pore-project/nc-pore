@@ -63,10 +63,7 @@ where
     /// Opening is strict: it is legal only in the local Opening phase and a
     /// successful emission confirms the local Opening barrier. Closing is
     /// optional and does not alter the lifecycle.
-    pub fn emit_sync_signet(
-        &mut self,
-        signet: &SyncSignet,
-    ) -> Result<(), SyncSignetEmissionError> {
+    pub fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
         if signet.kind() == crate::audio::SyncSignetKind::Opening
             && self.session.status() != &SessionStatus::Opening
         {
