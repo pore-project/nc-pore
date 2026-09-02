@@ -1,7 +1,7 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError,
+    RecordingArtifactId, RecordingId, RecordingWorkflow, RecordingWorkflowError,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
@@ -139,7 +139,7 @@ mod tests {
     use recorder::artifact::processing::RecordingArtifactProcessor;
     use recorder::audio::{
         CaptureProvider, CaptureResult, CpalCaptureProvider, SignetEvent, SyncSignet,
-        SyncSignetKind, SyncSignetConfiguration,
+        SyncSignetConfiguration, SyncSignetKind,
     };
     use recorder::persistence::InMemoryPersistenceProvider;
     use recorder::session::RecordingSession;
@@ -277,7 +277,7 @@ mod tests {
         let persistence = InMemoryPersistenceProvider::new();
         let coordinator = ArtifactCoordinator::new(persistence);
         let processor = RecordingArtifactProcessor::new(coordinator);
-        RecorderApplication::new(session, TestCaptureProvider { emitted }, processor)
+        RecorderApplication::new(TestCaptureProvider { emitted }, session, processor)
     }
 
     // TEST-01
@@ -351,7 +351,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            emitted.borrow().iter().map(|signet| signet.kind()).collect::<Vec<_>>(),
+            emitted
+                .borrow()
+                .iter()
+                .map(|signet| signet.kind())
+                .collect::<Vec<_>>(),
             vec![SyncSignetKind::Opening, SyncSignetKind::Closing]
         );
     }
@@ -456,14 +460,20 @@ mod tests {
             artifact.status(),
             &recorder::artifact::ArtifactStatus::Stored
         );
-        assert!(!artifact.tracks().is_empty(), "real capture must produce a track");
+        assert!(
+            !artifact.tracks().is_empty(),
+            "real capture must produce a track"
+        );
 
         let track = &artifact.tracks()[0];
         assert_eq!(
             track.configuration(),
             Some(RecordingConfiguration::default())
         );
-        assert!(!track.chunks().is_empty(), "real capture must produce a chunk");
+        assert!(
+            !track.chunks().is_empty(),
+            "real capture must produce a chunk"
+        );
         assert!(
             track
                 .chunks()
