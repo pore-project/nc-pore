@@ -27,7 +27,7 @@ pub enum ReadyStatus {
 ///
 /// The participant set is frozen when the coordinator is created. Session
 /// membership changes after that point do not affect this recording start.
-/// The coordinator does not start or stop audio; it emits the Opening Sync
+/// The coordinator does not start or stop audio; it triggers the Opening Sync
 /// Signet exactly once after the READY barrier has been reached.
 #[derive(Debug)]
 pub struct RecordingStartCoordinator {
@@ -49,19 +49,14 @@ impl RecordingStartCoordinator {
         }
     }
 
-    /// Returns the frozen participant set for this recording start.
     pub fn participants(&self) -> &BTreeSet<RecordingParticipantId> {
         &self.participants
     }
 
-    /// Returns the participants that have confirmed local capture is active.
     pub fn ready_participants(&self) -> &BTreeSet<RecordingParticipantId> {
         &self.ready
     }
 
-    /// Confirms READY for a participant in this recording start.
-    ///
-    /// A participant outside the frozen set cannot satisfy the READY barrier.
     pub fn confirm_ready(
         &mut self,
         participant: &RecordingParticipantId,
@@ -79,13 +74,8 @@ impl RecordingStartCoordinator {
         }
     }
 
-    /// Confirms READY and, if the complete barrier has now been reached,
-    /// returns the Opening Sync Signet in the same synchronization transition.
-    ///
-    /// This is the preferred coordination entry point for the higher-level
-    /// recording-start workflow: local capture must already be active before
-    /// this method is called, while the coordinator owns the participant
-    /// barrier and the exactly-once opening trigger.
+    /// Confirms READY and returns the configured Opening Sync Signet only when
+    /// the complete barrier has been reached.
     pub fn confirm_ready_and_opening_signet(
         &mut self,
         participant: &RecordingParticipantId,
@@ -94,20 +84,27 @@ impl RecordingStartCoordinator {
         Ok(self.opening_sync_signet())
     }
 
-    /// Emits the Opening Sync Signet once the READY barrier has been reached.
+    /// Returns the default Opening Sync Signet once the READY barrier is reached.
     ///
-    /// Returning `Some` is the explicit synchronization transition. Repeated
-    /// calls cannot emit the signet more than once for this recording start.
+    /// Kept as a convenience for lower-level callers. Higher-level recording
+    /// configuration should use `opening_sync_signet_with`.
     pub fn opening_sync_signet(&mut self) -> Option<SyncSignet> {
+        self.opening_sync_signet_with(SyncSignet::opening())
+    }
+
+    /// Returns the supplied Opening Sync Signet once the READY barrier is reached.
+    ///
+    /// The coordinator owns only the lifecycle trigger and exactly-once rule;
+    /// the supplied signet contains the configurable technical description.
+    pub fn opening_sync_signet_with(&mut self, signet: SyncSignet) -> Option<SyncSignet> {
         if !self.all_ready() || self.opening_signet_emitted {
             return None;
         }
 
         self.opening_signet_emitted = true;
-        Some(SyncSignet::opening())
+        Some(signet)
     }
 
-    /// Returns whether every participant selected for this recording is READY.
     pub fn all_ready(&self) -> bool {
         self.ready.len() == self.participants.len()
     }
@@ -127,13 +124,11 @@ mod tests {
     }
 
     // TEST-01 / CUE30
-    // Verify: The participant set is frozen for one concrete recording start.
     #[test]
     fn recording_start_freezes_participant_set() {
         let first = participant("participant-1");
         let second = participant("participant-2");
         let late_joiner = participant("participant-3");
-
         let coordinator = RecordingStartCoordinator::new([first.clone(), second.clone()]);
 
         assert_eq!(coordinator.participants().len(), 2);
@@ -143,8 +138,6 @@ mod tests {
     }
 
     // TEST-02 / CUE30
-    // Verify: The Opening Sync Signet barrier is reached only after every
-    // recording participant has confirmed READY.
     #[test]
     fn opening_barrier_waits_for_all_ready_participants() {
         let first = participant("participant-1");
@@ -156,7 +149,6 @@ mod tests {
             Ok(ReadyStatus::WaitingForParticipants)
         );
         assert!(!coordinator.all_ready());
-
         assert_eq!(
             coordinator.confirm_ready(&second),
             Ok(ReadyStatus::AllParticipantsReady)
@@ -165,8 +157,6 @@ mod tests {
     }
 
     // TEST-03 / CUE30
-    // Verify: A session member outside the frozen recording participant set
-    // cannot satisfy the READY barrier.
     #[test]
     fn non_recording_participant_cannot_confirm_ready() {
         let recording_participant = participant("participant-1");
@@ -181,8 +171,6 @@ mod tests {
     }
 
     // TEST-04 / CUE30
-    // Verify: Repeated READY messages are idempotent and cannot distort the
-    // participant barrier.
     #[test]
     fn repeated_ready_is_idempotent() {
         let participant = participant("participant-1");
@@ -200,7 +188,6 @@ mod tests {
     }
 
     // TEST-05 / CUE30
-    // Verify: The Opening Sync Signet cannot be emitted before all participants are READY.
     #[test]
     fn opening_signet_waits_for_ready_barrier() {
         let first = participant("participant-1");
@@ -208,11 +195,8 @@ mod tests {
         let mut coordinator = RecordingStartCoordinator::new([first.clone(), second.clone()]);
 
         coordinator.confirm_ready(&first).unwrap();
-
         assert_eq!(coordinator.opening_sync_signet(), None);
-
         coordinator.confirm_ready(&second).unwrap();
-
         assert_eq!(
             coordinator.opening_sync_signet(),
             Some(SyncSignet::opening())
@@ -220,14 +204,12 @@ mod tests {
     }
 
     // TEST-06 / CUE30
-    // Verify: The Opening Sync Signet is emitted exactly once for one recording start.
     #[test]
     fn opening_signet_is_emitted_only_once() {
         let participant = participant("participant-1");
         let mut coordinator = RecordingStartCoordinator::new([participant.clone()]);
 
         coordinator.confirm_ready(&participant).unwrap();
-
         assert_eq!(
             coordinator.opening_sync_signet(),
             Some(SyncSignet::opening())
@@ -236,7 +218,6 @@ mod tests {
     }
 
     // TEST-07 / CUE30
-    // Verify: A non-recording participant cannot cause the Opening Sync Signet to be emitted.
     #[test]
     fn non_recording_participant_cannot_trigger_opening_signet() {
         let recording_participant = participant("participant-1");
@@ -251,8 +232,6 @@ mod tests {
     }
 
     // TEST-08 / CUE30
-    // Verify: The combined ADR-068 transition returns no signet until the final
-    // participant is READY, then returns exactly one Opening Sync Signet.
     #[test]
     fn combined_ready_transition_opens_only_at_barrier() {
         let first = participant("participant-1");
@@ -263,15 +242,37 @@ mod tests {
             coordinator.confirm_ready_and_opening_signet(&first),
             Ok(None)
         );
-
         assert_eq!(
             coordinator.confirm_ready_and_opening_signet(&second),
             Ok(Some(SyncSignet::opening()))
         );
-
         assert_eq!(
             coordinator.confirm_ready_and_opening_signet(&second),
             Ok(None)
+        );
+    }
+
+    // TEST-09 / CUE30
+    #[test]
+    fn configured_opening_signet_is_returned_unchanged() {
+        let participant = participant("participant-1");
+        let mut coordinator = RecordingStartCoordinator::new([participant.clone()]);
+        let configured = SyncSignet::new(
+            SyncSignetKind::Opening,
+            [
+                SignetEvent::new(0, 15),
+                SignetEvent::new(60, 25),
+                SignetEvent::new(140, 35),
+            ],
+            0.05,
+            99,
+        );
+
+        coordinator.confirm_ready(&participant).unwrap();
+
+        assert_eq!(
+            coordinator.opening_sync_signet_with(configured),
+            Some(configured)
         );
     }
 }
