@@ -351,10 +351,8 @@ mod tests {
     use crate::session::RecordingSessionId;
 
     fn temp_store(name: &str) -> FilesystemCompletionJobStore {
-        let root = std::env::temp_dir().join(format!(
-            "nc-pore-completion-{name}-{}",
-            std::process::id()
-        ));
+        let store_name = format!("nc-pore-completion-{name}-{}", std::process::id());
+        let root = std::env::temp_dir().join(store_name);
         let _ = fs::remove_dir_all(&root);
         FilesystemCompletionJobStore::new(root).unwrap()
     }
