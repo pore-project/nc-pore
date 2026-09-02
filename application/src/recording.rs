@@ -1,7 +1,7 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingId, RecordingWorkflow, RecordingWorkflowError,
+    RecordingArtifactId, RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
@@ -29,6 +29,8 @@ pub enum ExecuteRecordingError<E> {
 ///
 /// ADR-068 signet semantics come from the core domain, while the concrete
 /// signet description is supplied by the technical recording configuration.
+/// The Opening Signet is emitted while local capture is active and before the
+/// workflow enters the stable Recording state.
 pub fn execute_recording<R, C, P>(
     repository: &mut R,
     production_id: &ProductionId,
@@ -60,10 +62,6 @@ where
         .begin_ready_phase()
         .map_err(ExecuteRecordingError::Workflow)?;
 
-    session
-        .start_recording_by(actor, recording_id)
-        .map_err(ExecuteRecordingError::Session)?;
-
     recorder
         .start(configuration)
         .map_err(ExecuteRecordingError::RecorderStart)?;
@@ -76,22 +74,35 @@ where
     workflow
         .mark_ready(actor)
         .map_err(ExecuteRecordingError::Workflow)?;
-    workflow
-        .start_recording()
-        .map_err(ExecuteRecordingError::Workflow)?;
 
-    // ADR-068: Opening is required. The configured technical description is
-    // emitted only after the domain READY barrier has opened the recording.
+    // ADR-068 / ADR-071i: READY only permits the Opening synchronization
+    // phase. Stable recording has not started yet.
+    let opening = workflow
+        .start_recording_with_signet()
+        .map_err(ExecuteRecordingError::Workflow)?;
+    debug_assert_eq!(opening, RecordingSyncSignet::Opening);
+
+    // The domain decides that Opening is required; the technical configuration
+    // supplies its provider-neutral audio representation.
     recorder
         .emit_sync_signet(&configuration.signets().opening())
         .map_err(ExecuteRecordingError::Recorder)?;
+
+    // Only after Opening has been emitted/confirmed does the workflow enter the
+    // stable Recording state and does the session persist its recording start.
+    workflow
+        .confirm_opening()
+        .map_err(ExecuteRecordingError::Workflow)?;
+    session
+        .start_recording_by(actor, recording_id)
+        .map_err(ExecuteRecordingError::Session)?;
 
     workflow
         .request_stop()
         .map_err(ExecuteRecordingError::Workflow)?;
 
-    // ADR-068: Closing is optional. If configured, it must be emitted while
-    // capture is still active, immediately before technical stop.
+    // ADR-068 / ADR-071i: Closing is optional and must be emitted while local
+    // capture is still active, after the fachlicher stop and before technical stop.
     if let Some(closing) = configuration.signets().closing() {
         recorder
             .emit_sync_signet(&closing)
@@ -281,8 +292,8 @@ mod tests {
     }
 
     // TEST-01
-    // Verify: The application layer drives the domain workflow through
-    // ready-gating, configurable Opening/Closing signets, stop and completion.
+    // Verify: the application layer completes the domain and technical flow,
+    // with Opening emitted before the stable Recording state is reached.
     #[test]
     fn execute_recording_completes_domain_and_technical_flow_with_configured_signets() {
         let (mut repository, production_id, actor, recording_id) = repository_with_recording();
