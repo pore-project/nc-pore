@@ -383,7 +383,8 @@ mod tests {
             .ready_and_maybe_opening_signet(&mut start, &p)
             .unwrap();
 
-        let result = workflow.stop().status();
+        let capture_result = workflow.stop();
+        let result = capture_result.status();
         assert!(matches!(result, crate::audio::CaptureStatus::Completed));
         assert_eq!(workflow.session().status(), &SessionStatus::Completed);
     }
