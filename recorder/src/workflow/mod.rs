@@ -173,7 +173,7 @@ where
     }
 
     pub fn session(&self) -> &RecordingSession {
-        self.session
+        &self.session
     }
 
     pub fn is_recording(&self) -> bool {
