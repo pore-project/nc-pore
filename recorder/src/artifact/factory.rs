@@ -27,8 +27,7 @@ impl RecordingArtifactFactory {
         preserved_capture: PreservedCapture,
         recording_session_id: RecordingSessionId,
     ) -> RecordingArtifact {
-        let mut artifact =
-            RecordingArtifact::new(preserved_capture.id(), recording_session_id);
+        let mut artifact = RecordingArtifact::new(preserved_capture.id(), recording_session_id);
 
         for capture_track in preserved_capture.tracks() {
             let mut recording_track = match capture_track.configuration() {
