@@ -7,6 +7,9 @@
 //! See:
 //! - ADR-002 Audio Format and Track Concept
 //! - ADR-061 Configurable Recording Configuration
+//! - ADR-068 Recording Start and Audio Synchronization Signet
+
+use super::signet::SyncSignetConfiguration;
 
 /// Sample representation requested for a recording.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -53,22 +56,28 @@ impl Default for RecordingChunkDuration {
 }
 
 /// Recording parameters requested from a capture implementation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RecordingConfiguration {
     sample_rate_hz: u32,
     channels: u16,
     sample_format: SampleFormat,
     chunk_duration: RecordingChunkDuration,
+    signets: SyncSignetConfiguration,
 }
 
 impl RecordingConfiguration {
-    /// Creates a recording configuration with the default chunk duration.
+    /// Creates a recording configuration with the default chunk duration
+    /// and default Opening/Closing synchronization signets.
     pub const fn new(sample_rate_hz: u32, channels: u16, sample_format: SampleFormat) -> Self {
         Self {
             sample_rate_hz,
             channels,
             sample_format,
             chunk_duration: RecordingChunkDuration::OneMinute,
+            signets: SyncSignetConfiguration::new(
+                super::signet::SyncSignet::opening(),
+                Some(super::signet::SyncSignet::closing()),
+            ),
         }
     }
 
@@ -84,6 +93,28 @@ impl RecordingConfiguration {
             channels,
             sample_format,
             chunk_duration,
+            signets: SyncSignetConfiguration::new(
+                super::signet::SyncSignet::opening(),
+                Some(super::signet::SyncSignet::closing()),
+            ),
+        }
+    }
+
+    /// Creates a recording configuration with an explicit synchronization
+    /// signet configuration.
+    pub const fn with_signets(
+        sample_rate_hz: u32,
+        channels: u16,
+        sample_format: SampleFormat,
+        chunk_duration: RecordingChunkDuration,
+        signets: SyncSignetConfiguration,
+    ) -> Self {
+        Self {
+            sample_rate_hz,
+            channels,
+            sample_format,
+            chunk_duration,
+            signets,
         }
     }
 
@@ -107,6 +138,10 @@ impl RecordingConfiguration {
     pub const fn chunk_duration(&self) -> RecordingChunkDuration {
         self.chunk_duration
     }
+
+    pub const fn signets(&self) -> SyncSignetConfiguration {
+        self.signets
+    }
 }
 
 #[cfg(test)]
@@ -115,7 +150,7 @@ mod tests {
 
     // TEST-01
     // Verify: The default recording configuration reflects ADR-002 and
-    // uses the defined default chunk duration.
+    // uses the defined default chunk duration and signet configuration.
     #[test]
     fn default_configuration_matches_adr_002() {
         let configuration = RecordingConfiguration::default();
@@ -126,6 +161,10 @@ mod tests {
         assert_eq!(
             configuration.chunk_duration(),
             RecordingChunkDuration::OneMinute
+        );
+        assert_eq!(
+            configuration.signets().opening().kind(),
+            super::signet::SyncSignetKind::Opening
         );
     }
 
@@ -160,5 +199,32 @@ mod tests {
         assert_eq!(RecordingChunkDuration::TwoMinutes.seconds(), 120);
         assert_eq!(RecordingChunkDuration::FiveMinutes.seconds(), 300);
         assert_eq!(RecordingChunkDuration::TenMinutes.seconds(), 600);
+    }
+
+    // TEST-04
+    // Verify: An explicit signet configuration can replace the default pattern.
+    #[test]
+    fn configuration_accepts_custom_signets() {
+        let opening = super::signet::SyncSignet::new(
+            super::signet::SyncSignetKind::Opening,
+            [
+                super::signet::SignetEvent::new(0, 20),
+                super::signet::SignetEvent::new(80, 20),
+                super::signet::SignetEvent::new(160, 20),
+            ],
+            0.08,
+            42,
+        );
+        let signets = SyncSignetConfiguration::new(opening, None);
+        let configuration = RecordingConfiguration::with_signets(
+            48_000,
+            1,
+            SampleFormat::Pcm24,
+            RecordingChunkDuration::OneMinute,
+            signets,
+        );
+
+        assert_eq!(configuration.signets().opening(), opening);
+        assert!(configuration.signets().closing().is_none());
     }
 }
