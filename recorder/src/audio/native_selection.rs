@@ -222,8 +222,7 @@ mod tests {
 
     #[test]
     fn native_16_bit_is_preserved_as_a_real_recording_format() {
-        let capability =
-            NativeAudioCapability::new(1, 48_000, 48_000, NativeSampleFormat::Pcm16);
+        let capability = NativeAudioCapability::new(1, 48_000, 48_000, NativeSampleFormat::Pcm16);
         assert_eq!(
             capability.sample_format().as_recording_format(),
             SampleFormat::Pcm16
