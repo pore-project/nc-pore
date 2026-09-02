@@ -6,10 +6,14 @@
 //! than being silently quantized to PCM24 merely because V1 transport uses
 //! FLAC.
 //!
-//! This boundary is intentionally in-memory for now. Durable local storage,
-//! completion jobs and upload orchestration remain subsequent layers.
+//! Durable local storage is provided as a separate implementation of this
+//! boundary. Completion jobs and upload orchestration remain subsequent layers.
+
+mod storage;
 
 use crate::audio::{CaptureResult, CaptureStatus, CaptureTrack};
+
+pub use storage::{FilesystemPreservationStore, PreservationLoadResult};
 
 /// Owned, transport-neutral representation of a completed local capture.
 ///
