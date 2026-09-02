@@ -158,6 +158,14 @@ mod tests {
             Ok(())
         }
 
+        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
+            if signet.kind() == SyncSignetKind::Opening {
+                Ok(())
+            } else {
+                Ok(())
+            }
+        }
+
         fn stop_capture(&mut self) -> CaptureResult {
             CaptureResult::failed("application-failed-capture", "input stream failed")
         }
