@@ -88,7 +88,7 @@ impl FilesystemPreservationStore {
         Self { root }
     }
 
-    fn validate_id(id: &str) -> bool {
+    fn valid_id(id: &str) -> bool {
         !id.is_empty() && id != "." && id != ".." && !id.contains('/') && !id.contains('\\')
     }
 
@@ -96,9 +96,8 @@ impl FilesystemPreservationStore {
         self.root.join(id)
     }
 
-    fn payload_path(capture_dir: &Path, track_id: &str, sequence: u32) -> PathBuf {
-        capture_dir
-            .join("tracks")
+    fn payload_path(dir: &Path, track_id: &str, sequence: u32) -> PathBuf {
+        dir.join("tracks")
             .join(track_id)
             .join(format!("chunk-{sequence:06}.payload"))
     }
@@ -149,8 +148,8 @@ impl FilesystemPreservationStore {
         }
     }
 
-    fn restore(metadata: PersistedCapture, capture_dir: &Path) -> PreservationLoadResult {
-        if !Self::validate_id(&metadata.id) {
+    fn restore(metadata: PersistedCapture, dir: &Path) -> PreservationLoadResult {
+        if !Self::valid_id(&metadata.id) {
             return PreservationLoadResult::Inconsistent;
         }
 
@@ -160,37 +159,34 @@ impl FilesystemPreservationStore {
         };
 
         for persisted_track in metadata.tracks {
-            if !Self::validate_id(&persisted_track.id) {
+            if !Self::valid_id(&persisted_track.id) {
                 return PreservationLoadResult::Inconsistent;
             }
 
-            let configuration = persisted_track.configuration.map_or_else(
-                || Ok(None),
-                |configuration| {
-                    let duration = match configuration.chunk_duration_seconds {
+            let configuration = match persisted_track.configuration {
+                None => None,
+                Some(value) => {
+                    let duration = match value.chunk_duration_seconds {
                         10 => RecordingChunkDuration::TenSeconds,
                         30 => RecordingChunkDuration::ThirtySeconds,
                         60 => RecordingChunkDuration::OneMinute,
                         120 => RecordingChunkDuration::TwoMinutes,
                         300 => RecordingChunkDuration::FiveMinutes,
                         600 => RecordingChunkDuration::TenMinutes,
-                        _ => return Err(()),
+                        _ => return PreservationLoadResult::Inconsistent,
                     };
-                    let format = match configuration.sample_format {
+                    let format = match value.sample_format {
                         PersistedSampleFormat::Pcm16 => SampleFormat::Pcm16,
                         PersistedSampleFormat::Pcm24 => SampleFormat::Pcm24,
                         PersistedSampleFormat::F32 => SampleFormat::F32,
                     };
-                    Ok(Some(RecordingConfiguration::with_chunk_duration(
-                        configuration.sample_rate_hz,
-                        configuration.channels,
+                    Some(RecordingConfiguration::with_chunk_duration(
+                        value.sample_rate_hz,
+                        value.channels,
                         format,
                         duration,
-                    )))
-                },
-            );
-            let Ok(configuration) = configuration else {
-                return PreservationLoadResult::Inconsistent;
+                    ))
+                }
             };
 
             let mut track = match configuration {
@@ -215,7 +211,7 @@ impl FilesystemPreservationStore {
             }
 
             for chunk in persisted_track.chunks {
-                let path = Self::payload_path(capture_dir, &persisted_track.id, chunk.sequence);
+                let path = Self::payload_path(dir, &persisted_track.id, chunk.sequence);
                 if !path.is_file() {
                     return PreservationLoadResult::Incomplete;
                 }
@@ -238,11 +234,11 @@ impl FilesystemPreservationStore {
 
     /// Durably stores a preserved capture without changing its representation.
     pub fn store(&self, capture: &PreservedCapture) -> Result<(), std::io::Error> {
-        if !Self::validate_id(capture.id())
+        if !Self::valid_id(capture.id())
             || capture
                 .tracks()
                 .iter()
-                .any(|track| !Self::validate_id(track.id.value()))
+                .any(|track| !Self::valid_id(track.id.value()))
         {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -255,9 +251,9 @@ impl FilesystemPreservationStore {
         let temp_dir = self.root.join(format!(".{}.tmp", capture.id()));
         let _ = fs::remove_dir_all(&temp_dir);
         fs::create_dir_all(&temp_dir)?;
-        let metadata_json = serde_json::to_string_pretty(&metadata)
+        let content = serde_json::to_string_pretty(&metadata)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-        fs::write(temp_dir.join("capture.json"), metadata_json)?;
+        fs::write(temp_dir.join("capture.json"), content)?;
 
         for track in capture.tracks() {
             for chunk in track.chunks() {
@@ -273,14 +269,14 @@ impl FilesystemPreservationStore {
 
     /// Restores and verifies a preserved capture after a restart.
     pub fn load(&self, id: &str) -> PreservationLoadResult {
-        if !Self::validate_id(id) {
+        if !Self::valid_id(id) {
             return PreservationLoadResult::Inconsistent;
         }
-        let capture_dir = self.capture_dir(id);
-        if !capture_dir.is_dir() {
+        let dir = self.capture_dir(id);
+        if !dir.is_dir() {
             return PreservationLoadResult::NotFound;
         }
-        let metadata_path = capture_dir.join("capture.json");
+        let metadata_path = dir.join("capture.json");
         if !metadata_path.is_file() {
             return PreservationLoadResult::Incomplete;
         }
@@ -292,7 +288,7 @@ impl FilesystemPreservationStore {
             Ok(metadata) => metadata,
             Err(_) => return PreservationLoadResult::Inconsistent,
         };
-        Self::restore(metadata, &capture_dir)
+        Self::restore(metadata, &dir)
     }
 }
 
@@ -339,7 +335,6 @@ mod tests {
         let store = FilesystemPreservationStore::new(&root);
         let capture = test_capture();
         store.store(&capture).expect("capture should be stored");
-
         let restored = match store.load("capture-persisted") {
             PreservationLoadResult::Valid(capture) => capture,
             other => panic!("capture should restore, got {other:?}"),
@@ -353,14 +348,19 @@ mod tests {
     fn missing_payload_is_reported_as_incomplete() {
         let root = test_directory("missing-payload");
         let store = FilesystemPreservationStore::new(&root);
-        store.store(&test_capture()).expect("capture should be stored");
+        store
+            .store(&test_capture())
+            .expect("capture should be stored");
         let payload = root
             .join("capture-persisted")
             .join("tracks")
             .join("track-mic")
             .join("chunk-000001.payload");
         fs::remove_file(payload).expect("payload should exist");
-        assert_eq!(store.load("capture-persisted"), PreservationLoadResult::Incomplete);
+        assert_eq!(
+            store.load("capture-persisted"),
+            PreservationLoadResult::Incomplete
+        );
         let _ = fs::remove_dir_all(root);
     }
 
@@ -369,14 +369,19 @@ mod tests {
     fn modified_payload_is_reported_as_inconsistent() {
         let root = test_directory("modified-payload");
         let store = FilesystemPreservationStore::new(&root);
-        store.store(&test_capture()).expect("capture should be stored");
+        store
+            .store(&test_capture())
+            .expect("capture should be stored");
         let payload = root
             .join("capture-persisted")
             .join("tracks")
             .join("track-mic")
             .join("chunk-000001.payload");
         fs::write(payload, [9, 8, 7]).expect("payload should be mutable in the test");
-        assert_eq!(store.load("capture-persisted"), PreservationLoadResult::Inconsistent);
+        assert_eq!(
+            store.load("capture-persisted"),
+            PreservationLoadResult::Inconsistent
+        );
         let _ = fs::remove_dir_all(root);
     }
 }
