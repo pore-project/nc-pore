@@ -55,18 +55,19 @@ pub struct SyncSignet {
 impl SyncSignet {
     /// Creates a signet from its configured temporal and rendering parameters.
     ///
-    /// `amplitude_ppm` is the linear amplitude in parts per million of full
-    /// scale. For example, `120_000` represents 0.12 full scale.
+    /// `amplitude` is the linear amplitude in the range 0.0..=1.0. It is
+    /// converted to parts per million internally to keep the value exactly
+    /// comparable. For example, `0.12` represents 0.12 full scale.
     pub const fn new(
         kind: SyncSignetKind,
         events: [SignetEvent; 3],
-        amplitude_ppm: u32,
+        amplitude: f32,
         seed: u32,
     ) -> Self {
         Self {
             kind,
             events,
-            amplitude_ppm,
+            amplitude_ppm: (amplitude * 1_000_000.0) as u32,
             seed,
         }
     }
@@ -89,7 +90,7 @@ impl SyncSignet {
                 SignetEvent::new(120, 40),
                 SignetEvent::new(240, 40),
             ],
-            120_000,
+            0.12,
             seed,
         )
     }
@@ -161,7 +162,7 @@ mod tests {
                 SignetEvent::new(75, 30),
                 SignetEvent::new(180, 50),
             ],
-            200_000,
+            0.2,
             1234,
         );
 
