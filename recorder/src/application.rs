@@ -259,9 +259,12 @@ mod tests {
             .emit_sync_signet(&configuration.signets().opening().expect("opening signet"))
             .unwrap();
 
-        assert!(!application.emit_optional_sync_signet(
-            configuration.signets().closing().as_ref().expect("closing signet")
-        ));
+        let closing = configuration
+            .signets()
+            .closing()
+            .as_ref()
+            .expect("closing signet");
+        assert!(!application.emit_optional_sync_signet(closing));
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
                 "production-fallback",
