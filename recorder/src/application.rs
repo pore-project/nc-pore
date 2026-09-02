@@ -275,8 +275,9 @@ mod tests {
     #[test]
     fn failed_capture_returns_application_error() {
         let session = RecordingSession::new("session-failed");
-        let processor =
-            RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            RejectingPersistenceProvider,
+        ));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
 
         application
