@@ -135,13 +135,15 @@ pub trait RemoteArtifactUploader {
     fn upload(&mut self, upload: &PreparedUpload) -> Result<RemoteUploadReceipt, Self::Error>;
 }
 
-/// Orchestrates durable completion up to an explicitly confirmed remote upload.
-pub struct CompletionCoordinator<'a, U> {
+/// Orchestrates the durable upload workflow up to an explicitly confirmed
+/// remote upload. `Uploaded` is the terminal state of the upload; higher-level
+/// completion and local cleanup may follow only after this point.
+pub struct UploadCoordinator<'a, U> {
     jobs: &'a FilesystemCompletionJobStore,
     uploader: U,
 }
 
-impl<'a, U> CompletionCoordinator<'a, U>
+impl<'a, U> UploadCoordinator<'a, U>
 where
     U: RemoteArtifactUploader,
 {
@@ -149,89 +151,92 @@ where
         Self { jobs, uploader }
     }
 
-    /// Completes one artifact and marks it uploaded only after exact receipt validation.
-    pub fn complete(
+    /// Runs one upload attempt and finalizes it only after exact receipt validation.
+    pub fn upload(
         &mut self,
         job: &mut CompletionJob,
         artifact: &RecordingArtifact,
-    ) -> Result<(), CompletionCoordinatorError<U::Error>> {
+    ) -> Result<(), UploadCoordinatorError<U::Error>> {
         job.begin_upload_preparation()
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         self.jobs
             .save(job)
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         let prepared = match job.prepare_upload(artifact) {
             Ok(upload) => upload,
             Err(error) => {
                 let _ = job.mark_retryable_failure();
                 let _ = self.jobs.save(job);
-                return Err(CompletionCoordinatorError::Job(error));
+                return Err(UploadCoordinatorError::Job(error));
             }
         };
         job.mark_ready_for_upload()
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         self.jobs
             .save(job)
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         job.mark_uploading()
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         self.jobs
             .save(job)
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         let receipt = match self.uploader.upload(&prepared) {
             Ok(receipt) => receipt,
             Err(error) => {
                 job.mark_retryable_failure()
-                    .map_err(CompletionCoordinatorError::Job)?;
+                    .map_err(UploadCoordinatorError::Job)?;
                 self.jobs
                     .save(job)
-                    .map_err(CompletionCoordinatorError::Job)?;
-                return Err(CompletionCoordinatorError::Upload(error));
+                    .map_err(UploadCoordinatorError::Job)?;
+                return Err(UploadCoordinatorError::Upload(error));
             }
         };
         if let Err(error) = validate_upload_receipt(&prepared, &receipt) {
             job.mark_retryable_failure()
-                .map_err(CompletionCoordinatorError::Job)?;
+                .map_err(UploadCoordinatorError::Job)?;
             self.jobs
                 .save(job)
-                .map_err(CompletionCoordinatorError::Job)?;
-            return Err(CompletionCoordinatorError::Confirmation(error));
+                .map_err(UploadCoordinatorError::Job)?;
+            return Err(UploadCoordinatorError::Confirmation(error));
         }
+        // This is the upload boundary's finalization step. Only after exact
+        // remote confirmation may the durable job become `Uploaded`.
         job.mark_uploaded()
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         self.jobs
             .save(job)
-            .map_err(CompletionCoordinatorError::Job)?;
+            .map_err(UploadCoordinatorError::Job)?;
         Ok(())
     }
 
-    /// Restores the durable capture named by the completion job, rebuilds the artifact from that preserved representation, and then completes it.
-    pub fn complete_from_preservation(
+    /// Restores the durable capture named by the upload job, rebuilds the
+    /// artifact from that preserved representation, and then uploads it.
+    pub fn upload_from_preservation(
         &mut self,
         job: &mut CompletionJob,
         preservation: &FilesystemPreservationStore,
         recording_session_id: RecordingSessionId,
-    ) -> Result<(), CompletionCoordinatorError<U::Error>> {
+    ) -> Result<(), UploadCoordinatorError<U::Error>> {
         let preserved = match preservation.load(job.capture_id()) {
             PreservationLoadResult::Valid(capture) => capture,
             PreservationLoadResult::Incomplete => {
-                return Err(CompletionCoordinatorError::Preservation(
+                return Err(UploadCoordinatorError::Preservation(
                     PreservationCompletionError::Incomplete,
                 ));
             }
             PreservationLoadResult::Inconsistent => {
-                return Err(CompletionCoordinatorError::Preservation(
+                return Err(UploadCoordinatorError::Preservation(
                     PreservationCompletionError::Inconsistent,
                 ));
             }
             PreservationLoadResult::NotFound => {
-                return Err(CompletionCoordinatorError::Preservation(
+                return Err(UploadCoordinatorError::Preservation(
                     PreservationCompletionError::NotFound,
                 ));
             }
         };
         let artifact = RecordingArtifactFactory::create(preserved, recording_session_id);
-        self.complete(job, &artifact)
+        self.upload(job, &artifact)
     }
 
     pub fn uploader(&self) -> &U {
@@ -240,7 +245,7 @@ where
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum CompletionCoordinatorError<E> {
+pub enum UploadCoordinatorError<E> {
     Job(CompletionJobError),
     Preservation(PreservationCompletionError),
     Upload(E),
@@ -411,20 +416,20 @@ mod tests {
 
     // TEST-54: Completion reaches Uploaded only after exact remote confirmation.
     #[test]
-    fn coordinator_requires_exact_confirmation_before_uploaded() {
+    fn upload_coordinator_requires_exact_confirmation_before_uploaded() {
         let root = std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id()));
         let store = FilesystemCompletionJobStore::new(&root).unwrap();
         let artifact = test_artifact();
         let mut job = CompletionJob::new("job-054", "capture-054");
-        let mut coordinator = CompletionCoordinator::new(&store, ConfirmingUploader);
-        coordinator.complete(&mut job, &artifact).unwrap();
+        let mut coordinator = UploadCoordinator::new(&store, ConfirmingUploader);
+        coordinator.upload(&mut job, &artifact).unwrap();
         assert_eq!(job.state(), crate::completion::CompletionJobState::Uploaded);
         let _ = std::fs::remove_dir_all(root);
     }
 
     // TEST-55: A mismatching receipt cannot advance the durable job to Uploaded.
     #[test]
-    fn coordinator_rejects_mismatching_confirmation() {
+    fn upload_coordinator_rejects_mismatching_confirmation() {
         let root = std::env::temp_dir().join(format!(
             "nc-pore-coordinator-mismatch-{}",
             std::process::id()
@@ -432,11 +437,11 @@ mod tests {
         let store = FilesystemCompletionJobStore::new(&root).unwrap();
         let artifact = test_artifact();
         let mut job = CompletionJob::new("job-055", "capture-055");
-        let mut coordinator = CompletionCoordinator::new(&store, MismatchingUploader);
-        let error = coordinator.complete(&mut job, &artifact).unwrap_err();
+        let mut coordinator = UploadCoordinator::new(&store, MismatchingUploader);
+        let error = coordinator.upload(&mut job, &artifact).unwrap_err();
         assert_eq!(
             error,
-            CompletionCoordinatorError::Confirmation(RemoteUploadValidationError::TrackMismatch)
+            UploadCoordinatorError::Confirmation(RemoteUploadValidationError::TrackMismatch)
         );
         assert_eq!(
             job.state(),
@@ -447,7 +452,7 @@ mod tests {
 
     // TEST-56: Restart recovery reconstructs the artifact from durable preservation.
     #[test]
-    fn coordinator_can_complete_from_durable_preservation() {
+    fn upload_coordinator_can_upload_from_durable_preservation() {
         let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -465,9 +470,9 @@ mod tests {
         let preserved = CapturePreserver::preserve(capture);
         preservation.store(&preserved).unwrap();
         let mut job = CompletionJob::new("job-056", "capture-056");
-        let mut coordinator = CompletionCoordinator::new(&jobs, ConfirmingUploader);
+        let mut coordinator = UploadCoordinator::new(&jobs, ConfirmingUploader);
         coordinator
-            .complete_from_preservation(
+            .upload_from_preservation(
                 &mut job,
                 &preservation,
                 RecordingSessionId::new("session-056"),
@@ -491,9 +496,9 @@ mod tests {
         let preservation = FilesystemPreservationStore::new(&preservation_root);
         let jobs = FilesystemCompletionJobStore::new(&jobs_root).unwrap();
         let mut job = CompletionJob::new("job-057", "capture-057");
-        let mut coordinator = CompletionCoordinator::new(&jobs, ConfirmingUploader);
+        let mut coordinator = UploadCoordinator::new(&jobs, ConfirmingUploader);
         let error = coordinator
-            .complete_from_preservation(
+            .upload_from_preservation(
                 &mut job,
                 &preservation,
                 RecordingSessionId::new("session-057"),
@@ -501,7 +506,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             error,
-            CompletionCoordinatorError::Preservation(PreservationCompletionError::NotFound)
+            UploadCoordinatorError::Preservation(PreservationCompletionError::NotFound)
         );
         assert_eq!(job.state(), crate::completion::CompletionJobState::Pending);
         let _ = std::fs::remove_dir_all(preservation_root);
