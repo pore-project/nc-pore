@@ -8,6 +8,7 @@ pub mod application;
 pub mod artifact;
 pub mod audio;
 pub mod export;
+pub mod host;
 pub mod metadata;
 pub mod persistence;
 pub mod remote;
