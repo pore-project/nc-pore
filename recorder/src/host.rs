@@ -142,11 +142,8 @@ mod tests {
     fn connector_reports_host_neutral_source_changes() {
         let previous = CaptureSource::new("device-1");
         let current = CaptureSource::new("device-2");
-        let change = CaptureSourceChange::new(
-            1_762_000_000_000,
-            Some(previous.clone()),
-            current.clone(),
-        );
+        let change =
+            CaptureSourceChange::new(1_762_000_000_000, Some(previous.clone()), current.clone());
         let mut connector = FakeHostConnector {
             source: Some(current),
             changes: vec![change],
@@ -160,9 +157,11 @@ mod tests {
         assert_eq!(changes[0].occurred_at_unix_ms(), 1_762_000_000_000);
         assert_eq!(changes[0].previous(), Some(&previous));
         assert_eq!(changes[0].current().id(), "device-2");
-        assert!(connector
-            .poll_capture_source_changes()
-            .expect("second poll succeeds")
-            .is_empty());
+        assert!(
+            connector
+                .poll_capture_source_changes()
+                .expect("second poll succeeds")
+                .is_empty()
+        );
     }
 }
