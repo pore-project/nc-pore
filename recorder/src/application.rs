@@ -262,9 +262,7 @@ mod tests {
             .emit_sync_signet(&configuration.signets().opening())
             .unwrap();
 
-        assert!(!application.emit_optional_sync_signet(
-            &configuration.signets().closing()
-        ));
+        assert!(!application.emit_optional_sync_signet(&configuration.signets().closing()));
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
                 "production-fallback",
@@ -277,9 +275,8 @@ mod tests {
     #[test]
     fn failed_capture_returns_application_error() {
         let session = RecordingSession::new("session-failed");
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
-            RejectingPersistenceProvider,
-        ));
+        let processor =
+            RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
         application
             .start(&RecordingConfiguration::default())
