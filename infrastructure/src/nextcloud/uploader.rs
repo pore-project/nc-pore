@@ -182,7 +182,9 @@ impl NextcloudArtifactUploader {
         T: crate::nextcloud::WebDavTransport,
     {
         if data.len() < LARGE_FILE_THRESHOLD {
-            let checksum = hex_hash(recorder::artifact::PayloadHash::from_bytes(&data).as_bytes());
+            let checksum = hex_hash(
+                recorder::artifact::PayloadHash::from_bytes(&data).as_bytes(),
+            );
             return client.put_with_headers(
                 destination_path,
                 data,
@@ -193,7 +195,9 @@ impl NextcloudArtifactUploader {
         let destination = client.url_for(destination_path)?.to_string();
         let upload_id = format!(
             "nc-pore-{}",
-            hex_hash(recorder::artifact::PayloadHash::from_bytes(destination_path.as_bytes()).as_bytes())
+            hex_hash(
+                recorder::artifact::PayloadHash::from_bytes(destination_path.as_bytes()).as_bytes(),
+            )
         );
         let upload_root = format!(
             "remote.php/dav/uploads/{}/{upload_id}",
@@ -239,10 +243,7 @@ impl NextcloudArtifactUploader {
 impl RemoteArtifactUploader for NextcloudArtifactUploader {
     type Error = NextcloudProviderError;
 
-    fn upload(
-        &mut self,
-        upload: &PreparedUpload,
-    ) -> Result<RemoteUploadReceipt, Self::Error> {
+    fn upload(&mut self, upload: &PreparedUpload) -> Result<RemoteUploadReceipt, Self::Error> {
         let connection = self.connection.clone();
         let client = connection.client()?;
         self.upload_with_client(&client, upload)
@@ -322,10 +323,12 @@ mod tests {
     fn path_uses_recording_start_and_default_audio_root() {
         let start = UNIX_EPOCH + Duration::from_secs(1_756_000_000);
         let metadata = RemoteArtifactMetadata::new(start, Some("Interview Frizz Feick".into()));
-        let connection = NextcloudConnection::new(crate::nextcloud::NextcloudConnectionConfig::new(
-            "https://cloud.example.test",
-            crate::nextcloud::NextcloudCredentials::new("host-user", "password"),
-        ))
+        let connection = NextcloudConnection::new(
+            crate::nextcloud::NextcloudConnectionConfig::new(
+                "https://cloud.example.test",
+                crate::nextcloud::NextcloudCredentials::new("host-user", "password"),
+            ),
+        )
         .unwrap();
         let uploader = NextcloudArtifactUploader::new(connection, metadata);
         let path = uploader.artifact_path("artifact-123").unwrap();
@@ -339,10 +342,12 @@ mod tests {
             SystemTime::UNIX_EPOCH,
             Some("Frizz Feick / Help the man".into()),
         );
-        let connection = NextcloudConnection::new(crate::nextcloud::NextcloudConnectionConfig::new(
-            "https://cloud.example.test",
-            crate::nextcloud::NextcloudCredentials::new("user", "password"),
-        ))
+        let connection = NextcloudConnection::new(
+            crate::nextcloud::NextcloudConnectionConfig::new(
+                "https://cloud.example.test",
+                crate::nextcloud::NextcloudCredentials::new("user", "password"),
+            ),
+        )
         .unwrap();
         let uploader = NextcloudArtifactUploader::new(connection, metadata);
         let path = uploader.artifact_path("artifact-123").unwrap();
