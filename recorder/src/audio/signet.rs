@@ -40,28 +40,33 @@ impl SignetEvent {
 /// Configurable provider-neutral signet description.
 ///
 /// The temporal event pattern, amplitude and renderer seed are configuration
-/// data rather than fixed recorder policy. A concrete capture provider may
-/// render this description according to its audio technology.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// data rather than fixed recorder policy. Amplitude is stored as a millionth
+/// of full scale so the configuration remains exactly comparable. A concrete
+/// capture provider may render this description according to its audio
+/// technology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyncSignet {
     kind: SyncSignetKind,
     events: [SignetEvent; 3],
-    amplitude: f32,
+    amplitude_ppm: u32,
     seed: u32,
 }
 
 impl SyncSignet {
     /// Creates a signet from its configured temporal and rendering parameters.
+    ///
+    /// `amplitude_ppm` is the linear amplitude in parts per million of full
+    /// scale. For example, `120_000` represents 0.12 full scale.
     pub const fn new(
         kind: SyncSignetKind,
         events: [SignetEvent; 3],
-        amplitude: f32,
+        amplitude_ppm: u32,
         seed: u32,
     ) -> Self {
         Self {
             kind,
             events,
-            amplitude,
+            amplitude_ppm,
             seed,
         }
     }
@@ -84,7 +89,7 @@ impl SyncSignet {
                 SignetEvent::new(120, 40),
                 SignetEvent::new(240, 40),
             ],
-            0.12,
+            120_000,
             seed,
         )
     }
@@ -97,8 +102,8 @@ impl SyncSignet {
         self.events
     }
 
-    pub const fn amplitude(self) -> f32 {
-        self.amplitude
+    pub const fn amplitude_ppm(self) -> u32 {
+        self.amplitude_ppm
     }
 
     pub const fn seed(self) -> u32 {
@@ -113,7 +118,7 @@ impl SyncSignet {
 }
 
 /// Configures which concrete signet descriptions the recorder lifecycle uses.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyncSignetConfiguration {
     opening: SyncSignet,
     closing: Option<SyncSignet>,
@@ -156,12 +161,12 @@ mod tests {
                 SignetEvent::new(75, 30),
                 SignetEvent::new(180, 50),
             ],
-            0.2,
+            200_000,
             1234,
         );
 
         assert_eq!(signet.events()[1], SignetEvent::new(75, 30));
-        assert_eq!(signet.amplitude(), 0.2);
+        assert_eq!(signet.amplitude_ppm(), 200_000);
         assert_eq!(signet.seed(), 1234);
         assert_eq!(signet.duration_ms(), 230);
     }
