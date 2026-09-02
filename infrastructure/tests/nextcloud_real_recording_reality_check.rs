@@ -143,7 +143,11 @@ fn nextcloud_real_recording_reality_check() {
 
     thread::sleep(Duration::from_secs(9));
 
-    let capture_result = workflow.stop_after_optional_closing(&configuration.signets().closing());
+    let closing_configuration = configuration.signets().closing();
+    let closing = closing_configuration
+        .as_ref()
+        .expect("closing signet must be configured");
+    let capture_result = workflow.stop_after_optional_closing(closing);
 
     assert!(
         !capture_result.tracks().is_empty(),
@@ -178,7 +182,7 @@ fn nextcloud_real_recording_reality_check() {
     let manifest_hash = artifact.manifest_hash();
     let recorded_at: DateTime<chrono::Utc> = SystemTime::now().into();
     let recorded_at = recorded_at.to_rfc3339_opts(SecondsFormat::Secs, true);
-    let display_name = "NC-PoRe Real Recording Reality Check".to_owned();
+    let display_name = "NC-PoRE Real Recording Reality Check".to_owned();
     let metadata =
         ArtifactTransferMetadata::new(Some(display_name.clone()), Some(recorded_at.clone()));
 
