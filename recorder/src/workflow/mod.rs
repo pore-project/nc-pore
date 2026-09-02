@@ -81,6 +81,10 @@ where
             return Ok(None);
         }
 
+        self.session
+            .ready()
+            .map_err(|_| WorkflowCoordinationError::InvalidSessionState)?;
+
         let signet = coordinator
             .opening_sync_signet()
             .ok_or(WorkflowCoordinationError::InvalidSessionState)?;
@@ -90,19 +94,40 @@ where
             .map_err(WorkflowCoordinationError::SignetEmission)?;
 
         self.session
-            .ready()
+            .confirm_opening()
             .map_err(|_| WorkflowCoordinationError::InvalidSessionState)?;
+
         Ok(Some(signet))
     }
 
-    /// Legacy/local-only READY transition. The coordinated ADR-068 path should
-    /// use `ready_and_maybe_opening_signet`.
+    /// Records local READY. This deliberately enters the Opening phase rather
+    /// than stable Recording; Opening confirmation is performed only after the
+    /// required Opening Signet has been successfully emitted.
     pub fn ready(&mut self) -> Result<(), crate::session::SessionTransitionError> {
         self.session.ready()
     }
 
+    /// Emits a synchronization signet into the active capture.
+    ///
+    /// Opening is strict: it is accepted only during the local Opening phase,
+    /// and successful emission immediately confirms the local Opening barrier.
+    /// Closing is optional and never changes the recording lifecycle by itself.
     pub fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
-        self.capture.emit_sync_signet(signet)
+        if signet.kind() == crate::audio::SyncSignetKind::Opening
+            && self.session.status() != &SessionStatus::Opening
+        {
+            return Err(SyncSignetEmissionError::NotCapturing);
+        }
+
+        self.capture.emit_sync_signet(signet)?;
+
+        if signet.kind() == crate::audio::SyncSignetKind::Opening {
+            self.session
+                .confirm_opening()
+                .map_err(|_| SyncSignetEmissionError::NotCapturing)?;
+        }
+
+        Ok(())
     }
 
     /// Stops local capture without coordinating a Closing Signet.
@@ -324,7 +349,7 @@ mod tests {
             workflow.ready_and_maybe_opening_signet(&mut coordinator, &p),
             Err(WorkflowCoordinationError::SignetEmission(_))
         ));
-        assert_eq!(workflow.session().status(), &SessionStatus::WaitingForReady);
+        assert_eq!(workflow.session().status(), &SessionStatus::Opening);
     }
 
     #[test]
