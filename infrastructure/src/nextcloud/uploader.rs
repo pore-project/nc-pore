@@ -1,9 +1,9 @@
 use crate::nextcloud::{NextcloudConnection, NextcloudProviderError, WebDavClient};
 use chrono::{DateTime, Utc};
+use recorder::completion::PreparedUpload;
 use recorder::remote::{
     RemoteArtifactMetadata, RemoteArtifactUploader, RemoteUploadReceipt, RemoteUploadTrackReceipt,
 };
-use recorder::PreparedUpload;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -241,7 +241,8 @@ impl RemoteArtifactUploader for NextcloudArtifactUploader {
         &mut self,
         upload: &PreparedUpload,
     ) -> Result<RemoteUploadReceipt, Self::Error> {
-        let client = self.connection.client()?;
+        let connection = self.connection.clone();
+        let client = connection.client()?;
         self.upload_with_client(&client, upload)
     }
 }
