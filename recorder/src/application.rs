@@ -2,27 +2,14 @@
 //!
 //! This module composes recorder workflow and artifact processing.
 //!
-//! It intentionally does not contain:
-//! - audio implementation logic
-//! - artifact creation logic
-//! - persistence implementation
-//! - production domain rules
-//!
-//! The application boundary receives the originating domain identifiers as
-//! opaque values and passes them into artifact processing. This keeps the
-//! recorder crate independent from the core crate while preserving the
-//! relationship between a domain Recording and its persisted artifact.
-//!
-//! See:
-//! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
-//! - ADR-051 Recording Artifact Processing Boundary
-//! - ADR-061 Configurable Recording Configuration
-//! - ADR-068 Recording Start and Audio Synchronization Signet
+//! It intentionally does not contain audio implementation logic, artifact
+//! creation logic, persistence implementation, or production domain rules.
 
 use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
 use crate::audio::{
     CaptureProvider, CaptureStatus, RecordingConfiguration, SyncSignet, SyncSignetEmissionError,
+    SyncSignetKind,
 };
 use crate::persistence::PersistenceProvider;
 use crate::persistence::PersistenceStoreError;
@@ -78,25 +65,30 @@ where
         self.workflow.ready()
     }
 
-    /// Emits a required or otherwise explicitly requested signet and propagates
-    /// the technical emission error to the caller. This is the strict path
-    /// used for Opening, whose lifecycle requirement is MUST.
+    /// Emits a synchronization signet into the active capture.
+    ///
+    /// Opening is strict because it is the required ADR-068 start barrier.
+    /// Closing is optional; emission failure is deliberately swallowed so a
+    /// recorder that can no longer hear/capture Closing can still stop and
+    /// complete normally.
     pub fn emit_sync_signet(
         &mut self,
         signet: &SyncSignet,
     ) -> Result<(), RecorderApplicationError> {
-        self.workflow
-            .emit_sync_signet(signet)
-            .map_err(RecorderApplicationError::SyncSignet)
+        match signet.kind() {
+            SyncSignetKind::Opening => self
+                .workflow
+                .emit_sync_signet(signet)
+                .map_err(RecorderApplicationError::SyncSignet),
+            SyncSignetKind::Closing => {
+                let _ = self.workflow.emit_sync_signet(signet);
+                Ok(())
+            }
+        }
     }
 
-    /// Attempts an optional Closing Signet without making it a stop prerequisite.
-    ///
-    /// The caller still gets the technical outcome for observability, but the
-    /// recorder workflow must continue to technical stop regardless. In
-    /// particular, a remote participant such as Bob may no longer be capturing
-    /// when Closing is attempted; that is a normal v1 fallback, not a failed
-    /// recording lifecycle.
+    /// Explicitly named best-effort API for optional Closing emission.
+    /// Returns whether the technical provider accepted the signet.
     pub fn emit_optional_sync_signet(&mut self, signet: &SyncSignet) -> bool {
         self.workflow.emit_sync_signet(signet).is_ok()
     }
@@ -106,7 +98,6 @@ where
         association: RecordingArtifactAssociation,
     ) -> Result<crate::artifact::RecordingArtifact, RecorderApplicationError> {
         let recording_session_id = RecordingSessionId::new(self.workflow.session().id());
-
         let capture_result = self.workflow.stop();
 
         if let CaptureStatus::Failed(error) = capture_result.status() {
@@ -192,13 +183,8 @@ mod tests {
     #[test]
     fn application_processes_recording_flow() {
         let session = RecordingSession::new("session-001");
-        let capture = TestCaptureProvider {
-            emitted: Vec::new(),
-            fail_on_closing: false,
-        };
-        let persistence = InMemoryPersistenceProvider::new();
-        let coordinator = ArtifactCoordinator::new(persistence);
-        let processor = RecordingArtifactProcessor::new(coordinator);
+        let capture = TestCaptureProvider { emitted: Vec::new(), fail_on_closing: false };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(InMemoryPersistenceProvider::new()));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
 
@@ -219,16 +205,10 @@ mod tests {
     #[test]
     fn application_stores_processed_artifact() {
         let session = RecordingSession::new("session-002");
-        let capture = TestCaptureProvider {
-            emitted: Vec::new(),
-            fail_on_closing: false,
-        };
-        let persistence = InMemoryPersistenceProvider::new();
-        let coordinator = ArtifactCoordinator::new(persistence);
-        let processor = RecordingArtifactProcessor::new(coordinator);
+        let capture = TestCaptureProvider { emitted: Vec::new(), fail_on_closing: false };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(InMemoryPersistenceProvider::new()));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
-
         application.start(&configuration).unwrap();
         application.ready().unwrap();
 
@@ -245,12 +225,8 @@ mod tests {
     #[test]
     fn optional_closing_failure_does_not_block_technical_stop() {
         let session = RecordingSession::new("session-closing-fallback");
-        let capture = TestCaptureProvider {
-            emitted: Vec::new(),
-            fail_on_closing: true,
-        };
-        let persistence = InMemoryPersistenceProvider::new();
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(persistence));
+        let capture = TestCaptureProvider { emitted: Vec::new(), fail_on_closing: true };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(InMemoryPersistenceProvider::new()));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
 
@@ -258,12 +234,9 @@ mod tests {
         application.ready().unwrap();
         application.emit_sync_signet(&configuration.signets().opening()).unwrap();
 
-        assert!(!application.emit_optional_sync_signet(&configuration.signets().closing()));
+        assert!(application.emit_optional_sync_signet(&configuration.signets().closing()) == false);
         let artifact = application
-            .stop(RecordingArtifactAssociation::new(
-                "production-fallback",
-                "recording-fallback",
-            ))
+            .stop(RecordingArtifactAssociation::new("production-fallback", "recording-fallback"))
             .expect("Closing failure must not block technical stop");
         assert_eq!(artifact.id.value(), "application-test-capture");
     }
@@ -271,18 +244,12 @@ mod tests {
     #[test]
     fn failed_capture_returns_application_error() {
         let session = RecordingSession::new("session-failed");
-        let processor =
-            RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
-
         application.start(&RecordingConfiguration::default()).unwrap();
         application.ready().unwrap();
 
-        let result = application.stop(RecordingArtifactAssociation::new(
-            "production-failed",
-            "recording-failed",
-        ));
-
+        let result = application.stop(RecordingArtifactAssociation::new("production-failed", "recording-failed"));
         assert!(matches!(
             result,
             Err(RecorderApplicationError::Capture(error)) if error == "input stream failed"
