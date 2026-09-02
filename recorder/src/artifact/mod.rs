@@ -27,7 +27,9 @@ pub mod registry;
 pub use id::{ArtifactId, RecordingTrackId};
 pub use integrity::{ManifestHash, PayloadHash};
 
-use crate::audio::{RecordingChunkDuration, RecordingConfiguration, SampleFormat};
+use crate::audio::{
+    CaptureSourceProvenance, RecordingChunkDuration, RecordingConfiguration, SampleFormat,
+};
 use crate::session::RecordingSessionId;
 
 /// Technical lifecycle state of a Recording Artifact.
@@ -195,6 +197,7 @@ impl RecordingChunk {
 pub struct RecordingTrack {
     pub id: RecordingTrackId,
     configuration: Option<RecordingConfiguration>,
+    source_provenance: Option<CaptureSourceProvenance>,
     chunks: Vec<RecordingChunk>,
 }
 
@@ -204,6 +207,7 @@ impl RecordingTrack {
         Self {
             id: RecordingTrackId::new(id),
             configuration: None,
+            source_provenance: None,
             chunks: Vec::new(),
         }
     }
@@ -216,6 +220,7 @@ impl RecordingTrack {
         Self {
             id: RecordingTrackId::new(id),
             configuration: Some(configuration),
+            source_provenance: None,
             chunks: Vec::new(),
         }
     }
@@ -223,6 +228,16 @@ impl RecordingTrack {
     /// Returns the recording configuration used for this track, if known.
     pub const fn configuration(&self) -> Option<RecordingConfiguration> {
         self.configuration
+    }
+
+    /// Attaches local capture-source provenance to this technical track.
+    pub fn set_source_provenance(&mut self, provenance: CaptureSourceProvenance) {
+        self.source_provenance = Some(provenance);
+    }
+
+    /// Returns local capture-source provenance, if known.
+    pub fn source_provenance(&self) -> Option<&CaptureSourceProvenance> {
+        self.source_provenance.as_ref()
     }
 
     /// Adds a technical recording chunk.
@@ -295,7 +310,8 @@ impl RecordingArtifact {
     ///
     /// Lifecycle status is deliberately excluded. The manifest covers the
     /// artifact identity, recording session, domain association, track
-    /// configuration, chunk positions, payload references and payload hashes.
+    /// configuration, source provenance, chunk positions, payload references
+    /// and payload hashes.
     pub fn manifest_hash(&self) -> ManifestHash {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(b"NC-PORE:recording-artifact-manifest:v1\0");
@@ -330,6 +346,29 @@ impl RecordingArtifact {
                         SampleFormat::F32 => 2,
                     });
                     append_chunk_duration(&mut bytes, configuration.chunk_duration());
+                }
+                None => bytes.push(0),
+            }
+
+            match track.source_provenance() {
+                Some(provenance) => {
+                    bytes.push(1);
+                    append_str(&mut bytes, provenance.source_id());
+                    match provenance.label() {
+                        Some(label) => {
+                            bytes.push(1);
+                            append_str(&mut bytes, label);
+                        }
+                        None => bytes.push(0),
+                    }
+                    append_u64(&mut bytes, provenance.started_at_unix_ms());
+                    match provenance.ended_at_unix_ms() {
+                        Some(timestamp) => {
+                            bytes.push(1);
+                            append_u64(&mut bytes, timestamp);
+                        }
+                        None => bytes.push(0),
+                    }
                 }
                 None => bytes.push(0),
             }
@@ -568,5 +607,33 @@ mod tests {
 
         assert_eq!(chunk.sequence, 2);
         assert_eq!(chunk.sample_offset(), 14_400_000);
+    }
+
+    // TEST-40
+    //
+    // Protects the host-neutral capture boundary:
+    // source provenance survives the capture-to-artifact conversion and
+    // contributes to the deterministic artifact manifest.
+    #[test]
+    fn recording_track_preserves_source_provenance() {
+        let provenance = CaptureSourceProvenance::new("device-1", 1_762_000_000_000)
+            .with_label("Microphone")
+            .ended_at(1_762_000_005_000);
+        let mut track = RecordingTrack::new("track-host");
+        track.set_source_provenance(provenance.clone());
+
+        let mut artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+        artifact.add_track(track);
+
+        assert_eq!(artifact.tracks()[0].source_provenance(), Some(&provenance));
+
+        let mut changed = artifact.clone();
+        changed.tracks[0].set_source_provenance(
+            CaptureSourceProvenance::new("device-2", 1_762_000_000_000)
+                .with_label("Microphone")
+                .ended_at(1_762_000_005_000),
+        );
+        assert_ne!(artifact.manifest_hash(), changed.manifest_hash());
     }
 }
