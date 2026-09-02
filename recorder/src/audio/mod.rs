@@ -29,7 +29,7 @@ pub use native_selection::{
     NativeAudioCapability, NativeCaptureConfiguration, NativeSampleFormat,
     select_best_native_capture,
 };
-pub use result::{CaptureChunk, CaptureTrack};
+pub use result::{CaptureChunk, CaptureSourceProvenance, CaptureTrack};
 pub use result::{CaptureResult, CaptureStatus};
 pub use signet::{SignetEvent, SyncSignet, SyncSignetKind};
 
