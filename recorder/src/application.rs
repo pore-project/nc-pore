@@ -134,7 +134,10 @@ mod tests {
             Ok(())
         }
 
-        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
+        fn emit_sync_signet(
+            &mut self,
+            signet: &SyncSignet,
+        ) -> Result<(), SyncSignetEmissionError> {
             if signet.kind() == SyncSignetKind::Closing && self.fail_on_closing {
                 return Err(SyncSignetEmissionError::NotCapturing);
             }
@@ -183,17 +186,27 @@ mod tests {
     #[test]
     fn application_processes_recording_flow() {
         let session = RecordingSession::new("session-001");
-        let capture = TestCaptureProvider { emitted: Vec::new(), fail_on_closing: false };
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(InMemoryPersistenceProvider::new()));
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+            fail_on_closing: false,
+        };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            InMemoryPersistenceProvider::new(),
+        ));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
 
         application.start(&configuration).unwrap();
         application.ready().unwrap();
-        application.emit_sync_signet(&configuration.signets().opening()).unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
         let artifact = application
-            .stop(RecordingArtifactAssociation::new("production-001", "recording-017"))
+            .stop(RecordingArtifactAssociation::new(
+                "production-001",
+                "recording-017",
+            ))
             .expect("application stop should persist artifact");
 
         assert_eq!(artifact.id.value(), "application-test-capture");
@@ -205,15 +218,23 @@ mod tests {
     #[test]
     fn application_stores_processed_artifact() {
         let session = RecordingSession::new("session-002");
-        let capture = TestCaptureProvider { emitted: Vec::new(), fail_on_closing: false };
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(InMemoryPersistenceProvider::new()));
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+            fail_on_closing: false,
+        };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            InMemoryPersistenceProvider::new(),
+        ));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
         application.start(&configuration).unwrap();
         application.ready().unwrap();
 
         let artifact = application
-            .stop(RecordingArtifactAssociation::new("production-002", "recording-018"))
+            .stop(RecordingArtifactAssociation::new(
+                "production-002",
+                "recording-018",
+            ))
             .expect("application stop should persist artifact");
 
         assert_eq!(artifact.id.value(), "application-test-capture");
@@ -225,18 +246,30 @@ mod tests {
     #[test]
     fn optional_closing_failure_does_not_block_technical_stop() {
         let session = RecordingSession::new("session-closing-fallback");
-        let capture = TestCaptureProvider { emitted: Vec::new(), fail_on_closing: true };
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(InMemoryPersistenceProvider::new()));
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+            fail_on_closing: true,
+        };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            InMemoryPersistenceProvider::new(),
+        ));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
 
         application.start(&configuration).unwrap();
         application.ready().unwrap();
-        application.emit_sync_signet(&configuration.signets().opening()).unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
-        assert!(application.emit_optional_sync_signet(&configuration.signets().closing()) == false);
+        assert!(
+            application.emit_optional_sync_signet(&configuration.signets().closing()) == false
+        );
         let artifact = application
-            .stop(RecordingArtifactAssociation::new("production-fallback", "recording-fallback"))
+            .stop(RecordingArtifactAssociation::new(
+                "production-fallback",
+                "recording-fallback",
+            ))
             .expect("Closing failure must not block technical stop");
         assert_eq!(artifact.id.value(), "application-test-capture");
     }
@@ -244,12 +277,19 @@ mod tests {
     #[test]
     fn failed_capture_returns_application_error() {
         let session = RecordingSession::new("session-failed");
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            RejectingPersistenceProvider,
+        ));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
-        application.start(&RecordingConfiguration::default()).unwrap();
+        application
+            .start(&RecordingConfiguration::default())
+            .unwrap();
         application.ready().unwrap();
 
-        let result = application.stop(RecordingArtifactAssociation::new("production-failed", "recording-failed"));
+        let result = application.stop(RecordingArtifactAssociation::new(
+            "production-failed",
+            "recording-failed",
+        ));
         assert!(matches!(
             result,
             Err(RecorderApplicationError::Capture(error)) if error == "input stream failed"
