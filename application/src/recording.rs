@@ -1,7 +1,8 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError,
+    RecordingArtifactId, RecordingId, RecordingSyncSignet, RecordingWorkflow,
+    RecordingWorkflowError,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
