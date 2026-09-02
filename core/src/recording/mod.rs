@@ -19,6 +19,7 @@
 pub mod artifact_id;
 pub mod coordination;
 pub mod id;
+pub mod signet;
 pub mod synchronization;
 pub mod workflow;
 
@@ -27,6 +28,7 @@ pub use coordination::{
     RecordingCoordination, RecordingCoordinationError, RecordingCoordinationStatus,
 };
 pub use id::RecordingId;
+pub use signet::{RecordingSyncSignet, RecordingSyncSignetRequirement};
 pub use synchronization::{
     RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
     RecordingArtifactSynchronizationStatus,
