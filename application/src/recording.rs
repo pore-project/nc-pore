@@ -277,7 +277,7 @@ mod tests {
         let persistence = InMemoryPersistenceProvider::new();
         let coordinator = ArtifactCoordinator::new(persistence);
         let processor = RecordingArtifactProcessor::new(coordinator);
-        RecorderApplication::new(TestCaptureProvider { emitted }, session, processor)
+        RecorderApplication::new(session, TestCaptureProvider { emitted }, processor)
     }
 
     // TEST-01
