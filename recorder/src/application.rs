@@ -21,7 +21,9 @@
 
 use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
-use crate::audio::{CaptureProvider, CaptureStatus, RecordingConfiguration};
+use crate::audio::{
+    CaptureProvider, CaptureStatus, RecordingConfiguration, SyncSignet, SyncSignetEmissionError,
+};
 use crate::persistence::PersistenceProvider;
 use crate::persistence::PersistenceStoreError;
 use crate::session::{RecordingSession, RecordingSessionId};
@@ -31,6 +33,7 @@ use crate::workflow::RecorderWorkflow;
 pub enum RecorderApplicationError {
     Capture(String),
     Persistence(PersistenceStoreError),
+    SyncSignet(SyncSignetEmissionError),
 }
 
 impl From<PersistenceStoreError> for RecorderApplicationError {
@@ -84,6 +87,20 @@ where
         self.workflow.ready()
     }
 
+    /// Emits a configured synchronization signet into the active capture.
+    ///
+    /// The recorder boundary accepts only the provider-neutral signet
+    /// description. Concrete capture backends decide how that description is
+    /// rendered into audio.
+    pub fn emit_sync_signet(
+        &mut self,
+        signet: &SyncSignet,
+    ) -> Result<(), RecorderApplicationError> {
+        self.workflow
+            .emit_sync_signet(signet)
+            .map_err(RecorderApplicationError::SyncSignet)
+    }
+
     /// Stops the local recording and persists an artifact associated with
     /// the originating domain production and recording.
     pub fn stop(
@@ -112,16 +129,26 @@ where
 mod tests {
     use super::*;
     use crate::artifact::coordination::ArtifactCoordinator;
-    use crate::audio::{CaptureProvider, CaptureResult};
+    use crate::audio::{CaptureProvider, CaptureResult, SyncSignetKind};
     use crate::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
 
-    struct TestCaptureProvider;
+    struct TestCaptureProvider {
+        emitted: Vec<SyncSignetKind>,
+    }
 
     impl CaptureProvider for TestCaptureProvider {
         fn start_capture(
             &mut self,
             _configuration: &RecordingConfiguration,
         ) -> Result<(), crate::audio::CaptureStartError> {
+            Ok(())
+        }
+
+        fn emit_sync_signet(
+            &mut self,
+            signet: &SyncSignet,
+        ) -> Result<(), SyncSignetEmissionError> {
+            self.emitted.push(signet.kind());
             Ok(())
         }
 
@@ -176,7 +203,9 @@ mod tests {
     fn application_processes_recording_flow() {
         let session = RecordingSession::new("session-001");
 
-        let capture = TestCaptureProvider;
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+        };
 
         let persistence = InMemoryPersistenceProvider::new();
 
@@ -189,6 +218,9 @@ mod tests {
 
         application.start(&configuration).unwrap();
         application.ready().unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -211,7 +243,9 @@ mod tests {
     fn application_stores_processed_artifact() {
         let session = RecordingSession::new("session-002");
 
-        let capture = TestCaptureProvider;
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+        };
 
         let persistence = InMemoryPersistenceProvider::new();
 
