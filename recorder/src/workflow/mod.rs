@@ -4,7 +4,9 @@
 //! boundary. This module owns only the technical lifecycle of one recorder:
 //! capture startup, local READY, Opening emission/confirmation and capture stop.
 
-use crate::audio::{CaptureProvider, CaptureResult, RecordingConfiguration, SyncSignet, SyncSignetEmissionError};
+use crate::audio::{
+    CaptureProvider, CaptureResult, RecordingConfiguration, SyncSignet, SyncSignetEmissionError,
+};
 use crate::session::{RecordingSession, SessionStatus};
 
 pub struct RecorderWorkflow<C>
@@ -61,7 +63,10 @@ where
     /// Opening is strict: it is legal only in the local Opening phase and a
     /// successful emission confirms the local Opening barrier. Closing is
     /// optional and does not alter the lifecycle.
-    pub fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
+    pub fn emit_sync_signet(
+        &mut self,
+        signet: &SyncSignet,
+    ) -> Result<(), SyncSignetEmissionError> {
         if signet.kind() == crate::audio::SyncSignetKind::Opening
             && self.session.status() != &SessionStatus::Opening
         {
@@ -92,7 +97,10 @@ where
 
         let capture_result = self.capture.stop_capture();
 
-        if matches!(capture_result.status(), crate::audio::CaptureStatus::Failed(_)) {
+        if matches!(
+            capture_result.status(),
+            crate::audio::CaptureStatus::Failed(_)
+        ) {
             self.session.fail().ok();
         } else {
             self.session.complete().ok();
