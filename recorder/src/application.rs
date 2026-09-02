@@ -259,11 +259,8 @@ mod tests {
             .emit_sync_signet(&configuration.signets().opening())
             .unwrap();
 
-        let closing = configuration
-            .signets()
-            .closing()
-            .as_ref()
-            .expect("closing signet");
+        let signets = configuration.signets();
+        let closing = signets.closing().as_ref().expect("closing signet");
         assert!(!application.emit_optional_sync_signet(closing));
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
