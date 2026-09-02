@@ -412,10 +412,7 @@ mod tests {
     // TEST-54: Completion reaches Uploaded only after exact remote confirmation.
     #[test]
     fn coordinator_requires_exact_confirmation_before_uploaded() {
-        let root = std::env::temp_dir().join(format!(
-            "nc-pore-coordinator-{}",
-            std::process::id()
-        ));
+        let root = std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id()));
         let store = FilesystemCompletionJobStore::new(&root).unwrap();
         let artifact = test_artifact();
         let mut job = CompletionJob::new("job-054", "capture-054");
@@ -462,12 +459,8 @@ mod tests {
         let jobs = FilesystemCompletionJobStore::new(&jobs_root).unwrap();
         let mut capture = CaptureResult::new("capture-056");
         let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
-        let mut track =
-            crate::audio::CaptureTrack::with_configuration("track-a", configuration);
-        track.add_chunk(CaptureChunk::with_payload(
-            1,
-            vec![0, 0, 1, 0, 2, 0, 3, 0],
-        ));
+        let mut track = crate::audio::CaptureTrack::with_configuration("track-a", configuration);
+        track.add_chunk(CaptureChunk::with_payload(1, vec![0, 0, 1, 0, 2, 0, 3, 0]));
         capture.add_track(track);
         let preserved = CapturePreserver::preserve(capture);
         preservation.store(&preserved).unwrap();
@@ -492,10 +485,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let preservation_root = std::env::temp_dir().join(format!(
-            "nc-pore-preservation-missing-{}",
-            suffix
-        ));
+        let preservation_root =
+            std::env::temp_dir().join(format!("nc-pore-preservation-missing-{}", suffix));
         let jobs_root = std::env::temp_dir().join(format!("nc-pore-jobs-missing-{}", suffix));
         let preservation = FilesystemPreservationStore::new(&preservation_root);
         let jobs = FilesystemCompletionJobStore::new(&jobs_root).unwrap();
