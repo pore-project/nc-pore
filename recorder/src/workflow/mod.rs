@@ -149,7 +149,8 @@ where
             let _ = self.capture.emit_sync_signet(signet);
         }
 
-        Ok((signet, self.stop()))
+        let capture_result = self.stop();
+        Ok((signet, capture_result))
     }
 
     /// Lower-level helper for callers that explicitly own the optional Closing
