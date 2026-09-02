@@ -108,10 +108,7 @@ where
     ///
     /// The supplied signet is owned by recording configuration; this workflow
     /// method only forwards it to the technical capture boundary.
-    pub fn emit_sync_signet(
-        &mut self,
-        signet: &SyncSignet,
-    ) -> Result<(), SyncSignetEmissionError> {
+    pub fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
         self.capture.emit_sync_signet(signet)
     }
 
@@ -176,7 +173,7 @@ where
     }
 
     pub fn session(&self) -> &RecordingSession {
-        &self.session
+        self.session
     }
 
     pub fn is_recording(&self) -> bool {
