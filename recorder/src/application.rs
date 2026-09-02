@@ -134,10 +134,7 @@ mod tests {
             Ok(())
         }
 
-        fn emit_sync_signet(
-            &mut self,
-            signet: &SyncSignet,
-        ) -> Result<(), SyncSignetEmissionError> {
+        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
             if signet.kind() == SyncSignetKind::Closing && self.fail_on_closing {
                 return Err(SyncSignetEmissionError::NotCapturing);
             }
