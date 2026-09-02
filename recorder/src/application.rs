@@ -144,10 +144,7 @@ mod tests {
             Ok(())
         }
 
-        fn emit_sync_signet(
-            &mut self,
-            signet: &SyncSignet,
-        ) -> Result<(), SyncSignetEmissionError> {
+        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
             self.emitted.push(signet.kind());
             Ok(())
         }
@@ -275,9 +272,8 @@ mod tests {
     #[test]
     fn failed_capture_returns_application_error() {
         let session = RecordingSession::new("session-failed");
-        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
-            RejectingPersistenceProvider,
-        ));
+        let processor =
+            RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
 
         application
