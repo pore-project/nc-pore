@@ -6,12 +6,13 @@
 
 use std::time::SystemTime;
 
-use crate::artifact::{ManifestHash, PayloadHash, RecordingArtifact, RecordingSessionId};
+use crate::artifact::{ManifestHash, PayloadHash, RecordingArtifact};
 use crate::artifact::RecordingArtifactFactory;
 use crate::completion::{
     CompletionJob, CompletionJobError, FilesystemCompletionJobStore, PreparedUpload,
 };
 use crate::preservation::{FilesystemPreservationStore, PreservationLoadResult};
+use crate::session::RecordingSessionId;
 
 /// Optional provider-neutral recording information for a finished artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -316,7 +317,6 @@ mod tests {
     use crate::audio::{CaptureChunk, CaptureResult, RecordingConfiguration, SampleFormat};
     use crate::completion::CompletionJob;
     use crate::preservation::CapturePreserver;
-    use crate::session::RecordingSessionId;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_upload() -> PreparedUpload {
@@ -479,7 +479,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let preservation_root = std::env::temp_dir().join(format!("nc-pore-preservation-{}", suffix));
+        let preservation_root =
+            std::env::temp_dir().join(format!("nc-pore-preservation-{}", suffix));
         let jobs_root = std::env::temp_dir().join(format!("nc-pore-jobs-{}", suffix));
         let preservation = FilesystemPreservationStore::new(&preservation_root);
         let jobs = FilesystemCompletionJobStore::new(&jobs_root).unwrap();
@@ -487,7 +488,10 @@ mod tests {
         let mut capture = CaptureResult::new("capture-056");
         let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
         let mut track = crate::audio::CaptureTrack::with_configuration("track-a", configuration);
-        track.add_chunk(CaptureChunk::with_payload(1, vec![0, 0, 1, 0, 2, 0, 3, 0]));
+        track.add_chunk(CaptureChunk::with_payload(
+            1,
+            vec![0, 0, 1, 0, 2, 0, 3, 0],
+        ));
         capture.add_track(track);
         let preserved = CapturePreserver::preserve(capture);
         preservation.store(&preserved).unwrap();
@@ -515,7 +519,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let preservation_root = std::env::temp_dir().join(format!("nc-pore-preservation-missing-{}", suffix));
+        let preservation_root = std::env::temp_dir()
+            .join(format!("nc-pore-preservation-missing-{}", suffix));
         let jobs_root = std::env::temp_dir().join(format!("nc-pore-jobs-missing-{}", suffix));
         let preservation = FilesystemPreservationStore::new(&preservation_root);
         let jobs = FilesystemCompletionJobStore::new(&jobs_root).unwrap();
