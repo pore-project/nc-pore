@@ -7,7 +7,9 @@
 use std::time::SystemTime;
 
 use crate::artifact::{ManifestHash, PayloadHash, RecordingArtifact};
-use crate::completion::{CompletionJob, CompletionJobError, FilesystemCompletionJobStore, PreparedUpload};
+use crate::completion::{
+    CompletionJob, CompletionJobError, FilesystemCompletionJobStore, PreparedUpload,
+};
 
 /// Optional provider-neutral recording information for a finished artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -279,7 +281,8 @@ mod tests {
             "track-a/chunk-000001",
             vec![0, 0, 1, 0, 2, 0, 3, 0],
         ));
-        let mut artifact = RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
+        let mut artifact =
+            RecordingArtifact::new("artifact-001", RecordingSessionId::new("session-001"));
         artifact.add_track(track);
         let mut job = CompletionJob::new("job-remote", "capture-remote");
         job.begin_upload_preparation().unwrap();
@@ -294,7 +297,10 @@ mod tests {
             "track-a/chunk-000001",
             vec![0, 0, 1, 0, 2, 0, 3, 0],
         ));
-        let mut artifact = RecordingArtifact::new("artifact-coordinator", RecordingSessionId::new("session-001"));
+        let mut artifact = RecordingArtifact::new(
+            "artifact-coordinator",
+            RecordingSessionId::new("session-001"),
+        );
         artifact.add_track(track);
         artifact
     }
@@ -309,7 +315,11 @@ mod tests {
                 .tracks()
                 .iter()
                 .map(|track| {
-                    RemoteUploadTrackReceipt::new(track.track_id(), track.size_bytes(), track.hash())
+                    RemoteUploadTrackReceipt::new(
+                        track.track_id(),
+                        track.size_bytes(),
+                        track.hash(),
+                    )
                 })
                 .collect();
             Ok(RemoteUploadReceipt::new(
@@ -348,7 +358,8 @@ mod tests {
                 RemoteUploadTrackReceipt::new(track.track_id(), track.size_bytes(), track.hash())
             })
             .collect();
-        let receipt = RemoteUploadReceipt::new(upload.artifact_id(), upload.manifest_hash(), tracks);
+        let receipt =
+            RemoteUploadReceipt::new(upload.artifact_id(), upload.manifest_hash(), tracks);
 
         assert_eq!(validate_upload_receipt(&upload, &receipt), Ok(()));
     }
@@ -386,13 +397,18 @@ mod tests {
         coordinator.complete(&mut job, &artifact).unwrap();
 
         assert_eq!(job.state(), crate::completion::CompletionJobState::Uploaded);
-        let _ = std::fs::remove_dir_all(std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id())));
+        let _ = std::fs::remove_dir_all(
+            std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id())),
+        );
     }
 
     // TEST-55: A mismatching receipt cannot advance the durable job to Uploaded.
     #[test]
     fn coordinator_rejects_mismatching_confirmation() {
-        let root = std::env::temp_dir().join(format!("nc-pore-coordinator-mismatch-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "nc-pore-coordinator-mismatch-{}",
+            std::process::id()
+        ));
         let store = FilesystemCompletionJobStore::new(&root).unwrap();
         let artifact = test_artifact();
         let mut job = CompletionJob::new("job-055", "capture-055");
@@ -404,7 +420,10 @@ mod tests {
             error,
             CompletionCoordinatorError::Confirmation(RemoteUploadValidationError::TrackMismatch)
         );
-        assert_eq!(job.state(), crate::completion::CompletionJobState::FailedRetryable);
+        assert_eq!(
+            job.state(),
+            crate::completion::CompletionJobState::FailedRetryable
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -431,6 +450,9 @@ mod tests {
 
         assert_eq!(remote.artifact().id.value(), "artifact-001");
         assert_eq!(remote.metadata().display_name(), None);
-        assert_eq!(remote.metadata().recording_started_at(), SystemTime::UNIX_EPOCH);
+        assert_eq!(
+            remote.metadata().recording_started_at(),
+            SystemTime::UNIX_EPOCH
+        );
     }
 }
