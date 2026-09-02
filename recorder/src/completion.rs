@@ -10,6 +10,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::artifact::{ManifestHash, RecordingArtifact, RecordingTrack};
+use crate::audio::CaptureChunk;
+use crate::transport::{encode_flac, FlacEncodeError};
+
 /// Stable lifecycle of one local completion job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompletionJobState {
@@ -83,9 +87,6 @@ impl CompletionJob {
     }
 
     /// Starts or resumes upload preparation and counts one processing attempt.
-    ///
-    /// Any non-terminal state can safely be re-entered after a restart. The
-    /// actual upload remains outside this local state machine.
     pub fn begin_upload_preparation(&mut self) -> Result<(), CompletionJobError> {
         if !self.state.is_resumable() {
             return Err(CompletionJobError::InvalidTransition);
@@ -93,6 +94,31 @@ impl CompletionJob {
         self.attempts = self.attempts.saturating_add(1);
         self.state = CompletionJobState::PreparingUpload;
         Ok(())
+    }
+
+    /// Encodes the artifact into the V1 lossless transport representation.
+    ///
+    /// Preparation is deterministic: it is derived from the local artifact,
+    /// while the durable job keeps only stable identity and workflow state.
+    /// This means a client restart can recreate the exact upload bytes from
+    /// the preserved local recording instead of treating a temporary network
+    /// representation as the source of truth.
+    pub fn prepare_upload(
+        &mut self,
+        artifact: &RecordingArtifact,
+    ) -> Result<PreparedUpload, CompletionJobError> {
+        if self.state != CompletionJobState::PreparingUpload {
+            return Err(CompletionJobError::InvalidTransition);
+        }
+        if let Some(expected) = self.artifact_id() {
+            if expected != artifact.id.value() {
+                return Err(CompletionJobError::ArtifactMismatch);
+            }
+        } else {
+            self.set_artifact_id(artifact.id.value());
+        }
+
+        PreparedUpload::from_artifact(artifact).map_err(CompletionJobError::Transport)
     }
 
     pub fn mark_ready_for_upload(&mut self) -> Result<(), CompletionJobError> {
@@ -128,12 +154,98 @@ impl CompletionJob {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One transport payload prepared for upload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedUploadTrack {
+    track_id: String,
+    data: Vec<u8>,
+}
+
+impl PreparedUploadTrack {
+    fn new(track_id: impl Into<String>, data: Vec<u8>) -> Self {
+        Self {
+            track_id: track_id.into(),
+            data,
+        }
+    }
+
+    pub fn track_id(&self) -> &str {
+        &self.track_id
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn size_bytes(&self) -> u64 {
+        self.data.len() as u64
+    }
+
+    pub fn hash(&self) -> crate::artifact::PayloadHash {
+        crate::artifact::PayloadHash::from_bytes(&self.data)
+    }
+}
+
+/// Deterministic upload preparation result for one recording artifact.
+///
+/// The manifest hash binds the upload to the technical artifact identity and
+/// its original chunk hashes. Each FLAC payload has its own SHA-256 digest so
+/// an eventual remote uploader can verify the exact bytes it transfers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedUpload {
+    artifact_id: String,
+    manifest_hash: ManifestHash,
+    tracks: Vec<PreparedUploadTrack>,
+}
+
+impl PreparedUpload {
+    fn from_artifact(artifact: &RecordingArtifact) -> Result<Self, FlacEncodeError> {
+        let mut tracks = Vec::with_capacity(artifact.tracks().len());
+        for track in artifact.tracks() {
+            tracks.push(prepare_track(track)?);
+        }
+
+        Ok(Self {
+            artifact_id: artifact.id.value().to_owned(),
+            manifest_hash: artifact.manifest_hash(),
+            tracks,
+        })
+    }
+
+    pub fn artifact_id(&self) -> &str {
+        &self.artifact_id
+    }
+
+    pub fn manifest_hash(&self) -> ManifestHash {
+        self.manifest_hash
+    }
+
+    pub fn tracks(&self) -> &[PreparedUploadTrack] {
+        &self.tracks
+    }
+}
+
+fn prepare_track(track: &RecordingTrack) -> Result<PreparedUploadTrack, FlacEncodeError> {
+    let configuration = track
+        .configuration()
+        .ok_or(FlacEncodeError::Configuration("track has no recording configuration".into()))?;
+    let chunks: Vec<CaptureChunk> = track
+        .chunks()
+        .iter()
+        .map(|chunk| CaptureChunk::with_payload(chunk.sequence, chunk.payload().data().to_vec()))
+        .collect();
+    let data = encode_flac(&chunks, configuration)?;
+    Ok(PreparedUploadTrack::new(track.id.value(), data))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompletionJobError {
     InvalidTransition,
     InvalidId,
     Io,
     Serialization,
+    ArtifactMismatch,
+    Transport(FlacEncodeError),
 }
 
 /// Durable filesystem store for completion-job state.
@@ -234,12 +346,32 @@ fn temporary_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
+    use crate::audio::{RecordingConfiguration, SampleFormat};
+    use crate::session::RecordingSessionId;
 
     fn temp_store(name: &str) -> FilesystemCompletionJobStore {
         let root =
             std::env::temp_dir().join(format!("nc-pore-completion-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         FilesystemCompletionJobStore::new(root).unwrap()
+    }
+
+    fn test_artifact(id: &str) -> RecordingArtifact {
+        let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
+        let mut track = RecordingTrack::with_configuration("track-a", configuration);
+        let mut payload = Vec::new();
+        for sample in [0i16, 1000, -1000, 32767, -32768] {
+            payload.extend_from_slice(&sample.to_ne_bytes());
+        }
+        track.add_chunk(RecordingChunk::with_payload(
+            1,
+            "track-a/chunk-000001",
+            payload,
+        ));
+        let mut artifact = RecordingArtifact::new(id, RecordingSessionId::new("session-001"));
+        artifact.add_track(track);
+        artifact
     }
 
     // TEST-48: Completion state survives a process restart boundary.
@@ -316,5 +448,40 @@ mod tests {
         assert_eq!(job.state(), CompletionJobState::FailedRetryable);
         assert!(job.state().is_resumable());
         assert_eq!(job.attempts(), 1);
+    }
+
+    // TEST-52: Upload preparation creates lossless FLAC and binds it to the artifact manifest.
+    #[test]
+    fn prepares_flac_upload_with_integrity_metadata() {
+        let artifact = test_artifact("artifact-052");
+        let mut job = CompletionJob::new("job-052", "capture-052");
+        job.begin_upload_preparation().unwrap();
+
+        let prepared = job.prepare_upload(&artifact).unwrap();
+
+        assert_eq!(prepared.artifact_id(), "artifact-052");
+        assert_eq!(prepared.manifest_hash(), artifact.manifest_hash());
+        assert_eq!(prepared.tracks().len(), 1);
+        assert!(prepared.tracks()[0].data().starts_with(b"fLaC"));
+        assert_eq!(
+            prepared.tracks()[0].hash(),
+            crate::artifact::PayloadHash::from_bytes(prepared.tracks()[0].data())
+        );
+        job.mark_ready_for_upload().unwrap();
+        assert_eq!(job.state(), CompletionJobState::ReadyForUpload);
+    }
+
+    // TEST-53: A retry cannot accidentally prepare a different artifact under the same job.
+    #[test]
+    fn rejects_artifact_identity_mismatch() {
+        let artifact = test_artifact("artifact-053");
+        let mut job = CompletionJob::new("job-053", "capture-053");
+        job.set_artifact_id("artifact-other");
+        job.begin_upload_preparation().unwrap();
+
+        assert_eq!(
+            job.prepare_upload(&artifact),
+            Err(CompletionJobError::ArtifactMismatch)
+        );
     }
 }
