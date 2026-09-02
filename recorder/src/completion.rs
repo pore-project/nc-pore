@@ -169,7 +169,8 @@ impl FilesystemCompletionJobStore {
             }
         }
 
-        let bytes = serde_json::to_vec_pretty(job).map_err(|_| CompletionJobError::Serialization)?;
+        let bytes =
+            serde_json::to_vec_pretty(job).map_err(|_| CompletionJobError::Serialization)?;
         let path = self.path_for(job.id());
         let temp = temporary_path(&path);
         fs::write(&temp, bytes).map_err(|_| CompletionJobError::Io)?;
@@ -222,7 +223,10 @@ impl FilesystemCompletionJobStore {
 
 fn temporary_path(path: &Path) -> PathBuf {
     let mut temp = path.to_path_buf();
-    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("job.json");
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("job.json");
     temp.set_file_name(format!(".{file_name}.tmp"));
     temp
 }
@@ -232,7 +236,10 @@ mod tests {
     use super::*;
 
     fn temp_store(name: &str) -> FilesystemCompletionJobStore {
-        let root = std::env::temp_dir().join(format!("nc-pore-completion-{name}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "nc-pore-completion-{name}-{}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&root);
         FilesystemCompletionJobStore::new(root).unwrap()
     }
