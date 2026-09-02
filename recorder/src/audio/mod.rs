@@ -25,9 +25,7 @@ pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
 pub use result::{CaptureChunk, CaptureTrack};
 pub use result::{CaptureResult, CaptureStatus};
-pub use signet::{
-    SignetEvent, SyncSignet, SyncSignetConfiguration, SyncSignetKind,
-};
+pub use signet::{SignetEvent, SyncSignet, SyncSignetConfiguration, SyncSignetKind};
 
 /// Returned when a capture provider cannot start audio capture.
 #[derive(Debug, PartialEq, Eq)]
