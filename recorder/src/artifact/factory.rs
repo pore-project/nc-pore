@@ -39,6 +39,10 @@ impl RecordingArtifactFactory {
                 None => RecordingTrack::new(capture_track.id.value()),
             };
 
+            if let Some(provenance) = capture_track.source_provenance() {
+                recording_track.set_source_provenance(provenance.clone());
+            }
+
             for capture_chunk in capture_track.chunks() {
                 // The logical reference remains independent from the concrete
                 // filesystem path used later by the persistence provider.
@@ -66,7 +70,8 @@ impl RecordingArtifactFactory {
 mod tests {
     use super::*;
     use crate::audio::{
-        CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat,
+        CaptureChunk, CaptureResult, CaptureSourceProvenance, CaptureTrack, RecordingConfiguration,
+        SampleFormat,
     };
 
     // TEST-22
@@ -143,5 +148,25 @@ mod tests {
         );
         assert_eq!(chunk.payload().data(), &[10, 20, 30]);
         assert_eq!(chunk.payload().size_bytes(), 3);
+    }
+
+    // TEST-41
+    //
+    // Protects the host-neutral capture boundary:
+    // source provenance is transferred unchanged from capture to artifact.
+    #[test]
+    fn factory_transfers_source_provenance() {
+        let provenance = CaptureSourceProvenance::new("device-1", 1_762_000_000_000)
+            .with_label("Microphone")
+            .ended_at(1_762_000_005_000);
+        let mut capture = CaptureResult::new("capture-001");
+        let mut track = CaptureTrack::new("track-host");
+        track.set_source_provenance(provenance.clone());
+        capture.add_track(track);
+
+        let artifact =
+            RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
+
+        assert_eq!(artifact.tracks()[0].source_provenance(), Some(&provenance));
     }
 }
