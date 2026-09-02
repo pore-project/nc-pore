@@ -329,7 +329,9 @@ mod tests {
         workflow.start_recording_with_signet().unwrap();
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
-        workflow.acknowledge_stop(&participant("participant-a")).unwrap();
+        workflow
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap();
         assert_eq!(
             workflow.acknowledge_stop(&participant("participant-a")),
             Err(RecordingWorkflowError::AlreadyAcknowledged)
