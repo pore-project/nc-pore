@@ -1,8 +1,7 @@
 //! Durable local storage for preserved captures.
 //!
-//! This boundary persists the capture representation before artifact creation
-//! or transport. Payload bytes remain opaque and are verified by size and
-//! SHA-256 when a preserved capture is restored after restart.
+//! Payload bytes remain opaque and are verified by size and SHA-256 when a
+//! preserved capture is restored after restart.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -71,27 +70,18 @@ struct PersistedChunk {
 /// Result of restoring one preserved capture from durable local storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreservationLoadResult {
-    /// The preserved capture and all payloads are complete and valid.
     Valid(PreservedCapture),
-    /// Metadata or payload files are missing and the capture cannot yet be restored.
     Incomplete,
-    /// Persisted data exists but fails structural or integrity validation.
     Inconsistent,
-    /// No preserved capture exists for the requested identifier.
     NotFound,
 }
 
 /// Durable local store for preserved captures.
-///
-/// Each capture has one directory containing metadata and opaque chunk payload
-/// files. Publishing is atomic at the capture-directory level so a restart
-/// cannot observe the temporary directory as a completed capture.
 pub struct FilesystemPreservationStore {
     root: PathBuf,
 }
 
 impl FilesystemPreservationStore {
-    /// Creates a local preservation store and its root directory if necessary.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         let root = path.into();
         fs::create_dir_all(&root).expect("failed to create preservation directory");
@@ -113,7 +103,7 @@ impl FilesystemPreservationStore {
             .join(format!("chunk-{sequence:06}.payload"))
     }
 
-    fn metadata_from_capture(capture: &PreservedCapture) -> PersistedCapture {
+    fn metadata(capture: &PreservedCapture) -> PersistedCapture {
         PersistedCapture {
             id: capture.id().to_owned(),
             status: match capture.status() {
@@ -125,21 +115,25 @@ impl FilesystemPreservationStore {
                 .iter()
                 .map(|track| PersistedCaptureTrack {
                     id: track.id.value().to_owned(),
-                    configuration: track.configuration().map(|configuration| PersistedConfiguration {
-                        sample_rate_hz: configuration.sample_rate_hz(),
-                        channels: configuration.channels(),
-                        sample_format: match configuration.sample_format() {
-                            SampleFormat::Pcm16 => PersistedSampleFormat::Pcm16,
-                            SampleFormat::Pcm24 => PersistedSampleFormat::Pcm24,
-                            SampleFormat::F32 => PersistedSampleFormat::F32,
-                        },
-                        chunk_duration_seconds: configuration.chunk_duration().seconds(),
+                    configuration: track.configuration().map(|configuration| {
+                        PersistedConfiguration {
+                            sample_rate_hz: configuration.sample_rate_hz(),
+                            channels: configuration.channels(),
+                            sample_format: match configuration.sample_format() {
+                                SampleFormat::Pcm16 => PersistedSampleFormat::Pcm16,
+                                SampleFormat::Pcm24 => PersistedSampleFormat::Pcm24,
+                                SampleFormat::F32 => PersistedSampleFormat::F32,
+                            },
+                            chunk_duration_seconds: configuration.chunk_duration().seconds(),
+                        }
                     }),
-                    source_provenance: track.source_provenance().map(|provenance| PersistedSourceProvenance {
-                        source_id: provenance.source_id().to_owned(),
-                        label: provenance.label().map(str::to_owned),
-                        started_at_unix_ms: provenance.started_at_unix_ms(),
-                        ended_at_unix_ms: provenance.ended_at_unix_ms(),
+                    source_provenance: track.source_provenance().map(|provenance| {
+                        PersistedSourceProvenance {
+                            source_id: provenance.source_id().to_owned(),
+                            label: provenance.label().map(str::to_owned),
+                            started_at_unix_ms: provenance.started_at_unix_ms(),
+                            ended_at_unix_ms: provenance.ended_at_unix_ms(),
+                        }
                     }),
                     chunks: track
                         .chunks()
@@ -155,7 +149,7 @@ impl FilesystemPreservationStore {
         }
     }
 
-    fn restore_metadata(metadata: PersistedCapture, capture_dir: &Path) -> PreservationLoadResult {
+    fn restore(metadata: PersistedCapture, capture_dir: &Path) -> PreservationLoadResult {
         if !Self::validate_id(&metadata.id) {
             return PreservationLoadResult::Inconsistent;
         }
@@ -170,37 +164,39 @@ impl FilesystemPreservationStore {
                 return PreservationLoadResult::Inconsistent;
             }
 
-            let configuration = match persisted_track.configuration {
-                None => None,
-                Some(configuration) => {
-                    let chunk_duration = match configuration.chunk_duration_seconds {
+            let configuration = persisted_track.configuration.map_or_else(
+                || Ok(None),
+                |configuration| {
+                    let duration = match configuration.chunk_duration_seconds {
                         10 => RecordingChunkDuration::TenSeconds,
                         30 => RecordingChunkDuration::ThirtySeconds,
                         60 => RecordingChunkDuration::OneMinute,
                         120 => RecordingChunkDuration::TwoMinutes,
                         300 => RecordingChunkDuration::FiveMinutes,
                         600 => RecordingChunkDuration::TenMinutes,
-                        _ => return PreservationLoadResult::Inconsistent,
+                        _ => return Err(()),
                     };
-                    let sample_format = match configuration.sample_format {
+                    let format = match configuration.sample_format {
                         PersistedSampleFormat::Pcm16 => SampleFormat::Pcm16,
                         PersistedSampleFormat::Pcm24 => SampleFormat::Pcm24,
                         PersistedSampleFormat::F32 => SampleFormat::F32,
                     };
-                    Some(RecordingConfiguration::with_chunk_duration(
+                    Ok(Some(RecordingConfiguration::with_chunk_duration(
                         configuration.sample_rate_hz,
                         configuration.channels,
-                        sample_format,
-                        chunk_duration,
-                    ))
-                }
+                        format,
+                        duration,
+                    )))
+                },
+            );
+            let Ok(configuration) = configuration else {
+                return PreservationLoadResult::Inconsistent;
             };
 
             let mut track = match configuration {
-                Some(configuration) => CaptureTrack::with_configuration(
-                    persisted_track.id.clone(),
-                    configuration,
-                ),
+                Some(configuration) => {
+                    CaptureTrack::with_configuration(persisted_track.id.clone(), configuration)
+                }
                 None => CaptureTrack::new(persisted_track.id.clone()),
             };
 
@@ -219,67 +215,55 @@ impl FilesystemPreservationStore {
             }
 
             for chunk in persisted_track.chunks {
-                let payload_path = Self::payload_path(capture_dir, &persisted_track.id, chunk.sequence);
-                if !payload_path.is_file() {
+                let path = Self::payload_path(capture_dir, &persisted_track.id, chunk.sequence);
+                if !path.is_file() {
                     return PreservationLoadResult::Incomplete;
                 }
-
-                let payload = match fs::read(payload_path) {
+                let payload = match fs::read(path) {
                     Ok(payload) => payload,
                     Err(_) => return PreservationLoadResult::Inconsistent,
                 };
-
                 if payload.len() as u64 != chunk.payload_size_bytes
                     || sha256(&payload) != chunk.payload_sha256
                 {
                     return PreservationLoadResult::Inconsistent;
                 }
-
                 track.add_chunk(CaptureChunk::with_payload(chunk.sequence, payload));
             }
-
             capture.add_track(track);
         }
 
-        PreservationLoadResult::Valid(CapturePreserver::preserve(capture))
+        PreservationLoadResult::Valid(PreservedCapture::from_capture_result(capture))
     }
 
-    /// Durably stores a preserved capture without converting its payload or sample format.
+    /// Durably stores a preserved capture without changing its representation.
     pub fn store(&self, capture: &PreservedCapture) -> Result<(), std::io::Error> {
-        if !Self::validate_id(capture.id()) {
+        if !Self::validate_id(capture.id())
+            || capture
+                .tracks()
+                .iter()
+                .any(|track| !Self::validate_id(track.id.value()))
+        {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "invalid capture id",
+                "invalid capture or track id",
             ));
         }
 
-        for track in capture.tracks() {
-            if !Self::validate_id(track.id.value()) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "invalid capture track id",
-                ));
-            }
-        }
-
-        let metadata = Self::metadata_from_capture(capture);
+        let metadata = Self::metadata(capture);
         let capture_dir = self.capture_dir(capture.id());
         let temp_dir = self.root.join(format!(".{}.tmp", capture.id()));
         let _ = fs::remove_dir_all(&temp_dir);
         fs::create_dir_all(&temp_dir)?;
-
-        let metadata_json = serde_json::to_string_pretty(&metadata).map_err(|error| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, error)
-        })?;
+        let metadata_json = serde_json::to_string_pretty(&metadata)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
         fs::write(temp_dir.join("capture.json"), metadata_json)?;
 
         for track in capture.tracks() {
             for chunk in track.chunks() {
-                let payload_path = Self::payload_path(&temp_dir, track.id.value(), chunk.sequence);
-                if let Some(parent) = payload_path.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(&payload_path, chunk.payload())?;
+                let path = Self::payload_path(&temp_dir, track.id.value(), chunk.sequence);
+                fs::create_dir_all(path.parent().expect("payload path has parent"))?;
+                fs::write(path, chunk.payload())?;
             }
         }
 
@@ -292,17 +276,14 @@ impl FilesystemPreservationStore {
         if !Self::validate_id(id) {
             return PreservationLoadResult::Inconsistent;
         }
-
         let capture_dir = self.capture_dir(id);
         if !capture_dir.is_dir() {
             return PreservationLoadResult::NotFound;
         }
-
         let metadata_path = capture_dir.join("capture.json");
         if !metadata_path.is_file() {
             return PreservationLoadResult::Incomplete;
         }
-
         let content = match fs::read_to_string(metadata_path) {
             Ok(content) => content,
             Err(_) => return PreservationLoadResult::Inconsistent,
@@ -311,8 +292,7 @@ impl FilesystemPreservationStore {
             Ok(metadata) => metadata,
             Err(_) => return PreservationLoadResult::Inconsistent,
         };
-
-        Self::restore_metadata(metadata, &capture_dir)
+        Self::restore(metadata, &capture_dir)
     }
 }
 
@@ -353,67 +333,50 @@ mod tests {
     }
 
     // TEST-45
-    // Protects durable preservation: the complete preserved representation survives a store/load cycle.
     #[test]
     fn store_and_load_preserved_capture_round_trip() {
         let root = test_directory("round-trip");
         let store = FilesystemPreservationStore::new(&root);
         let capture = test_capture();
-
         store.store(&capture).expect("capture should be stored");
 
         let restored = match store.load("capture-persisted") {
             PreservationLoadResult::Valid(capture) => capture,
             other => panic!("capture should restore, got {other:?}"),
         };
-
         assert_eq!(restored, capture);
         let _ = fs::remove_dir_all(root);
     }
 
     // TEST-46
-    // Protects restart recovery: a missing payload is incomplete, not a valid capture.
     #[test]
     fn missing_payload_is_reported_as_incomplete() {
         let root = test_directory("missing-payload");
         let store = FilesystemPreservationStore::new(&root);
-        let capture = test_capture();
-        store.store(&capture).expect("capture should be stored");
-
+        store.store(&test_capture()).expect("capture should be stored");
         let payload = root
             .join("capture-persisted")
             .join("tracks")
             .join("track-mic")
             .join("chunk-000001.payload");
         fs::remove_file(payload).expect("payload should exist");
-
-        assert_eq!(
-            store.load("capture-persisted"),
-            PreservationLoadResult::Incomplete
-        );
+        assert_eq!(store.load("capture-persisted"), PreservationLoadResult::Incomplete);
         let _ = fs::remove_dir_all(root);
     }
 
     // TEST-47
-    // Protects preservation integrity: modified payloads are rejected after restart.
     #[test]
     fn modified_payload_is_reported_as_inconsistent() {
         let root = test_directory("modified-payload");
         let store = FilesystemPreservationStore::new(&root);
-        let capture = test_capture();
-        store.store(&capture).expect("capture should be stored");
-
+        store.store(&test_capture()).expect("capture should be stored");
         let payload = root
             .join("capture-persisted")
             .join("tracks")
             .join("track-mic")
             .join("chunk-000001.payload");
         fs::write(payload, [9, 8, 7]).expect("payload should be mutable in the test");
-
-        assert_eq!(
-            store.load("capture-persisted"),
-            PreservationLoadResult::Inconsistent
-        );
+        assert_eq!(store.load("capture-persisted"), PreservationLoadResult::Inconsistent);
         let _ = fs::remove_dir_all(root);
     }
 }
