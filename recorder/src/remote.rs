@@ -7,7 +7,7 @@
 use std::time::SystemTime;
 
 use crate::artifact::{ManifestHash, PayloadHash, RecordingArtifact};
-use crate::completion::PreparedUpload;
+use crate::completion::{CompletionJob, CompletionJobError, FilesystemCompletionJobStore, PreparedUpload};
 
 /// Optional provider-neutral recording information for a finished artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,6 +130,98 @@ pub trait RemoteArtifactUploader {
     fn upload(&mut self, upload: &PreparedUpload) -> Result<RemoteUploadReceipt, Self::Error>;
 }
 
+/// Orchestrates durable completion up to an explicitly confirmed remote upload.
+///
+/// The coordinator persists every state boundary before crossing it. A remote
+/// provider can therefore be replaced without changing the local completion
+/// state machine, and a failed or interrupted upload remains resumable.
+pub struct CompletionCoordinator<'a, U> {
+    jobs: &'a FilesystemCompletionJobStore,
+    uploader: U,
+}
+
+impl<'a, U> CompletionCoordinator<'a, U>
+where
+    U: RemoteArtifactUploader,
+{
+    pub fn new(jobs: &'a FilesystemCompletionJobStore, uploader: U) -> Self {
+        Self { jobs, uploader }
+    }
+
+    /// Completes one artifact and marks it uploaded only after exact receipt validation.
+    pub fn complete(
+        &mut self,
+        job: &mut CompletionJob,
+        artifact: &RecordingArtifact,
+    ) -> Result<(), CompletionCoordinatorError<U::Error>> {
+        job.begin_upload_preparation()
+            .map_err(CompletionCoordinatorError::Job)?;
+        self.jobs
+            .save(job)
+            .map_err(CompletionCoordinatorError::Job)?;
+
+        let prepared = match job.prepare_upload(artifact) {
+            Ok(upload) => upload,
+            Err(error) => {
+                let _ = job.mark_retryable_failure();
+                let _ = self.jobs.save(job);
+                return Err(CompletionCoordinatorError::Job(error));
+            }
+        };
+
+        job.mark_ready_for_upload()
+            .map_err(CompletionCoordinatorError::Job)?;
+        self.jobs
+            .save(job)
+            .map_err(CompletionCoordinatorError::Job)?;
+
+        job.mark_uploading()
+            .map_err(CompletionCoordinatorError::Job)?;
+        self.jobs
+            .save(job)
+            .map_err(CompletionCoordinatorError::Job)?;
+
+        let receipt = match self.uploader.upload(&prepared) {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                job.mark_retryable_failure()
+                    .map_err(CompletionCoordinatorError::Job)?;
+                self.jobs
+                    .save(job)
+                    .map_err(CompletionCoordinatorError::Job)?;
+                return Err(CompletionCoordinatorError::Upload(error));
+            }
+        };
+
+        if let Err(error) = validate_upload_receipt(&prepared, &receipt) {
+            job.mark_retryable_failure()
+                .map_err(CompletionCoordinatorError::Job)?;
+            self.jobs
+                .save(job)
+                .map_err(CompletionCoordinatorError::Job)?;
+            return Err(CompletionCoordinatorError::Confirmation(error));
+        }
+
+        job.mark_uploaded()
+            .map_err(CompletionCoordinatorError::Job)?;
+        self.jobs
+            .save(job)
+            .map_err(CompletionCoordinatorError::Job)?;
+        Ok(())
+    }
+
+    pub fn uploader(&self) -> &U {
+        &self.uploader
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum CompletionCoordinatorError<E> {
+    Job(CompletionJobError),
+    Upload(E),
+    Confirmation(RemoteUploadValidationError),
+}
+
 /// Validates that the remote receipt confirms exactly the prepared upload.
 pub fn validate_upload_receipt(
     upload: &PreparedUpload,
@@ -194,6 +286,58 @@ mod tests {
         job.prepare_upload(&artifact).unwrap()
     }
 
+    fn test_artifact() -> RecordingArtifact {
+        let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
+        let mut track = RecordingTrack::with_configuration("track-a", configuration);
+        track.add_chunk(RecordingChunk::with_payload(
+            1,
+            "track-a/chunk-000001",
+            vec![0, 0, 1, 0, 2, 0, 3, 0],
+        ));
+        let mut artifact = RecordingArtifact::new("artifact-coordinator", RecordingSessionId::new("session-001"));
+        artifact.add_track(track);
+        artifact
+    }
+
+    struct ConfirmingUploader;
+
+    impl RemoteArtifactUploader for ConfirmingUploader {
+        type Error = ();
+
+        fn upload(&mut self, upload: &PreparedUpload) -> Result<RemoteUploadReceipt, Self::Error> {
+            let tracks = upload
+                .tracks()
+                .iter()
+                .map(|track| {
+                    RemoteUploadTrackReceipt::new(track.track_id(), track.size_bytes(), track.hash())
+                })
+                .collect();
+            Ok(RemoteUploadReceipt::new(
+                upload.artifact_id(),
+                upload.manifest_hash(),
+                tracks,
+            ))
+        }
+    }
+
+    struct MismatchingUploader;
+
+    impl RemoteArtifactUploader for MismatchingUploader {
+        type Error = ();
+
+        fn upload(&mut self, upload: &PreparedUpload) -> Result<RemoteUploadReceipt, Self::Error> {
+            Ok(RemoteUploadReceipt::new(
+                upload.artifact_id(),
+                upload.manifest_hash(),
+                vec![RemoteUploadTrackReceipt::new(
+                    "track-a",
+                    0,
+                    PayloadHash::from_bytes(b"wrong"),
+                )],
+            ))
+        }
+    }
+
     #[test]
     fn receipt_must_confirm_exact_payloads() {
         let upload = test_upload();
@@ -226,6 +370,42 @@ mod tests {
             validate_upload_receipt(&upload, &receipt),
             Err(RemoteUploadValidationError::TrackMismatch)
         );
+    }
+
+    // TEST-54: Completion reaches Uploaded only after exact remote confirmation.
+    #[test]
+    fn coordinator_requires_exact_confirmation_before_uploaded() {
+        let store = FilesystemCompletionJobStore::new(
+            std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id())),
+        )
+        .unwrap();
+        let artifact = test_artifact();
+        let mut job = CompletionJob::new("job-054", "capture-054");
+        let mut coordinator = CompletionCoordinator::new(&store, ConfirmingUploader);
+
+        coordinator.complete(&mut job, &artifact).unwrap();
+
+        assert_eq!(job.state(), crate::completion::CompletionJobState::Uploaded);
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join(format!("nc-pore-coordinator-{}", std::process::id())));
+    }
+
+    // TEST-55: A mismatching receipt cannot advance the durable job to Uploaded.
+    #[test]
+    fn coordinator_rejects_mismatching_confirmation() {
+        let root = std::env::temp_dir().join(format!("nc-pore-coordinator-mismatch-{}", std::process::id()));
+        let store = FilesystemCompletionJobStore::new(&root).unwrap();
+        let artifact = test_artifact();
+        let mut job = CompletionJob::new("job-055", "capture-055");
+        let mut coordinator = CompletionCoordinator::new(&store, MismatchingUploader);
+
+        let error = coordinator.complete(&mut job, &artifact).unwrap_err();
+
+        assert_eq!(
+            error,
+            CompletionCoordinatorError::Confirmation(RemoteUploadValidationError::TrackMismatch)
+        );
+        assert_eq!(job.state(), crate::completion::CompletionJobState::FailedRetryable);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
