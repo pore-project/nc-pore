@@ -504,13 +504,8 @@ mod tests {
     fn reconstitute_requires_persisted_coordination() {
         let (repository, production_id, alice, _, recording_id) = fixture();
 
-        let error = reconstitute_distributed_recording(
-            &repository,
-            &production_id,
-            &alice,
-            &recording_id,
-        )
-        .unwrap_err();
+        let error = reconstitute_distributed_recording(&repository, &production_id, &alice, &recording_id)
+            .unwrap_err();
 
         assert_eq!(
             error,
