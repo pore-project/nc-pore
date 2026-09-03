@@ -10,7 +10,9 @@ use crate::activity::ActivityEvent;
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
-use crate::recording::{Recording, RecordingCoordinationError, RecordingId, RecordingLifecycleError, RecordingStatus};
+use crate::recording::{
+    Recording, RecordingCoordinationError, RecordingId, RecordingLifecycleError, RecordingStatus,
+};
 use crate::role::{ParticipantRole, ProductionAction};
 
 use super::{ProductionSession, ProductionSessionError, ProductionStatus};
