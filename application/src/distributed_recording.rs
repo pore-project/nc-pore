@@ -170,22 +170,14 @@ where
         .collect();
 
     session
-        .begin_recording_by(actor, recording_id, participants)
+        .begin_recording_by(actor, recording_id, participants.clone())
         .map_err(DistributedRecordingError::Session)?;
     repository
         .update(&session)
         .map_err(DistributedRecordingError::Repository)?;
 
-    let mut workflow = RecordingWorkflow::from_persisted_state(
-        recording,
-        session
-            .recording_coordination()
-            .cloned()
-            .ok_or(DistributedRecordingError::Workflow(
-                RecordingWorkflowError::InvalidState,
-            ))?,
-    )
-    .map_err(DistributedRecordingError::Workflow)?;
+    let mut workflow = RecordingWorkflow::from_recording(recording, participants)
+        .map_err(DistributedRecordingError::Workflow)?;
     workflow
         .begin_ready_phase()
         .map_err(DistributedRecordingError::Workflow)?;
