@@ -85,10 +85,14 @@ mod tests {
         assert_eq!(artifact.recording_session_id.value(), "browser-session-001");
         assert_eq!(artifact.tracks().len(), 1);
         assert_eq!(artifact.tracks()[0].chunks().len(), 1);
-        assert_eq!(artifact.tracks()[0].chunks()[0].payload().data(), &[10, 20, 30]);
+        assert_eq!(
+            artifact.tracks()[0].chunks()[0].payload().data(),
+            &[10, 20, 30]
+        );
         assert!(matches!(
             provider.load("browser-recording-001"),
-            PersistenceLoadResult::Valid(stored) if matches!(stored.status(), ArtifactStatus::Stored)
+            PersistenceLoadResult::Valid(stored)
+                if matches!(stored.status(), ArtifactStatus::Stored)
         ));
     }
 
