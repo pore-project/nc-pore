@@ -368,10 +368,26 @@ mod tests {
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
 
-        assert!(!workflow.acknowledge_stop(&participant("participant-a")).unwrap());
-        assert!(!workflow.acknowledge_stop(&participant("participant-a")).unwrap());
-        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
-        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
+        assert!(
+            !workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
+        assert!(
+            !workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
     }
 
     #[test]
