@@ -89,9 +89,9 @@ impl DistributedRecording {
         self.workflow.start_recording_with_signet()
     }
 
-    /// Emits Opening on the local recorder and confirms the host recorder's
-    /// Opening barrier. Stable Recording is persisted in Core only when every
-    /// selected recorder has confirmed Opening.
+    /// Emits Opening on the local recorder and persists this participant's
+    /// Opening confirmation in Core. Stable Recording is persisted only when
+    /// the complete selected participant set has confirmed Opening.
     pub fn confirm_opening<R, C, P>(
         &mut self,
         repository: &mut R,
@@ -106,31 +106,13 @@ impl DistributedRecording {
         recorder
             .emit_sync_signet(opening)
             .map_err(DistributedRecordingError::Recorder)?;
-        let recording_started = self
-            .confirm_opening_for_participant(&self.actor.clone())
-            .map_err(DistributedRecordingError::Workflow)?;
 
-        if !recording_started {
-            return Ok(false);
-        }
-
-        let mut session = repository
-            .get(&self.production_id)
-            .map_err(DistributedRecordingError::Repository)?
-            .ok_or(DistributedRecordingError::SessionNotFound)?;
-        session
-            .start_recording_by(&self.actor, &self.recording_id)
-            .map_err(DistributedRecordingError::Session)?;
-        repository
-            .update(&session)
-            .map_err(DistributedRecordingError::Repository)?;
-        Ok(true)
+        confirm_distributed_recording_opening(repository, self, &self.actor.clone())
     }
 
     /// Confirms Opening for a recorder that has already emitted/captured the
-    /// signet. The returned value becomes true only at the aggregate Opening
-    /// barrier. This keeps remote-client confirmation separate from local
-    /// capture mechanics.
+    /// signet and persists that confirmation in Core. The returned value is
+    /// true only at the aggregate Opening barrier.
     pub fn confirm_opening_for_participant(
         &mut self,
         participant: &ParticipantId,
@@ -224,6 +206,56 @@ where
     }
 
     Ok(core_ready)
+}
+
+/// Persists one participant's Opening confirmation in Core and mirrors the
+/// same barrier in the local application workflow. Once the aggregate Opening
+/// barrier completes, Core advances the authoritative recording to Recording.
+pub fn confirm_distributed_recording_opening<R>(
+    repository: &mut R,
+    recording: &mut DistributedRecording,
+    participant: &ParticipantId,
+) -> Result<bool, DistributedRecordingError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    let mut session = repository
+        .get(recording.production_id())
+        .map_err(DistributedRecordingError::Repository)?
+        .ok_or(DistributedRecordingError::SessionNotFound)?;
+
+    let core_opening_confirmed = session
+        .confirm_recording_opening_by(participant, recording.recording_id())
+        .map_err(DistributedRecordingError::Session)?;
+    repository
+        .update(&session)
+        .map_err(DistributedRecordingError::Repository)?;
+
+    let workflow_opening_confirmed = recording
+        .workflow_mut()
+        .confirm_opening(participant)
+        .map_err(DistributedRecordingError::Workflow)?;
+
+    if core_opening_confirmed != workflow_opening_confirmed {
+        return Err(DistributedRecordingError::CoordinationDiverged);
+    }
+
+    if !core_opening_confirmed {
+        return Ok(false);
+    }
+
+    let mut session = repository
+        .get(recording.production_id())
+        .map_err(DistributedRecordingError::Repository)?
+        .ok_or(DistributedRecordingError::SessionNotFound)?;
+    session
+        .start_recording_by(participant, recording.recording_id())
+        .map_err(DistributedRecordingError::Session)?;
+    repository
+        .update(&session)
+        .map_err(DistributedRecordingError::Repository)?;
+
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -341,23 +373,39 @@ mod tests {
                 .unwrap();
 
         assert!(
-            !mark_distributed_recording_ready(&mut repository, &mut recording, &alice,).unwrap()
+            !mark_distributed_recording_ready(&mut repository, &mut recording, &alice).unwrap()
         );
         assert_eq!(
             recording.trigger_opening(),
             Err(RecordingWorkflowError::InvalidState)
         );
 
-        assert!(mark_distributed_recording_ready(&mut repository, &mut recording, &bob,).unwrap());
+        assert!(mark_distributed_recording_ready(&mut repository, &mut recording, &bob).unwrap());
         assert_eq!(
             recording.trigger_opening(),
             Ok(RecordingSyncSignet::Opening)
         );
-        assert!(!recording.confirm_opening_for_participant(&alice).unwrap());
-        assert!(recording.confirm_opening_for_participant(&bob).unwrap());
+        assert!(!confirm_distributed_recording_opening(&mut repository, &mut recording, &alice)
+            .unwrap());
+        assert!(confirm_distributed_recording_opening(&mut repository, &mut recording, &bob)
+            .unwrap());
         assert_eq!(
             recording.workflow().status(),
             nc_pore_core::recording::RecordingWorkflowStatus::Recording
+        );
+        assert_eq!(
+            repository
+                .get(&production_id)
+                .unwrap()
+                .unwrap()
+                .recording_coordination()
+                .unwrap()
+                .opening_confirmed_participants(),
+            &[alice, bob]
+        );
+        assert_eq!(
+            repository.get(&production_id).unwrap().unwrap().recordings()[0].status(),
+            nc_pore_core::recording::RecordingStatus::Recording
         );
     }
 }
