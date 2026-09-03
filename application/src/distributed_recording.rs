@@ -197,12 +197,13 @@ where
         .cloned()
         .ok_or(DistributedRecordingError::RecordingNotFound)?;
 
-    let coordination = session
-        .recording_coordination()
-        .cloned()
-        .ok_or(DistributedRecordingError::Workflow(
-            RecordingWorkflowError::InvalidState,
-        ))?;
+    let coordination =
+        session
+            .recording_coordination()
+            .cloned()
+            .ok_or(DistributedRecordingError::Workflow(
+                RecordingWorkflowError::InvalidState,
+            ))?;
 
     let workflow = RecordingWorkflow::from_persisted_state(recording, coordination)
         .map_err(DistributedRecordingError::Workflow)?;
