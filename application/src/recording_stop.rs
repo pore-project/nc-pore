@@ -41,9 +41,7 @@ where
     C: CaptureProvider,
     P: PersistenceProvider,
 {
-    let mut coordinator = RecordingStopCoordinator::new(
-        nc_pore_core::recording::RecordingStopMode::Host,
-    );
+    let mut coordinator = RecordingStopCoordinator::new(nc_pore_core::recording::RecordingStopMode::Host);
     coordinator
         .persist_core_stop()
         .map_err(ExecuteRecordingStopError::Coordinator)?;
@@ -114,7 +112,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nc_pore_core::recording::{RecordingClosingOutcome, RecordingStopCoordinatorStatus, RecordingStopMode};
+    use nc_pore_core::recording::{
+        RecordingClosingOutcome, RecordingStopCoordinatorStatus, RecordingStopMode,
+    };
 
     #[test]
     fn host_stop_requires_persisted_core_stop_before_closing() {
