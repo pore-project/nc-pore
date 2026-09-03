@@ -25,7 +25,7 @@ pub use cpal::test_input_stream;
 pub use cpal::{CpalCaptureProvider, CpalInputConfiguration};
 pub use result::{CaptureChunk, CaptureTrack};
 pub use result::{CaptureResult, CaptureStatus};
-pub use signet::{SignetEvent, SyncSignet, SyncSignetKind};
+pub use signet::{SignetEvent, SyncSignet, SyncSignetConfiguration, SyncSignetKind};
 
 /// Returned when a capture provider cannot start audio capture.
 #[derive(Debug, PartialEq, Eq)]
@@ -37,7 +37,7 @@ pub enum CaptureStartError {
 }
 
 /// Returned when a synchronization signet cannot be emitted into a capture.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncSignetEmissionError {
     NotCapturing,
     Unsupported,

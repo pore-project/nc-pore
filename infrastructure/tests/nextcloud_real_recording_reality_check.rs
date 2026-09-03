@@ -14,11 +14,7 @@ use recorder::audio::{
 };
 use recorder::persistence::FilesystemPersistenceProvider;
 use recorder::session::RecordingSession;
-use recorder::workflow::{
-    recording_start::{RecordingParticipantId, RecordingStartCoordinator},
-    recording_stop::RecordingStopCoordinator,
-    RecorderWorkflow,
-};
+use recorder::workflow::RecorderWorkflow;
 use std::env;
 use std::thread;
 use std::time::{Duration, SystemTime};
@@ -132,28 +128,26 @@ fn nextcloud_real_recording_reality_check() {
 
     let process_id = std::process::id();
     let session_value = format!("session-real-recording-{}", process_id);
-    let participant = RecordingParticipantId::new("participant-real-recording");
     let session = RecordingSession::new(&session_value);
     let mut workflow = RecorderWorkflow::new(session, capture);
 
     workflow
         .start(&configuration)
         .expect("real CPAL capture must start");
-
-    let mut start_coordinator = RecordingStartCoordinator::new([participant.clone()]);
     workflow
-        .ready_and_maybe_opening_signet(&mut start_coordinator, &participant)
-        .expect("real capture must reach READY and emit opening signet");
+        .ready()
+        .expect("real capture must reach local Opening phase");
+    workflow
+        .emit_sync_signet(&configuration.signets().opening())
+        .expect("real capture must emit opening signet");
 
     thread::sleep(Duration::from_secs(9));
 
-    let mut stop_coordinator = RecordingStopCoordinator::new([participant.clone()]);
-    let (_closing_signet, capture_result) = workflow
-        .stop_with_coordinator(&mut stop_coordinator)
-        .expect("real capture must stop with closing signet");
-    stop_coordinator
-        .confirm_ok(&participant)
-        .expect("real capture participant must confirm stop");
+    let closing_configuration = configuration.signets().closing();
+    let closing = closing_configuration
+        .as_ref()
+        .expect("closing signet must be configured");
+    let capture_result = workflow.stop_after_optional_closing(closing);
 
     assert!(
         !capture_result.tracks().is_empty(),

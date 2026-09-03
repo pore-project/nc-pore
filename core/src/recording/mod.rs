@@ -19,6 +19,8 @@
 pub mod artifact_id;
 pub mod coordination;
 pub mod id;
+pub mod signet;
+pub mod stop;
 pub mod synchronization;
 pub mod workflow;
 
@@ -27,6 +29,11 @@ pub use coordination::{
     RecordingCoordination, RecordingCoordinationError, RecordingCoordinationStatus,
 };
 pub use id::RecordingId;
+pub use signet::{RecordingSyncSignet, RecordingSyncSignetRequirement};
+pub use stop::{
+    RecordingClosingOutcome, RecordingStopCoordinator, RecordingStopCoordinatorError,
+    RecordingStopCoordinatorStatus, RecordingStopMode,
+};
 pub use synchronization::{
     RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
     RecordingArtifactSynchronizationStatus,
@@ -39,6 +46,7 @@ use crate::participant::ParticipantId;
 pub enum RecordingStatus {
     Prepared,
     Recording,
+    Stopped,
     Completed,
 }
 
@@ -108,6 +116,11 @@ impl Recording {
         Ok(())
     }
 
+    pub fn stop(&mut self) -> Result<(), RecordingLifecycleError> {
+        self.transition_to(RecordingStatus::Stopped)?;
+        Ok(())
+    }
+
     pub fn complete(
         &mut self,
         artifact_id: RecordingArtifactId,
@@ -134,7 +147,8 @@ impl Recording {
         if !matches!(
             (self.status, target),
             (RecordingStatus::Prepared, RecordingStatus::Recording)
-                | (RecordingStatus::Recording, RecordingStatus::Completed)
+                | (RecordingStatus::Recording, RecordingStatus::Stopped)
+                | (RecordingStatus::Stopped, RecordingStatus::Completed)
         ) {
             return Err(RecordingLifecycleError::InvalidTransition {
                 from: self.status,
@@ -183,10 +197,20 @@ mod tests {
     }
 
     #[test]
-    fn recording_can_transition_to_completed_with_artifact() {
+    fn recording_can_transition_to_stopped_before_completion() {
         let mut recording = Recording::new("recording-test-04");
+        recording.start().unwrap();
+        assert_eq!(recording.stop(), Ok(()));
+        assert_eq!(recording.status(), RecordingStatus::Stopped);
+        assert_eq!(recording.artifact_id(), None);
+    }
+
+    #[test]
+    fn stopped_recording_can_transition_to_completed_with_artifact() {
+        let mut recording = Recording::new("recording-test-05");
         let expected_artifact = artifact_id();
         recording.start().unwrap();
+        recording.stop().unwrap();
         assert_eq!(recording.complete(expected_artifact.clone()), Ok(()));
         assert_eq!(recording.status(), RecordingStatus::Completed);
         assert_eq!(recording.artifact_id(), Some(&expected_artifact));
@@ -194,7 +218,7 @@ mod tests {
 
     #[test]
     fn prepared_recording_cannot_be_completed() {
-        let mut recording = Recording::new("recording-test-05");
+        let mut recording = Recording::new("recording-test-06");
         let result = recording.complete(artifact_id());
         assert_eq!(
             result,
@@ -209,7 +233,7 @@ mod tests {
 
     #[test]
     fn recording_cannot_be_started_twice() {
-        let mut recording = Recording::new("recording-test-06");
+        let mut recording = Recording::new("recording-test-07");
         recording.start().unwrap();
         let result = recording.start();
         assert_eq!(
@@ -223,9 +247,26 @@ mod tests {
     }
 
     #[test]
-    fn completed_recording_cannot_be_started_again() {
-        let mut recording = Recording::new("recording-test-07");
+    fn recording_cannot_be_stopped_twice() {
+        let mut recording = Recording::new("recording-test-08");
         recording.start().unwrap();
+        recording.stop().unwrap();
+        let result = recording.stop();
+        assert_eq!(
+            result,
+            Err(RecordingLifecycleError::InvalidTransition {
+                from: RecordingStatus::Stopped,
+                to: RecordingStatus::Stopped,
+            })
+        );
+        assert_eq!(recording.status(), RecordingStatus::Stopped);
+    }
+
+    #[test]
+    fn completed_recording_cannot_be_started_again() {
+        let mut recording = Recording::new("recording-test-09");
+        recording.start().unwrap();
+        recording.stop().unwrap();
         recording.complete(artifact_id()).unwrap();
         let result = recording.start();
         assert_eq!(
@@ -240,9 +281,10 @@ mod tests {
 
     #[test]
     fn completed_recording_is_idempotent_for_same_artifact() {
-        let mut recording = Recording::new("recording-test-08");
+        let mut recording = Recording::new("recording-test-10");
         let artifact = artifact_id();
         recording.start().unwrap();
+        recording.stop().unwrap();
         recording.complete(artifact.clone()).unwrap();
         let result = recording.complete(artifact.clone());
         assert_eq!(result, Ok(()));
@@ -252,10 +294,11 @@ mod tests {
 
     #[test]
     fn completed_recording_rejects_different_artifact() {
-        let mut recording = Recording::new("recording-test-09");
+        let mut recording = Recording::new("recording-test-11");
         let existing = artifact_id();
         let requested = RecordingArtifactId::new("artifact-test-02");
         recording.start().unwrap();
+        recording.stop().unwrap();
         recording.complete(existing.clone()).unwrap();
         let result = recording.complete(requested.clone());
         assert_eq!(
@@ -265,5 +308,20 @@ mod tests {
                 requested,
             })
         );
+    }
+
+    #[test]
+    fn recording_cannot_complete_directly_from_recording_anymore() {
+        let mut recording = Recording::new("recording-test-12");
+        recording.start().unwrap();
+        let result = recording.complete(artifact_id());
+        assert_eq!(
+            result,
+            Err(RecordingLifecycleError::InvalidTransition {
+                from: RecordingStatus::Recording,
+                to: RecordingStatus::Completed,
+            })
+        );
+        assert_eq!(recording.status(), RecordingStatus::Recording);
     }
 }

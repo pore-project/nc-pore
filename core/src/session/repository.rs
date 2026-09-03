@@ -8,10 +8,14 @@
 
 use crate::activity::ActivityEvent;
 use crate::identity::ProductionId;
+use crate::participant::ParticipantId;
 use crate::participation::Participation;
-use crate::recording::Recording;
+use crate::recording::{
+    Recording, RecordingCoordination, RecordingId, RecordingLifecycleError, RecordingStatus,
+};
+use crate::role::ProductionAction;
 
-use super::{ProductionSession, ProductionStatus};
+use super::{ProductionSession, ProductionSessionError, ProductionStatus};
 
 /// Domain-facing repository contract for Production Sessions.
 ///
@@ -38,13 +42,17 @@ pub trait ProductionSessionRepository {
 
 /// Reconstitutes a domain session from already-decoded domain state.
 ///
-/// Serialization and storage remain outside Core. This function only restores
-/// the aggregate from domain values supplied by an outer persistence adapter.
+/// Serialization and storage remain outside Core. The recording coordination
+/// is part of the aggregate state and is therefore supplied by the outer
+/// persistence adapter rather than being recreated as a fresh in-memory
+/// coordination. This preserves READY, Opening confirmations and stop
+/// acknowledgements across session reloads.
 pub fn reconstitute_production_session(
     id: ProductionId,
     status: ProductionStatus,
     participations: Vec<Participation>,
     recordings: Vec<Recording>,
+    recording_coordination: Option<RecordingCoordination>,
     activities: Vec<ActivityEvent>,
 ) -> ProductionSession {
     ProductionSession {
@@ -52,8 +60,73 @@ pub fn reconstitute_production_session(
         status,
         participations,
         recordings,
-        recording_coordination: None,
+        recording_coordination,
         activities,
+    }
+}
+
+/// Persists the fachliche Opening confirmation of one selected client in
+/// Core. The complete READY barrier must have been reached before Opening can
+/// be confirmed; stable Recording remains a separate aggregate transition.
+impl ProductionSession {
+    pub fn confirm_recording_opening_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<bool, ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
+        }
+
+        coordination
+            .confirm_opening(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
+    }
+
+    /// Persists one selected participant's technical stop acknowledgement in
+    /// Core. The authoritative recording stop must already have been applied;
+    /// this method never stops another participant's local recorder.
+    pub fn acknowledge_recording_stop_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<bool, ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
+        let recording = self
+            .recordings
+            .iter()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        if recording.status() != RecordingStatus::Stopped {
+            return Err(ProductionSessionError::RecordingLifecycle(
+                RecordingLifecycleError::InvalidTransition {
+                    from: recording.status(),
+                    to: RecordingStatus::Stopped,
+                },
+            ));
+        }
+
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
+        }
+
+        coordination
+            .acknowledge_stop(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
     }
 }
 
@@ -138,5 +211,52 @@ mod tests {
         updated.start_by(&owner).unwrap();
         repo.update(&updated).unwrap();
         assert_eq!(repo.get(&id).unwrap().unwrap().status(), updated.status());
+    }
+
+    #[test]
+    fn reconstitution_preserves_recording_coordination_barrier_state() {
+        let production_id = ProductionId::new("session-reconstituted");
+        let recording_id = RecordingId::new("recording-reconstituted");
+        let alice = ParticipantId::new("alice");
+        let bob = ParticipantId::new("bob");
+        let mut coordination =
+            RecordingCoordination::new(recording_id.clone(), [alice.clone(), bob.clone()]).unwrap();
+
+        coordination.begin_waiting_for_ready().unwrap();
+        coordination.mark_ready(&alice).unwrap();
+        coordination.mark_ready(&bob).unwrap();
+        coordination.confirm_opening(&alice).unwrap();
+        coordination.confirm_opening(&bob).unwrap();
+        coordination.acknowledge_stop(&alice).unwrap();
+        coordination.acknowledge_stop(&bob).unwrap();
+
+        let restored = reconstitute_production_session(
+            production_id,
+            ProductionStatus::Active,
+            vec![],
+            vec![Recording::new(recording_id.value())],
+            Some(coordination),
+            vec![],
+        );
+
+        let restored_coordination = restored.recording_coordination().unwrap();
+        assert_eq!(
+            restored_coordination.participants(),
+            &[alice.clone(), bob.clone()]
+        );
+        assert_eq!(
+            restored_coordination.ready_participants(),
+            &[alice.clone(), bob.clone()]
+        );
+        assert_eq!(
+            restored_coordination.opening_confirmed_participants(),
+            &[alice.clone(), bob.clone()]
+        );
+        assert_eq!(
+            restored_coordination.stop_acknowledged_participants(),
+            &[alice, bob]
+        );
+        assert!(restored_coordination.is_opening_confirmed());
+        assert!(restored_coordination.is_stop_acknowledged());
     }
 }
