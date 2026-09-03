@@ -121,7 +121,8 @@ impl RecordingWorkflow {
         }
 
         if status == RecordingWorkflowStatus::Completed
-            && coordination.stop_acknowledged_participants().len() != coordination.participants().len()
+            && coordination.stop_acknowledged_participants().len()
+                != coordination.participants().len()
         {
             return Err(RecordingWorkflowError::InvalidState);
         }
