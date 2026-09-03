@@ -43,9 +43,6 @@ where
 {
     let mut coordinator =
         RecordingStopCoordinator::new(nc_pore_core::recording::RecordingStopMode::Host);
-    coordinator
-        .persist_core_stop()
-        .map_err(ExecuteRecordingStopError::Coordinator)?;
 
     // Keep the application/domain workflow and the persisted Core session at
     // the same fachlichen stop boundary before any Closing attempt.
@@ -63,6 +60,11 @@ where
     repository
         .update(&session)
         .map_err(ExecuteRecordingStopError::Repository)?;
+
+    // Only now has the authoritative Core stop actually been persisted.
+    coordinator
+        .persist_core_stop()
+        .map_err(ExecuteRecordingStopError::Coordinator)?;
 
     let closing_outcome = match configuration.signets().closing() {
         Some(closing) if recorder.emit_optional_sync_signet(&closing) => {
