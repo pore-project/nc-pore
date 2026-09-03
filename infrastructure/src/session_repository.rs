@@ -93,6 +93,7 @@ struct PersistedRecording {
 enum PersistedRecordingStatus {
     Prepared,
     Recording,
+    Stopped,
     Completed,
 }
 
@@ -115,6 +116,7 @@ enum PersistedActivityType {
     ParticipantAdded,
     RecordingAdded,
     RecordingStarted,
+    RecordingStopped,
     RecordingCompleted,
 }
 
@@ -171,6 +173,7 @@ impl From<RecordingStatus> for PersistedRecordingStatus {
         match status {
             RecordingStatus::Prepared => Self::Prepared,
             RecordingStatus::Recording => Self::Recording,
+            RecordingStatus::Stopped => Self::Stopped,
             RecordingStatus::Completed => Self::Completed,
         }
     }
@@ -181,6 +184,7 @@ impl From<PersistedRecordingStatus> for RecordingStatus {
         match status {
             PersistedRecordingStatus::Prepared => Self::Prepared,
             PersistedRecordingStatus::Recording => Self::Recording,
+            PersistedRecordingStatus::Stopped => Self::Stopped,
             PersistedRecordingStatus::Completed => Self::Completed,
         }
     }
@@ -195,6 +199,7 @@ impl From<ActivityType> for PersistedActivityType {
             ActivityType::ParticipantAdded => Self::ParticipantAdded,
             ActivityType::RecordingAdded => Self::RecordingAdded,
             ActivityType::RecordingStarted => Self::RecordingStarted,
+            ActivityType::RecordingStopped => Self::RecordingStopped,
             ActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
@@ -209,6 +214,7 @@ impl From<PersistedActivityType> for ActivityType {
             PersistedActivityType::ParticipantAdded => Self::ParticipantAdded,
             PersistedActivityType::RecordingAdded => Self::RecordingAdded,
             PersistedActivityType::RecordingStarted => Self::RecordingStarted,
+            PersistedActivityType::RecordingStopped => Self::RecordingStopped,
             PersistedActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
@@ -347,7 +353,6 @@ impl PersistedProductionSession {
     }
 }
 
-/// Concrete local filesystem persistence for `ProductionSession`.
 pub struct FileProductionSessionRepository {
     root: PathBuf,
 }
@@ -480,6 +485,9 @@ mod tests {
             .unwrap();
         session
             .start_recording_by(&owner, &RecordingId::new("recording-001"))
+            .unwrap();
+        session
+            .stop_recording_by(&owner, &RecordingId::new("recording-001"))
             .unwrap();
         session
             .complete_recording_by(
