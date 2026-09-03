@@ -31,14 +31,9 @@ where
         .update(&session)
         .map_err(DistributedRecordingError::Repository)?;
 
-    let workflow_acknowledged = recording
-        .workflow_mut()
-        .acknowledge_stop(participant)
+    recording
+        .refresh_workflow_from_core(&session)
         .map_err(DistributedRecordingError::Workflow)?;
-
-    if core_acknowledged != workflow_acknowledged {
-        return Err(DistributedRecordingError::CoordinationDiverged);
-    }
 
     Ok(core_acknowledged)
 }
