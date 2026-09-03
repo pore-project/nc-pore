@@ -14,7 +14,6 @@ use recorder::persistence::PersistenceProvider;
 pub enum DistributedRecordingError<E> {
     SessionNotFound,
     RecordingNotFound,
-    RecordingCoordinationNotFound,
     Repository(E),
     Session(ProductionSessionError),
     Workflow(RecordingWorkflowError),
@@ -201,7 +200,9 @@ where
     let coordination = session
         .recording_coordination()
         .cloned()
-        .ok_or(DistributedRecordingError::RecordingCoordinationNotFound)?;
+        .ok_or(DistributedRecordingError::Workflow(
+            RecordingWorkflowError::InvalidState,
+        ))?;
 
     let workflow = RecordingWorkflow::from_persisted_state(recording, coordination)
         .map_err(DistributedRecordingError::Workflow)?;
@@ -503,7 +504,9 @@ mod tests {
 
         assert_eq!(
             reconstitute_distributed_recording(&repository, &production_id, &alice, &recording_id,),
-            Err(DistributedRecordingError::RecordingCoordinationNotFound)
+            Err(DistributedRecordingError::Workflow(
+                RecordingWorkflowError::InvalidState,
+            ))
         );
     }
 }
