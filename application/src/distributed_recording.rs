@@ -89,14 +89,16 @@ impl DistributedRecording {
         self.workflow.start_recording_with_signet()
     }
 
-    /// Emits the configured Opening Signet, confirms the local Opening barrier,
-    /// and only then persists Core's stable Recording state.
+    /// Emits Opening on one local recorder and confirms that recorder's
+    /// Opening barrier. Stable Recording is persisted in Core only when all
+    /// selected recorders have confirmed Opening.
     pub fn confirm_opening<R, C, P>(
         &mut self,
         repository: &mut R,
         recorder: &mut RecorderApplication<C, P>,
+        participant: &ParticipantId,
         opening: &SyncSignet,
-    ) -> Result<(), DistributedRecordingError<R::Error>>
+    ) -> Result<bool, DistributedRecordingError<R::Error>>
     where
         R: ProductionSessionRepository,
         C: CaptureProvider,
@@ -105,9 +107,12 @@ impl DistributedRecording {
         recorder
             .emit_sync_signet(opening)
             .map_err(DistributedRecordingError::Recorder)?;
-        self.workflow
-            .confirm_opening()
+        self.confirm_opening_for_participant(participant)
             .map_err(DistributedRecordingError::Workflow)?;
+
+        if !self.workflow.recording().status().eq(&nc_pore_core::recording::RecordingStatus::Recording) {
+            return Ok(false);
+        }
 
         let mut session = repository
             .get(&self.production_id)
@@ -119,7 +124,18 @@ impl DistributedRecording {
         repository
             .update(&session)
             .map_err(DistributedRecordingError::Repository)?;
-        Ok(())
+        Ok(true)
+    }
+
+    /// Confirms Opening for a recorder that has already emitted/captured the
+    /// signet. The returned value becomes true only at the aggregate Opening
+    /// barrier. This keeps remote-client confirmation separate from local
+    /// capture mechanics.
+    pub fn confirm_opening_for_participant(
+        &mut self,
+        participant: &ParticipantId,
+    ) -> Result<bool, RecordingWorkflowError> {
+        self.workflow.confirm_opening(participant)
     }
 }
 
@@ -318,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_waits_for_bob_ready() {
+    fn opening_waits_for_bob_ready_and_opening_confirmation() {
         let (mut repository, production_id, alice, bob, recording_id) = fixture();
         let mut recording =
             begin_distributed_recording(&mut repository, &production_id, &alice, &recording_id)
@@ -336,6 +352,16 @@ mod tests {
         assert_eq!(
             recording.trigger_opening(),
             Ok(RecordingSyncSignet::Opening)
+        );
+        assert!(!recording
+            .confirm_opening_for_participant(&alice)
+            .unwrap());
+        assert!(recording
+            .confirm_opening_for_participant(&bob)
+            .unwrap());
+        assert_eq!(
+            recording.workflow().status(),
+            nc_pore_core::recording::RecordingWorkflowStatus::Recording
         );
     }
 }
