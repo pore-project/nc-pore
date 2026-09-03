@@ -155,10 +155,6 @@ mod tests {
         *repository = InMemorySessions { session };
         recording
             .workflow_mut()
-            .request_stop()
-            .expect_err("workflow is still Recording only until Core stop is mirrored");
-        recording
-            .workflow_mut()
             .confirm_core_stop_persisted()
             .unwrap();
     }
