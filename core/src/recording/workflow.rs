@@ -50,8 +50,6 @@ pub struct RecordingWorkflow {
     recording: Recording,
     coordination: RecordingCoordination,
     status: RecordingWorkflowStatus,
-    opening_confirmed: Vec<ParticipantId>,
-    acknowledged: Vec<ParticipantId>,
 }
 
 impl RecordingWorkflow {
@@ -72,8 +70,6 @@ impl RecordingWorkflow {
             recording,
             coordination,
             status: RecordingWorkflowStatus::Preparing,
-            opening_confirmed: Vec::new(),
-            acknowledged: Vec::new(),
         })
     }
 
@@ -124,11 +120,8 @@ impl RecordingWorkflow {
             return Err(RecordingWorkflowError::InvalidState);
         }
 
-        let opening_confirmed = coordination.opening_confirmed_participants().to_vec();
-        let acknowledged = coordination.stop_acknowledged_participants().to_vec();
-
         if status == RecordingWorkflowStatus::Completed
-            && acknowledged.len() != coordination.participants().len()
+            && coordination.stop_acknowledged_participants().len() != coordination.participants().len()
         {
             return Err(RecordingWorkflowError::InvalidState);
         }
@@ -137,8 +130,6 @@ impl RecordingWorkflow {
             recording,
             coordination,
             status,
-            opening_confirmed,
-            acknowledged,
         })
     }
 
@@ -201,14 +192,10 @@ impl RecordingWorkflow {
 
         let confirmed = self.coordination.confirm_opening(participant_id)?;
         if confirmed {
-            self.opening_confirmed = self.coordination.opening_confirmed_participants().to_vec();
             self.recording.start()?;
             self.status = RecordingWorkflowStatus::Recording;
-            return Ok(true);
         }
-
-        self.opening_confirmed = self.coordination.opening_confirmed_participants().to_vec();
-        Ok(false)
+        Ok(confirmed)
     }
 
     pub fn start_recording(&mut self) -> Result<(), RecordingWorkflowError> {
@@ -243,9 +230,7 @@ impl RecordingWorkflow {
             return Err(RecordingWorkflowError::InvalidState);
         }
 
-        let acknowledged = self.coordination.acknowledge_stop(participant_id)?;
-        self.acknowledged = self.coordination.stop_acknowledged_participants().to_vec();
-        Ok(acknowledged)
+        Ok(self.coordination.acknowledge_stop(participant_id)?)
     }
 
     pub fn complete(
@@ -253,7 +238,8 @@ impl RecordingWorkflow {
         artifact_id: RecordingArtifactId,
     ) -> Result<(), RecordingWorkflowError> {
         if self.status != RecordingWorkflowStatus::Stopping
-            || self.acknowledged.len() != self.coordination.participants().len()
+            || self.coordination.stop_acknowledged_participants().len()
+                != self.coordination.participants().len()
         {
             return Err(RecordingWorkflowError::InvalidState);
         }
