@@ -1,1 +1,1 @@
-include!("impl/session_client_recording_vertical_slice.rs");
+include!("impl/session_client_recording_browser_runtime.rs");
