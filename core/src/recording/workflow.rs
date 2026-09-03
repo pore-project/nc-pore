@@ -404,7 +404,11 @@ mod tests {
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        assert!(workflow.acknowledge_stop(&participant("participant-a")).unwrap());
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-02"))
             .unwrap();
