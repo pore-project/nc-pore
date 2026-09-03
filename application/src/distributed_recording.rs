@@ -7,7 +7,7 @@ use nc_pore_core::role::ProductionAction;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::{ProductionSession, ProductionSessionError};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
-use recorder::audio::{CaptureProvider, RecordingConfiguration, CaptureStartError};
+use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration, SyncSignet};
 use recorder::persistence::PersistenceProvider;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -58,10 +58,9 @@ impl DistributedRecording {
         &mut self.workflow
     }
 
-    /// Starts the local technical recorder and reports local READY only after
-    /// the recorder itself has reached its READY state. This is deliberately
-    /// separate from the distributed READY barrier: remote participants may
-    /// still be preparing.
+    /// Starts the local technical recorder. Local READY is a separate step so
+    /// remote participants can prepare independently before the global READY
+    /// barrier is released.
     pub fn prepare_local_recorder<C, P>(
         &mut self,
         recorder: &mut RecorderApplication<C, P>,
@@ -74,11 +73,11 @@ impl DistributedRecording {
         recorder
             .start(configuration)
             .map_err(DistributedRecordingError::RecorderStart)?;
-        recorder
-            .ready()
-            .map_err(|error| DistributedRecordingError::Recorder(
-                RecorderApplicationError::Capture(format!("recorder ready transition failed: {error:?}")),
-            ))?;
+        recorder.ready().map_err(|error| {
+            DistributedRecordingError::Recorder(RecorderApplicationError::Capture(
+                format!("recorder ready transition failed: {error:?}"),
+            ))
+        })?;
         Ok(())
     }
 
@@ -86,20 +85,21 @@ impl DistributedRecording {
         self.workflow.start_recording_with_signet()
     }
 
-    /// Completes the Opening barrier locally. The caller must only invoke this
-    /// after `trigger_opening` and after the Opening Signet was successfully
-    /// emitted into the active local capture.
-    pub fn confirm_opening<C, P>(
+    /// Emits the configured Opening Signet, confirms the local Opening barrier,
+    /// and only then persists Core's stable Recording state.
+    pub fn confirm_opening<R, C, P>(
         &mut self,
-        repository: &mut impl ProductionSessionRepository,
+        repository: &mut R,
         recorder: &mut RecorderApplication<C, P>,
-    ) -> Result<(), DistributedRecordingError<impl std::fmt::Debug>>
+        opening: &SyncSignet,
+    ) -> Result<(), DistributedRecordingError<R::Error>>
     where
+        R: ProductionSessionRepository,
         C: CaptureProvider,
         P: PersistenceProvider,
     {
         recorder
-            .emit_sync_signet(&RecordingSyncSignet::Opening.into())
+            .emit_sync_signet(opening)
             .map_err(DistributedRecordingError::Recorder)?;
         self.workflow
             .confirm_opening()
@@ -107,14 +107,14 @@ impl DistributedRecording {
 
         let mut session = repository
             .get(&self.production_id)
-            .map_err(|_| DistributedRecordingError::CoordinationDiverged)?
+            .map_err(DistributedRecordingError::Repository)?
             .ok_or(DistributedRecordingError::SessionNotFound)?;
         session
             .start_recording_by(&self.actor, &self.recording_id)
             .map_err(DistributedRecordingError::Session)?;
         repository
             .update(&session)
-            .map_err(|_| DistributedRecordingError::CoordinationDiverged)?;
+            .map_err(DistributedRecordingError::Repository)?;
         Ok(())
     }
 }
