@@ -336,13 +336,21 @@ mod tests {
         reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        assert!(!workflow.acknowledge_stop(&participant("participant-a")).unwrap());
+        assert!(
+            !workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
         assert_eq!(
             workflow.complete(RecordingArtifactId::new("artifact-workflow-01")),
             Err(RecordingWorkflowError::InvalidState)
         );
-        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-01"))
             .unwrap();
@@ -367,7 +375,9 @@ mod tests {
         reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        workflow.acknowledge_stop(&participant("participant-a")).unwrap();
+        workflow
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap();
         assert_eq!(
             workflow.acknowledge_stop(&participant("participant-a")),
             Err(RecordingWorkflowError::AlreadyAcknowledged)
@@ -388,7 +398,11 @@ mod tests {
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        assert!(workflow.acknowledge_stop(&participant("participant-a")).unwrap());
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-02"))
             .unwrap();
