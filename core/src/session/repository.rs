@@ -10,7 +10,9 @@ use crate::activity::ActivityEvent;
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
-use crate::recording::{Recording, RecordingCoordination, RecordingId, RecordingLifecycleError, RecordingStatus};
+use crate::recording::{
+    Recording, RecordingCoordination, RecordingId, RecordingLifecycleError, RecordingStatus,
+};
 use crate::role::ProductionAction;
 
 use super::{ProductionSession, ProductionSessionError, ProductionStatus};
@@ -238,8 +240,14 @@ mod tests {
         );
 
         let restored_coordination = restored.recording_coordination().unwrap();
-        assert_eq!(restored_coordination.participants(), &[alice.clone(), bob.clone()]);
-        assert_eq!(restored_coordination.ready_participants(), &[alice.clone(), bob.clone()]);
+        assert_eq!(
+            restored_coordination.participants(),
+            &[alice.clone(), bob.clone()]
+        );
+        assert_eq!(
+            restored_coordination.ready_participants(),
+            &[alice.clone(), bob.clone()]
+        );
         assert_eq!(
             restored_coordination.opening_confirmed_participants(),
             &[alice.clone(), bob.clone()]
