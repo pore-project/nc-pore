@@ -1,6 +1,7 @@
 pub mod client;
 #[cfg(test)]
 mod client_session_context_tests;
+pub mod distributed_recording;
 pub mod external_session_context;
 pub mod recording;
 pub mod recording_stop;
