@@ -9,7 +9,8 @@
 //! boundary. The handoff contains only technical capture data needed to build
 //! the existing `CaptureResult` representation.
 
-use recorder::artifact::{RecordingArtifact, RecordingArtifactFactory};
+use recorder::artifact::factory::RecordingArtifactFactory;
+use recorder::artifact::RecordingArtifact;
 use recorder::audio::{CaptureResult, CaptureTrack, RecordingConfiguration};
 use recorder::session::RecordingSessionId;
 
