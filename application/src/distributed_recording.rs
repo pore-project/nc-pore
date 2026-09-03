@@ -74,9 +74,9 @@ impl DistributedRecording {
             .start(configuration)
             .map_err(DistributedRecordingError::RecorderStart)?;
         recorder.ready().map_err(|error| {
-            DistributedRecordingError::Recorder(RecorderApplicationError::Capture(
-                format!("recorder ready transition failed: {error:?}"),
-            ))
+            DistributedRecordingError::Recorder(RecorderApplicationError::Capture(format!(
+                "recorder ready transition failed: {error:?}"
+            )))
         })?;
         Ok(())
     }
