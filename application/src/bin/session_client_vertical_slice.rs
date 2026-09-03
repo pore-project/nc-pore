@@ -1,23 +1,13 @@
 //! Browser/client vertical slice for the first real recording path.
 //!
-//! The browser remains a thin state viewer and command surface. Recording
-//! lifecycle semantics stay in Application/Core. Authentication, production
-//! persistence, WebSocket transport and real audio capture are deliberately
-//! outside this slice.
+//! The browser is only a thin state viewer and command surface. Recording
+//! lifecycle semantics remain in Application/Core. Authentication, production
+//! persistence, WebSocket transport and real audio capture are outside this slice.
 
-use nc_pore_application::client::{
-    ClientProductionSession, ClientRole, ClientSessionError, ClientSessionService,
-};
-use nc_pore_application::distributed_recording::{
-    begin_distributed_recording, confirm_distributed_recording_opening,
-    mark_distributed_recording_ready, reconstitute_distributed_recording,
-    DistributedRecording, DistributedRecordingError,
-};
+use nc_pore_application::client::{ClientProductionSession, ClientRole, ClientSessionError, ClientSessionService};
+use nc_pore_application::distributed_recording::{begin_distributed_recording, confirm_distributed_recording_opening, mark_distributed_recording_ready, reconstitute_distributed_recording, DistributedRecording, DistributedRecordingError};
 use nc_pore_application::distributed_recording_stop::acknowledge_distributed_recording_stop_in_core;
-use nc_pore_application::session_context::{
-    ProductionSessionContextError, ProductionSessionContextProvider, SessionCapability,
-    SessionContext, SessionContextProvider,
-};
+use nc_pore_application::session_context::{ProductionSessionContextError, ProductionSessionContextProvider, SessionCapability, SessionContext, SessionContextProvider};
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{Recording, RecordingWorkflowStatus};
@@ -33,7 +23,6 @@ const RECORDING_ID: &str = "vertical-slice-recording";
 const ARTIFACT_ID: &str = "vertical-slice-artifact";
 
 struct InMemoryRepository { sessions: Vec<ProductionSession> }
-
 impl ProductionSessionRepository for InMemoryRepository {
     type Error = &'static str;
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
@@ -41,18 +30,15 @@ impl ProductionSessionRepository for InMemoryRepository {
         self.sessions.push(session.clone()); Ok(())
     }
     fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        let existing = self.sessions.iter_mut().find(|s| s.id == session.id).ok_or("session not found")?;
-        *existing = session.clone(); Ok(())
+        let stored = self.sessions.iter_mut().find(|s| s.id == session.id).ok_or("session not found")?;
+        *stored = session.clone(); Ok(())
     }
     fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
         Ok(self.sessions.iter().find(|s| &s.id == id).cloned())
     }
 }
 
-struct ServerState {
-    repository: InMemoryRepository,
-    active_recording: Option<DistributedRecording>,
-}
+struct ServerState { repository: InMemoryRepository, active_recording: Option<DistributedRecording> }
 
 fn main() -> std::io::Result<()> {
     let mut repository = InMemoryRepository { sessions: Vec::new() };
@@ -228,40 +214,15 @@ fn response(status: u16, body: &'static str) -> (u16, &'static str, String) { (s
 fn query_value(query: &str, key: &str) -> Option<String> { query.split('&').find_map(|item| { let (name, value) = item.split_once('=')?; (name == key).then(|| value.to_owned()) }) }
 fn json_field(body: &str, field: &str) -> Option<String> { let marker = format!("\"{field}\":\""); let start = body.find(&marker)? + marker.len(); let rest = &body[start..]; let end = rest.find('"')?; Some(rest[..end].to_owned()) }
 fn reason_phrase(status: u16) -> &'static str { match status { 200 => "OK", 400 => "Bad Request", 403 => "Forbidden", 404 => "Not Found", 409 => "Conflict", 500 => "Internal Server Error", _ => "Unknown" } }
-
 fn distributed_error<E>(e: DistributedRecordingError<E>) -> (u16, &'static str, String) { match e { DistributedRecordingError::SessionNotFound => response(404, r#"{"error":"session_not_found"}"#), DistributedRecordingError::RecordingNotFound => response(404, r#"{"error":"recording_not_found"}"#), DistributedRecordingError::CoordinationDiverged => response(409, r#"{"error":"coordination_diverged"}"#), DistributedRecordingError::Session(_) | DistributedRecordingError::Workflow(_) => response(409, r#"{"error":"recording_state_rejected"}"#), DistributedRecordingError::Repository(_) | DistributedRecordingError::RecorderStart(_) | DistributedRecordingError::Recorder(_) => response(500, r#"{"error":"application_error"}"#) } }
 fn production_error(e: ProductionSessionError) -> (u16, &'static str, String) { match e { ProductionSessionError::Unauthorized => response(403, r#"{"error":"unauthorized"}"#), ProductionSessionError::RecordingNotFound => response(404, r#"{"error":"recording_not_found"}"#), ProductionSessionError::InvalidStateTransition | ProductionSessionError::RecordingLifecycle(_) | ProductionSessionError::RecordingCoordination(_) | ProductionSessionError::RecordingCoordinationNotFound | ProductionSessionError::RecordingCoordinationAlreadyActive => response(409, r#"{"error":"recording_state_rejected"}"#) } }
 fn workflow_error(e: nc_pore_core::recording::RecordingWorkflowError) -> (u16, &'static str, String) { (409, "application/json; charset=utf-8", format!("{{\"error\":\"workflow_state_rejected\",\"detail\":\"{:?}\"}}", e)) }
-
-fn session_json(session: &ClientProductionSession) -> String {
-    let participants = session.participants.iter().map(|p| { let roles = p.roles.iter().map(|r| format!("\"{}\"", role_name(*r))).collect::<Vec<_>>().join(","); format!("{{\"id\":\"{}\",\"roles\":[{}]}}", json_escape(&p.id), roles) }).collect::<Vec<_>>().join(",");
-    let recordings = session.recordings.iter().map(|r| format!("{{\"id\":\"{}\",\"status\":\"{:?}\",\"artifact_id\":{}}}", json_escape(&r.id), r.status, r.artifact_id.as_ref().map(|id| format!("\"{}\"", json_escape(id))).unwrap_or_else(|| "null".to_owned()))).collect::<Vec<_>>().join(",");
-    format!("{{\"id\":\"{}\",\"status\":\"{:?}\",\"participants\":[{}],\"recordings\":[{}]}}", json_escape(&session.id), session.status, participants, recordings)
-}
-fn recording_json(recording: &DistributedRecording) -> String {
-    let c = recording.workflow().coordination();
-    let list = |ids: &[ParticipantId]| ids.iter().map(|id| format!("\"{}\"", json_escape(id.value()))).collect::<Vec<_>>().join(",");
-    format!("{{\"recording_id\":\"{}\",\"recording_status\":\"{:?}\",\"workflow\":\"{:?}\",\"participants\":[{}],\"ready\":[{}],\"opening_confirmed\":[{}],\"stop_acknowledged\":[{}]}}", json_escape(recording.recording_id().value()), recording.workflow().recording().status(), recording.workflow().status(), list(c.participants()), list(c.ready_participants()), list(c.opening_confirmed_participants()), list(c.stop_acknowledged_participants()))
-}
-fn context_json(c: &SessionContext) -> String { let caps = c.capabilities.iter().map(|x| format!("\"{}\"", capability_name(*x))).collect::<Vec<_>>().join(","); let ps = c.participants.iter().map(|p| format!("\"{}\"", json_escape(&p.id))).collect::<Vec<_>>().join(","); format!("{{\"session_id\":\"{}\",\"state\":\"{:?}\",\"actor_id\":\"{}\",\"participants\":[{}],\"capabilities\":[{}]}}", json_escape(&c.session_id), c.state, json_escape(&c.actor_id), ps, caps) }
-fn role_name(r: ClientRole) -> &'static str { match r { ClientRole::Owner => "Owner", ClientRole::Producer => "Producer", ClientRole::Participant => "Participant", ClientRole::Guest => "Guest" } }
-fn capability_name(c: SessionCapability) -> &'static str { match c { SessionCapability::StartSession => "StartSession", SessionCapability::CompleteSession => "CompleteSession", SessionCapability::ManageParticipants => "ManageParticipants", SessionCapability::ManageRecordings => "ManageRecordings", SessionCapability::ParticipateInRecording => "ParticipateInRecording" } }
-fn json_escape(v: &str) -> String { v.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t") }
+fn session_json(s: &ClientProductionSession) -> String { let p=s.participants.iter().map(|p|{let r=p.roles.iter().map(|r|format!("\"{}\"",role_name(*r))).collect::<Vec<_>>().join(",");format!("{{\"id\":\"{}\",\"roles\":[{}]}}",json_escape(&p.id),r)}).collect::<Vec<_>>().join(",");let r=s.recordings.iter().map(|r|format!("{{\"id\":\"{}\",\"status\":\"{:?}\",\"artifact_id\":{}}}",json_escape(&r.id),r.status,r.artifact_id.as_ref().map(|id|format!("\"{}\"",json_escape(id))).unwrap_or_else(||"null".to_owned()))).collect::<Vec<_>>().join(",");format!("{{\"id\":\"{}\",\"status\":\"{:?}\",\"participants\":[{}],\"recordings\":[{}]}}",json_escape(&s.id),s.status,p,r)}
+fn recording_json(r: &DistributedRecording) -> String { let c=r.workflow().coordination();let list=|ids:&[ParticipantId]|ids.iter().map(|id|format!("\"{}\"",json_escape(id.value()))).collect::<Vec<_>>().join(",");format!("{{\"recording_id\":\"{}\",\"recording_status\":\"{:?}\",\"workflow\":\"{:?}\",\"participants\":[{}],\"ready\":[{}],\"opening_confirmed\":[{}],\"stop_acknowledged\":[{}]}}",json_escape(r.recording_id().value()),r.workflow().recording().status(),r.workflow().status(),list(c.participants()),list(c.ready_participants()),list(c.opening_confirmed_participants()),list(c.stop_acknowledged_participants())) }
+fn context_json(c:&SessionContext)->String{let caps=c.capabilities.iter().map(|x|format!("\"{}\"",capability_name(*x))).collect::<Vec<_>>().join(",");let ps=c.participants.iter().map(|p|format!("\"{}\"",json_escape(&p.id))).collect::<Vec<_>>().join(",");format!("{{\"session_id\":\"{}\",\"state\":\"{:?}\",\"actor_id\":\"{}\",\"participants\":[{}],\"capabilities\":[{}]}}",json_escape(&c.session_id),c.state,json_escape(&c.actor_id),ps,caps)}
+fn role_name(r:ClientRole)->&'static str{match r{ClientRole::Owner=>"Owner",ClientRole::Producer=>"Producer",ClientRole::Participant=>"Participant",ClientRole::Guest=>"Guest"}}
+fn capability_name(c:SessionCapability)->&'static str{match c{SessionCapability::StartSession=>"StartSession",SessionCapability::CompleteSession=>"CompleteSession",SessionCapability::ManageParticipants=>"ManageParticipants",SessionCapability::ManageRecordings=>"ManageRecordings",SessionCapability::ParticipateInRecording=>"ParticipateInRecording"}}
+fn json_escape(v:&str)->String{v.replace('\\',"\\\\").replace('"',"\\\"").replace('\n',"\\n").replace('\r',"\\r").replace('\t',"\\t")}
 
 const INDEX_HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC-PoRe Session Client</title><style>body{max-width:900px;margin:2rem auto;padding:0 1rem;font:16px system-ui,sans-serif}button{margin:.25rem;padding:.55rem .8rem}.state{padding:.8rem;border:1px solid #aaa;margin:1rem 0}pre{white-space:pre-wrap;word-break:break-word}</style></head><body><h1>NC-PoRe session client</h1><p id="status">Opening session…</p><p>Two-browser test: <code>?actor=alice</code> and <code>?actor=bob</code>.</p><section class="state"><strong>Session</strong><div id="session"></div></section><section class="state"><strong>Recording</strong><div id="recording"></div><div id="participants"></div></section><div id="controls"></div><pre id="result"></pre><script>
-const p=new URLSearchParams(location.search),session=p.get('session')||'vertical-slice-session',actor=p.get('actor')||'bob';const status=document.getElementById('status'),sessionView=document.getElementById('session'),recordingView=document.getElementById('recording'),participantsView=document.getElementById('participants'),controls=document.getElementById('controls'),result=document.getElementById('result');
-async function api(path,options){const r=await fetch(path,options),d=await r.json();if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);return d}
-function button(label,path,payload){const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{const v=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});result.textContent=JSON.stringify(v,null,2);await refresh()}catch(e){status.textContent=`Command failed: ${e}`}};controls.appendChild(b)}
-async function refresh(){try{const c=await api(`/api/sessions/${session}/context?actor=${encodeURIComponent(actor)}`);sessionView.textContent=`${c.state} — ${c.participants.join(', ')||'no participants'}`;let r=null;try{r=await api(`/api/recordings/vertical-slice-recording/state?actor=${encodeURIComponent(actor)}`)}catch(_){}controls.replaceChildren();if(!r){recordingView.textContent='not started';participantsView.textContent=''}else{recordingView.textContent=`${r.recording_status} / workflow ${r.workflow}`;participantsView.textContent=`participants: ${r.participants.join(', ')} | READY: ${r.ready.join(', ')||'—'} | Opening ACK: ${r.opening_confirmed.join(', ')||'—'} | Stop ACK: ${r.stop_acknowledged.join(', ')||'—'}`}const owner=actor==='alice';if(c.state==='Available'){if(owner)button('Start session',`/api/sessions/${session}/start`,{});if(!c.participants.includes(actor))button('Join',`/api/sessions/${session}/join`,{participant_id:actor})}if(c.state==='Active'&&!r){if(owner)button('Begin recording',`/api/sessions/${session}/recording/begin`,{actor_id:actor});if(!c.participants.includes(actor))button('Join',`/api/sessions/${session}/join`,{participant_id:actor})}if(r){if(r.workflow==='WaitingForReady'&&r.participants.includes(actor)&&!r.ready.includes(actor))button('READY',`/api/sessions/${session}/recording/ready`,{participant_id:actor});if(owner&&r.workflow==='Ready')button('Trigger Opening',`/api/sessions/${session}/recording/open`,{actor_id:actor});if(r.workflow==='Opening'&&r.participants.includes(actor)&&!r.opening_confirmed.includes(actor))button('Confirm Opening',`/api/sessions/${session}/recording/opening-confirm`,{participant_id:actor});if(owner&&r.workflow==='Recording')button('Stop recording',`/api/sessions/${session}/recording/stop`,{actor_id:actor});if(r.workflow==='Stopping'&&r.participants.includes(actor)&&!r.stop_acknowledged.includes(actor))button('ACK stop',`/api/sessions/${session}/recording/stop-ack`,{participant_id:actor});if(owner&&r.workflow==='Stopping'&&r.stop_acknowledged.length===r.participants.length)button('Complete recording',`/api/sessions/${session}/recording/complete`,{actor_id:actor})}status.textContent=`actor ${actor} · session ${c.state}`}catch(e){status.textContent=`Refresh failed: ${e}`}}
-setInterval(refresh,1000);refresh();</script></body></html>"#;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    fn state() -> ServerState { let mut repository=InMemoryRepository{sessions:vec![]}; let mut client=ClientSessionService::new(&mut repository); client.create(SESSION_ID,OWNER_ID).unwrap(); drop(client); ServerState{repository,active_recording:None} }
-    fn setup(state:&mut ServerState){ assert_eq!(join(&format!("/api/sessions/{SESSION_ID}/join"),state,r#"{"participant_id":"bob"}"#).0,200); assert_eq!(start_session(&format!("/api/sessions/{SESSION_ID}/start"),state).0,200); assert_eq!(begin_recording(&format!("/api/sessions/{SESSION_ID}/recording/begin"),state,r#"{"actor_id":"alice"}"#").0,200); }
-    #[test] fn browser_boundary_reads_core_session(){let mut s=state();let r=session_route("/api/sessions/vertical-slice-session",&mut s);assert_eq!(r.0,200);assert!(r.2.contains(r#""status":"Created""#));}
-    #[test] fn ready_is_core_backed(){let mut s=state();setup(&mut s);assert_eq!(ready(&mut s,r#"{"participant_id":"alice"}"#").0,200);assert_eq!(s.active_recording.as_ref().unwrap().workflow().status(),RecordingWorkflowStatus::WaitingForReady);assert_eq!(ready(&mut s,r#"{"participant_id":"bob"}"#").0,200);assert_eq!(s.active_recording.as_ref().unwrap().workflow().status(),RecordingWorkflowStatus::Ready);}
-    #[test] fn opening_is_a_barrier(){let mut s=state();setup(&mut s);ready(&mut s,r#"{"participant_id":"alice"}"#");ready(&mut s,r#"{"participant_id":"bob"}"#");assert_eq!(open_recording(&mut s,r#"{"actor_id":"alice"}"#").0,200);assert_eq!(confirm_opening(&mut s,r#"{"participant_id":"alice"}"#").0,200);assert_eq!(s.active_recording.as_ref().unwrap().workflow().status(),RecordingWorkflowStatus::Opening);assert_eq!(confirm_opening(&mut s,r#"{"participant_id":"bob"}"#").0,200);assert_eq!(s.active_recording.as_ref().unwrap().workflow().status(),RecordingWorkflowStatus::Recording);}
-    #[test] fn stop_ack_gates_completion(){let mut s=state();setup(&mut s);ready(&mut s,r#"{"participant_id":"alice"}"#");ready(&mut s,r#"{"participant_id":"bob"}"#");open_recording(&mut s,r#"{"actor_id":"alice"}"#");confirm_opening(&mut s,r#"{"participant_id":"alice"}"#");confirm_opening(&mut s,r#"{"participant_id":"bob"}"#");assert_eq!(stop_recording(&mut s,r#"{"actor_id":"alice"}"#").0,200);assert_eq!(stop_ack(&mut s,r#"{"participant_id":"bob"}"#").0,200);assert_eq!(complete_recording(&mut s,r#"{"actor_id":"alice"}"#").0,409);assert_eq!(stop_ack(&mut s,r#"{"participant_id":"alice"}"#").0,200);assert_eq!(complete_recording(&mut s,r#"{"actor_id":"alice"}"#").0,200);assert_eq!(s.active_recording.as_ref().unwrap().workflow().status(),RecordingWorkflowStatus::Completed);}
-}
+const p=new URLSearchParams(location.search),session=p.get('session')||'vertical-slice-session',actor=p.get('actor')||'bob';const status=document.getElementById('status'),sessionView=document.getElementById('session'),recordingView=document.getElementById('recording'),participantsView=document.getElementById('participants'),controls=document.getElementById('controls'),result=document.getElementById('result');async function api(path,options){const r=await fetch(path,options),d=await r.json();if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);return d}function button(label,path,payload){const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{const v=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});result.textContent=JSON.stringify(v,null,2);await refresh()}catch(e){status.textContent=`Command failed: ${e}`}};controls.appendChild(b)}async function refresh(){try{const c=await api(`/api/sessions/${session}/context?actor=${encodeURIComponent(actor)}`);sessionView.textContent=`${c.state} — ${c.participants.join(', ')||'no participants'}`;let r=null;try{r=await api(`/api/recordings/vertical-slice-recording/state?actor=${encodeURIComponent(actor)}`)}catch(_){}controls.replaceChildren();if(!r){recordingView.textContent='not started';participantsView.textContent=''}else{recordingView.textContent=`${r.recording_status} / workflow ${r.workflow}`;participantsView.textContent=`participants: ${r.participants.join(', ')} | READY: ${r.ready.join(', ')||'—'} | Opening ACK: ${r.opening_confirmed.join(', ')||'—'} | Stop ACK: ${r.stop_acknowledged.join(', ')||'—'}`}const owner=actor==='alice';if(c.state==='Available'){if(owner)button('Start session',`/api/sessions/${session}/start`,{});if(!c.participants.includes(actor))button('Join',`/api/sessions/${session}/join`,{participant_id:actor})}if(c.state==='Active'&&!r){if(owner)button('Begin recording',`/api/sessions/${session}/recording/begin`,{actor_id:actor});if(!c.participants.includes(actor))button('Join',`/api/sessions/${session}/join`,{participant_id:actor})}if(r){if(r.workflow==='WaitingForReady'&&r.participants.includes(actor)&&!r.ready.includes(actor))button('READY',`/api/sessions/${session}/recording/ready`,{participant_id:actor});if(owner&&r.workflow==='Ready')button('Trigger Opening',`/api/sessions/${session}/recording/open`,{actor_id:actor});if(r.workflow==='Opening'&&r.participants.includes(actor)&&!r.opening_confirmed.includes(actor))button('Confirm Opening',`/api/sessions/${session}/recording/opening-confirm`,{participant_id:actor});if(owner&&r.workflow==='Recording')button('Stop recording',`/api/sessions/${session}/recording/stop`,{actor_id:actor});if(r.workflow==='Stopping'&&r.participants.includes(actor)&&!r.stop_acknowledged.includes(actor))button('ACK stop',`/api/sessions/${session}/recording/stop-ack`,{participant_id:actor});if(owner&&r.workflow==='Stopping'&&r.stop_acknowledged.length===r.participants.length)button('Complete recording',`/api/sessions/${session}/recording/complete`,{actor_id:actor})}status.textContent=`actor ${actor} · session ${c.state}`}catch(e){status.textContent=`Refresh failed: ${e}`}}setInterval(refresh,1000);refresh();</script></body></html>"#;
