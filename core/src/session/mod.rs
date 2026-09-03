@@ -259,6 +259,30 @@ impl ProductionSession {
             .map_err(ProductionSessionError::RecordingCoordination)
     }
 
+    /// Persists one participant's Opening confirmation in Core. Stable
+    /// Recording is reached only after every selected participant has
+    /// confirmed Opening.
+    pub fn confirm_recording_opening_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<bool, ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
+        }
+
+        coordination
+            .confirm_opening(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
+    }
+
     pub fn start_recording_by(
         &mut self,
         actor: &ParticipantId,
@@ -331,6 +355,45 @@ impl ProductionSession {
         );
 
         Ok(())
+    }
+
+    /// Persists one selected participant's technical stop acknowledgement in
+    /// Core. This is a barrier only; it does not stop another participant's
+    /// local recorder.
+    pub fn acknowledge_recording_stop_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<bool, ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
+        let recording = self
+            .recordings
+            .iter()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        if recording.status() != RecordingStatus::Stopped {
+            return Err(ProductionSessionError::RecordingLifecycle(
+                RecordingLifecycleError::InvalidTransition {
+                    from: recording.status(),
+                    to: RecordingStatus::Stopped,
+                },
+            ));
+        }
+
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
+        }
+
+        coordination
+            .acknowledge_stop(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
     }
 
     pub fn complete_recording_by(
@@ -796,5 +859,114 @@ mod tests {
             session.begin_recording_by(&owner, &RecordingId::new("recording-006"), [owner.clone()]),
             Err(ProductionSessionError::RecordingCoordinationAlreadyActive)
         );
+    }
+
+    #[test]
+    fn opening_confirmation_is_persisted_for_every_selected_participant() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let participant = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        let recording_id = RecordingId::new("recording-opening-001");
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
+            .unwrap();
+        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&participant, &recording_id)
+            .unwrap();
+
+        assert_eq!(
+            session.confirm_recording_opening_by(&owner, &recording_id),
+            Ok(false)
+        );
+        assert_eq!(
+            session
+                .recording_coordination()
+                .unwrap()
+                .opening_confirmed_participants(),
+            &[owner.clone()]
+        );
+        assert_eq!(
+            session.confirm_recording_opening_by(&participant, &recording_id),
+            Ok(true)
+        );
+        assert!(session.recording_coordination().unwrap().is_opening_confirmed());
+    }
+
+    #[test]
+    fn opening_confirmation_cannot_precede_ready_barrier() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        let recording_id = RecordingId::new("recording-opening-002");
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone()])
+            .unwrap();
+
+        assert_eq!(
+            session.confirm_recording_opening_by(&owner, &recording_id),
+            Err(ProductionSessionError::RecordingCoordination(
+                RecordingCoordinationError::InvalidState
+            ))
+        );
+    }
+
+    #[test]
+    fn stop_acknowledgement_is_persisted_only_after_authoritative_stop() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let participant = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        let recording_id = RecordingId::new("recording-stop-005");
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
+            .unwrap();
+        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&participant, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&participant, &recording_id)
+            .unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+
+        assert_eq!(
+            session.acknowledge_recording_stop_by(&owner, &recording_id),
+            Err(ProductionSessionError::RecordingLifecycle(
+                RecordingLifecycleError::InvalidTransition {
+                    from: RecordingStatus::Recording,
+                    to: RecordingStatus::Stopped,
+                }
+            ))
+        );
+
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+        assert_eq!(
+            session.acknowledge_recording_stop_by(&participant, &recording_id),
+            Ok(false)
+        );
+        assert_eq!(
+            session.acknowledge_recording_stop_by(&owner, &recording_id),
+            Ok(true)
+        );
+        assert!(session.recording_coordination().unwrap().is_stop_acknowledged());
     }
 }
