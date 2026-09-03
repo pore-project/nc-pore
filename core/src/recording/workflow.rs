@@ -198,21 +198,17 @@ impl RecordingWorkflow {
         if self.status != RecordingWorkflowStatus::Opening {
             return Err(RecordingWorkflowError::InvalidState);
         }
-        if !self.coordination.participants().contains(participant_id) {
-            return Err(RecordingWorkflowError::ParticipantNotSelected);
-        }
-        if self.opening_confirmed.contains(participant_id) {
-            return Err(RecordingWorkflowError::AlreadyAcknowledged);
+
+        let confirmed = self.coordination.confirm_opening(participant_id)?;
+        if confirmed {
+            self.opening_confirmed = self.coordination.opening_confirmed_participants().to_vec();
+            self.recording.start()?;
+            self.status = RecordingWorkflowStatus::Recording;
+            return Ok(true);
         }
 
-        self.opening_confirmed.push(participant_id.clone());
-        if self.opening_confirmed.len() != self.coordination.participants().len() {
-            return Ok(false);
-        }
-
-        self.recording.start()?;
-        self.status = RecordingWorkflowStatus::Recording;
-        Ok(true)
+        self.opening_confirmed = self.coordination.opening_confirmed_participants().to_vec();
+        Ok(false)
     }
 
     pub fn start_recording(&mut self) -> Result<(), RecordingWorkflowError> {
@@ -246,14 +242,10 @@ impl RecordingWorkflow {
         if self.status != RecordingWorkflowStatus::Stopping {
             return Err(RecordingWorkflowError::InvalidState);
         }
-        if !self.coordination.participants().contains(participant_id) {
-            return Err(RecordingWorkflowError::ParticipantNotSelected);
-        }
-        if self.acknowledged.contains(participant_id) {
-            return Ok(self.acknowledged.len() == self.coordination.participants().len());
-        }
-        self.acknowledged.push(participant_id.clone());
-        Ok(self.acknowledged.len() == self.coordination.participants().len())
+
+        let acknowledged = self.coordination.acknowledge_stop(participant_id)?;
+        self.acknowledged = self.coordination.stop_acknowledged_participants().to_vec();
+        Ok(acknowledged)
     }
 
     pub fn complete(
@@ -357,7 +349,9 @@ mod tests {
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Opening);
         assert_eq!(
             workflow.confirm_opening(&participant("participant-a")),
-            Err(RecordingWorkflowError::AlreadyAcknowledged)
+            Err(RecordingWorkflowError::Coordination(
+                RecordingCoordinationError::AlreadyOpeningConfirmed,
+            ))
         );
 
         assert!(
@@ -385,7 +379,9 @@ mod tests {
         workflow.start_recording_with_signet().unwrap();
         assert_eq!(
             workflow.confirm_opening(&participant("participant-c")),
-            Err(RecordingWorkflowError::ParticipantNotSelected)
+            Err(RecordingWorkflowError::Coordination(
+                RecordingCoordinationError::ParticipantNotSelected,
+            ))
         );
     }
 
@@ -462,7 +458,9 @@ mod tests {
         workflow.confirm_core_stop_persisted().unwrap();
         assert_eq!(
             workflow.acknowledge_stop(&participant("participant-c")),
-            Err(RecordingWorkflowError::ParticipantNotSelected)
+            Err(RecordingWorkflowError::Coordination(
+                RecordingCoordinationError::ParticipantNotSelected,
+            ))
         );
     }
 
