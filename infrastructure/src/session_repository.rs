@@ -341,14 +341,15 @@ impl PersistedProductionSession {
             ));
         }
 
-        Ok(nc_pore_core::session::repository::reconstitute_production_session(
-            ProductionId::new(self.id),
-            self.status.into(),
-            participations,
-            recordings,
-            None,
-            activities,
-        ))
+        Ok(
+            nc_pore_core::session::repository::reconstitute_production_session(
+                ProductionId::new(self.id),
+                self.status.into(),
+                participations,
+                recordings,
+                activities,
+            ),
+        )
     }
 }
 
@@ -363,29 +364,65 @@ impl FileProductionSessionRepository {
         Ok(Self { root })
     }
 
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     fn path_for(&self, id: &ProductionId) -> PathBuf {
-        self.root.join(format!("{}.json", id.value()))
+        let filename = id
+            .value()
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        self.root.join(format!("{filename}.json"))
+    }
+
+    fn write(
+        &self,
+        session: &ProductionSession,
+    ) -> Result<(), FileProductionSessionRepositoryError> {
+        let path = self.path_for(&session.id);
+        let temporary = self.root.join(format!(
+            ".{}.{}.tmp",
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("session"),
+            std::process::id()
+        ));
+        let persisted = PersistedProductionSession::from_domain(session);
+        let bytes = serde_json::to_vec_pretty(&persisted)?;
+
+        fs::write(&temporary, bytes)?;
+        if let Err(error) = fs::rename(&temporary, &path) {
+            let _ = fs::remove_file(&temporary);
+            return Err(error.into());
+        }
+        Ok(())
     }
 }
 
 impl ProductionSessionRepository for FileProductionSessionRepository {
     type Error = FileProductionSessionRepositoryError;
 
-    fn store(&mut self, session: ProductionSession) -> Result<(), Self::Error> {
+    fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
         let path = self.path_for(&session.id);
         if path.exists() {
             return Err(FileProductionSessionRepositoryError::AlreadyExists);
         }
-        let persisted = PersistedProductionSession::from_domain(&session);
-        fs::write(path, serde_json::to_vec_pretty(&persisted)?)?;
-        Ok(())
+        self.write(session)
     }
 
-    fn update(&mut self, session: ProductionSession) -> Result<(), Self::Error> {
+    fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
         let path = self.path_for(&session.id);
-        let persisted = PersistedProductionSession::from_domain(&session);
-        fs::write(path, serde_json::to_vec_pretty(&persisted)?)?;
-        Ok(())
+        if !path.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "production session does not exist",
+            )
+            .into());
+        }
+        self.write(session)
     }
 
     fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
@@ -393,8 +430,129 @@ impl ProductionSessionRepository for FileProductionSessionRepository {
         if !path.exists() {
             return Ok(None);
         }
+
         let bytes = fs::read(path)?;
         let persisted: PersistedProductionSession = serde_json::from_slice(&bytes)?;
-        persisted.into_domain().map(Some)
+        Ok(Some(persisted.into_domain()?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nc_pore_core::recording::RecordingArtifactId;
+    use nc_pore_core::role::ParticipantRole;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_root() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("nc-pore-production-{nanos}"))
+    }
+
+    fn rich_session() -> ProductionSession {
+        let id = ProductionId::new("production-001");
+        let owner = ParticipantId::new("owner-1");
+        let producer = ParticipantId::new("producer-1");
+        let mut session = ProductionSession::new_with_actor(id, Some(owner.clone()));
+        session
+            .add_participation_by(
+                &owner,
+                Participation::with_roles(
+                    owner.clone(),
+                    [
+                        ParticipantRole::Owner,
+                        ParticipantRole::Producer,
+                        ParticipantRole::Participant,
+                    ],
+                ),
+            )
+            .unwrap();
+        session
+            .add_participation_by(
+                &owner,
+                Participation::with_roles(
+                    producer,
+                    [ParticipantRole::Producer, ParticipantRole::Participant],
+                ),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+        session
+            .add_recording_by(&owner, Recording::new("recording-001"))
+            .unwrap();
+        session
+            .start_recording_by(&owner, &RecordingId::new("recording-001"))
+            .unwrap();
+        session
+            .stop_recording_by(&owner, &RecordingId::new("recording-001"))
+            .unwrap();
+        session
+            .complete_recording_by(
+                &owner,
+                &RecordingId::new("recording-001"),
+                RecordingArtifactId::new("artifact-001"),
+            )
+            .unwrap();
+        session
+    }
+
+    #[test]
+    fn file_repository_round_trips_complete_session_state_and_history() {
+        let root = temp_root();
+        let mut repository = FileProductionSessionRepository::new(&root).unwrap();
+        let session = rich_session();
+        let id = session.id.clone();
+
+        repository.store(&session).unwrap();
+        let reloaded = repository.get(&id).unwrap().unwrap();
+
+        assert_eq!(reloaded.id, session.id);
+        assert_eq!(reloaded.status(), session.status());
+        assert_eq!(reloaded.participations(), session.participations());
+        assert_eq!(reloaded.recordings(), session.recordings());
+        assert_eq!(reloaded.activities(), session.activities());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_repository_rejects_duplicate_store() {
+        let root = temp_root();
+        let mut repository = FileProductionSessionRepository::new(&root).unwrap();
+        let session = ProductionSession::new(ProductionId::new("production-001"));
+
+        repository.store(&session).unwrap();
+        assert!(matches!(
+            repository.store(&session),
+            Err(FileProductionSessionRepositoryError::AlreadyExists)
+        ));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_repository_returns_none_for_missing_session() {
+        let root = temp_root();
+        let repository = FileProductionSessionRepository::new(&root).unwrap();
+        assert!(repository
+            .get(&ProductionId::new("missing"))
+            .unwrap()
+            .is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_repository_update_rejects_missing_session() {
+        let root = temp_root();
+        let mut repository = FileProductionSessionRepository::new(&root).unwrap();
+        let session = ProductionSession::new(ProductionId::new("missing"));
+        assert!(matches!(
+            repository.update(&session),
+            Err(FileProductionSessionRepositoryError::Io(error))
+                if error.kind() == std::io::ErrorKind::NotFound
+        ));
+        let _ = fs::remove_dir_all(root);
     }
 }
