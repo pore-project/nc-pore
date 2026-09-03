@@ -105,16 +105,22 @@ impl RecordingWorkflow {
                         RecordingStatus::Recording => RecordingWorkflowStatus::Recording,
                         RecordingStatus::Stopped => RecordingWorkflowStatus::Stopping,
                         RecordingStatus::Completed => RecordingWorkflowStatus::Completed,
-                        RecordingStatus::Prepared => return Err(RecordingWorkflowError::InvalidState),
+                        RecordingStatus::Prepared => {
+                            return Err(RecordingWorkflowError::InvalidState);
+                        }
                     }
                 }
             }
         };
 
-        if status == RecordingWorkflowStatus::Preparing && recording.status() != RecordingStatus::Prepared {
+        if status == RecordingWorkflowStatus::Preparing
+            && recording.status() != RecordingStatus::Prepared
+        {
             return Err(RecordingWorkflowError::InvalidState);
         }
-        if status == RecordingWorkflowStatus::WaitingForReady && recording.status() != RecordingStatus::Prepared {
+        if status == RecordingWorkflowStatus::WaitingForReady
+            && recording.status() != RecordingStatus::Prepared
+        {
             return Err(RecordingWorkflowError::InvalidState);
         }
 
@@ -384,9 +390,16 @@ mod tests {
             workflow.request_stop(),
             Err(RecordingWorkflowError::InvalidState)
         );
-        workflow.confirm_opening(&participant("participant-a")).unwrap();
-        assert_eq!(workflow.request_stop(), Err(RecordingWorkflowError::InvalidState));
-        workflow.confirm_opening(&participant("participant-b")).unwrap();
+        workflow
+            .confirm_opening(&participant("participant-a"))
+            .unwrap();
+        assert_eq!(
+            workflow.request_stop(),
+            Err(RecordingWorkflowError::InvalidState)
+        );
+        workflow
+            .confirm_opening(&participant("participant-b"))
+            .unwrap();
         workflow.request_stop().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
         workflow.confirm_core_stop_persisted().unwrap();
@@ -468,7 +481,13 @@ mod tests {
 
         let restored = RecordingWorkflow::from_persisted_state(recording, coordination).unwrap();
         assert_eq!(restored.status(), RecordingWorkflowStatus::Recording);
-        assert_eq!(restored.coordination().opening_confirmed_participants().len(), 2);
+        assert_eq!(
+            restored
+                .coordination()
+                .opening_confirmed_participants()
+                .len(),
+            2
+        );
     }
 
     #[test]
