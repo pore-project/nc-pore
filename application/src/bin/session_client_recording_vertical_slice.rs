@@ -1,2 +1,1 @@
-#![rustfmt::skip]
-include!("impl/session_client_vertical_slice.rs");
+include!("impl/session_client_recording_vertical_slice.rs");
