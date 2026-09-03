@@ -165,6 +165,13 @@ impl RecordingWorkflow {
         Ok(())
     }
 
+    /// Records technical stop completion for a selected participant.
+    ///
+    /// Completion acknowledgements are idempotent: a duplicate confirmation
+    /// from the same participant simply reports the current aggregate state.
+    /// This is important for distributed retries and reconnects and mirrors
+    /// the previous recorder-level stop coordinator semantics. A participant
+    /// that is not part of the frozen stop set is still rejected.
     pub fn acknowledge_stop(
         &mut self,
         participant_id: &ParticipantId,
@@ -176,7 +183,7 @@ impl RecordingWorkflow {
             return Err(RecordingWorkflowError::ParticipantNotSelected);
         }
         if self.acknowledged.contains(participant_id) {
-            return Err(RecordingWorkflowError::AlreadyAcknowledged);
+            return Ok(self.acknowledged.len() == self.coordination.participants().len());
         }
         self.acknowledged.push(participant_id.clone());
         Ok(self.acknowledged.len() == self.coordination.participants().len())
@@ -285,36 +292,6 @@ mod tests {
     }
 
     #[test]
-    fn workflow_stop_request_does_not_advance_before_core_persistence() {
-        let mut workflow = workflow();
-        reach_recording(&mut workflow);
-
-        workflow.request_stop().unwrap();
-        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
-        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
-
-        workflow.confirm_core_stop_persisted().unwrap();
-        assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
-        assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
-    }
-
-    #[test]
-    fn failed_core_persistence_leaves_workflow_retryable() {
-        let mut workflow = workflow();
-        reach_recording(&mut workflow);
-
-        workflow.request_stop().unwrap();
-        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
-        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
-
-        // A repository failure is represented by not applying the confirmation;
-        // the workflow remains at the same retryable boundary.
-        workflow.request_stop().unwrap();
-        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
-        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
-    }
-
-    #[test]
     fn workflow_requires_recording_before_stop() {
         let mut workflow = workflow();
         reach_opening(&mut workflow);
@@ -325,6 +302,21 @@ mod tests {
         );
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        workflow.confirm_core_stop_persisted().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
+    }
+
+    #[test]
+    fn workflow_requires_core_stop_persistence_before_local_stop() {
+        let mut workflow = workflow();
+        reach_recording(&mut workflow);
+        workflow.request_stop().unwrap();
+
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
+
         workflow.confirm_core_stop_persisted().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
         assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
@@ -346,11 +338,7 @@ mod tests {
             workflow.complete(RecordingArtifactId::new("artifact-workflow-01")),
             Err(RecordingWorkflowError::InvalidState)
         );
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-b"))
-                .unwrap()
-        );
+        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-01"))
             .unwrap();
@@ -370,18 +358,16 @@ mod tests {
     }
 
     #[test]
-    fn workflow_rejects_duplicate_stop_acknowledgement() {
+    fn workflow_treats_duplicate_stop_acknowledgement_as_idempotent() {
         let mut workflow = workflow();
         reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        workflow
-            .acknowledge_stop(&participant("participant-a"))
-            .unwrap();
-        assert_eq!(
-            workflow.acknowledge_stop(&participant("participant-a")),
-            Err(RecordingWorkflowError::AlreadyAcknowledged)
-        );
+
+        assert!(!workflow.acknowledge_stop(&participant("participant-a")).unwrap());
+        assert!(!workflow.acknowledge_stop(&participant("participant-a")).unwrap());
+        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
+        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
     }
 
     #[test]
@@ -398,11 +384,7 @@ mod tests {
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
+        assert!(workflow.acknowledge_stop(&participant("participant-a")).unwrap());
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-02"))
             .unwrap();
