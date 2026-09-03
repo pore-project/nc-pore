@@ -504,12 +504,14 @@ mod tests {
     fn reconstitute_requires_persisted_coordination() {
         let (repository, production_id, alice, _, recording_id) = fixture();
 
-        let error = reconstitute_distributed_recording(&repository, &production_id, &alice, &recording_id)
-            .unwrap_err();
+        let result =
+            reconstitute_distributed_recording(&repository, &production_id, &alice, &recording_id);
 
-        assert_eq!(
-            error,
-            DistributedRecordingError::Workflow(RecordingWorkflowError::InvalidState)
-        );
+        assert!(matches!(
+            result,
+            Err(DistributedRecordingError::Workflow(
+                RecordingWorkflowError::InvalidState,
+            ))
+        ));
     }
 }
