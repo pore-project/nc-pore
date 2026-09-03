@@ -18,6 +18,7 @@ jobs:
         run: |
           node --check js/pore-recording-controller.js
           node --check js/pore-talk-audio-connector.js
+          node --check js/pore-talk-recording-ui.js
           node --check js/init.js
 
   rust:
