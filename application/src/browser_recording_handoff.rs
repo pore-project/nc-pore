@@ -12,6 +12,7 @@
 use recorder::artifact::factory::RecordingArtifactFactory;
 use recorder::artifact::RecordingArtifact;
 use recorder::audio::{CaptureResult, CaptureTrack, RecordingConfiguration};
+use recorder::persistence::{PersistenceProvider, PersistenceStoreError};
 use recorder::session::RecordingSessionId;
 
 /// Technical stop reason supplied by a capture producer.
@@ -140,6 +141,23 @@ impl BrowserRecordingHandoff {
             recording_session_id,
         ))
     }
+
+    /// Bridges a finalized browser recording into the existing persistence
+    /// boundary. The browser handoff does not own storage; it only supplies
+    /// the artifact that the existing provider persists.
+    pub fn persist<P: PersistenceProvider>(
+        self,
+        recording_session_id: RecordingSessionId,
+        provider: &mut P,
+    ) -> Result<RecordingArtifact, BrowserRecordingPersistenceError> {
+        let artifact = self
+            .into_recording_artifact(recording_session_id)
+            .map_err(BrowserRecordingPersistenceError::Handoff)?;
+
+        provider
+            .store_checked(artifact)
+            .map_err(BrowserRecordingPersistenceError::Persistence)
+    }
 }
 
 /// Failure while crossing the browser-to-application handoff boundary.
@@ -148,9 +166,17 @@ pub enum BrowserRecordingHandoffError {
     EmptyPayload,
 }
 
+/// Failure while bridging a browser recording into persistence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BrowserRecordingPersistenceError {
+    Handoff(BrowserRecordingHandoffError),
+    Persistence(PersistenceStoreError),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use recorder::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
 
     #[test]
     fn finalized_browser_recording_becomes_capture_result() {
@@ -200,6 +226,74 @@ mod tests {
                 .value(),
             "browser-track/chunk-000001"
         );
+    }
+
+    #[test]
+    fn finalized_browser_recording_can_be_persisted_through_existing_provider() {
+        let handoff = BrowserRecordingHandoff::new(
+            "recording-001",
+            "browser-track",
+            vec![5, 6, 7],
+            "audio/webm",
+            BrowserRecordingStopReason::UserRequested,
+        );
+        let mut provider = InMemoryPersistenceProvider::new();
+
+        let artifact = handoff
+            .persist(RecordingSessionId::new("session-001"), &mut provider)
+            .expect("persistence succeeds");
+
+        assert!(matches!(
+            artifact.status(),
+            recorder::artifact::ArtifactStatus::Stored
+        ));
+        assert!(matches!(
+            provider.load("recording-001"),
+            PersistenceLoadResult::Valid(stored) if stored.id.value() == "recording-001"
+        ));
+        assert_eq!(provider.list().len(), 1);
+    }
+
+    #[test]
+    fn repeated_equivalent_browser_handoff_is_idempotent_at_persistence_boundary() {
+        let mut provider = InMemoryPersistenceProvider::new();
+
+        for _ in 0..2 {
+            BrowserRecordingHandoff::new(
+                "recording-002",
+                "browser-track",
+                vec![1, 2, 3],
+                "audio/webm",
+                BrowserRecordingStopReason::UserRequested,
+            )
+            .persist(RecordingSessionId::new("session-002"), &mut provider)
+            .expect("equivalent persistence succeeds");
+        }
+
+        assert_eq!(provider.list().len(), 1);
+    }
+
+    #[test]
+    fn empty_finalized_recording_is_rejected_before_persistence() {
+        let handoff = BrowserRecordingHandoff::new(
+            "recording-003",
+            "browser-track",
+            Vec::<u8>::new(),
+            "audio/webm",
+            BrowserRecordingStopReason::TechnicalFailure,
+        );
+        let mut provider = InMemoryPersistenceProvider::new();
+
+        assert_eq!(
+            handoff.persist(RecordingSessionId::new("session-003"), &mut provider),
+            Err(BrowserRecordingPersistenceError::Handoff(
+                BrowserRecordingHandoffError::EmptyPayload
+            ))
+        );
+        assert!(matches!(
+            provider.load("recording-003"),
+            PersistenceLoadResult::NotFound
+        ));
     }
 
     #[test]
