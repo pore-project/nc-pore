@@ -44,8 +44,9 @@ where
     let mut coordinator =
         RecordingStopCoordinator::new(nc_pore_core::recording::RecordingStopMode::Host);
 
-    // Keep the application/domain workflow and the persisted Core session at
-    // the same fachlichen stop boundary before any Closing attempt.
+    // Validate the stop request, but do not advance local/domain lifecycle
+    // state yet. The authoritative Core stop must cross its persistence
+    // boundary first so a repository failure leaves the workflow retryable.
     workflow
         .request_stop()
         .map_err(ExecuteRecordingStopError::Workflow)?;
@@ -61,7 +62,11 @@ where
         .update(&session)
         .map_err(ExecuteRecordingStopError::Repository)?;
 
-    // Only now has the authoritative Core stop actually been persisted.
+    // The authoritative Core stop has now actually been persisted. Only now
+    // may the local/domain workflow cross its corresponding stop boundary.
+    workflow
+        .confirm_core_stop_persisted()
+        .map_err(ExecuteRecordingStopError::Workflow)?;
     coordinator
         .persist_core_stop()
         .map_err(ExecuteRecordingStopError::Coordinator)?;
