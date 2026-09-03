@@ -148,9 +148,7 @@ mod tests {
         recording.workflow_mut().confirm_opening(bob).unwrap();
 
         let mut session = repository.session.clone();
-        session
-            .start_recording_by(alice, recording_id)
-            .unwrap();
+        session.start_recording_by(alice, recording_id).unwrap();
         session.stop_recording_by(alice, recording_id).unwrap();
         *repository = InMemorySessions { session };
         recording

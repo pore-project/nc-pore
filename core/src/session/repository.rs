@@ -10,10 +10,7 @@ use crate::activity::ActivityEvent;
 use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
-use crate::recording::{
-    Recording, RecordingArtifactId, RecordingCoordinationError, RecordingId,
-    RecordingLifecycleError, RecordingStatus,
-};
+use crate::recording::{Recording, RecordingCoordinationError, RecordingId, RecordingLifecycleError, RecordingStatus};
 use crate::role::{ParticipantRole, ProductionAction};
 
 use super::{ProductionSession, ProductionSessionError, ProductionStatus};
@@ -172,8 +169,10 @@ mod tests {
         let owner = ParticipantId::new("owner-1");
         let participant = ParticipantId::new("participant-1");
         let recording_id = RecordingId::new("recording-001");
-        let mut session =
-            ProductionSession::new_with_actor(ProductionId::new("session-001"), Some(owner.clone()));
+        let mut session = ProductionSession::new_with_actor(
+            ProductionId::new("session-001"),
+            Some(owner.clone()),
+        );
         session
             .add_participation_by(
                 &owner,
@@ -190,10 +189,7 @@ mod tests {
         session
             .add_participation_by(
                 &owner,
-                Participation::with_roles(
-                    participant.clone(),
-                    [ParticipantRole::Participant],
-                ),
+                Participation::with_roles(participant.clone(), [ParticipantRole::Participant]),
             )
             .unwrap();
         session.start_by(&owner).unwrap();
@@ -270,7 +266,12 @@ mod tests {
             session.confirm_recording_opening_by(&participant, &recording_id),
             Ok(true)
         );
-        assert!(session.recording_coordination().unwrap().is_opening_confirmed());
+        assert!(
+            session
+                .recording_coordination()
+                .unwrap()
+                .is_opening_confirmed()
+        );
     }
 
     #[test]
@@ -297,12 +298,17 @@ mod tests {
             session.acknowledge_recording_stop_by(&owner, &recording_id),
             Ok(true)
         );
-        assert!(session.recording_coordination().unwrap().is_stop_acknowledged());
+        assert!(
+            session
+                .recording_coordination()
+                .unwrap()
+                .is_stop_acknowledged()
+        );
     }
 
     #[test]
     fn unselected_participant_cannot_confirm_opening_or_acknowledge_stop() {
-        let (mut session, owner, _participant, recording_id) = recording_fixture();
+        let (mut session, owner, participant, recording_id) = recording_fixture();
         let outsider = ParticipantId::new("outsider");
 
         assert_eq!(
@@ -313,7 +319,7 @@ mod tests {
             .confirm_recording_opening_by(&owner, &recording_id)
             .unwrap();
         session
-            .confirm_recording_opening_by(&ParticipantId::new("participant-1"), &recording_id)
+            .confirm_recording_opening_by(&participant, &recording_id)
             .unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
         session.stop_recording_by(&owner, &recording_id).unwrap();
