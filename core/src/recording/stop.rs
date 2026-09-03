@@ -207,7 +207,7 @@ mod tests {
 
         assert_eq!(
             coordinator.record_closing_outcome(RecordingClosingOutcome::Emitted),
-            Err(RecordingStopCoordinatorError::ClosingAlreadyAttempted)
+            Err(RecordingStopCoordinatorError::ClosingNotAllowed)
         );
     }
 
