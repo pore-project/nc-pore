@@ -2,10 +2,10 @@ use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{
     RecordingArtifactId, RecordingClosingOutcome, RecordingId, RecordingStopCoordinator,
-    RecordingStopCoordinatorError, RecordingStopMode, RecordingWorkflow, RecordingWorkflowError,
+    RecordingStopCoordinatorError, RecordingWorkflow, RecordingWorkflowError,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
-use nc_pore_core::session::{ProductionSession, ProductionSessionError};
+use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
 use recorder::audio::{CaptureProvider, RecordingConfiguration};
@@ -13,6 +13,7 @@ use recorder::persistence::PersistenceProvider;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteRecordingStopError<E> {
+    SessionNotFound,
     Repository(E),
     Session(ProductionSessionError),
     Workflow(RecordingWorkflowError),
@@ -20,12 +21,12 @@ pub enum ExecuteRecordingStopError<E> {
     Recorder(RecorderApplicationError),
 }
 
-/// Executes the host-neutral distributed stop sequence for one recording.
+/// Executes the host-stop sequence defined by ADR-080i.
 ///
-/// The Core stop is persisted before any Closing attempt. Closing is explicitly
-/// best effort and never blocks technical capture stop or completion. This is
-/// the application-level integration point for ADR-080i; transport and capture
-/// implementations remain below this boundary.
+/// The fachliche Core stop is persisted before Closing. Closing is best effort
+/// and never blocks technical capture stop or completion. The coordinator is
+/// deliberately host-only here; Safety Stop is a separate local path because
+/// it must not pretend that a Core stop was persisted.
 pub fn execute_recording_stop<R, C, P>(
     repository: &mut R,
     production_id: &ProductionId,
@@ -34,57 +35,46 @@ pub fn execute_recording_stop<R, C, P>(
     workflow: &mut RecordingWorkflow,
     recorder: &mut RecorderApplication<C, P>,
     configuration: &RecordingConfiguration,
-    mode: RecordingStopMode,
 ) -> Result<RecordingArtifact, ExecuteRecordingStopError<R::Error>>
 where
     R: ProductionSessionRepository,
     C: CaptureProvider,
     P: PersistenceProvider,
 {
-    let mut coordinator = RecordingStopCoordinator::new(mode);
+    let mut coordinator = RecordingStopCoordinator::new(
+        nc_pore_core::recording::RecordingStopMode::Host,
+    );
+    coordinator
+        .persist_core_stop()
+        .map_err(ExecuteRecordingStopError::Coordinator)?;
 
-    match mode {
-        RecordingStopMode::Host => coordinator
-            .persist_core_stop()
-            .map_err(ExecuteRecordingStopError::Coordinator)?,
-        RecordingStopMode::Safety => coordinator
-            .safety_stop()
-            .map_err(ExecuteRecordingStopError::Coordinator)?,
-    }
+    // Keep the application/domain workflow and the persisted Core session at
+    // the same fachlichen stop boundary before any Closing attempt.
+    workflow
+        .request_stop()
+        .map_err(ExecuteRecordingStopError::Workflow)?;
 
     let mut session = repository
         .get(production_id)
         .map_err(ExecuteRecordingStopError::Repository)?
-        .ok_or(ExecuteRecordingStopError::Repository(
-            repository
-                .get(production_id)
-                .err()
-                .expect("repository lookup above must provide the missing-session error"),
-        ))?;
-
-    // The repository lookup above is only used to obtain the authoritative
-    // session snapshot. A missing session cannot be represented by the generic
-    // repository error contract, so callers should normally resolve the session
-    // before invoking this coordinator.
-    stop_session_recording(&mut session, actor, recording_id, mode)
+        .ok_or(ExecuteRecordingStopError::SessionNotFound)?;
+    session
+        .stop_recording_by(actor, recording_id)
         .map_err(ExecuteRecordingStopError::Session)?;
     repository
         .update(&session)
         .map_err(ExecuteRecordingStopError::Repository)?;
 
-    if mode == RecordingStopMode::Host {
-        let outcome = match configuration.signets().closing() {
-            Some(closing) if recorder.emit_optional_sync_signet(&closing) => {
-                RecordingClosingOutcome::Emitted
-            }
-            Some(_) => RecordingClosingOutcome::Unavailable,
-            None => RecordingClosingOutcome::NotAttempted,
-        };
-        coordinator
-            .record_closing_outcome(outcome)
-            .map_err(ExecuteRecordingStopError::Coordinator)?;
-    }
-
+    let closing_outcome = match configuration.signets().closing() {
+        Some(closing) if recorder.emit_optional_sync_signet(&closing) => {
+            RecordingClosingOutcome::Emitted
+        }
+        Some(_) => RecordingClosingOutcome::Unavailable,
+        None => RecordingClosingOutcome::NotAttempted,
+    };
+    coordinator
+        .record_closing_outcome(closing_outcome)
+        .map_err(ExecuteRecordingStopError::Coordinator)?;
     coordinator
         .begin_technical_stop()
         .map_err(ExecuteRecordingStopError::Coordinator)?;
@@ -121,24 +111,13 @@ where
     Ok(artifact)
 }
 
-fn stop_session_recording(
-    session: &mut ProductionSession,
-    actor: &ParticipantId,
-    recording_id: &RecordingId,
-    mode: RecordingStopMode,
-) -> Result<(), ProductionSessionError> {
-    match mode {
-        RecordingStopMode::Host => session.stop_recording_by(actor, recording_id),
-        RecordingStopMode::Safety => Ok(()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nc_pore_core::recording::{RecordingClosingOutcome, RecordingStopCoordinatorStatus, RecordingStopMode};
 
     #[test]
-    fn host_mode_requires_core_stop_before_closing() {
+    fn host_stop_requires_persisted_core_stop_before_closing() {
         let mut coordinator = RecordingStopCoordinator::new(RecordingStopMode::Host);
         assert_eq!(
             coordinator.record_closing_outcome(RecordingClosingOutcome::Emitted),
@@ -149,17 +128,24 @@ mod tests {
             .record_closing_outcome(RecordingClosingOutcome::NotAttempted)
             .unwrap();
         coordinator.begin_technical_stop().unwrap();
+        assert_eq!(
+            coordinator.status(),
+            RecordingStopCoordinatorStatus::TechnicalStopping
+        );
     }
 
     #[test]
-    fn safety_mode_has_no_closing_step() {
-        let mut coordinator = RecordingStopCoordinator::new(RecordingStopMode::Safety);
-        coordinator.safety_stop().unwrap();
-        assert_eq!(coordinator.closing(), None);
-        coordinator.begin_technical_stop().err();
+    fn closing_failure_does_not_block_technical_stop() {
+        let mut coordinator = RecordingStopCoordinator::new(RecordingStopMode::Host);
+        coordinator.persist_core_stop().unwrap();
+        coordinator
+            .record_closing_outcome(RecordingClosingOutcome::Unavailable)
+            .unwrap();
+        coordinator.begin_technical_stop().unwrap();
+        coordinator.complete().unwrap();
         assert_eq!(
             coordinator.status(),
-            nc_pore_core::recording::RecordingStopCoordinatorStatus::TechnicalStopping
+            RecordingStopCoordinatorStatus::Completed
         );
     }
 }
