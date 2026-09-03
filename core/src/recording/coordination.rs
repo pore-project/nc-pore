@@ -209,12 +209,16 @@ mod tests {
         let coordination = coordination();
 
         assert_eq!(coordination.participants().len(), 2);
-        assert!(coordination
-            .participants()
-            .contains(&participant("participant-a")));
-        assert!(coordination
-            .participants()
-            .contains(&participant("participant-b")));
+        assert!(
+            coordination
+                .participants()
+                .contains(&participant("participant-a"))
+        );
+        assert!(
+            coordination
+                .participants()
+                .contains(&participant("participant-b"))
+        );
     }
 
     // TEST-02
@@ -305,18 +309,22 @@ mod tests {
         let mut coordination = coordination();
         reach_ready(&mut coordination);
 
-        assert!(!coordination
-            .confirm_opening(&participant("participant-a"))
-            .unwrap());
+        assert!(
+            !coordination
+                .confirm_opening(&participant("participant-a"))
+                .unwrap()
+        );
         assert_eq!(
             coordination.opening_confirmed_participants(),
             &[participant("participant-a")]
         );
         assert!(!coordination.is_opening_confirmed());
 
-        assert!(coordination
-            .confirm_opening(&participant("participant-b"))
-            .unwrap());
+        assert!(
+            coordination
+                .confirm_opening(&participant("participant-b"))
+                .unwrap()
+        );
         assert!(coordination.is_opening_confirmed());
     }
 
@@ -352,20 +360,28 @@ mod tests {
         let mut coordination = coordination();
         reach_opening_confirmed(&mut coordination);
 
-        assert!(!coordination
-            .acknowledge_stop(&participant("participant-a"))
-            .unwrap());
+        assert!(
+            !coordination
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
         assert!(!coordination.is_stop_acknowledged());
-        assert!(!coordination
-            .acknowledge_stop(&participant("participant-a"))
-            .unwrap());
-        assert!(coordination
-            .acknowledge_stop(&participant("participant-b"))
-            .unwrap());
+        assert!(
+            !coordination
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
+        assert!(
+            coordination
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
         assert!(coordination.is_stop_acknowledged());
-        assert!(coordination
-            .acknowledge_stop(&participant("participant-b"))
-            .unwrap());
+        assert!(
+            coordination
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
     }
 
     // TEST-12
