@@ -11,13 +11,11 @@ use recorder::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
 use recorder::session::RecordingSessionId;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-
 const ADDRESS: &str = "127.0.0.1:8788";
 const SESSION_ID: &str = "vertical-slice-session";
 const OWNER_ID: &str = "alice";
 const RECORDING_ID: &str = "vertical-slice-recording";
 const MAX_BODY: usize = 8 * 1024 * 1024;
-
 struct Repo { sessions: Vec<ProductionSession> }
 impl ProductionSessionRepository for Repo {
     type Error = &'static str;
@@ -25,14 +23,7 @@ impl ProductionSessionRepository for Repo {
     fn update(&mut self, s: &ProductionSession) -> Result<(), Self::Error> { *self.sessions.iter_mut().find(|x| x.id == s.id).ok_or("session not found")? = s.clone(); Ok(()) }
     fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> { Ok(self.sessions.iter().find(|s| &s.id == id).cloned()) }
 }
-
-struct State {
-    repo: Repo,
-    recording: Option<DistributedRecording>,
-    persistence: InMemoryPersistenceProvider,
-    persisted_artifact_id: Option<String>,
-}
-
+struct State { repo: Repo, recording: Option<DistributedRecording>, persistence: InMemoryPersistenceProvider, persisted_artifact_id: Option<String> }
 fn main() -> std::io::Result<()> {
     let mut repo = Repo { sessions: Vec::new() };
     let mut client = ClientSessionService::new(&mut repo);
@@ -45,7 +36,6 @@ fn main() -> std::io::Result<()> {
     for stream in listener.incoming() { if let Ok(stream) = stream { handle(stream, &mut state) } }
     Ok(())
 }
-
 fn handle(mut stream: TcpStream, state: &mut State) {
     let mut request = Vec::new();
     let mut buf = [0_u8; 16 * 1024];
@@ -81,7 +71,6 @@ fn handle(mut stream: TcpStream, state: &mut State) {
     };
     write_response(&mut stream, result)
 }
-
 fn complete_request(buf: &[u8]) -> bool {
     let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") else { return false };
     let h = String::from_utf8_lossy(&buf[..i]);
@@ -90,7 +79,6 @@ fn complete_request(buf: &[u8]) -> bool {
 }
 fn write_response(s: &mut TcpStream, r: (u16, &'static str, String)) { let _ = s.write_all(format!("HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", r.0, reason(r.0), r.1, r.2.len(), r.2).as_bytes()); }
 fn json(s: u16, e: &str) -> (u16, &'static str, String) { (s, "application/json; charset=utf-8", format!("{{\"error\":\"{}\"}}", e)) }
-
 fn join(st: &mut State, b: &str) -> (u16, &'static str, String) {
     let Some(id) = field(b, "participant_id") else { return json(400, "invalid_request") };
     let mut c = ClientSessionService::new(&mut st.repo);
@@ -145,7 +133,6 @@ fn stop_ack(st: &mut State, b: &str) -> (u16, &'static str, String) {
     let Some(r) = st.recording.as_mut() else { return json(409, "recording_not_started") };
     if acknowledge_distributed_recording_stop_in_core(&mut st.repo, r, &p).is_ok() { (200, "application/json; charset=utf-8", recording_json(r)) } else { json(409, "stop_ack_rejected") }
 }
-
 fn finalize_recording(st: &mut State, b: &str) -> (u16, &'static str, String) {
     let Some(a) = field(b, "actor_id") else { return json(400, "invalid_request") };
     if a != OWNER_ID { return json(403, "owner_required") }
@@ -160,7 +147,6 @@ fn finalize_recording(st: &mut State, b: &str) -> (u16, &'static str, String) {
         Err(_) => json(409, "artifact_persistence_rejected"),
     }
 }
-
 fn complete(st: &mut State, b: &str) -> (u16, &'static str, String) {
     let Some(id) = field(b, "actor_id") else { return json(400, "invalid_request") };
     let a = ParticipantId::new(id);
@@ -168,14 +154,12 @@ fn complete(st: &mut State, b: &str) -> (u16, &'static str, String) {
     let Some(r) = st.recording.as_mut() else { return json(409, "recording_not_started") };
     let c = r.workflow().coordination();
     if r.workflow().status() != RecordingWorkflowStatus::Stopping || c.stop_acknowledged_participants().len() != c.participants().len() { return json(409, "stop_ack_barrier_not_complete") }
-
     let Some(artifact_id) = st.persisted_artifact_id.as_deref() else { return json(409, "artifact_not_persisted") };
     match st.persistence.load(artifact_id) {
         PersistenceLoadResult::Valid(_) => {}
         PersistenceLoadResult::NotFound => return json(409, "artifact_not_persisted"),
-        PersistenceLoadResult::Incomplete(_) | PersistenceLoadResult::Inconsistent(_) => return json(409, "artifact_not_valid"),
+        PersistenceLoadResult::Incomplete | PersistenceLoadResult::Inconsistent => return json(409, "artifact_not_valid"),
     }
-
     let Some(mut s) = st.repo.get(&ProductionId::new(SESSION_ID)).ok().flatten() else { return json(404, "session_not_found") };
     let core_artifact_id = nc_pore_core::recording::RecordingArtifactId::new(artifact_id);
     if s.complete_recording_by(&a, r.recording_id(), core_artifact_id).is_err() { return json(409, "complete_rejected") }
@@ -183,7 +167,6 @@ fn complete(st: &mut State, b: &str) -> (u16, &'static str, String) {
     let rid = r.recording_id().clone();
     match reconstitute_distributed_recording(&st.repo, &ProductionId::new(SESSION_ID), &a, &rid) { Ok(n) => { *r = n; (200, "application/json; charset=utf-8", recording_json(r)) }, Err(_) => json(409, "reconstitution_failed") }
 }
-
 fn state_json(st: &mut State) -> (u16, &'static str, String) {
     if let Some(r) = st.recording.as_ref() { (200, "application/json; charset=utf-8", recording_json(r)) }
     else if let Some(s) = st.repo.get(&ProductionId::new(SESSION_ID)).ok().flatten() {
@@ -201,5 +184,4 @@ fn decode_hex(v: &str) -> Result<Vec<u8>, ()> { if v.len() % 2 != 0 { return Err
 fn hex_value(v: u8) -> Result<u8, ()> { match v { b'0'..=b'9' => Ok(v - b'0'), b'a'..=b'f' => Ok(v - b'a' + 10), b'A'..=b'F' => Ok(v - b'A' + 10), _ => Err(()) } }
 fn escape(v: &str) -> String { v.replace('\\', "\\\\").replace('"', "\\\"") }
 fn reason(v: u16) -> &'static str { match v { 200 => "OK", 400 => "Bad Request", 403 => "Forbidden", 404 => "Not Found", 409 => "Conflict", 413 => "Payload Too Large", 500 => "Internal Server Error", _ => "Bad Request" } }
-
 const HTML: &str = r#"<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>NC-PoRe recording slice</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem}button{margin:.25rem;padding:.5rem .75rem}.box{border:1px solid #aaa;padding:1rem;margin:1rem 0}.status{display:inline-flex;align-items:center;gap:.5rem;font-weight:700}.dot{width:1rem;height:1rem;border-radius:50%;display:inline-block;border:1px solid #555}.grey{background:#bbb}.yellow{background:#ffd43b}.green{background:#2f9e44}.blue{background:#228be6}.confirmed{background:white;border:2px solid #2f9e44}.blink{animation:pulse 1s infinite}@keyframes pulse{50%{opacity:.35}}</style></head><body><h1>NC-PoRe recording client</h1><p>Open twice with <b>?actor=alice</b> and <b>?actor=bob</b>.</p><div class="box">Actor: <span id="actor"></span></div><div class="box"><div class="status"><span id="dot" class="dot grey"></span><span id="label">Session wird erstellt / vorbereitet</span></div></div><div class="box"><pre id="state">—</pre></div><div id="buttons"></div><script>const q=new URLSearchParams(location.search),actor=q.get('actor')||'bob',buttons=document.getElementById('buttons'),state=document.getElementById('state'),dot=document.getElementById('dot'),label=document.getElementById('label');let mediaRecorder=null,mediaStream=null,chunks=[],finalizePromise=Promise.resolve();document.getElementById('actor').textContent=actor;async function post(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data||{})});if(!r.ok)throw new Error((await r.json()).error);return r.json()}function addButton(text,action,disabled=false){const x=document.createElement('button');x.textContent=text;x.disabled=disabled;x.onclick=async()=>{try{await action();refresh()}catch(e){alert(e)}};buttons.appendChild(x)}function status(w){dot.className='dot';if(w==='Preparing'){dot.classList.add('grey');label.textContent='Session wird erstellt / vorbereitet'}else if(w==='WaitingForReady'||w==='Ready'){dot.classList.add('yellow');label.textContent='Aufnahmebereit / READY'}else if(w==='Opening'){dot.classList.add('green','blink');label.textContent='Aufnahme wird gestartet'}else if(w==='Recording'){dot.classList.add('green');label.textContent='Aufnahme läuft'}else if(w==='Stopping'){dot.classList.add('blue');label.textContent='Aufnahme abgeschlossen / Übertragung läuft'}else if(w==='Completed'){dot.classList.add('confirmed');label.textContent='Serverseitig überprüft / übernommen'}else{dot.classList.add('grey');label.textContent='Kein aktiver Recording-Status'}}async function startCapture(){if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw new Error('Browser MediaRecorder nicht verfügbar');if(mediaRecorder&&mediaRecorder.state!=='inactive')return;mediaStream=await navigator.mediaDevices.getUserMedia({audio:true});chunks=[];let o={};if(MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))o={mimeType:'audio/webm;codecs=opus'};else if(MediaRecorder.isTypeSupported('audio/webm'))o={mimeType:'audio/webm'};mediaRecorder=new MediaRecorder(mediaStream,o);mediaRecorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};mediaRecorder.onstop=()=>{finalizePromise=finalizeCapture().finally(()=>{mediaStream?.getTracks().forEach(t=>t.stop());mediaStream=null;mediaRecorder=null})};mediaRecorder.start(250)}async function finalizeCapture(){const blob=new Blob(chunks,{type:mediaRecorder?.mimeType||'audio/webm'}),bytes=new Uint8Array(await blob.arrayBuffer());let hex='';for(const byte of bytes)hex+=byte.toString(16).padStart(2,'0');await post('/recording/finalize',{actor_id:actor,recording_id:'vertical-slice-recording',track_id:'browser-track',format:blob.type||'audio/webm',payload_hex:hex})}function stopCapture(){if(mediaRecorder&&mediaRecorder.state!=='inactive')mediaRecorder.stop()}async function refresh(){const r=await(await fetch('/api/state')).json();buttons.replaceChildren();state.textContent=JSON.stringify(r,null,2);if(r.recording_status===null){status('Preparing');if(actor==='alice'){addButton('Start session',()=>post('/start',{}),r.session_status==='Active');if(r.session_status==='Active'&&r.participants.length>0)addButton('Begin recording',()=>post('/recording/begin',{actor_id:actor}))}addButton('Join',()=>post('/join',{participant_id:actor}),r.participants.includes(actor));return}status(r.workflow);if(r.workflow==='WaitingForReady'&&!r.ready.includes(actor))addButton('READY',()=>post('/recording/ready',{participant_id:actor}));if(actor==='alice'&&r.workflow==='Ready')addButton('Trigger Opening',()=>post('/recording/open',{actor_id:actor}));if(r.workflow==='Opening'&&!r.opening_confirmed.includes(actor))addButton('Confirm Opening',()=>post('/recording/opening-confirm',{participant_id:actor}));if(r.workflow==='Recording'){addButton(mediaRecorder&&mediaRecorder.state!=='inactive'?'Stop browser capture':'Start browser capture',mediaRecorder&&mediaRecorder.state!=='inactive'?async()=>stopCapture():startCapture);if(actor==='alice')addButton('Stop recording',async()=>{stopCapture();await finalizePromise;await post('/recording/stop',{actor_id:actor})})}if(r.workflow==='Stopping'&&!r.stop_acknowledged.includes(actor))addButton('ACK stop',()=>post('/recording/stop-ack',{participant_id:actor}));if(actor==='alice'&&r.workflow==='Stopping'&&r.stop_acknowledged.length===r.participants.length)addButton('Complete recording',()=>post('/recording/complete',{actor_id:actor}))}setInterval(refresh,1000);refresh();</script></body></html>"#;
