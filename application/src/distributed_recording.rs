@@ -89,14 +89,13 @@ impl DistributedRecording {
         self.workflow.start_recording_with_signet()
     }
 
-    /// Emits Opening on one local recorder and confirms that recorder's
-    /// Opening barrier. Stable Recording is persisted in Core only when all
-    /// selected recorders have confirmed Opening.
+    /// Emits Opening on the local recorder and confirms the host recorder's
+    /// Opening barrier. Stable Recording is persisted in Core only when every
+    /// selected recorder has confirmed Opening.
     pub fn confirm_opening<R, C, P>(
         &mut self,
         repository: &mut R,
         recorder: &mut RecorderApplication<C, P>,
-        participant: &ParticipantId,
         opening: &SyncSignet,
     ) -> Result<bool, DistributedRecordingError<R::Error>>
     where
@@ -107,10 +106,11 @@ impl DistributedRecording {
         recorder
             .emit_sync_signet(opening)
             .map_err(DistributedRecordingError::Recorder)?;
-        self.confirm_opening_for_participant(participant)
+        let recording_started = self
+            .confirm_opening_for_participant(&self.actor.clone())
             .map_err(DistributedRecordingError::Workflow)?;
 
-        if !self.workflow.recording().status().eq(&nc_pore_core::recording::RecordingStatus::Recording) {
+        if !recording_started {
             return Ok(false);
         }
 
