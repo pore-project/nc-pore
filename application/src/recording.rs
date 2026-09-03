@@ -1,15 +1,14 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingId, RecordingSyncSignet, RecordingWorkflow,
-    RecordingWorkflowError,
-};
+use nc_pore_core::recording::{RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
-use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
+use recorder::artifact::RecordingArtifact;
 use recorder::persistence::PersistenceProvider;
+
+use crate::recording_stop::{execute_recording_stop, ExecuteRecordingStopError};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteRecordingError<E> {
@@ -20,6 +19,7 @@ pub enum ExecuteRecordingError<E> {
     Workflow(RecordingWorkflowError),
     RecorderStart(CaptureStartError),
     Recorder(RecorderApplicationError),
+    Stop(ExecuteRecordingStopError<E>),
 }
 
 /// Orchestrates one complete production recording lifecycle.
@@ -97,57 +97,23 @@ where
     session
         .start_recording_by(actor, recording_id)
         .map_err(ExecuteRecordingError::Session)?;
-
-    workflow
-        .request_stop()
-        .map_err(ExecuteRecordingError::Workflow)?;
-
-    // ADR-071i: the persisted Core stop is the authoritative recording
-    // boundary. Closing is only a best-effort marker and must never be used as
-    // the lifecycle authority for reconnecting or late observers.
-    session
-        .stop_recording_by(actor, recording_id)
-        .map_err(ExecuteRecordingError::Session)?;
     repository
         .update(&session)
         .map_err(ExecuteRecordingError::Repository)?;
 
-    // ADR-068 / ADR-071i: Closing is optional and must be emitted while local
-    // capture is still active, after the fachlicher stop and before technical stop.
-    // RecorderApplication deliberately treats Closing emission as best effort.
-    if let Some(closing) = configuration.signets().closing() {
-        recorder
-            .emit_sync_signet(&closing)
-            .map_err(ExecuteRecordingError::Recorder)?;
-    }
-
-    let artifact = recorder
-        .stop(RecordingArtifactAssociation::new(
-            production_id.value(),
-            recording_id.value(),
-        ))
-        .map_err(ExecuteRecordingError::Recorder)?;
-
-    workflow
-        .acknowledge_stop(actor)
-        .map_err(ExecuteRecordingError::Workflow)?;
-    workflow
-        .complete(RecordingArtifactId::new(artifact.id.value()))
-        .map_err(ExecuteRecordingError::Workflow)?;
-
-    session
-        .complete_recording_by(
-            actor,
-            recording_id,
-            RecordingArtifactId::new(artifact.id.value()),
-        )
-        .map_err(ExecuteRecordingError::Session)?;
-
-    repository
-        .update(&session)
-        .map_err(ExecuteRecordingError::Repository)?;
-
-    Ok(artifact)
+    // ADR-080i: once the fachliche Recording state is persisted, all stop
+    // ordering is delegated to the dedicated host-stop coordinator. In
+    // particular, Core STOP is persisted before Closing is attempted.
+    execute_recording_stop(
+        repository,
+        production_id,
+        actor,
+        recording_id,
+        &mut workflow,
+        recorder,
+        configuration,
+    )
+    .map_err(ExecuteRecordingError::Stop)
 }
 
 #[cfg(test)]
