@@ -793,11 +793,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            session.begin_recording_by(
-                &owner,
-                &RecordingId::new("recording-006"),
-                [owner.clone()]
-            ),
+            session.begin_recording_by(&owner, &RecordingId::new("recording-006"), [owner.clone()]),
             Err(ProductionSessionError::RecordingCoordinationAlreadyActive)
         );
     }
