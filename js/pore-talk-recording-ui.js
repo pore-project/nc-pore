@@ -14,7 +14,7 @@
 		error: { label: 'Nicht bereit', tone: 'error', symbol: '!' },
 		ready: { label: 'Aufnahme bereit', tone: 'ready', symbol: '●' },
 		recording: { label: 'Aufnahme läuft', tone: 'recording', symbol: '●' },
-		opening: { label: 'Aufnahme wird geöffnet', tone: 'recording opening', symbol: '●' },
+		opening: { label: 'Aufnahme wird geöffnet', tone: 'opening', symbol: '●' },
 		stopping: { label: 'Aufnahme wird übertragen', tone: 'transfer', symbol: '↗' },
 		confirmed: { label: 'Aufnahme bestätigt', tone: 'confirmed', symbol: '✓' },
 	})
@@ -52,7 +52,7 @@
 		const status = resolveStatus({ state, listener, ready, confirmed })
 		const root = document.createElement('section')
 		root.className = 'pore-talk-recording'
-		root.dataset.status = status.tone.split(' ')[0]
+		root.dataset.status = status.tone
 		root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
 
 		const indicator = document.createElement('span')
