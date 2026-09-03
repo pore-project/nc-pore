@@ -113,12 +113,6 @@ impl RecordingWorkflow {
         Ok(ready)
     }
 
-    /// Triggers the required Opening Signet after the READY barrier.
-    ///
-    /// Technical capture may already be active, but the domain recording is
-    /// deliberately not yet in the stable Recording state. The caller must
-    /// emit/transport the returned Opening Signet and then call
-    /// `confirm_opening` before recording can proceed.
     pub fn start_recording_with_signet(
         &mut self,
     ) -> Result<RecordingSyncSignet, RecordingWorkflowError> {
@@ -129,8 +123,6 @@ impl RecordingWorkflow {
         Ok(RecordingSyncSignet::Opening)
     }
 
-    /// Confirms that the required Opening Signet has been emitted/received by
-    /// the recording participants and enters the stable recording state.
     pub fn confirm_opening(&mut self) -> Result<(), RecordingWorkflowError> {
         if self.status != RecordingWorkflowStatus::Opening {
             return Err(RecordingWorkflowError::InvalidState);
@@ -140,8 +132,6 @@ impl RecordingWorkflow {
         Ok(())
     }
 
-    /// Compatibility helper for callers that explicitly use the domain start
-    /// contract. Opening must still be confirmed before the workflow records.
     pub fn start_recording(&mut self) -> Result<(), RecordingWorkflowError> {
         self.start_recording_with_signet().map(|_| ())
     }
@@ -150,6 +140,7 @@ impl RecordingWorkflow {
         if self.status != RecordingWorkflowStatus::Recording {
             return Err(RecordingWorkflowError::InvalidState);
         }
+        self.recording.stop()?;
         self.status = RecordingWorkflowStatus::Stopping;
         Ok(())
     }
@@ -213,7 +204,6 @@ mod tests {
         workflow.mark_ready(&participant("participant-b")).unwrap();
     }
 
-    // TEST-01 / CUE30
     #[test]
     fn workflow_requires_all_ready_before_opening() {
         let mut workflow = workflow();
@@ -232,7 +222,6 @@ mod tests {
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Opening);
     }
 
-    // TEST-02 / CUE30
     #[test]
     fn workflow_requires_ready_phase_before_ready_reports() {
         let mut workflow = workflow();
@@ -242,7 +231,6 @@ mod tests {
         );
     }
 
-    // TEST-03 / CUE30
     #[test]
     fn opening_must_be_confirmed_before_stable_recording() {
         let mut workflow = workflow();
@@ -260,7 +248,6 @@ mod tests {
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
     }
 
-    // TEST-04 / CUE30
     #[test]
     fn opening_cannot_be_confirmed_before_it_is_triggered() {
         let mut workflow = workflow();
@@ -271,7 +258,6 @@ mod tests {
         );
     }
 
-    // TEST-05 / CUE30
     #[test]
     fn workflow_requires_recording_before_stop() {
         let mut workflow = workflow();
@@ -284,9 +270,9 @@ mod tests {
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
     }
 
-    // TEST-06 / CUE30
     #[test]
     fn workflow_requires_all_stop_acknowledgements_before_completion() {
         let mut workflow = workflow();
@@ -315,7 +301,6 @@ mod tests {
         assert!(workflow.is_complete());
     }
 
-    // TEST-07 / CUE30
     #[test]
     fn workflow_rejects_unselected_stop_acknowledgement() {
         let mut workflow = workflow();
@@ -329,7 +314,6 @@ mod tests {
         );
     }
 
-    // TEST-08 / CUE30
     #[test]
     fn workflow_rejects_duplicate_stop_acknowledgement() {
         let mut workflow = workflow();
@@ -346,7 +330,6 @@ mod tests {
         );
     }
 
-    // TEST-09 / CUE30
     #[test]
     fn workflow_can_reconstitute_and_return_existing_recording_state() {
         let mut recording = Recording::new("recording-workflow-02");
