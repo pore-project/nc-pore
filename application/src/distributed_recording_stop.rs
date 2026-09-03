@@ -4,13 +4,6 @@ use nc_pore_core::session::repository::ProductionSessionRepository;
 
 use crate::distributed_recording::{DistributedRecording, DistributedRecordingError};
 
-/// Records the technical stop acknowledgement of one selected recorder.
-///
-/// The local recorder must stop independently; this operation only advances
-/// the distributed workflow barrier. In particular, a remote participant
-/// does not need to have a local `RecorderApplication` instance in the host
-/// process. The workflow remains incomplete until every selected participant
-/// has acknowledged the stop.
 pub fn acknowledge_distributed_recording_stop(
     recording: &mut DistributedRecording,
     participant: &ParticipantId,
@@ -18,10 +11,6 @@ pub fn acknowledge_distributed_recording_stop(
     recording.workflow_mut().acknowledge_stop(participant)
 }
 
-/// Persists one participant's technical stop acknowledgement in Core and
-/// mirrors the same barrier in the local workflow. Core must already contain
-/// the authoritative recording stop; this operation never stops another
-/// participant's recorder and never uses Closing as a completion signal.
 pub fn acknowledge_distributed_recording_stop_in_core<R>(
     repository: &mut R,
     recording: &mut DistributedRecording,
@@ -148,7 +137,9 @@ mod tests {
         recording.workflow_mut().confirm_opening(bob).unwrap();
 
         let mut session = repository.session.clone();
-        session.mark_recording_ready_by(alice, recording_id).unwrap();
+        session
+            .mark_recording_ready_by(alice, recording_id)
+            .unwrap();
         session.mark_recording_ready_by(bob, recording_id).unwrap();
         session
             .confirm_recording_opening_by(alice, recording_id)
