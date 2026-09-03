@@ -1,91 +1,124 @@
-.pore-talk-recording-controls {
-	position: fixed;
-	right: 24px;
-	bottom: 100px;
-	z-index: 100000;
+/*
+ * NC-PoRE — Talk-native recording control surface.
+ *
+ * The component is mounted inside the Talk call root supplied by the host
+ * integration. It deliberately does not position itself against the viewport.
+ */
+
+.pore-talk-recording {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 10px 12px;
-	background: var(--color-main-background, #fff);
-	border: 1px solid var(--color-border, #bbb);
-	border-radius: var(--border-radius-large, 10px);
-	box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
-	font-size: 13px;
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: calc(2 * var(--default-grid-baseline));
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	box-shadow: var(--color-box-shadow);
 }
 
-.pore-talk-recording-controls__status {
+.pore-talk-recording__indicator {
 	display: inline-flex;
 	align-items: center;
-	gap: 7px;
-	min-width: 150px;
-	font-weight: 600;
-}
-
-.pore-talk-recording-controls__status::before {
-	content: '';
-	width: 8px;
-	height: 8px;
-	flex: 0 0 8px;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: 0 0 24px;
 	border-radius: 50%;
-	background: var(--color-text-maxcontrast, #999);
+	font-weight: 700;
 }
 
-.pore-talk-recording-controls[data-recording='true'] .pore-talk-recording-controls__status::before {
-	background: var(--color-error, #d00);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error, #d00) 15%, transparent);
+.pore-talk-recording__indicator--preparing {
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
 }
 
-.pore-talk-recording-controls__source {
-	max-width: 280px;
-	overflow: hidden;
-	text-overflow: ellipsis;
+.pore-talk-recording__indicator--listener {
+	background: var(--color-text-default);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--error {
+	background: var(--color-error);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--ready {
+	background: var(--color-warning);
+	color: var(--color-text-default);
+}
+
+.pore-talk-recording__indicator--recording {
+	background: var(--color-success);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--opening {
+	animation: pore-talk-recording-pulse 1s ease-in-out infinite;
+}
+
+.pore-talk-recording__indicator--transfer {
+	background: var(--color-primary-element);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--confirmed {
+	background: var(--color-main-background);
+	color: var(--color-success);
+	border: 2px solid var(--color-success);
+}
+
+.pore-talk-recording__content {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--default-grid-baseline);
+	min-width: 0;
+}
+
+.pore-talk-recording__label {
 	white-space: nowrap;
-	color: var(--color-text-maxcontrast, #666);
 }
 
-.pore-talk-recording-controls__button {
+.pore-talk-recording__readiness,
+.pore-talk-recording__elapsed {
+	color: var(--color-text-maxcontrast);
+}
+
+.pore-talk-recording__controls {
+	display: flex;
+	gap: var(--default-grid-baseline);
+}
+
+.pore-talk-recording__button {
 	min-height: 36px;
-}
-
-.pore-talk-recording-controls__button--start,
-.pore-talk-recording-controls__button--stop {
+	padding-inline: calc(2 * var(--default-grid-baseline));
 	font-weight: 600;
 }
 
-.pore-talk-recording-result {
-	position: fixed;
-	right: 24px;
-	bottom: 154px;
-	z-index: 100001;
-	max-width: 320px;
-	padding: 10px 12px;
-	background: var(--color-main-background, #fff);
-	border: 1px solid var(--color-border, #bbb);
-	border-radius: var(--border-radius-large, 10px);
-	box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+.pore-talk-recording__button--stop {
+	border-color: var(--color-error);
 }
 
-.pore-talk-recording-result a {
-	color: var(--color-primary-element, #0082c9);
-	font-weight: 600;
-	text-decoration: none;
+@keyframes pore-talk-recording-pulse {
+	50% {
+		opacity: .45;
+	}
 }
 
-.pore-talk-recording-result a:hover {
-	text-decoration: underline;
+@media (prefers-reduced-motion: reduce) {
+	.pore-talk-recording__indicator--opening {
+		animation: none;
+	}
 }
 
 @media (max-width: 700px) {
-	.pore-talk-recording-controls {
-		right: 12px;
-		left: 12px;
-		bottom: 76px;
+	.pore-talk-recording {
+		align-items: flex-start;
 		flex-wrap: wrap;
 	}
 
-	.pore-talk-recording-controls__source {
-		max-width: 100%;
+	.pore-talk-recording__controls {
 		flex: 1 1 100%;
 	}
 }
