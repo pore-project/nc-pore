@@ -43,12 +43,14 @@ impl From<RecordingLifecycleError> for RecordingWorkflowError {
 ///
 /// The Opening Signet is a hard synchronization barrier: READY makes the
 /// workflow eligible to trigger Opening, but the workflow does not enter the
-/// stable Recording state until Opening has been confirmed.
+/// stable Recording state until every selected recording client has confirmed
+/// that it received/captured Opening.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingWorkflow {
     recording: Recording,
     coordination: RecordingCoordination,
     status: RecordingWorkflowStatus,
+    opening_confirmed: Vec<ParticipantId>,
     acknowledged: Vec<ParticipantId>,
 }
 
@@ -70,6 +72,7 @@ impl RecordingWorkflow {
             recording,
             coordination,
             status: RecordingWorkflowStatus::Preparing,
+            opening_confirmed: Vec::new(),
             acknowledged: Vec::new(),
         })
     }
@@ -123,13 +126,34 @@ impl RecordingWorkflow {
         Ok(RecordingSyncSignet::Opening)
     }
 
-    pub fn confirm_opening(&mut self) -> Result<(), RecordingWorkflowError> {
+    /// Confirms Opening for one selected recording client.
+    ///
+    /// Stable Recording is reached only after every selected client has
+    /// confirmed Opening. This is the domain barrier corresponding to the
+    /// ADR-071i requirement that all recording clients confirm the Opening
+    /// Signet before Recording becomes authoritative.
+    pub fn confirm_opening(
+        &mut self,
+        participant_id: &ParticipantId,
+    ) -> Result<bool, RecordingWorkflowError> {
         if self.status != RecordingWorkflowStatus::Opening {
             return Err(RecordingWorkflowError::InvalidState);
         }
+        if !self.coordination.participants().contains(participant_id) {
+            return Err(RecordingWorkflowError::ParticipantNotSelected);
+        }
+        if self.opening_confirmed.contains(participant_id) {
+            return Err(RecordingWorkflowError::AlreadyAcknowledged);
+        }
+
+        self.opening_confirmed.push(participant_id.clone());
+        if self.opening_confirmed.len() != self.coordination.participants().len() {
+            return Ok(false);
+        }
+
         self.recording.start()?;
         self.status = RecordingWorkflowStatus::Recording;
-        Ok(())
+        Ok(true)
     }
 
     pub fn start_recording(&mut self) -> Result<(), RecordingWorkflowError> {
@@ -138,11 +162,6 @@ impl RecordingWorkflow {
 
     /// Validates that the workflow is at the stable Recording boundary and
     /// accepts a fachliche stop request without mutating local lifecycle state.
-    ///
-    /// The actual domain transition is deliberately deferred until the
-    /// authoritative Core `RECORDING_STOPPED` state has been persisted. This
-    /// keeps a failed repository update retryable and prevents local workflow
-    /// state from claiming `Stopping` while Core still says `Recording`.
     pub fn request_stop(&self) -> Result<(), RecordingWorkflowError> {
         if self.status != RecordingWorkflowStatus::Recording
             || self.recording.status() != RecordingStatus::Recording
@@ -169,9 +188,6 @@ impl RecordingWorkflow {
     ///
     /// Completion acknowledgements are idempotent: a duplicate confirmation
     /// from the same participant simply reports the current aggregate state.
-    /// This is important for distributed retries and reconnects and mirrors
-    /// the previous recorder-level stop coordinator semantics. A participant
-    /// that is not part of the frozen stop set is still rejected.
     pub fn acknowledge_stop(
         &mut self,
         participant_id: &ParticipantId,
@@ -234,7 +250,8 @@ mod tests {
     fn reach_recording(workflow: &mut RecordingWorkflow) {
         reach_opening(workflow);
         workflow.start_recording_with_signet().unwrap();
-        workflow.confirm_opening().unwrap();
+        workflow.confirm_opening(&participant("participant-a")).unwrap();
+        workflow.confirm_opening(&participant("participant-b")).unwrap();
     }
 
     #[test]
@@ -265,7 +282,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_must_be_confirmed_before_stable_recording() {
+    fn opening_must_be_confirmed_by_every_participant_before_stable_recording() {
         let mut workflow = workflow();
         reach_opening(&mut workflow);
         let signet = workflow.start_recording_with_signet().unwrap();
@@ -277,7 +294,14 @@ mod tests {
             Err(RecordingWorkflowError::InvalidState)
         );
 
-        workflow.confirm_opening().unwrap();
+        assert!(!workflow.confirm_opening(&participant("participant-a")).unwrap());
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Opening);
+        assert_eq!(
+            workflow.confirm_opening(&participant("participant-a")),
+            Err(RecordingWorkflowError::AlreadyAcknowledged)
+        );
+
+        assert!(workflow.confirm_opening(&participant("participant-b")).unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
     }
 
@@ -286,8 +310,19 @@ mod tests {
         let mut workflow = workflow();
         reach_opening(&mut workflow);
         assert_eq!(
-            workflow.confirm_opening(),
+            workflow.confirm_opening(&participant("participant-a")),
             Err(RecordingWorkflowError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn opening_confirmation_rejects_unselected_participant() {
+        let mut workflow = workflow();
+        reach_opening(&mut workflow);
+        workflow.start_recording_with_signet().unwrap();
+        assert_eq!(
+            workflow.confirm_opening(&participant("participant-c")),
+            Err(RecordingWorkflowError::ParticipantNotSelected)
         );
     }
 
@@ -300,7 +335,12 @@ mod tests {
             workflow.request_stop(),
             Err(RecordingWorkflowError::InvalidState)
         );
-        workflow.confirm_opening().unwrap();
+        workflow.confirm_opening(&participant("participant-a")).unwrap();
+        assert_eq!(
+            workflow.request_stop(),
+            Err(RecordingWorkflowError::InvalidState)
+        );
+        workflow.confirm_opening(&participant("participant-b")).unwrap();
         workflow.request_stop().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
         workflow.confirm_core_stop_persisted().unwrap();
@@ -401,7 +441,7 @@ mod tests {
         workflow.begin_ready_phase().unwrap();
         assert!(workflow.mark_ready(&participant("participant-a")).unwrap());
         workflow.start_recording_with_signet().unwrap();
-        workflow.confirm_opening().unwrap();
+        assert!(workflow.confirm_opening(&participant("participant-a")).unwrap());
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
         assert!(
