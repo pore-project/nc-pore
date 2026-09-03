@@ -250,8 +250,12 @@ mod tests {
     fn reach_recording(workflow: &mut RecordingWorkflow) {
         reach_opening(workflow);
         workflow.start_recording_with_signet().unwrap();
-        workflow.confirm_opening(&participant("participant-a")).unwrap();
-        workflow.confirm_opening(&participant("participant-b")).unwrap();
+        workflow
+            .confirm_opening(&participant("participant-a"))
+            .unwrap();
+        workflow
+            .confirm_opening(&participant("participant-b"))
+            .unwrap();
     }
 
     #[test]
@@ -294,14 +298,18 @@ mod tests {
             Err(RecordingWorkflowError::InvalidState)
         );
 
-        assert!(!workflow.confirm_opening(&participant("participant-a")).unwrap());
+        assert!(!workflow
+            .confirm_opening(&participant("participant-a"))
+            .unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Opening);
         assert_eq!(
             workflow.confirm_opening(&participant("participant-a")),
             Err(RecordingWorkflowError::AlreadyAcknowledged)
         );
 
-        assert!(workflow.confirm_opening(&participant("participant-b")).unwrap());
+        assert!(workflow
+            .confirm_opening(&participant("participant-b"))
+            .unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
     }
 
@@ -335,12 +343,16 @@ mod tests {
             workflow.request_stop(),
             Err(RecordingWorkflowError::InvalidState)
         );
-        workflow.confirm_opening(&participant("participant-a")).unwrap();
+        workflow
+            .confirm_opening(&participant("participant-a"))
+            .unwrap();
         assert_eq!(
             workflow.request_stop(),
             Err(RecordingWorkflowError::InvalidState)
         );
-        workflow.confirm_opening(&participant("participant-b")).unwrap();
+        workflow
+            .confirm_opening(&participant("participant-b"))
+            .unwrap();
         workflow.request_stop().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
         workflow.confirm_core_stop_persisted().unwrap();
@@ -368,21 +380,17 @@ mod tests {
         reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        assert!(
-            !workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
+        assert!(!workflow
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
         assert_eq!(
             workflow.complete(RecordingArtifactId::new("artifact-workflow-01")),
             Err(RecordingWorkflowError::InvalidState)
         );
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-b"))
-                .unwrap()
-        );
+        assert!(workflow
+            .acknowledge_stop(&participant("participant-b"))
+            .unwrap());
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-01"))
             .unwrap();
@@ -408,26 +416,18 @@ mod tests {
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
 
-        assert!(
-            !workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
-        assert!(
-            !workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-b"))
-                .unwrap()
-        );
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-b"))
-                .unwrap()
-        );
+        assert!(!workflow
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap());
+        assert!(!workflow
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap());
+        assert!(workflow
+            .acknowledge_stop(&participant("participant-b"))
+            .unwrap());
+        assert!(workflow
+            .acknowledge_stop(&participant("participant-b"))
+            .unwrap());
     }
 
     #[test]
@@ -441,14 +441,14 @@ mod tests {
         workflow.begin_ready_phase().unwrap();
         assert!(workflow.mark_ready(&participant("participant-a")).unwrap());
         workflow.start_recording_with_signet().unwrap();
-        assert!(workflow.confirm_opening(&participant("participant-a")).unwrap());
+        assert!(workflow
+            .confirm_opening(&participant("participant-a"))
+            .unwrap());
         workflow.request_stop().unwrap();
         workflow.confirm_core_stop_persisted().unwrap();
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
+        assert!(workflow
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap());
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-02"))
             .unwrap();
