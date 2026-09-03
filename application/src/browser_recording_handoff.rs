@@ -9,7 +9,9 @@
 //! boundary. The handoff contains only technical capture data needed to build
 //! the existing `CaptureResult` representation.
 
+use recorder::artifact::{RecordingArtifact, RecordingArtifactFactory};
 use recorder::audio::{CaptureResult, CaptureTrack, RecordingConfiguration};
+use recorder::session::RecordingSessionId;
 
 /// Technical stop reason supplied by a capture producer.
 ///
@@ -122,6 +124,21 @@ impl BrowserRecordingHandoff {
         result.add_track(track);
         Ok(result)
     }
+
+    /// Completes the neutral handoff through the existing artifact factory.
+    ///
+    /// This is deliberately the last responsibility of the browser boundary:
+    /// persistence remains owned by the existing persistence provider.
+    pub fn into_recording_artifact(
+        self,
+        recording_session_id: RecordingSessionId,
+    ) -> Result<RecordingArtifact, BrowserRecordingHandoffError> {
+        let capture_result = self.into_capture_result()?;
+        Ok(RecordingArtifactFactory::create(
+            capture_result,
+            recording_session_id,
+        ))
+    }
 }
 
 /// Failure while crossing the browser-to-application handoff boundary.
@@ -152,6 +169,30 @@ mod tests {
         assert_eq!(result.tracks()[0].id.value(), "browser-track");
         assert_eq!(result.tracks()[0].chunks()[0].sequence, 1);
         assert_eq!(result.tracks()[0].chunks()[0].payload(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn finalized_browser_recording_uses_existing_artifact_factory() {
+        let handoff = BrowserRecordingHandoff::new(
+            "recording-001",
+            "browser-track",
+            vec![9, 8, 7],
+            "audio/webm",
+            BrowserRecordingStopReason::UserRequested,
+        );
+
+        let artifact = handoff
+            .into_recording_artifact(RecordingSessionId::new("session-001"))
+            .expect("handoff succeeds");
+
+        assert_eq!(artifact.id.value(), "recording-001");
+        assert_eq!(artifact.recording_session_id.value(), "session-001");
+        assert_eq!(artifact.tracks().len(), 1);
+        assert_eq!(artifact.tracks()[0].chunks()[0].payload().data(), &[9, 8, 7]);
+        assert_eq!(
+            artifact.tracks()[0].chunks()[0].payload().reference().value(),
+            "browser-track/chunk-000001"
+        );
     }
 
     #[test]
