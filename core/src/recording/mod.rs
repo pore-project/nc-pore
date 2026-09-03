@@ -20,6 +20,7 @@ pub mod artifact_id;
 pub mod coordination;
 pub mod id;
 pub mod signet;
+pub mod stop;
 pub mod synchronization;
 pub mod workflow;
 
@@ -29,6 +30,10 @@ pub use coordination::{
 };
 pub use id::RecordingId;
 pub use signet::{RecordingSyncSignet, RecordingSyncSignetRequirement};
+pub use stop::{
+    RecordingClosingOutcome, RecordingStopCoordinator, RecordingStopCoordinatorError,
+    RecordingStopCoordinatorStatus, RecordingStopMode,
+};
 pub use synchronization::{
     RecordingArtifactSynchronization, RecordingArtifactSynchronizationError,
     RecordingArtifactSynchronizationStatus,
