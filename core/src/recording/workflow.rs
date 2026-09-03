@@ -338,7 +338,11 @@ mod tests {
             workflow.complete(RecordingArtifactId::new("artifact-workflow-01")),
             Err(RecordingWorkflowError::InvalidState)
         );
-        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-01"))
             .unwrap();
