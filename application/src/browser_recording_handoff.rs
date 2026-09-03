@@ -184,6 +184,9 @@ mod tests {
         assert_eq!(handoff.format(), "audio/webm");
         assert_eq!(handoff.recording_started_at(), Some("start"));
         assert_eq!(handoff.recording_stopped_at(), Some("stop"));
-        assert_eq!(handoff.stop_reason(), &BrowserRecordingStopReason::SessionEnded);
+        assert_eq!(
+            handoff.stop_reason(),
+            &BrowserRecordingStopReason::SessionEnded
+        );
     }
 }
