@@ -1,14 +1,15 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::recording::{
-    RecordingArtifactId, RecordingId, RecordingWorkflow, RecordingWorkflowError,
-};
+use nc_pore_core::recording::{RecordingId, RecordingSyncSignet, RecordingWorkflowError};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
-use recorder::artifact::{RecordingArtifact, RecordingArtifactAssociation};
+use recorder::artifact::RecordingArtifact;
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
 use recorder::persistence::PersistenceProvider;
+
+use crate::distributed_recording::{begin_distributed_recording, DistributedRecordingError};
+use crate::recording_stop::{execute_recording_stop, ExecuteRecordingStopError};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteRecordingError<E> {
@@ -19,13 +20,39 @@ pub enum ExecuteRecordingError<E> {
     Workflow(RecordingWorkflowError),
     RecorderStart(CaptureStartError),
     Recorder(RecorderApplicationError),
+    CoordinationDiverged,
+    Stop(ExecuteRecordingStopError<E>),
+}
+
+fn map_distributed_error<E>(error: DistributedRecordingError<E>) -> ExecuteRecordingError<E> {
+    match error {
+        DistributedRecordingError::SessionNotFound => ExecuteRecordingError::SessionNotFound,
+        DistributedRecordingError::RecordingNotFound => ExecuteRecordingError::RecordingNotFound,
+        DistributedRecordingError::Repository(error) => ExecuteRecordingError::Repository(error),
+        DistributedRecordingError::Session(error) => ExecuteRecordingError::Session(error),
+        DistributedRecordingError::Workflow(error) => ExecuteRecordingError::Workflow(error),
+        DistributedRecordingError::RecorderStart(error) => {
+            ExecuteRecordingError::RecorderStart(error)
+        }
+        DistributedRecordingError::Recorder(error) => ExecuteRecordingError::Recorder(error),
+        DistributedRecordingError::CoordinationDiverged => {
+            ExecuteRecordingError::CoordinationDiverged
+        }
+    }
 }
 
 /// Orchestrates one complete production recording lifecycle.
 ///
-/// The domain workflow owns the recording state machine while the recorder
-/// owns capture and artifact processing. The application layer coordinates
-/// the two without exposing either implementation detail to the other boundary.
+/// The distributed recording coordinator is the single application-level
+/// start path. Core freezes the complete recording participant set before
+/// local capture begins; each participant must then complete local technical
+/// READY before that participant is marked READY in Core. Opening can only be
+/// triggered after the complete frozen set is READY.
+///
+/// ADR-068 signet semantics come from the core domain, while the concrete
+/// signet description is supplied by the technical recording configuration.
+/// The Opening Signet is emitted while local capture is active and before the
+/// workflow enters the stable Recording state.
 pub fn execute_recording<R, C, P>(
     repository: &mut R,
     production_id: &ProductionId,
@@ -39,74 +66,43 @@ where
     C: CaptureProvider,
     P: PersistenceProvider,
 {
-    let mut session = repository
-        .get(production_id)
-        .map_err(ExecuteRecordingError::Repository)?
-        .ok_or(ExecuteRecordingError::SessionNotFound)?;
+    let mut distributed =
+        begin_distributed_recording(repository, production_id, actor, recording_id)
+            .map_err(map_distributed_error)?;
 
-    let recording = session
-        .recordings()
-        .iter()
-        .find(|recording| recording.id() == recording_id)
-        .cloned()
-        .ok_or(ExecuteRecordingError::RecordingNotFound)?;
+    // Local technical readiness must be established before this participant
+    // can contribute READY to Core's distributed barrier.
+    distributed
+        .prepare_local_recorder(repository, actor, recorder, configuration)
+        .map_err(map_distributed_error)?;
 
-    let mut workflow = RecordingWorkflow::from_recording(recording, [actor.clone()])
+    // For this synchronous application entry point, the actor is the only
+    // locally available recorder. The distributed coordinator nevertheless
+    // derives the participant set from Core and refuses Opening unless all
+    // frozen participants are READY. A future remote-client path calls the
+    // same preparation operation for each remote recorder.
+    let opening = distributed
+        .trigger_opening()
         .map_err(ExecuteRecordingError::Workflow)?;
-    workflow
-        .begin_ready_phase()
-        .map_err(ExecuteRecordingError::Workflow)?;
+    debug_assert_eq!(opening, RecordingSyncSignet::Opening);
 
-    session
-        .start_recording_by(actor, recording_id)
-        .map_err(ExecuteRecordingError::Session)?;
+    distributed
+        .confirm_opening(repository, recorder, &configuration.signets().opening())
+        .map_err(map_distributed_error)?;
 
-    recorder
-        .start(configuration)
-        .map_err(ExecuteRecordingError::RecorderStart)?;
-
-    workflow
-        .mark_ready(actor)
-        .map_err(ExecuteRecordingError::Workflow)?;
-    recorder.ready().map_err(|error| {
-        ExecuteRecordingError::Recorder(RecorderApplicationError::Capture(format!(
-            "recorder ready transition failed: {error:?}"
-        )))
-    })?;
-    workflow
-        .start_recording()
-        .map_err(ExecuteRecordingError::Workflow)?;
-
-    let artifact = recorder
-        .stop(RecordingArtifactAssociation::new(
-            production_id.value(),
-            recording_id.value(),
-        ))
-        .map_err(ExecuteRecordingError::Recorder)?;
-
-    workflow
-        .request_stop()
-        .map_err(ExecuteRecordingError::Workflow)?;
-    workflow
-        .acknowledge_stop(actor)
-        .map_err(ExecuteRecordingError::Workflow)?;
-    workflow
-        .complete(RecordingArtifactId::new(artifact.id.value()))
-        .map_err(ExecuteRecordingError::Workflow)?;
-
-    session
-        .complete_recording_by(
-            actor,
-            recording_id,
-            RecordingArtifactId::new(artifact.id.value()),
-        )
-        .map_err(ExecuteRecordingError::Session)?;
-
-    repository
-        .update(&session)
-        .map_err(ExecuteRecordingError::Repository)?;
-
-    Ok(artifact)
+    // ADR-080i: once the fachliche Recording state is persisted, all stop
+    // ordering is delegated to the dedicated host-stop coordinator. In
+    // particular, Core STOP is persisted before Closing is attempted.
+    execute_recording_stop(
+        repository,
+        production_id,
+        actor,
+        recording_id,
+        distributed.workflow_mut(),
+        recorder,
+        configuration,
+    )
+    .map_err(ExecuteRecordingError::Stop)
 }
 
 #[cfg(test)]
@@ -119,9 +115,14 @@ mod tests {
     use nc_pore_core::session::ProductionSession;
     use recorder::artifact::coordination::ArtifactCoordinator;
     use recorder::artifact::processing::RecordingArtifactProcessor;
-    use recorder::audio::{CaptureProvider, CaptureResult, CpalCaptureProvider};
+    use recorder::audio::{
+        CaptureProvider, CaptureResult, CpalCaptureProvider, SignetEvent, SyncSignet,
+        SyncSignetConfiguration, SyncSignetKind,
+    };
     use recorder::persistence::InMemoryPersistenceProvider;
     use recorder::session::RecordingSession;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     struct InMemorySessions {
         sessions: Vec<ProductionSession>,
@@ -159,13 +160,23 @@ mod tests {
         }
     }
 
-    struct TestCaptureProvider;
+    struct TestCaptureProvider {
+        emitted: Rc<RefCell<Vec<SyncSignet>>>,
+    }
 
     impl CaptureProvider for TestCaptureProvider {
         fn start_capture(
             &mut self,
             _configuration: &RecordingConfiguration,
         ) -> Result<(), CaptureStartError> {
+            Ok(())
+        }
+
+        fn emit_sync_signet(
+            &mut self,
+            signet: &SyncSignet,
+        ) -> Result<(), recorder::audio::SyncSignetEmissionError> {
+            self.emitted.borrow_mut().push(*signet);
             Ok(())
         }
 
@@ -187,6 +198,13 @@ mod tests {
             self.provider.start_capture(configuration)?;
             std::thread::sleep(self.duration);
             Ok(())
+        }
+
+        fn emit_sync_signet(
+            &mut self,
+            signet: &SyncSignet,
+        ) -> Result<(), recorder::audio::SyncSignetEmissionError> {
+            self.provider.emit_sync_signet(signet)
         }
 
         fn stop_capture(&mut self) -> CaptureResult {
@@ -231,23 +249,40 @@ mod tests {
     }
 
     fn recorder_application(
+        emitted: Rc<RefCell<Vec<SyncSignet>>>,
     ) -> RecorderApplication<TestCaptureProvider, InMemoryPersistenceProvider> {
         let session = RecordingSession::new("recording-001");
         let persistence = InMemoryPersistenceProvider::new();
         let coordinator = ArtifactCoordinator::new(persistence);
         let processor = RecordingArtifactProcessor::new(coordinator);
-        RecorderApplication::new(session, TestCaptureProvider, processor)
+        RecorderApplication::new(session, TestCaptureProvider { emitted }, processor)
     }
 
     // TEST-01
-    //
-    // Verify: The application layer drives the domain workflow through
-    // ready-gating, recording, stop acknowledgement, and completion while
-    // the recorder remains responsible for technical capture and artifacts.
+    // Verify: the application layer completes the domain and technical flow,
+    // with Opening emitted before the stable Recording state is reached.
     #[test]
-    fn execute_recording_completes_domain_and_technical_flow() {
+    fn execute_recording_completes_domain_and_technical_flow_with_configured_signets() {
         let (mut repository, production_id, actor, recording_id) = repository_with_recording();
-        let mut recorder = recorder_application();
+        let emitted = Rc::new(RefCell::new(Vec::new()));
+        let mut recorder = recorder_application(Rc::clone(&emitted));
+        let opening = SyncSignet::new(
+            SyncSignetKind::Opening,
+            [
+                SignetEvent::new(0, 10),
+                SignetEvent::new(50, 10),
+                SignetEvent::new(100, 10),
+            ],
+            0.05,
+            42,
+        );
+        let configuration = RecordingConfiguration::with_signets(
+            48_000,
+            1,
+            recorder::audio::SampleFormat::Pcm24,
+            recorder::audio::RecordingChunkDuration::OneMinute,
+            SyncSignetConfiguration::new(opening, None),
+        );
 
         let artifact = execute_recording(
             &mut repository,
@@ -255,13 +290,13 @@ mod tests {
             &actor,
             &recording_id,
             &mut recorder,
-            &RecordingConfiguration::default(),
+            &configuration,
         )
         .unwrap();
 
+        assert_eq!(emitted.borrow().as_slice(), &[opening]);
         let session = repository.get(&production_id).unwrap().unwrap();
         let recording = &session.recordings()[0];
-
         assert_eq!(
             recording.status(),
             nc_pore_core::recording::RecordingStatus::Completed
@@ -276,12 +311,38 @@ mod tests {
     }
 
     // TEST-02
-    //
-    // Verify: A recorder start failure does not persist a partially advanced
-    // domain session because the repository update occurs only after capture
-    // and workflow completion succeed.
+    // Verify: Closing remains optional while Opening is always emitted.
     #[test]
-    fn execute_recording_does_not_persist_failed_start() {
+    fn execute_recording_uses_default_signets_when_requested() {
+        let (mut repository, production_id, actor, recording_id) = repository_with_recording();
+        let emitted = Rc::new(RefCell::new(Vec::new()));
+        let mut recorder = recorder_application(Rc::clone(&emitted));
+
+        execute_recording(
+            &mut repository,
+            &production_id,
+            &actor,
+            &recording_id,
+            &mut recorder,
+            &RecordingConfiguration::default(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            emitted
+                .borrow()
+                .iter()
+                .map(|signet| signet.kind())
+                .collect::<Vec<_>>(),
+            vec![SyncSignetKind::Opening, SyncSignetKind::Closing]
+        );
+    }
+
+    // TEST-03
+    // Verify: A recorder start failure does not mark the participant READY in
+    // Core because local technical readiness must precede the Core READY call.
+    #[test]
+    fn execute_recording_does_not_mark_core_ready_after_failed_start() {
         struct FailingCaptureProvider;
 
         impl CaptureProvider for FailingCaptureProvider {
@@ -323,14 +384,36 @@ mod tests {
             ))
         ));
         let session = repository.get(&production_id).unwrap().unwrap();
-        assert_eq!(
-            session.recordings()[0].status(),
-            nc_pore_core::recording::RecordingStatus::Prepared
-        );
+        let coordination = session.recording_coordination().unwrap();
+        assert!(!coordination.ready_participants().contains(&actor));
     }
 
-    // TEST-03
-    //
+    // TEST-04
+    // Verify: A single-participant recording uses the same distributed path as
+    // a multi-participant recording rather than inventing an actor-only workflow.
+    #[test]
+    fn execute_recording_persists_distributed_coordination_for_single_participant() {
+        let (mut repository, production_id, actor, recording_id) = repository_with_recording();
+        let emitted = Rc::new(RefCell::new(Vec::new()));
+        let mut recorder = recorder_application(emitted);
+
+        execute_recording(
+            &mut repository,
+            &production_id,
+            &actor,
+            &recording_id,
+            &mut recorder,
+            &RecordingConfiguration::default(),
+        )
+        .unwrap();
+
+        let session = repository.get(&production_id).unwrap().unwrap();
+        let coordination = session.recording_coordination().unwrap();
+        assert_eq!(coordination.participants(), &[actor.clone()]);
+        assert_eq!(coordination.ready_participants(), &[actor]);
+    }
+
+    // TEST-05
     // Verify: The existing CPAL provider can drive the complete application
     // recording path and produce a persisted artifact with real payload data.
     //

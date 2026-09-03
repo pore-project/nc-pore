@@ -1,9 +1,7 @@
 //! NC-PoRe synchronization signet model.
 //!
-//! The signet is a short, deliberately recognizable audio event used as a
-//! shared reference point in recordings. This module models the signal as a
-//! sequence of timed broadband events without coupling it to a concrete audio
-//! backend.
+//! This module defines the provider-neutral description of a synchronization
+//! signet. The concrete audio backend decides how the description is rendered.
 //!
 //! See ADR-068 Recording Start and Audio Synchronization Signet.
 
@@ -14,7 +12,7 @@ pub enum SyncSignetKind {
     Closing,
 }
 
-/// One broadband event within a synchronization signet.
+/// One timed event within a synchronization signet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SignetEvent {
     start_ms: u32,
@@ -39,38 +37,62 @@ impl SignetEvent {
     }
 }
 
-/// The currently selected NC-PoRe synchronization signet pattern.
+/// Configurable provider-neutral signet description.
 ///
-/// ADR-068 deliberately leaves the concrete waveform, spectrum and loudness
-/// open. The first implementation step therefore defines only the temporal
-/// structure needed by the recorder workflow. Opening and Closing are kept as
-/// distinct logical signet kinds even while they share the same temporal
-/// structure in this backend-independent model.
+/// The temporal event pattern, amplitude and renderer seed are configuration
+/// data rather than fixed recorder policy. Amplitude is stored as a millionth
+/// of full scale so the configuration remains exactly comparable. A concrete
+/// capture provider may render this description according to its audio
+/// technology.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyncSignet {
     kind: SyncSignetKind,
     events: [SignetEvent; 3],
+    amplitude_ppm: u32,
+    seed: u32,
 }
 
 impl SyncSignet {
-    /// Returns the initial three-event opening signet pattern defined by ADR-068.
-    pub const fn opening() -> Self {
+    /// Creates a signet from its configured temporal and rendering parameters.
+    ///
+    /// `amplitude` is the linear amplitude in the range 0.0..=1.0. It is
+    /// converted to parts per million internally to keep the value exactly
+    /// comparable. For example, `0.12` represents 0.12 full scale.
+    pub const fn new(
+        kind: SyncSignetKind,
+        events: [SignetEvent; 3],
+        amplitude: f32,
+        seed: u32,
+    ) -> Self {
         Self {
-            kind: SyncSignetKind::Opening,
-            events: Self::event_pattern(),
+            kind,
+            events,
+            amplitude_ppm: (amplitude * 1_000_000.0) as u32,
+            seed,
         }
     }
 
-    /// Returns the initial three-event closing signet pattern defined by ADR-068.
-    ///
-    /// The concrete waveform may later distinguish the closing signet from the
-    /// opening signet by signal direction or spectrum. The logical distinction
-    /// is already explicit at this layer.
+    /// Returns the default opening signet configuration.
+    pub const fn opening() -> Self {
+        Self::default_for(SyncSignetKind::Opening, 0x1357_9bdf)
+    }
+
+    /// Returns the default closing signet configuration.
     pub const fn closing() -> Self {
-        Self {
-            kind: SyncSignetKind::Closing,
-            events: Self::event_pattern(),
-        }
+        Self::default_for(SyncSignetKind::Closing, 0x2468_ace1)
+    }
+
+    const fn default_for(kind: SyncSignetKind, seed: u32) -> Self {
+        Self::new(
+            kind,
+            [
+                SignetEvent::new(0, 40),
+                SignetEvent::new(120, 40),
+                SignetEvent::new(240, 40),
+            ],
+            0.12,
+            seed,
+        )
     }
 
     pub const fn kind(self) -> SyncSignetKind {
@@ -81,13 +103,12 @@ impl SyncSignet {
         self.events
     }
 
-    /// Returns the shared temporal structure used by the current signet family.
-    const fn event_pattern() -> [SignetEvent; 3] {
-        [
-            SignetEvent::new(0, 40),
-            SignetEvent::new(120, 40),
-            SignetEvent::new(240, 40),
-        ]
+    pub const fn amplitude_ppm(self) -> u32 {
+        self.amplitude_ppm
+    }
+
+    pub const fn seed(self) -> u32 {
+        self.seed
     }
 
     /// Returns the total temporal extent of the signet.
@@ -97,57 +118,89 @@ impl SyncSignet {
     }
 }
 
+/// Configures which concrete signet descriptions the recorder lifecycle uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyncSignetConfiguration {
+    opening: SyncSignet,
+    closing: Option<SyncSignet>,
+}
+
+impl SyncSignetConfiguration {
+    /// Creates a configuration with a required opening signet and an optional
+    /// closing signet.
+    pub const fn new(opening: SyncSignet, closing: Option<SyncSignet>) -> Self {
+        Self { opening, closing }
+    }
+
+    pub const fn opening(self) -> SyncSignet {
+        self.opening
+    }
+
+    pub const fn closing(self) -> Option<SyncSignet> {
+        self.closing
+    }
+}
+
+impl Default for SyncSignetConfiguration {
+    fn default() -> Self {
+        Self::new(SyncSignet::opening(), Some(SyncSignet::closing()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // TEST-01 / CUE30
-    // Verify: The opening signet consists of exactly three timed events.
+    // TEST-01
+    // Verify: A signet preserves caller-supplied timing and rendering parameters.
     #[test]
-    fn opening_signet_has_three_events() {
-        let signet = SyncSignet::opening();
+    fn signet_preserves_configuration() {
+        let signet = SyncSignet::new(
+            SyncSignetKind::Opening,
+            [
+                SignetEvent::new(0, 25),
+                SignetEvent::new(75, 30),
+                SignetEvent::new(180, 50),
+            ],
+            0.2,
+            1234,
+        );
 
-        assert_eq!(signet.events().len(), 3);
-        assert_eq!(signet.kind(), SyncSignetKind::Opening);
+        assert_eq!(signet.events()[1], SignetEvent::new(75, 30));
+        assert_eq!(signet.amplitude_ppm(), 200_000);
+        assert_eq!(signet.seed(), 1234);
+        assert_eq!(signet.duration_ms(), 230);
     }
 
-    // TEST-02 / CUE30
-    // Verify: The opening signet events are ordered and equally spaced.
+    // TEST-02
+    // Verify: Opening and Closing remain distinct logical anchors.
     #[test]
-    fn opening_signet_events_are_evenly_spaced() {
-        let events = SyncSignet::opening().events();
-
-        assert_eq!(events[0].start_ms(), 0);
-        assert_eq!(events[1].start_ms() - events[0].start_ms(), 120);
-        assert_eq!(events[2].start_ms() - events[1].start_ms(), 120);
-    }
-
-    // TEST-03 / CUE30
-    // Verify: The temporal extent includes the duration of the final event.
-    #[test]
-    fn opening_signet_duration_includes_final_event() {
-        assert_eq!(SyncSignet::opening().duration_ms(), 280);
-    }
-
-    // TEST-04 / CUE30
-    // Verify: Opening and Closing are distinct logical anchors in the signet family.
-    #[test]
-    fn closing_signet_has_distinct_logical_kind() {
+    fn opening_and_closing_are_distinct() {
+        assert_eq!(SyncSignet::opening().kind(), SyncSignetKind::Opening);
         assert_eq!(SyncSignet::closing().kind(), SyncSignetKind::Closing);
         assert_ne!(SyncSignet::opening(), SyncSignet::closing());
     }
 
-    // TEST-05 / CUE30
-    // Verify: Opening and Closing share the current backend-independent timing structure.
+    // TEST-03
+    // Verify: The default configuration requires Opening and permits Closing.
     #[test]
-    fn opening_and_closing_share_temporal_structure() {
+    fn default_configuration_contains_required_opening_and_optional_closing() {
+        let configuration = SyncSignetConfiguration::default();
+
+        assert_eq!(configuration.opening().kind(), SyncSignetKind::Opening);
         assert_eq!(
-            SyncSignet::opening().events(),
-            SyncSignet::closing().events()
+            configuration.closing().unwrap().kind(),
+            SyncSignetKind::Closing
         );
-        assert_eq!(
-            SyncSignet::opening().duration_ms(),
-            SyncSignet::closing().duration_ms()
-        );
+    }
+
+    // TEST-04
+    // Verify: Closing can be disabled without affecting the required Opening.
+    #[test]
+    fn configuration_can_omit_closing() {
+        let configuration = SyncSignetConfiguration::new(SyncSignet::opening(), None);
+
+        assert_eq!(configuration.opening().kind(), SyncSignetKind::Opening);
+        assert!(configuration.closing().is_none());
     }
 }

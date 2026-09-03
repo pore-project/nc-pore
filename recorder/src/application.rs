@@ -2,26 +2,15 @@
 //!
 //! This module composes recorder workflow and artifact processing.
 //!
-//! It intentionally does not contain:
-//! - audio implementation logic
-//! - artifact creation logic
-//! - persistence implementation
-//! - production domain rules
-//!
-//! The application boundary receives the originating domain identifiers as
-//! opaque values and passes them into artifact processing. This keeps the
-//! recorder crate independent from the core crate while preserving the
-//! relationship between a domain Recording and its persisted artifact.
-//!
-//! See:
-//! - ADR-040 Recorder Workflow and Capture Lifecycle Coordination
-//! - ADR-051 Recording Artifact Processing Boundary
-//! - ADR-061 Configurable Recording Configuration
-//! - ADR-068 Recording Start and Audio Synchronization Signet
+//! It intentionally does not contain audio implementation logic, artifact
+//! creation logic, persistence implementation, or production domain rules.
 
 use crate::artifact::RecordingArtifactAssociation;
 use crate::artifact::processing::RecordingArtifactProcessor;
-use crate::audio::{CaptureProvider, CaptureStatus, RecordingConfiguration};
+use crate::audio::{
+    CaptureProvider, CaptureStatus, RecordingConfiguration, SyncSignet, SyncSignetEmissionError,
+    SyncSignetKind,
+};
 use crate::persistence::PersistenceProvider;
 use crate::persistence::PersistenceStoreError;
 use crate::session::{RecordingSession, RecordingSessionId};
@@ -31,6 +20,7 @@ use crate::workflow::RecorderWorkflow;
 pub enum RecorderApplicationError {
     Capture(String),
     Persistence(PersistenceStoreError),
+    SyncSignet(SyncSignetEmissionError),
 }
 
 impl From<PersistenceStoreError> for RecorderApplicationError {
@@ -64,10 +54,6 @@ where
         }
     }
 
-    /// Starts local capture for one concrete recording attempt.
-    ///
-    /// The local recorder remains WaitingForReady until the recording
-    /// coordinator confirms this participant's READY state.
     pub fn start(
         &mut self,
         configuration: &RecordingConfiguration,
@@ -75,23 +61,44 @@ where
         self.workflow.start(configuration)
     }
 
-    /// Confirms that local capture is active and this participant is READY.
-    ///
-    /// A higher-level recording coordinator is responsible for collecting
-    /// READY confirmations and deciding when the Opening Sync Signet may be
-    /// emitted.
     pub fn ready(&mut self) -> Result<(), crate::session::SessionTransitionError> {
         self.workflow.ready()
     }
 
-    /// Stops the local recording and persists an artifact associated with
-    /// the originating domain production and recording.
+    /// Emits a synchronization signet into the active capture.
+    ///
+    /// Opening is strict because it is the required ADR-068 start barrier.
+    /// Successful Opening emission confirms the local Opening phase and enters
+    /// stable local Recording. Closing is optional; emission failure is
+    /// deliberately swallowed so a recorder that can no longer hear/capture
+    /// Closing can still stop and complete normally.
+    pub fn emit_sync_signet(
+        &mut self,
+        signet: &SyncSignet,
+    ) -> Result<(), RecorderApplicationError> {
+        match signet.kind() {
+            SyncSignetKind::Opening => self
+                .workflow
+                .emit_sync_signet(signet)
+                .map_err(RecorderApplicationError::SyncSignet),
+            SyncSignetKind::Closing => {
+                let _ = self.workflow.emit_sync_signet(signet);
+                Ok(())
+            }
+        }
+    }
+
+    /// Explicitly named best-effort API for optional Closing emission.
+    /// Returns whether the technical provider accepted the signet.
+    pub fn emit_optional_sync_signet(&mut self, signet: &SyncSignet) -> bool {
+        self.workflow.emit_sync_signet(signet).is_ok()
+    }
+
     pub fn stop(
         &mut self,
         association: RecordingArtifactAssociation,
     ) -> Result<crate::artifact::RecordingArtifact, RecorderApplicationError> {
         let recording_session_id = RecordingSessionId::new(self.workflow.session().id());
-
         let capture_result = self.workflow.stop();
 
         if let CaptureStatus::Failed(error) = capture_result.status() {
@@ -112,16 +119,27 @@ where
 mod tests {
     use super::*;
     use crate::artifact::coordination::ArtifactCoordinator;
-    use crate::audio::{CaptureProvider, CaptureResult};
+    use crate::audio::{CaptureProvider, CaptureResult, SyncSignetKind};
     use crate::persistence::{InMemoryPersistenceProvider, PersistenceLoadResult};
 
-    struct TestCaptureProvider;
+    struct TestCaptureProvider {
+        emitted: Vec<SyncSignetKind>,
+        fail_on_closing: bool,
+    }
 
     impl CaptureProvider for TestCaptureProvider {
         fn start_capture(
             &mut self,
             _configuration: &RecordingConfiguration,
         ) -> Result<(), crate::audio::CaptureStartError> {
+            Ok(())
+        }
+
+        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
+            if signet.kind() == SyncSignetKind::Closing && self.fail_on_closing {
+                return Err(SyncSignetEmissionError::NotCapturing);
+            }
+            self.emitted.push(signet.kind());
             Ok(())
         }
 
@@ -140,6 +158,14 @@ mod tests {
             Ok(())
         }
 
+        fn emit_sync_signet(&mut self, signet: &SyncSignet) -> Result<(), SyncSignetEmissionError> {
+            if signet.kind() == SyncSignetKind::Opening {
+                Ok(())
+            } else {
+                Ok(())
+            }
+        }
+
         fn stop_capture(&mut self) -> CaptureResult {
             CaptureResult::failed("application-failed-capture", "input stream failed")
         }
@@ -151,44 +177,36 @@ mod tests {
         fn store(&mut self, _artifact: crate::artifact::RecordingArtifact) {
             panic!("failed capture must not reach persistence");
         }
-
         fn load(&self, _id: &str) -> PersistenceLoadResult {
             PersistenceLoadResult::NotFound
         }
-
         fn list_ids(&self) -> Vec<String> {
             Vec::new()
         }
-
         fn list(&self) -> Vec<crate::artifact::RecordingArtifact> {
             Vec::new()
         }
-
         fn remove(&mut self, _id: &str) {}
     }
 
-    // TEST-24
-    //
-    // Verify: Application flow uses the recording session
-    // as source for artifact session association and preserves
-    // the originating domain recording association.
     #[test]
     fn application_processes_recording_flow() {
         let session = RecordingSession::new("session-001");
-
-        let capture = TestCaptureProvider;
-
-        let persistence = InMemoryPersistenceProvider::new();
-
-        let coordinator = ArtifactCoordinator::new(persistence);
-
-        let processor = RecordingArtifactProcessor::new(coordinator);
-
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+            fail_on_closing: false,
+        };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            InMemoryPersistenceProvider::new(),
+        ));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
 
         application.start(&configuration).unwrap();
         application.ready().unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -203,27 +221,23 @@ mod tests {
         assert_eq!(artifact.recording_id(), Some("recording-017"));
     }
 
-    // TEST-25
-    //
-    // Verify: Complete application flow creates and stores
-    // a recording artifact without losing the originating domain IDs.
     #[test]
     fn application_stores_processed_artifact() {
         let session = RecordingSession::new("session-002");
-
-        let capture = TestCaptureProvider;
-
-        let persistence = InMemoryPersistenceProvider::new();
-
-        let coordinator = ArtifactCoordinator::new(persistence);
-
-        let processor = RecordingArtifactProcessor::new(coordinator);
-
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+            fail_on_closing: false,
+        };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            InMemoryPersistenceProvider::new(),
+        ));
         let mut application = RecorderApplication::new(session, capture, processor);
         let configuration = RecordingConfiguration::default();
-
         application.start(&configuration).unwrap();
         application.ready().unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
         let artifact = application
             .stop(RecordingArtifactAssociation::new(
@@ -239,22 +253,54 @@ mod tests {
     }
 
     #[test]
+    fn optional_closing_failure_does_not_block_technical_stop() {
+        let session = RecordingSession::new("session-closing-fallback");
+        let capture = TestCaptureProvider {
+            emitted: Vec::new(),
+            fail_on_closing: true,
+        };
+        let processor = RecordingArtifactProcessor::new(ArtifactCoordinator::new(
+            InMemoryPersistenceProvider::new(),
+        ));
+        let mut application = RecorderApplication::new(session, capture, processor);
+        let configuration = RecordingConfiguration::default();
+
+        application.start(&configuration).unwrap();
+        application.ready().unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
+
+        let signets = configuration.signets();
+        let closing_configuration = signets.closing();
+        let closing = closing_configuration.as_ref().expect("closing signet");
+        assert!(!application.emit_optional_sync_signet(closing));
+        let artifact = application
+            .stop(RecordingArtifactAssociation::new(
+                "production-fallback",
+                "recording-fallback",
+            ))
+            .expect("Closing failure must not block technical stop");
+        assert_eq!(artifact.id.value(), "application-test-capture");
+    }
+
+    #[test]
     fn failed_capture_returns_application_error() {
         let session = RecordingSession::new("session-failed");
         let processor =
             RecordingArtifactProcessor::new(ArtifactCoordinator::new(RejectingPersistenceProvider));
         let mut application = RecorderApplication::new(session, FailedCaptureProvider, processor);
-
-        application
-            .start(&RecordingConfiguration::default())
-            .unwrap();
+        let configuration = RecordingConfiguration::default();
+        application.start(&configuration).unwrap();
         application.ready().unwrap();
+        application
+            .emit_sync_signet(&configuration.signets().opening())
+            .unwrap();
 
         let result = application.stop(RecordingArtifactAssociation::new(
             "production-failed",
             "recording-failed",
         ));
-
         assert!(matches!(
             result,
             Err(RecorderApplicationError::Capture(error)) if error == "input stream failed"

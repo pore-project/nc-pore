@@ -1,6 +1,6 @@
 use super::{
     Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError,
-    RecordingLifecycleError, RecordingStatus,
+    RecordingLifecycleError, RecordingStatus, RecordingSyncSignet,
 };
 use crate::participant::ParticipantId;
 
@@ -9,6 +9,7 @@ pub enum RecordingWorkflowStatus {
     Preparing,
     WaitingForReady,
     Ready,
+    Opening,
     Recording,
     Stopping,
     Completed,
@@ -22,6 +23,7 @@ pub enum RecordingWorkflowError {
     ParticipantNotSelected,
     AlreadyReady,
     AlreadyAcknowledged,
+    OpeningNotConfirmed,
 }
 
 impl From<RecordingCoordinationError> for RecordingWorkflowError {
@@ -38,12 +40,16 @@ impl From<RecordingLifecycleError> for RecordingWorkflowError {
 
 /// Orchestrates the domain-level ADR-068 recording sequence without owning
 /// audio capture, clock handling, or sync-signet generation.
+///
+/// The Opening Signet is a hard synchronization barrier: READY makes the
+/// workflow eligible to trigger Opening, but the workflow does not enter the
+/// stable Recording state until every selected recording client has confirmed
+/// that it received/captured Opening.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingWorkflow {
     recording: Recording,
     coordination: RecordingCoordination,
     status: RecordingWorkflowStatus,
-    acknowledged: Vec<ParticipantId>,
 }
 
 impl RecordingWorkflow {
@@ -64,7 +70,67 @@ impl RecordingWorkflow {
             recording,
             coordination,
             status: RecordingWorkflowStatus::Preparing,
-            acknowledged: Vec::new(),
+        })
+    }
+
+    pub fn from_persisted_state(
+        recording: Recording,
+        coordination: RecordingCoordination,
+    ) -> Result<Self, RecordingWorkflowError> {
+        if recording.id() != coordination.recording_id() {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
+
+        let status = match coordination.status() {
+            super::RecordingCoordinationStatus::Preparing => RecordingWorkflowStatus::Preparing,
+            super::RecordingCoordinationStatus::WaitingForReady => {
+                RecordingWorkflowStatus::WaitingForReady
+            }
+            super::RecordingCoordinationStatus::Ready => {
+                if coordination.opening_confirmed_participants().is_empty() {
+                    match recording.status() {
+                        RecordingStatus::Prepared => RecordingWorkflowStatus::Ready,
+                        _ => return Err(RecordingWorkflowError::InvalidState),
+                    }
+                } else if coordination.opening_confirmed_participants().len()
+                    < coordination.participants().len()
+                {
+                    RecordingWorkflowStatus::Opening
+                } else {
+                    match recording.status() {
+                        RecordingStatus::Recording => RecordingWorkflowStatus::Recording,
+                        RecordingStatus::Stopped => RecordingWorkflowStatus::Stopping,
+                        RecordingStatus::Completed => RecordingWorkflowStatus::Completed,
+                        RecordingStatus::Prepared => {
+                            return Err(RecordingWorkflowError::InvalidState);
+                        }
+                    }
+                }
+            }
+        };
+
+        if status == RecordingWorkflowStatus::Preparing
+            && recording.status() != RecordingStatus::Prepared
+        {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
+        if status == RecordingWorkflowStatus::WaitingForReady
+            && recording.status() != RecordingStatus::Prepared
+        {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
+
+        if status == RecordingWorkflowStatus::Completed
+            && coordination.stop_acknowledged_participants().len()
+                != coordination.participants().len()
+        {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
+
+        Ok(Self {
+            recording,
+            coordination,
+            status,
         })
     }
 
@@ -107,19 +173,52 @@ impl RecordingWorkflow {
         Ok(ready)
     }
 
-    pub fn start_recording(&mut self) -> Result<(), RecordingWorkflowError> {
+    pub fn start_recording_with_signet(
+        &mut self,
+    ) -> Result<RecordingSyncSignet, RecordingWorkflowError> {
         if self.status != RecordingWorkflowStatus::Ready {
             return Err(RecordingWorkflowError::InvalidState);
         }
-        self.recording.start()?;
-        self.status = RecordingWorkflowStatus::Recording;
+        self.status = RecordingWorkflowStatus::Opening;
+        Ok(RecordingSyncSignet::Opening)
+    }
+
+    pub fn confirm_opening(
+        &mut self,
+        participant_id: &ParticipantId,
+    ) -> Result<bool, RecordingWorkflowError> {
+        if self.status != RecordingWorkflowStatus::Opening {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
+
+        let confirmed = self.coordination.confirm_opening(participant_id)?;
+        if confirmed {
+            self.recording.start()?;
+            self.status = RecordingWorkflowStatus::Recording;
+        }
+        Ok(confirmed)
+    }
+
+    pub fn start_recording(&mut self) -> Result<(), RecordingWorkflowError> {
+        self.start_recording_with_signet().map(|_| ())
+    }
+
+    pub fn request_stop(&self) -> Result<(), RecordingWorkflowError> {
+        if self.status != RecordingWorkflowStatus::Recording
+            || self.recording.status() != RecordingStatus::Recording
+        {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
         Ok(())
     }
 
-    pub fn request_stop(&mut self) -> Result<(), RecordingWorkflowError> {
-        if self.status != RecordingWorkflowStatus::Recording {
+    pub fn confirm_core_stop_persisted(&mut self) -> Result<(), RecordingWorkflowError> {
+        if self.status != RecordingWorkflowStatus::Recording
+            || self.recording.status() != RecordingStatus::Recording
+        {
             return Err(RecordingWorkflowError::InvalidState);
         }
+        self.recording.stop()?;
         self.status = RecordingWorkflowStatus::Stopping;
         Ok(())
     }
@@ -131,14 +230,8 @@ impl RecordingWorkflow {
         if self.status != RecordingWorkflowStatus::Stopping {
             return Err(RecordingWorkflowError::InvalidState);
         }
-        if !self.coordination.participants().contains(participant_id) {
-            return Err(RecordingWorkflowError::ParticipantNotSelected);
-        }
-        if self.acknowledged.contains(participant_id) {
-            return Err(RecordingWorkflowError::AlreadyAcknowledged);
-        }
-        self.acknowledged.push(participant_id.clone());
-        Ok(self.acknowledged.len() == self.coordination.participants().len())
+
+        Ok(self.coordination.acknowledge_stop(participant_id)?)
     }
 
     pub fn complete(
@@ -146,7 +239,8 @@ impl RecordingWorkflow {
         artifact_id: RecordingArtifactId,
     ) -> Result<(), RecordingWorkflowError> {
         if self.status != RecordingWorkflowStatus::Stopping
-            || self.acknowledged.len() != self.coordination.participants().len()
+            || self.coordination.stop_acknowledged_participants().len()
+                != self.coordination.participants().len()
         {
             return Err(RecordingWorkflowError::InvalidState);
         }
@@ -177,23 +271,41 @@ mod tests {
         .unwrap()
     }
 
-    // TEST-01
+    fn reach_opening(workflow: &mut RecordingWorkflow) {
+        workflow.begin_ready_phase().unwrap();
+        workflow.mark_ready(&participant("participant-a")).unwrap();
+        workflow.mark_ready(&participant("participant-b")).unwrap();
+    }
+
+    fn reach_recording(workflow: &mut RecordingWorkflow) {
+        reach_opening(workflow);
+        workflow.start_recording_with_signet().unwrap();
+        workflow
+            .confirm_opening(&participant("participant-a"))
+            .unwrap();
+        workflow
+            .confirm_opening(&participant("participant-b"))
+            .unwrap();
+    }
+
     #[test]
-    fn workflow_requires_all_ready_before_recording() {
+    fn workflow_requires_all_ready_before_opening() {
         let mut workflow = workflow();
         workflow.begin_ready_phase().unwrap();
         assert!(!workflow.mark_ready(&participant("participant-a")).unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::WaitingForReady);
         assert_eq!(
-            workflow.start_recording(),
+            workflow.start_recording_with_signet(),
             Err(RecordingWorkflowError::InvalidState)
         );
         assert!(workflow.mark_ready(&participant("participant-b")).unwrap());
-        workflow.start_recording().unwrap();
-        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        assert_eq!(
+            workflow.start_recording_with_signet(),
+            Ok(RecordingSyncSignet::Opening)
+        );
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Opening);
     }
 
-    // TEST-02
     #[test]
     fn workflow_requires_ready_phase_before_ready_reports() {
         let mut workflow = workflow();
@@ -203,31 +315,107 @@ mod tests {
         );
     }
 
-    // TEST-03
     #[test]
-    fn workflow_requires_recording_before_stop() {
+    fn opening_must_be_confirmed_by_every_participant_before_stable_recording() {
         let mut workflow = workflow();
-        workflow.begin_ready_phase().unwrap();
-        workflow.mark_ready(&participant("participant-a")).unwrap();
-        workflow.mark_ready(&participant("participant-b")).unwrap();
+        reach_opening(&mut workflow);
+        let signet = workflow.start_recording_with_signet().unwrap();
+
+        assert_eq!(signet, RecordingSyncSignet::Opening);
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Opening);
         assert_eq!(
             workflow.request_stop(),
             Err(RecordingWorkflowError::InvalidState)
         );
-        workflow.start_recording().unwrap();
-        workflow.request_stop().unwrap();
-        assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
+
+        assert!(
+            !workflow
+                .confirm_opening(&participant("participant-a"))
+                .unwrap()
+        );
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Opening);
+        assert_eq!(
+            workflow.confirm_opening(&participant("participant-a")),
+            Err(RecordingWorkflowError::Coordination(
+                RecordingCoordinationError::AlreadyOpeningConfirmed,
+            ))
+        );
+
+        assert!(
+            workflow
+                .confirm_opening(&participant("participant-b"))
+                .unwrap()
+        );
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
     }
 
-    // TEST-04
+    #[test]
+    fn opening_cannot_be_confirmed_before_it_is_triggered() {
+        let mut workflow = workflow();
+        reach_opening(&mut workflow);
+        assert_eq!(
+            workflow.confirm_opening(&participant("participant-a")),
+            Err(RecordingWorkflowError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn opening_confirmation_rejects_unselected_participant() {
+        let mut workflow = workflow();
+        reach_opening(&mut workflow);
+        workflow.start_recording_with_signet().unwrap();
+        assert_eq!(
+            workflow.confirm_opening(&participant("participant-c")),
+            Err(RecordingWorkflowError::Coordination(
+                RecordingCoordinationError::ParticipantNotSelected,
+            ))
+        );
+    }
+
+    #[test]
+    fn workflow_requires_recording_before_stop() {
+        let mut workflow = workflow();
+        reach_opening(&mut workflow);
+        workflow.start_recording_with_signet().unwrap();
+        assert_eq!(
+            workflow.request_stop(),
+            Err(RecordingWorkflowError::InvalidState)
+        );
+        workflow
+            .confirm_opening(&participant("participant-a"))
+            .unwrap();
+        assert_eq!(
+            workflow.request_stop(),
+            Err(RecordingWorkflowError::InvalidState)
+        );
+        workflow
+            .confirm_opening(&participant("participant-b"))
+            .unwrap();
+        workflow.request_stop().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        workflow.confirm_core_stop_persisted().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
+    }
+
+    #[test]
+    fn workflow_requires_core_stop_persistence_before_local_stop() {
+        let mut workflow = workflow();
+        reach_recording(&mut workflow);
+        workflow.request_stop().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
+        workflow.confirm_core_stop_persisted().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
+    }
+
     #[test]
     fn workflow_requires_all_stop_acknowledgements_before_completion() {
         let mut workflow = workflow();
-        workflow.begin_ready_phase().unwrap();
-        workflow.mark_ready(&participant("participant-a")).unwrap();
-        workflow.mark_ready(&participant("participant-b")).unwrap();
-        workflow.start_recording().unwrap();
+        reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
+        workflow.confirm_core_stop_persisted().unwrap();
         assert!(
             !workflow
                 .acknowledge_stop(&participant("participant-a"))
@@ -249,68 +437,99 @@ mod tests {
         assert!(workflow.is_complete());
     }
 
-    // TEST-05
     #[test]
     fn workflow_rejects_unselected_stop_acknowledgement() {
         let mut workflow = workflow();
-        workflow.begin_ready_phase().unwrap();
-        workflow.mark_ready(&participant("participant-a")).unwrap();
-        workflow.mark_ready(&participant("participant-b")).unwrap();
-        workflow.start_recording().unwrap();
+        reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
+        workflow.confirm_core_stop_persisted().unwrap();
         assert_eq!(
             workflow.acknowledge_stop(&participant("participant-c")),
-            Err(RecordingWorkflowError::ParticipantNotSelected)
+            Err(RecordingWorkflowError::Coordination(
+                RecordingCoordinationError::ParticipantNotSelected,
+            ))
         );
     }
 
-    // TEST-06
     #[test]
-    fn workflow_rejects_duplicate_stop_acknowledgement() {
+    fn workflow_treats_duplicate_stop_acknowledgement_as_idempotent() {
         let mut workflow = workflow();
-        workflow.begin_ready_phase().unwrap();
-        workflow.mark_ready(&participant("participant-a")).unwrap();
-        workflow.mark_ready(&participant("participant-b")).unwrap();
-        workflow.start_recording().unwrap();
+        reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
-        workflow
-            .acknowledge_stop(&participant("participant-a"))
-            .unwrap();
-        assert_eq!(
-            workflow.acknowledge_stop(&participant("participant-a")),
-            Err(RecordingWorkflowError::AlreadyAcknowledged)
-        );
-    }
-
-    // TEST-07
-    #[test]
-    fn workflow_can_reconstitute_and_return_existing_recording_state() {
-        let mut recording = Recording::new("recording-workflow-02");
-        recording.assign_participant(participant("participant-a"));
-        let mut workflow =
-            RecordingWorkflow::from_recording(recording.clone(), [participant("participant-a")])
-                .unwrap();
-
-        workflow.begin_ready_phase().unwrap();
-        assert!(workflow.mark_ready(&participant("participant-a")).unwrap());
-        workflow.start_recording().unwrap();
-        workflow.request_stop().unwrap();
+        workflow.confirm_core_stop_persisted().unwrap();
         assert!(
-            workflow
+            !workflow
                 .acknowledge_stop(&participant("participant-a"))
                 .unwrap()
         );
-        workflow
-            .complete(RecordingArtifactId::new("artifact-workflow-02"))
-            .unwrap();
+        assert!(
+            !workflow
+                .acknowledge_stop(&participant("participant-a"))
+                .unwrap()
+        );
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
+        assert!(
+            workflow
+                .acknowledge_stop(&participant("participant-b"))
+                .unwrap()
+        );
+    }
 
-        let result = workflow.into_recording();
-        assert_eq!(result.id(), recording.id());
-        assert_eq!(result.participant_id(), recording.participant_id());
-        assert_eq!(result.status(), RecordingStatus::Completed);
+    #[test]
+    fn workflow_reconstitutes_from_persisted_ready_state() {
+        let mut workflow = workflow();
+        reach_opening(&mut workflow);
+        let coordination = workflow.coordination().clone();
+        let recording = workflow.recording().clone();
+
+        let restored = RecordingWorkflow::from_persisted_state(recording, coordination).unwrap();
+        assert_eq!(restored.status(), RecordingWorkflowStatus::Ready);
+        assert_eq!(restored.coordination().ready_participants().len(), 2);
+    }
+
+    #[test]
+    fn workflow_reconstitutes_from_persisted_recording_state() {
+        let mut workflow = workflow();
+        reach_recording(&mut workflow);
+        let coordination = workflow.coordination().clone();
+        let recording = workflow.recording().clone();
+
+        let restored = RecordingWorkflow::from_persisted_state(recording, coordination).unwrap();
+        assert_eq!(restored.status(), RecordingWorkflowStatus::Recording);
         assert_eq!(
-            result.artifact_id().unwrap().value(),
-            "artifact-workflow-02"
+            restored
+                .coordination()
+                .opening_confirmed_participants()
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn workflow_reconstitutes_from_persisted_stopping_state() {
+        let mut workflow = workflow();
+        reach_recording(&mut workflow);
+        workflow.confirm_core_stop_persisted().unwrap();
+        let coordination = workflow.coordination().clone();
+        let recording = workflow.recording().clone();
+
+        let restored = RecordingWorkflow::from_persisted_state(recording, coordination).unwrap();
+        assert_eq!(restored.status(), RecordingWorkflowStatus::Stopping);
+    }
+
+    #[test]
+    fn workflow_reconstitution_rejects_mismatched_recording_id() {
+        let workflow = workflow();
+        let coordination = workflow.coordination().clone();
+        let recording = Recording::new("different-recording");
+
+        assert_eq!(
+            RecordingWorkflow::from_persisted_state(recording, coordination),
+            Err(RecordingWorkflowError::InvalidState)
         );
     }
 }
