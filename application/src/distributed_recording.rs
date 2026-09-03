@@ -19,6 +19,7 @@ pub enum DistributedRecordingError<E> {
     Workflow(RecordingWorkflowError),
     RecorderStart(CaptureStartError),
     Recorder(RecorderApplicationError),
+    CoordinationDiverged,
 }
 
 /// Application-level handle for one distributed recording start sequence.
