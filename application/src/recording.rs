@@ -8,9 +8,7 @@ use recorder::artifact::RecordingArtifact;
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
 use recorder::persistence::PersistenceProvider;
 
-use crate::distributed_recording::{
-    begin_distributed_recording, DistributedRecordingError,
-};
+use crate::distributed_recording::{begin_distributed_recording, DistributedRecordingError};
 use crate::recording_stop::{execute_recording_stop, ExecuteRecordingStopError};
 
 #[derive(Debug, PartialEq, Eq)]
