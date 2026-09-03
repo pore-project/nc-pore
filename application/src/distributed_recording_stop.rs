@@ -104,17 +104,19 @@ mod tests {
 
         recording.workflow_mut().mark_ready(&alice).unwrap();
         recording.workflow_mut().mark_ready(&bob).unwrap();
-        recording.workflow_mut().start_recording_with_signet().unwrap();
+        recording
+            .workflow_mut()
+            .start_recording_with_signet()
+            .unwrap();
         recording.workflow_mut().confirm_opening(&alice).unwrap();
         recording.workflow_mut().confirm_opening(&bob).unwrap();
         recording.workflow_mut().request_stop().unwrap();
-        recording.workflow_mut().confirm_core_stop_persisted().unwrap();
+        recording
+            .workflow_mut()
+            .confirm_core_stop_persisted()
+            .unwrap();
 
-        assert!(!acknowledge_distributed_recording_stop(
-            &mut recording,
-            &bob
-        )
-        .unwrap());
+        assert!(!acknowledge_distributed_recording_stop(&mut recording, &bob).unwrap());
         assert!(acknowledge_distributed_recording_stop(&mut recording, &alice).unwrap());
     }
 }
