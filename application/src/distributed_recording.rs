@@ -5,7 +5,7 @@ use nc_pore_core::recording::{
 };
 use nc_pore_core::role::ProductionAction;
 use nc_pore_core::session::repository::ProductionSessionRepository;
-use nc_pore_core::session::ProductionSessionError;
+use nc_pore_core::session::{ProductionSession, ProductionSessionError};
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration, SyncSignet};
 use recorder::persistence::PersistenceProvider;
@@ -19,16 +19,13 @@ pub enum DistributedRecordingError<E> {
     Workflow(RecordingWorkflowError),
     RecorderStart(CaptureStartError),
     Recorder(RecorderApplicationError),
-    CoordinationDiverged,
 }
 
 /// Application-level handle for one distributed recording start sequence.
 ///
-/// The participant set is selected and frozen by Core via
-/// `ProductionSession::begin_recording_by`. The workflow mirrors that same
-/// set for its local state machine; it does not invent a second participant
-/// set. READY remains a barrier: Opening can only be triggered after every
-/// selected recorder has reported READY.
+/// Core owns the persistent coordination state. The application workflow is
+/// reconstructed from that state after Core mutations instead of applying the
+/// same transition a second time.
 #[derive(Debug)]
 pub struct DistributedRecording {
     production_id: ProductionId,
@@ -56,6 +53,25 @@ impl DistributedRecording {
 
     pub fn workflow_mut(&mut self) -> &mut RecordingWorkflow {
         &mut self.workflow
+    }
+
+    fn rebuild_workflow_from_core(
+        &mut self,
+        session: &ProductionSession,
+    ) -> Result<(), RecordingWorkflowError> {
+        let recording = session
+            .recordings()
+            .iter()
+            .find(|recording| recording.id() == &self.recording_id)
+            .cloned()
+            .ok_or(RecordingWorkflowError::InvalidState)?;
+        let coordination = session
+            .recording_coordination()
+            .cloned()
+            .ok_or(RecordingWorkflowError::InvalidState)?;
+
+        self.workflow = RecordingWorkflow::from_persisted_state(recording, coordination)?;
+        Ok(())
     }
 
     /// Prepares one local recorder and only then records that participant as
@@ -107,7 +123,8 @@ impl DistributedRecording {
             .emit_sync_signet(opening)
             .map_err(DistributedRecordingError::Recorder)?;
 
-        confirm_distributed_recording_opening(repository, self, &self.actor.clone())
+        let actor = self.actor.clone();
+        confirm_distributed_recording_opening(repository, self, &actor)
     }
 
     /// Confirms Opening for a recorder that has already emitted/captured the
@@ -153,14 +170,22 @@ where
         .collect();
 
     session
-        .begin_recording_by(actor, recording_id, participants.clone())
+        .begin_recording_by(actor, recording_id, participants)
         .map_err(DistributedRecordingError::Session)?;
     repository
         .update(&session)
         .map_err(DistributedRecordingError::Repository)?;
 
-    let mut workflow = RecordingWorkflow::from_recording(recording, participants)
-        .map_err(DistributedRecordingError::Workflow)?;
+    let mut workflow = RecordingWorkflow::from_persisted_state(
+        recording,
+        session
+            .recording_coordination()
+            .cloned()
+            .ok_or(DistributedRecordingError::Workflow(
+                RecordingWorkflowError::InvalidState,
+            ))?,
+    )
+    .map_err(DistributedRecordingError::Workflow)?;
     workflow
         .begin_ready_phase()
         .map_err(DistributedRecordingError::Workflow)?;
@@ -216,9 +241,8 @@ where
     })
 }
 
-/// Records one participant's local READY state in Core and mirrors the same
-/// transition in the application workflow. The returned boolean is true only
-/// when the complete frozen participant set is READY.
+/// Records one participant's local READY state in Core. The application
+/// workflow is then rebuilt from Core's persisted coordination state.
 pub fn mark_distributed_recording_ready<R>(
     repository: &mut R,
     recording: &mut DistributedRecording,
@@ -239,21 +263,16 @@ where
         .update(&session)
         .map_err(DistributedRecordingError::Repository)?;
 
-    let workflow_ready = recording
-        .workflow_mut()
-        .mark_ready(participant)
+    recording
+        .rebuild_workflow_from_core(&session)
         .map_err(DistributedRecordingError::Workflow)?;
-
-    if core_ready != workflow_ready {
-        return Err(DistributedRecordingError::CoordinationDiverged);
-    }
 
     Ok(core_ready)
 }
 
-/// Persists one participant's Opening confirmation in Core and mirrors the
-/// same barrier in the local application workflow. Once the aggregate Opening
-/// barrier completes, Core advances the authoritative recording to Recording.
+/// Persists one participant's Opening confirmation in Core. Once the
+/// aggregate Opening barrier completes, Core advances the authoritative
+/// recording to Recording; the application workflow is rebuilt afterwards.
 pub fn confirm_distributed_recording_opening<R>(
     repository: &mut R,
     recording: &mut DistributedRecording,
@@ -270,35 +289,22 @@ where
     let core_opening_confirmed = session
         .confirm_recording_opening_by(participant, recording.recording_id())
         .map_err(DistributedRecordingError::Session)?;
+
+    if core_opening_confirmed {
+        session
+            .start_recording_by(participant, recording.recording_id())
+            .map_err(DistributedRecordingError::Session)?;
+    }
+
     repository
         .update(&session)
         .map_err(DistributedRecordingError::Repository)?;
 
-    let workflow_opening_confirmed = recording
-        .workflow_mut()
-        .confirm_opening(participant)
+    recording
+        .rebuild_workflow_from_core(&session)
         .map_err(DistributedRecordingError::Workflow)?;
 
-    if core_opening_confirmed != workflow_opening_confirmed {
-        return Err(DistributedRecordingError::CoordinationDiverged);
-    }
-
-    if !core_opening_confirmed {
-        return Ok(false);
-    }
-
-    let mut session = repository
-        .get(recording.production_id())
-        .map_err(DistributedRecordingError::Repository)?
-        .ok_or(DistributedRecordingError::SessionNotFound)?;
-    session
-        .start_recording_by(participant, recording.recording_id())
-        .map_err(DistributedRecordingError::Session)?;
-    repository
-        .update(&session)
-        .map_err(DistributedRecordingError::Repository)?;
-
-    Ok(true)
+    Ok(core_opening_confirmed)
 }
 
 #[cfg(test)]
