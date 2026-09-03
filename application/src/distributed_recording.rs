@@ -14,6 +14,7 @@ use recorder::persistence::PersistenceProvider;
 pub enum DistributedRecordingError<E> {
     SessionNotFound,
     RecordingNotFound,
+    RecordingCoordinationNotFound,
     Repository(E),
     Session(ProductionSessionError),
     Workflow(RecordingWorkflowError),
@@ -163,6 +164,46 @@ where
         .map_err(DistributedRecordingError::Workflow)?;
     workflow
         .begin_ready_phase()
+        .map_err(DistributedRecordingError::Workflow)?;
+
+    Ok(DistributedRecording {
+        production_id: production_id.clone(),
+        recording_id: recording_id.clone(),
+        actor: actor.clone(),
+        workflow,
+    })
+}
+
+/// Reconstitutes the application workflow from Core's persisted recording
+/// and coordination state. Core remains the source of truth; the workflow is
+/// rebuilt from that state rather than inventing a fresh participant set.
+pub fn reconstitute_distributed_recording<R>(
+    repository: &R,
+    production_id: &ProductionId,
+    actor: &ParticipantId,
+    recording_id: &RecordingId,
+) -> Result<DistributedRecording, DistributedRecordingError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    let session = repository
+        .get(production_id)
+        .map_err(DistributedRecordingError::Repository)?
+        .ok_or(DistributedRecordingError::SessionNotFound)?;
+
+    let recording = session
+        .recordings()
+        .iter()
+        .find(|recording| recording.id() == recording_id)
+        .cloned()
+        .ok_or(DistributedRecordingError::RecordingNotFound)?;
+
+    let coordination = session
+        .recording_coordination()
+        .cloned()
+        .ok_or(DistributedRecordingError::RecordingCoordinationNotFound)?;
+
+    let workflow = RecordingWorkflow::from_persisted_state(recording, coordination)
         .map_err(DistributedRecordingError::Workflow)?;
 
     Ok(DistributedRecording {
@@ -414,6 +455,66 @@ mod tests {
                 .recordings()[0]
                 .status(),
             nc_pore_core::recording::RecordingStatus::Recording
+        );
+    }
+
+    #[test]
+    fn reconstitute_uses_persisted_coordination_state() {
+        let (mut repository, production_id, alice, bob, recording_id) = fixture();
+        let mut recording =
+            begin_distributed_recording(&mut repository, &production_id, &alice, &recording_id)
+                .unwrap();
+
+        mark_distributed_recording_ready(&mut repository, &mut recording, &alice).unwrap();
+        mark_distributed_recording_ready(&mut repository, &mut recording, &bob).unwrap();
+        recording.trigger_opening().unwrap();
+        confirm_distributed_recording_opening(&mut repository, &mut recording, &alice).unwrap();
+
+        let restored = reconstitute_distributed_recording(
+            &repository,
+            &production_id,
+            &alice,
+            &recording_id,
+        )
+        .unwrap();
+
+        assert_eq!(
+            restored.workflow().status(),
+            nc_pore_core::recording::RecordingWorkflowStatus::Opening
+        );
+        assert_eq!(
+            restored
+                .workflow()
+                .coordination()
+                .ready_participants()
+                .len(),
+            2
+        );
+        assert_eq!(
+            restored
+                .workflow()
+                .coordination()
+                .opening_confirmed_participants(),
+            &[alice]
+        );
+        assert_eq!(restored.actor(), &alice);
+        assert_eq!(restored.recording_id(), &recording_id);
+
+        let _ = bob;
+    }
+
+    #[test]
+    fn reconstitute_requires_persisted_coordination() {
+        let (repository, production_id, alice, _, recording_id) = fixture();
+
+        assert_eq!(
+            reconstitute_distributed_recording(
+                &repository,
+                &production_id,
+                &alice,
+                &recording_id,
+            ),
+            Err(DistributedRecordingError::RecordingCoordinationNotFound)
         );
     }
 }
