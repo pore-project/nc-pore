@@ -102,8 +102,19 @@ where
         .request_stop()
         .map_err(ExecuteRecordingError::Workflow)?;
 
+    // ADR-071i: the persisted Core stop is the authoritative recording
+    // boundary. Closing is only a best-effort marker and must never be used as
+    // the lifecycle authority for reconnecting or late observers.
+    session
+        .stop_recording_by(actor, recording_id)
+        .map_err(ExecuteRecordingError::Session)?;
+    repository
+        .update(&session)
+        .map_err(ExecuteRecordingError::Repository)?;
+
     // ADR-068 / ADR-071i: Closing is optional and must be emitted while local
     // capture is still active, after the fachlicher stop and before technical stop.
+    // RecorderApplication deliberately treats Closing emission as best effort.
     if let Some(closing) = configuration.signets().closing() {
         recorder
             .emit_sync_signet(&closing)
