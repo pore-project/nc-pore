@@ -353,12 +353,8 @@ mod tests {
             recording.trigger_opening(),
             Ok(RecordingSyncSignet::Opening)
         );
-        assert!(!recording
-            .confirm_opening_for_participant(&alice)
-            .unwrap());
-        assert!(recording
-            .confirm_opening_for_participant(&bob)
-            .unwrap());
+        assert!(!recording.confirm_opening_for_participant(&alice).unwrap());
+        assert!(recording.confirm_opening_for_participant(&bob).unwrap());
         assert_eq!(
             recording.workflow().status(),
             nc_pore_core::recording::RecordingWorkflowStatus::Recording
