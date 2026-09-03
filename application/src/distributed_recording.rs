@@ -1,6 +1,8 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::recording::{RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError};
+use nc_pore_core::recording::{
+    RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError,
+};
 use nc_pore_core::role::ProductionAction;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::{ProductionSession, ProductionSessionError};
@@ -176,23 +178,40 @@ mod tests {
         }
 
         fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
-            Ok(self.sessions.iter().find(|session| &session.id == id).cloned())
+            Ok(self
+                .sessions
+                .iter()
+                .find(|session| &session.id == id)
+                .cloned())
         }
     }
 
-    fn fixture() -> (InMemorySessions, ProductionId, ParticipantId, ParticipantId, RecordingId) {
+    fn fixture() -> (
+        InMemorySessions,
+        ProductionId,
+        ParticipantId,
+        ParticipantId,
+        RecordingId,
+    ) {
         let production_id = ProductionId::new("production-001");
         let alice = ParticipantId::new("alice");
         let bob = ParticipantId::new("bob");
         let recording_id = RecordingId::new("recording-001");
-        let mut session = ProductionSession::new_with_actor(production_id.clone(), Some(alice.clone()));
+        let mut session = ProductionSession::new_with_actor(
+            production_id.clone(),
+            Some(alice.clone()),
+        );
 
         session
             .add_participation_by(
                 &alice,
                 Participation::with_roles(
                     alice.clone(),
-                    [ParticipantRole::Owner, ParticipantRole::Producer, ParticipantRole::Participant],
+                    [
+                        ParticipantRole::Owner,
+                        ParticipantRole::Producer,
+                        ParticipantRole::Participant,
+                    ],
                 ),
             )
             .unwrap();
@@ -207,7 +226,9 @@ mod tests {
             .add_recording_by(&alice, Recording::new(recording_id.value()))
             .unwrap();
 
-        let mut repository = InMemorySessions { sessions: Vec::new() };
+        let mut repository = InMemorySessions {
+            sessions: Vec::new(),
+        };
         repository.store(&session).unwrap();
         (repository, production_id, alice, bob, recording_id)
     }
@@ -251,13 +272,26 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!mark_distributed_recording_ready(&mut repository, &mut recording, &alice).unwrap());
+        assert!(!mark_distributed_recording_ready(
+            &mut repository,
+            &mut recording,
+            &alice,
+        )
+        .unwrap());
         assert_eq!(
             recording.trigger_opening(),
             Err(RecordingWorkflowError::InvalidState)
         );
 
-        assert!(mark_distributed_recording_ready(&mut repository, &mut recording, &bob).unwrap());
-        assert_eq!(recording.trigger_opening(), Ok(RecordingSyncSignet::Opening));
+        assert!(mark_distributed_recording_ready(
+            &mut repository,
+            &mut recording,
+            &bob,
+        )
+        .unwrap());
+        assert_eq!(
+            recording.trigger_opening(),
+            Ok(RecordingSyncSignet::Opening)
+        );
     }
 }
