@@ -9,8 +9,7 @@ use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration
 use recorder::persistence::PersistenceProvider;
 
 use crate::distributed_recording::{
-    begin_distributed_recording, mark_distributed_recording_ready, DistributedRecording,
-    DistributedRecordingError,
+    begin_distributed_recording, DistributedRecordingError,
 };
 use crate::recording_stop::{execute_recording_stop, ExecuteRecordingStopError};
 
@@ -76,24 +75,14 @@ where
     // Local technical readiness must be established before this participant
     // can contribute READY to Core's distributed barrier.
     distributed
-        .prepare_local_recorder(recorder, configuration)
-        .map_err(|error| match error {
-            DistributedRecordingError::RecorderStart(error) => {
-                ExecuteRecordingError::RecorderStart(error)
-            }
-            DistributedRecordingError::Recorder(error) => ExecuteRecordingError::Recorder(error),
-            _ => unreachable!("local recorder preparation cannot return this error"),
-        })?;
-
-    let all_ready = mark_distributed_recording_ready(repository, &mut distributed, actor)
+        .prepare_local_recorder(repository, actor, recorder, configuration)
         .map_err(map_distributed_error)?;
-    debug_assert!(all_ready);
 
     // For this synchronous application entry point, the actor is the only
     // locally available recorder. The distributed coordinator nevertheless
     // derives the participant set from Core and refuses Opening unless all
     // frozen participants are READY. A future remote-client path calls the
-    // same mark_distributed_recording_ready operation for each remote recorder.
+    // same preparation operation for each remote recorder.
     let opening = distributed
         .trigger_opening()
         .map_err(ExecuteRecordingError::Workflow)?;
