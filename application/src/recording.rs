@@ -1,11 +1,13 @@
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::recording::{RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError};
+use nc_pore_core::recording::{
+    RecordingId, RecordingSyncSignet, RecordingWorkflow, RecordingWorkflowError,
+};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
-use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
 use recorder::artifact::RecordingArtifact;
+use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration};
 use recorder::persistence::PersistenceProvider;
 
 use crate::recording_stop::{execute_recording_stop, ExecuteRecordingStopError};
