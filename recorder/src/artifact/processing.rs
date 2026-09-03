@@ -1,10 +1,12 @@
 //! Recording Artifact processing boundary.
 //!
 //! This module transforms completed CaptureResult instances
-//! into managed RecordingArtifact instances.
+//! into managed RecordingArtifact instances through the explicit
+//! local preservation boundary.
 //!
 //! It connects:
 //! - CaptureResult
+//! - CapturePreserver
 //! - RecordingArtifactFactory
 //! - ArtifactCoordinator
 //! - originating domain recording association
@@ -24,12 +26,14 @@ use crate::artifact::coordination::ArtifactCoordinator;
 use crate::artifact::factory::RecordingArtifactFactory;
 use crate::audio::CaptureResult;
 use crate::persistence::{PersistenceProvider, PersistenceStoreError};
+use crate::preservation::CapturePreserver;
 use crate::session::RecordingSessionId;
 
 /// Processes completed capture results into recording artifacts.
 ///
-/// The processor connects capture completion with artifact management
-/// while keeping workflow coordination independent from artifact details.
+/// The processor first crosses the capture -> preservation boundary. Artifact
+/// creation therefore consumes an owned preservation snapshot rather than
+/// treating the raw capture result as if it were already preserved.
 pub struct RecordingArtifactProcessor<P>
 where
     P: PersistenceProvider,
@@ -58,7 +62,9 @@ where
         recording_session_id: RecordingSessionId,
         association: RecordingArtifactAssociation,
     ) -> Result<crate::artifact::RecordingArtifact, PersistenceStoreError> {
-        let mut artifact = RecordingArtifactFactory::create(capture_result, recording_session_id);
+        let preserved_capture = CapturePreserver::preserve(capture_result);
+        let mut artifact =
+            RecordingArtifactFactory::create(preserved_capture, recording_session_id);
 
         artifact.set_domain_association(association.production_id(), association.recording_id());
         artifact.make_available();

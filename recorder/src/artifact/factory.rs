@@ -1,11 +1,12 @@
 //! Recording Artifact factory.
 //!
 //! This module creates RecordingArtifact instances
-//! from completed capture results.
+//! from preserved local captures.
 //!
 //! It intentionally does not contain:
 //! - workflow coordination
 //! - capture logic
+//! - preservation logic
 //! - persistence logic
 //! - registry management
 //!
@@ -14,32 +15,31 @@
 //! - ADR-058 Recording Payload Representation
 
 use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
-use crate::audio::{
-    CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat,
-};
+use crate::preservation::PreservedCapture;
 use crate::session::RecordingSessionId;
 
-/// Creates RecordingArtifact instances.
-///
-/// The factory encapsulates artifact construction
-/// and keeps creation logic separate from workflow coordination.
+/// Creates RecordingArtifact instances from preserved captures.
 pub struct RecordingArtifactFactory;
 
 impl RecordingArtifactFactory {
-    /// Creates a new RecordingArtifact from a capture result.
+    /// Creates a new RecordingArtifact from a preserved local capture.
     pub fn create(
-        capture_result: CaptureResult,
+        preserved_capture: PreservedCapture,
         recording_session_id: RecordingSessionId,
     ) -> RecordingArtifact {
-        let mut artifact = RecordingArtifact::new(capture_result.id(), recording_session_id);
+        let mut artifact = RecordingArtifact::new(preserved_capture.id(), recording_session_id);
 
-        for capture_track in capture_result.tracks() {
+        for capture_track in preserved_capture.tracks() {
             let mut recording_track = match capture_track.configuration() {
                 Some(configuration) => {
                     RecordingTrack::with_configuration(capture_track.id.value(), configuration)
                 }
                 None => RecordingTrack::new(capture_track.id.value()),
             };
+
+            if let Some(provenance) = capture_track.source_provenance() {
+                recording_track.set_source_provenance(provenance.clone());
+            }
 
             for capture_chunk in capture_track.chunks() {
                 // The logical reference remains independent from the concrete
@@ -68,21 +68,22 @@ impl RecordingArtifactFactory {
 mod tests {
     use super::*;
     use crate::audio::{
-        CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat,
+        CaptureChunk, CaptureResult, CaptureSourceProvenance, CaptureTrack, RecordingConfiguration,
+        SampleFormat,
     };
+    use crate::preservation::CapturePreserver;
 
     // TEST-22
     //
     // Protects ADR-050:
     // Artifact creation is encapsulated in the factory.
     #[test]
-    fn factory_creates_artifact_from_capture_result() {
+    fn factory_creates_artifact_from_preserved_capture() {
         let capture_result = CaptureResult::new("capture-001");
+        let preserved = CapturePreserver::preserve(capture_result);
 
-        let artifact = RecordingArtifactFactory::create(
-            capture_result,
-            RecordingSessionId::new("session-001"),
-        );
+        let artifact =
+            RecordingArtifactFactory::create(preserved, RecordingSessionId::new("session-001"));
 
         assert_eq!(artifact.id.value(), "capture-001");
         assert_eq!(artifact.recording_session_id.value(), "session-001");
@@ -104,9 +105,10 @@ mod tests {
 
         capture.add_track(host);
         capture.add_track(guest);
+        let preserved = CapturePreserver::preserve(capture);
 
         let artifact =
-            RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
+            RecordingArtifactFactory::create(preserved, RecordingSessionId::new("session-001"));
 
         assert_eq!(artifact.tracks().len(), 2);
         assert_eq!(artifact.tracks()[0].id.value(), "track-host");
@@ -131,9 +133,10 @@ mod tests {
         let mut track = CaptureTrack::with_configuration("track-host", configuration);
         track.add_chunk(CaptureChunk::with_payload(1, vec![10, 20, 30]));
         capture.add_track(track);
+        let preserved = CapturePreserver::preserve(capture);
 
         let artifact =
-            RecordingArtifactFactory::create(capture, RecordingSessionId::new("session-001"));
+            RecordingArtifactFactory::create(preserved, RecordingSessionId::new("session-001"));
 
         let recording_track = &artifact.tracks()[0];
         assert_eq!(recording_track.configuration(), Some(configuration));
@@ -145,5 +148,26 @@ mod tests {
         );
         assert_eq!(chunk.payload().data(), &[10, 20, 30]);
         assert_eq!(chunk.payload().size_bytes(), 3);
+    }
+
+    // TEST-41
+    //
+    // Protects the host-neutral capture boundary:
+    // source provenance is transferred unchanged from capture to artifact.
+    #[test]
+    fn factory_transfers_source_provenance() {
+        let provenance = CaptureSourceProvenance::new("device-1", 1_762_000_000_000)
+            .with_label("Microphone")
+            .ended_at(1_762_000_005_000);
+        let mut capture = CaptureResult::new("capture-001");
+        let mut track = CaptureTrack::new("track-host");
+        track.set_source_provenance(provenance.clone());
+        capture.add_track(track);
+        let preserved = CapturePreserver::preserve(capture);
+
+        let artifact =
+            RecordingArtifactFactory::create(preserved, RecordingSessionId::new("session-001"));
+
+        assert_eq!(artifact.tracks()[0].source_provenance(), Some(&provenance));
     }
 }
