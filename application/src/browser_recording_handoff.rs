@@ -188,9 +188,16 @@ mod tests {
         assert_eq!(artifact.id.value(), "recording-001");
         assert_eq!(artifact.recording_session_id.value(), "session-001");
         assert_eq!(artifact.tracks().len(), 1);
-        assert_eq!(artifact.tracks()[0].chunks()[0].payload().data(), &[9, 8, 7]);
         assert_eq!(
-            artifact.tracks()[0].chunks()[0].payload().reference().value(),
+            artifact.tracks()[0].chunks()[0].payload().data(),
+            &[9, 8, 7]
+        );
+        assert_eq!(
+            artifact.tracks()[0]
+                .chunks()[0]
+                .payload()
+                .reference()
+                .value(),
             "browser-track/chunk-000001"
         );
     }
