@@ -6,7 +6,7 @@ use crate::participant::ParticipantId;
 use crate::participation::Participation;
 use crate::recording::{
     Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError, RecordingId,
-    RecordingLifecycleError,
+    RecordingLifecycleError, RecordingStatus,
 };
 use crate::role::ProductionAction;
 
@@ -296,6 +296,49 @@ impl ProductionSession {
         Ok(())
     }
 
+    /// Persists the fachliche recording stop before any optional Closing
+    /// synchronization signet is attempted. This is the authoritative stop
+    /// boundary for reconnecting or late observers; Closing is only a
+    /// best-effort technical marker and never replaces this transition.
+    pub fn stop_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
+        if self.status != ProductionStatus::Active {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        if recording.status() != RecordingStatus::Recording {
+            return Err(ProductionSessionError::RecordingLifecycle(
+                RecordingLifecycleError::InvalidTransition {
+                    from: recording.status(),
+                    to: RecordingStatus::Stopped,
+                },
+            ));
+        }
+
+        recording
+            .stop()
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingStopped,
+            Some(recording_id.value().to_owned()),
+        );
+
+        Ok(())
+    }
+
     pub fn complete_recording_by(
         &mut self,
         actor: &ParticipantId,
@@ -362,6 +405,12 @@ mod tests {
             )
             .unwrap();
         owner
+    }
+
+    fn add_recording(session: &mut ProductionSession, owner: &ParticipantId, id: &str) {
+        session
+            .add_recording_by(owner, Recording::new(id))
+            .unwrap();
     }
 
     #[test]
@@ -545,15 +594,102 @@ mod tests {
         let mut session = create_test_session();
         let owner = add_owner(&mut session);
         session.start_by(&owner).unwrap();
+        add_recording(&mut session, &owner, "recording-001");
 
-        session
-            .add_recording_by(&owner, Recording::new("recording-001"))
-            .unwrap();
         session
             .start_recording_by(&owner, &RecordingId::new("recording-001"))
             .unwrap();
 
         assert_eq!(session.recordings()[0].participant_id(), Some(&owner));
+    }
+
+    #[test]
+    fn recording_stop_persists_stopped_state_and_activity() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        add_recording(&mut session, &owner, "recording-stop-001");
+        let recording_id = RecordingId::new("recording-stop-001");
+
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Stopped);
+        assert_eq!(
+            session.activities().last().unwrap().activity_type,
+            ActivityType::RecordingStopped
+        );
+        assert_eq!(
+            session.activities().last().unwrap().target.as_deref(),
+            Some("recording-stop-001")
+        );
+    }
+
+    #[test]
+    fn stopped_recording_cannot_be_stopped_again() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        add_recording(&mut session, &owner, "recording-stop-002");
+        let recording_id = RecordingId::new("recording-stop-002");
+
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        assert_eq!(
+            session.stop_recording_by(&owner, &recording_id),
+            Err(ProductionSessionError::RecordingLifecycle(
+                RecordingLifecycleError::InvalidTransition {
+                    from: RecordingStatus::Stopped,
+                    to: RecordingStatus::Stopped,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn stopped_recording_can_complete_with_artifact() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        add_recording(&mut session, &owner, "recording-stop-003");
+        let recording_id = RecordingId::new("recording-stop-003");
+
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+        session
+            .complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("artifact-stop-003"),
+            )
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Completed);
+    }
+
+    #[test]
+    fn recording_cannot_complete_without_persisted_stop() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        add_recording(&mut session, &owner, "recording-stop-004");
+        let recording_id = RecordingId::new("recording-stop-004");
+        session.start_recording_by(&owner, &recording_id).unwrap();
+
+        assert_eq!(
+            session.complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("artifact-stop-004"),
+            ),
+            Err(ProductionSessionError::RecordingLifecycle(
+                RecordingLifecycleError::InvalidTransition {
+                    from: RecordingStatus::Recording,
+                    to: RecordingStatus::Completed,
+                }
+            ))
+        );
     }
 
     // TEST-10
