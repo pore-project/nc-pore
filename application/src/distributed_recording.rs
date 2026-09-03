@@ -197,10 +197,8 @@ mod tests {
         let alice = ParticipantId::new("alice");
         let bob = ParticipantId::new("bob");
         let recording_id = RecordingId::new("recording-001");
-        let mut session = ProductionSession::new_with_actor(
-            production_id.clone(),
-            Some(alice.clone()),
-        );
+        let mut session =
+            ProductionSession::new_with_actor(production_id.clone(), Some(alice.clone()));
 
         session
             .add_participation_by(
@@ -237,13 +235,9 @@ mod tests {
     fn begin_uses_core_participant_set_for_distributed_recording() {
         let (mut repository, production_id, alice, bob, recording_id) = fixture();
 
-        let recording = begin_distributed_recording(
-            &mut repository,
-            &production_id,
-            &alice,
-            &recording_id,
-        )
-        .unwrap();
+        let recording =
+            begin_distributed_recording(&mut repository, &production_id, &alice, &recording_id)
+                .unwrap();
 
         assert_eq!(
             recording.workflow().coordination().participants(),
@@ -264,31 +258,19 @@ mod tests {
     #[test]
     fn opening_waits_for_bob_ready() {
         let (mut repository, production_id, alice, bob, recording_id) = fixture();
-        let mut recording = begin_distributed_recording(
-            &mut repository,
-            &production_id,
-            &alice,
-            &recording_id,
-        )
-        .unwrap();
+        let mut recording =
+            begin_distributed_recording(&mut repository, &production_id, &alice, &recording_id)
+                .unwrap();
 
-        assert!(!mark_distributed_recording_ready(
-            &mut repository,
-            &mut recording,
-            &alice,
-        )
-        .unwrap());
+        assert!(
+            !mark_distributed_recording_ready(&mut repository, &mut recording, &alice,).unwrap()
+        );
         assert_eq!(
             recording.trigger_opening(),
             Err(RecordingWorkflowError::InvalidState)
         );
 
-        assert!(mark_distributed_recording_ready(
-            &mut repository,
-            &mut recording,
-            &bob,
-        )
-        .unwrap());
+        assert!(mark_distributed_recording_ready(&mut repository, &mut recording, &bob,).unwrap());
         assert_eq!(
             recording.trigger_opening(),
             Ok(RecordingSyncSignet::Opening)
