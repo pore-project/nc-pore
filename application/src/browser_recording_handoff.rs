@@ -284,12 +284,14 @@ mod tests {
         );
         let mut provider = InMemoryPersistenceProvider::new();
 
-        assert_eq!(
-            handoff.persist(RecordingSessionId::new("session-003"), &mut provider),
+        let result = handoff.persist(RecordingSessionId::new("session-003"), &mut provider);
+
+        assert!(matches!(
+            result,
             Err(BrowserRecordingPersistenceError::Handoff(
                 BrowserRecordingHandoffError::EmptyPayload
             ))
-        );
+        ));
         assert!(matches!(
             provider.load("recording-003"),
             PersistenceLoadResult::NotFound
