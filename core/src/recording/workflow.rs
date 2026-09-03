@@ -136,8 +136,28 @@ impl RecordingWorkflow {
         self.start_recording_with_signet().map(|_| ())
     }
 
-    pub fn request_stop(&mut self) -> Result<(), RecordingWorkflowError> {
-        if self.status != RecordingWorkflowStatus::Recording {
+    /// Validates that the workflow is at the stable Recording boundary and
+    /// accepts a fachliche stop request without mutating local lifecycle state.
+    ///
+    /// The actual domain transition is deliberately deferred until the
+    /// authoritative Core `RECORDING_STOPPED` state has been persisted. This
+    /// keeps a failed repository update retryable and prevents local workflow
+    /// state from claiming `Stopping` while Core still says `Recording`.
+    pub fn request_stop(&self) -> Result<(), RecordingWorkflowError> {
+        if self.status != RecordingWorkflowStatus::Recording
+            || self.recording.status() != RecordingStatus::Recording
+        {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
+        Ok(())
+    }
+
+    /// Applies the local/domain stop transition after the authoritative Core
+    /// stop has been successfully persisted.
+    pub fn confirm_core_stop_persisted(&mut self) -> Result<(), RecordingWorkflowError> {
+        if self.status != RecordingWorkflowStatus::Recording
+            || self.recording.status() != RecordingStatus::Recording
+        {
             return Err(RecordingWorkflowError::InvalidState);
         }
         self.recording.stop()?;
@@ -204,6 +224,12 @@ mod tests {
         workflow.mark_ready(&participant("participant-b")).unwrap();
     }
 
+    fn reach_recording(workflow: &mut RecordingWorkflow) {
+        reach_opening(workflow);
+        workflow.start_recording_with_signet().unwrap();
+        workflow.confirm_opening().unwrap();
+    }
+
     #[test]
     fn workflow_requires_all_ready_before_opening() {
         let mut workflow = workflow();
@@ -259,6 +285,36 @@ mod tests {
     }
 
     #[test]
+    fn workflow_stop_request_does_not_advance_before_core_persistence() {
+        let mut workflow = workflow();
+        reach_recording(&mut workflow);
+
+        workflow.request_stop().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
+
+        workflow.confirm_core_stop_persisted().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
+    }
+
+    #[test]
+    fn failed_core_persistence_leaves_workflow_retryable() {
+        let mut workflow = workflow();
+        reach_recording(&mut workflow);
+
+        workflow.request_stop().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
+
+        // A repository failure is represented by not applying the confirmation;
+        // the workflow remains at the same retryable boundary.
+        workflow.request_stop().unwrap();
+        assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
+    }
+
+    #[test]
     fn workflow_requires_recording_before_stop() {
         let mut workflow = workflow();
         reach_opening(&mut workflow);
@@ -269,6 +325,7 @@ mod tests {
         );
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
+        workflow.confirm_core_stop_persisted().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
         assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
     }
@@ -276,25 +333,16 @@ mod tests {
     #[test]
     fn workflow_requires_all_stop_acknowledgements_before_completion() {
         let mut workflow = workflow();
-        reach_opening(&mut workflow);
-        workflow.start_recording_with_signet().unwrap();
-        workflow.confirm_opening().unwrap();
+        reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
-        assert!(
-            !workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
+        workflow.confirm_core_stop_persisted().unwrap();
+        assert!(!workflow.acknowledge_stop(&participant("participant-a")).unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
         assert_eq!(
             workflow.complete(RecordingArtifactId::new("artifact-workflow-01")),
             Err(RecordingWorkflowError::InvalidState)
         );
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-b"))
-                .unwrap()
-        );
+        assert!(workflow.acknowledge_stop(&participant("participant-b")).unwrap());
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-01"))
             .unwrap();
@@ -304,10 +352,9 @@ mod tests {
     #[test]
     fn workflow_rejects_unselected_stop_acknowledgement() {
         let mut workflow = workflow();
-        reach_opening(&mut workflow);
-        workflow.start_recording_with_signet().unwrap();
-        workflow.confirm_opening().unwrap();
+        reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
+        workflow.confirm_core_stop_persisted().unwrap();
         assert_eq!(
             workflow.acknowledge_stop(&participant("participant-c")),
             Err(RecordingWorkflowError::ParticipantNotSelected)
@@ -317,13 +364,10 @@ mod tests {
     #[test]
     fn workflow_rejects_duplicate_stop_acknowledgement() {
         let mut workflow = workflow();
-        reach_opening(&mut workflow);
-        workflow.start_recording_with_signet().unwrap();
-        workflow.confirm_opening().unwrap();
+        reach_recording(&mut workflow);
         workflow.request_stop().unwrap();
-        workflow
-            .acknowledge_stop(&participant("participant-a"))
-            .unwrap();
+        workflow.confirm_core_stop_persisted().unwrap();
+        workflow.acknowledge_stop(&participant("participant-a")).unwrap();
         assert_eq!(
             workflow.acknowledge_stop(&participant("participant-a")),
             Err(RecordingWorkflowError::AlreadyAcknowledged)
@@ -343,11 +387,8 @@ mod tests {
         workflow.start_recording_with_signet().unwrap();
         workflow.confirm_opening().unwrap();
         workflow.request_stop().unwrap();
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
+        workflow.confirm_core_stop_persisted().unwrap();
+        assert!(workflow.acknowledge_stop(&participant("participant-a")).unwrap());
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-02"))
             .unwrap();
