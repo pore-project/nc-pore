@@ -200,9 +200,6 @@ impl ProductionSession {
         Ok(())
     }
 
-    /// Begins the coordinated recording handshake for a fixed set of
-    /// recording participants. The participant set is frozen for this start
-    /// attempt. Audio capture and sync-signet emission remain outside Core.
     pub fn begin_recording_by(
         &mut self,
         actor: &ParticipantId,
@@ -241,9 +238,6 @@ impl ProductionSession {
         Ok(())
     }
 
-    /// Records that one selected participant has actually started local
-    /// capture. Returns `true` when all selected participants are ready and
-    /// the opening-signet boundary may now be emitted by the outer layer.
     pub fn mark_recording_ready_by(
         &mut self,
         actor: &ParticipantId,
@@ -408,9 +402,7 @@ mod tests {
     }
 
     fn add_recording(session: &mut ProductionSession, owner: &ParticipantId, id: &str) {
-        session
-            .add_recording_by(owner, Recording::new(id))
-            .unwrap();
+        session.add_recording_by(owner, Recording::new(id)).unwrap();
     }
 
     #[test]
@@ -692,7 +684,6 @@ mod tests {
         );
     }
 
-    // TEST-10
     #[test]
     fn owner_can_begin_recording_for_fixed_participant_set() {
         let mut session = create_test_session();
@@ -724,7 +715,6 @@ mod tests {
         );
     }
 
-    // TEST-11
     #[test]
     fn recording_participant_set_rejects_unselected_participant() {
         let mut session = create_test_session();
@@ -761,7 +751,6 @@ mod tests {
         );
     }
 
-    // TEST-12
     #[test]
     fn opening_boundary_becomes_ready_only_after_all_selected_participants_report_ready() {
         let mut session = create_test_session();
@@ -793,7 +782,6 @@ mod tests {
         assert!(session.recording_coordination().unwrap().is_ready());
     }
 
-    // TEST-13
     #[test]
     fn recording_cannot_be_started_twice_while_coordination_is_active() {
         let mut session = create_test_session();
@@ -805,7 +793,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            session.begin_recording_by(&owner, &RecordingId::new("recording-006"), [owner.clone()]),
+            session.begin_recording_by(
+                &owner,
+                &RecordingId::new("recording-006"),
+                [owner.clone()]
+            ),
             Err(ProductionSessionError::RecordingCoordinationAlreadyActive)
         );
     }
