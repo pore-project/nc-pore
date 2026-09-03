@@ -470,13 +470,9 @@ mod tests {
         recording.trigger_opening().unwrap();
         confirm_distributed_recording_opening(&mut repository, &mut recording, &alice).unwrap();
 
-        let restored = reconstitute_distributed_recording(
-            &repository,
-            &production_id,
-            &alice,
-            &recording_id,
-        )
-        .unwrap();
+        let restored =
+            reconstitute_distributed_recording(&repository, &production_id, &alice, &recording_id)
+                .unwrap();
 
         assert_eq!(
             restored.workflow().status(),
@@ -499,8 +495,6 @@ mod tests {
         );
         assert_eq!(restored.actor(), &alice);
         assert_eq!(restored.recording_id(), &recording_id);
-
-        let _ = bob;
     }
 
     #[test]
@@ -508,12 +502,7 @@ mod tests {
         let (repository, production_id, alice, _, recording_id) = fixture();
 
         assert_eq!(
-            reconstitute_distributed_recording(
-                &repository,
-                &production_id,
-                &alice,
-                &recording_id,
-            ),
+            reconstitute_distributed_recording(&repository, &production_id, &alice, &recording_id,),
             Err(DistributedRecordingError::RecordingCoordinationNotFound)
         );
     }
