@@ -193,8 +193,7 @@ mod tests {
             &[9, 8, 7]
         );
         assert_eq!(
-            artifact.tracks()[0]
-                .chunks()[0]
+            artifact.tracks()[0].chunks()[0]
                 .payload()
                 .reference()
                 .value(),
