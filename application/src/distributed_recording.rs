@@ -5,7 +5,7 @@ use nc_pore_core::recording::{
 };
 use nc_pore_core::role::ProductionAction;
 use nc_pore_core::session::repository::ProductionSessionRepository;
-use nc_pore_core::session::{ProductionSession, ProductionSessionError};
+use nc_pore_core::session::ProductionSessionError;
 use recorder::application::{RecorderApplication, RecorderApplicationError};
 use recorder::audio::{CaptureProvider, CaptureStartError, RecordingConfiguration, SyncSignet};
 use recorder::persistence::PersistenceProvider;
@@ -307,6 +307,7 @@ mod tests {
     use nc_pore_core::participation::Participation;
     use nc_pore_core::recording::Recording;
     use nc_pore_core::role::ParticipantRole;
+    use nc_pore_core::session::ProductionSession;
 
     struct InMemorySessions {
         sessions: Vec<ProductionSession>,
@@ -493,7 +494,7 @@ mod tests {
                 .workflow()
                 .coordination()
                 .opening_confirmed_participants(),
-            &[alice]
+            &[alice.clone()]
         );
         assert_eq!(restored.actor(), &alice);
         assert_eq!(restored.recording_id(), &recording_id);
@@ -503,11 +504,17 @@ mod tests {
     fn reconstitute_requires_persisted_coordination() {
         let (repository, production_id, alice, _, recording_id) = fixture();
 
+        let error = reconstitute_distributed_recording(
+            &repository,
+            &production_id,
+            &alice,
+            &recording_id,
+        )
+        .unwrap_err();
+
         assert_eq!(
-            reconstitute_distributed_recording(&repository, &production_id, &alice, &recording_id,),
-            Err(DistributedRecordingError::Workflow(
-                RecordingWorkflowError::InvalidState,
-            ))
+            error,
+            DistributedRecordingError::Workflow(RecordingWorkflowError::InvalidState)
         );
     }
 }
