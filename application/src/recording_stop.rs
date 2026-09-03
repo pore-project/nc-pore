@@ -41,7 +41,8 @@ where
     C: CaptureProvider,
     P: PersistenceProvider,
 {
-    let mut coordinator = RecordingStopCoordinator::new(nc_pore_core::recording::RecordingStopMode::Host);
+    let mut coordinator =
+        RecordingStopCoordinator::new(nc_pore_core::recording::RecordingStopMode::Host);
     coordinator
         .persist_core_stop()
         .map_err(ExecuteRecordingStopError::Coordinator)?;
