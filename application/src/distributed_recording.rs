@@ -55,7 +55,7 @@ impl DistributedRecording {
         &mut self.workflow
     }
 
-    fn rebuild_workflow_from_core(
+    pub(crate) fn refresh_workflow_from_core(
         &mut self,
         session: &ProductionSession,
     ) -> Result<(), RecordingWorkflowError> {
@@ -256,7 +256,7 @@ where
         .map_err(DistributedRecordingError::Repository)?;
 
     recording
-        .rebuild_workflow_from_core(&session)
+        .refresh_workflow_from_core(&session)
         .map_err(DistributedRecordingError::Workflow)?;
 
     Ok(core_ready)
@@ -293,7 +293,7 @@ where
         .map_err(DistributedRecordingError::Repository)?;
 
     recording
-        .rebuild_workflow_from_core(&session)
+        .refresh_workflow_from_core(&session)
         .map_err(DistributedRecordingError::Workflow)?;
 
     Ok(core_opening_confirmed)
