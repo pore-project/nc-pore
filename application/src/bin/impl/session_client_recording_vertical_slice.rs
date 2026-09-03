@@ -47,7 +47,8 @@ fn handle(mut stream: TcpStream, state: &mut State) {
     let body = sections.next().unwrap_or_default();
     let mut line = head.lines().next().unwrap_or_default().split_whitespace();
     let method = line.next().unwrap_or_default();
-    let path = line.next().unwrap_or_default();
+    let target = line.next().unwrap_or_default();
+    let path = target.split_once('?').map_or(target, |(path, _)| path);
     let result = if method == "GET" && path == "/" { (200, "text/html; charset=utf-8", HTML.to_owned()) }
     else if method == "GET" && path.starts_with("/api/state") { state_json(state) }
     else if method == "POST" && path.ends_with("/join") { join(state, body) }
