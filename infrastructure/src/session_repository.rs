@@ -36,7 +36,10 @@ impl std::fmt::Display for FileProductionSessionRepositoryError {
                 write!(formatter, "invalid persisted activity timestamp: {value}")
             }
             Self::InvalidRecordingCoordinationState(error) => {
-                write!(formatter, "invalid persisted recording coordination state: {error}")
+                write!(
+                    formatter,
+                    "invalid persisted recording coordination state: {error}"
+                )
             }
             Self::AlreadyExists => write!(formatter, "production session already exists"),
         }
@@ -302,9 +305,7 @@ impl PersistedRecordingCoordination {
         }
     }
 
-    fn into_domain(
-        self,
-    ) -> Result<RecordingCoordination, FileProductionSessionRepositoryError> {
+    fn into_domain(self) -> Result<RecordingCoordination, FileProductionSessionRepositoryError> {
         let persisted_status = self.status;
         let mut coordination = RecordingCoordination::new(
             RecordingId::new(self.recording_id),
@@ -312,7 +313,10 @@ impl PersistedRecordingCoordination {
         )
         .map_err(Self::coordination_error)?;
 
-        if !matches!(persisted_status, PersistedRecordingCoordinationStatus::Preparing) {
+        if !matches!(
+            persisted_status,
+            PersistedRecordingCoordinationStatus::Preparing
+        ) {
             coordination
                 .begin_waiting_for_ready()
                 .map_err(Self::coordination_error)?;
@@ -337,20 +341,22 @@ impl PersistedRecordingCoordination {
         }
 
         let expected_status = match persisted_status {
-            PersistedRecordingCoordinationStatus::Preparing => RecordingCoordinationStatus::Preparing,
+            PersistedRecordingCoordinationStatus::Preparing => {
+                RecordingCoordinationStatus::Preparing
+            }
             PersistedRecordingCoordinationStatus::WaitingForReady => {
                 RecordingCoordinationStatus::WaitingForReady
             }
             PersistedRecordingCoordinationStatus::Ready => RecordingCoordinationStatus::Ready,
         };
         if coordination.status() != expected_status {
-            return Err(FileProductionSessionRepositoryError::InvalidRecordingCoordinationState(
-                format!(
+            return Err(
+                FileProductionSessionRepositoryError::InvalidRecordingCoordinationState(format!(
                     "persisted status {:?} does not match reconstructed status {:?}",
                     persisted_status,
                     coordination.status()
-                ),
-            ));
+                )),
+            );
         }
 
         Ok(coordination)
@@ -657,10 +663,7 @@ mod tests {
         session
             .add_participation_by(
                 &owner,
-                Participation::with_roles(
-                    participant.clone(),
-                    [ParticipantRole::Participant],
-                ),
+                Participation::with_roles(participant.clone(), [ParticipantRole::Participant]),
             )
             .unwrap();
         session.start_by(&owner).unwrap();
@@ -668,11 +671,7 @@ mod tests {
             .add_recording_by(&owner, Recording::new(recording_id.value()))
             .unwrap();
         session
-            .begin_recording_by(
-                &owner,
-                &recording_id,
-                [owner.clone(), participant.clone()],
-            )
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
             .unwrap();
         session
             .mark_recording_ready_by(&owner, &recording_id)
@@ -686,12 +685,8 @@ mod tests {
         session
             .confirm_recording_opening_by(&participant, &recording_id)
             .unwrap();
-        session
-            .start_recording_by(&owner, &recording_id)
-            .unwrap();
-        session
-            .stop_recording_by(&owner, &recording_id)
-            .unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
         session
             .acknowledge_recording_stop_by(&owner, &recording_id)
             .unwrap();
