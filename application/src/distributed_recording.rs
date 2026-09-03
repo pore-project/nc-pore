@@ -58,15 +58,18 @@ impl DistributedRecording {
         &mut self.workflow
     }
 
-    /// Starts the local technical recorder. Local READY is a separate step so
-    /// remote participants can prepare independently before the global READY
-    /// barrier is released.
-    pub fn prepare_local_recorder<C, P>(
+    /// Prepares one local recorder and only then records that participant as
+    /// READY in Core. A failed local start/READY transition therefore cannot
+    /// advance the distributed READY barrier.
+    pub fn prepare_local_recorder<R, C, P>(
         &mut self,
+        repository: &mut R,
+        participant: &ParticipantId,
         recorder: &mut RecorderApplication<C, P>,
         configuration: &RecordingConfiguration,
-    ) -> Result<(), DistributedRecordingError<()>>
+    ) -> Result<bool, DistributedRecordingError<R::Error>>
     where
+        R: ProductionSessionRepository,
         C: CaptureProvider,
         P: PersistenceProvider,
     {
@@ -78,7 +81,8 @@ impl DistributedRecording {
                 "recorder ready transition failed: {error:?}"
             )))
         })?;
-        Ok(())
+
+        mark_distributed_recording_ready(repository, self, participant)
     }
 
     pub fn trigger_opening(&mut self) -> Result<RecordingSyncSignet, RecordingWorkflowError> {
