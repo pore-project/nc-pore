@@ -385,10 +385,13 @@ mod tests {
             recording.trigger_opening(),
             Ok(RecordingSyncSignet::Opening)
         );
-        assert!(!confirm_distributed_recording_opening(&mut repository, &mut recording, &alice)
-            .unwrap());
-        assert!(confirm_distributed_recording_opening(&mut repository, &mut recording, &bob)
-            .unwrap());
+        assert!(
+            !confirm_distributed_recording_opening(&mut repository, &mut recording, &alice)
+                .unwrap()
+        );
+        assert!(
+            confirm_distributed_recording_opening(&mut repository, &mut recording, &bob).unwrap()
+        );
         assert_eq!(
             recording.workflow().status(),
             nc_pore_core::recording::RecordingWorkflowStatus::Recording
@@ -404,7 +407,12 @@ mod tests {
             &[alice, bob]
         );
         assert_eq!(
-            repository.get(&production_id).unwrap().unwrap().recordings()[0].status(),
+            repository
+                .get(&production_id)
+                .unwrap()
+                .unwrap()
+                .recordings()[0]
+                .status(),
             nc_pore_core::recording::RecordingStatus::Recording
         );
     }
