@@ -92,11 +92,7 @@ impl RecordingStopCoordinator {
         if self.closing.is_some() {
             return Err(RecordingStopCoordinatorError::ClosingAlreadyAttempted);
         }
-        if outcome == RecordingClosingOutcome::NotAttempted {
-            self.closing = Some(outcome);
-        } else {
-            self.closing = Some(outcome);
-        }
+        self.closing = Some(outcome);
         self.status = RecordingStopCoordinatorStatus::ClosingAttempted;
         Ok(())
     }
@@ -111,15 +107,17 @@ impl RecordingStopCoordinator {
                     self.status,
                     RecordingStopCoordinatorStatus::CoreStopPersisted
                         | RecordingStopCoordinatorStatus::ClosingAttempted
-                ) => {
-                    self.status = RecordingStopCoordinatorStatus::TechnicalStopping;
-                    Ok(())
-                }
+                ) =>
+            {
+                self.status = RecordingStopCoordinatorStatus::TechnicalStopping;
+                Ok(())
+            }
             RecordingStopMode::Safety
-                if self.status == RecordingStopCoordinatorStatus::Recording => {
-                    self.status = RecordingStopCoordinatorStatus::TechnicalStopping;
-                    Ok(())
-                }
+                if self.status == RecordingStopCoordinatorStatus::Recording =>
+            {
+                self.status = RecordingStopCoordinatorStatus::TechnicalStopping;
+                Ok(())
+            }
             _ => Err(RecordingStopCoordinatorError::InvalidState),
         }
     }
