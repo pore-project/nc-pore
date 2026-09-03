@@ -1,3 +1,4 @@
+pub mod browser_recording_handoff;
 pub mod client;
 #[cfg(test)]
 mod client_session_context_tests;
