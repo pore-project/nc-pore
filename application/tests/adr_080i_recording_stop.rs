@@ -136,4 +136,3 @@ fn fachlicher_stop_is_persisted_before_technical_capture_stop() {
     assert!(observation.stopped_persisted);
     assert!(observation.capture_stop_observed_persisted);
 }
-
