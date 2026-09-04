@@ -53,6 +53,7 @@ impl ProductionSession {
             None,
             ActivityResult::Success,
         );
+
         Self {
             id,
             status: ProductionStatus::Created,
@@ -63,7 +64,11 @@ impl ProductionSession {
         }
     }
 
-    fn authorize(&self, actor: &ParticipantId, action: ProductionAction) -> Result<(), ProductionSessionError> {
+    fn authorize(
+        &self,
+        actor: &ParticipantId,
+        action: ProductionAction,
+    ) -> Result<(), ProductionSessionError> {
         self.participations
             .iter()
             .find(|participation| &participation.participant_id == actor)
@@ -72,7 +77,12 @@ impl ProductionSession {
             .ok_or(ProductionSessionError::Unauthorized)
     }
 
-    fn push_activity(&mut self, actor: Option<ParticipantId>, activity_type: ActivityType, target: Option<String>) {
+    fn push_activity(
+        &mut self,
+        actor: Option<ParticipantId>,
+        activity_type: ActivityType,
+        target: Option<String>,
+    ) {
         self.activities.push(ActivityEvent::new(
             activity_type,
             self.id.clone(),
@@ -84,39 +94,67 @@ impl ProductionSession {
 
     pub fn start_by(&mut self, actor: &ParticipantId) -> Result<(), ProductionSessionError> {
         self.authorize(actor, ProductionAction::StartSession)?;
+
         if self.status != ProductionStatus::Created {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
+
         self.status = ProductionStatus::Active;
         self.push_activity(Some(actor.clone()), ActivityType::SessionStarted, None);
+
         Ok(())
     }
 
-    pub fn status(&self) -> ProductionStatus { self.status }
-    pub fn participations(&self) -> &[Participation] { &self.participations }
-    pub fn recordings(&self) -> &[Recording] { &self.recordings }
-    pub fn recording_coordination(&self) -> Option<&RecordingCoordination> { self.recording_coordination.as_ref() }
-    pub fn activities(&self) -> &[ActivityEvent] { &self.activities }
-    pub fn participant_count(&self) -> usize { self.participations.len() }
+    pub fn status(&self) -> ProductionStatus {
+        self.status
+    }
+
+    pub fn participations(&self) -> &[Participation] {
+        &self.participations
+    }
+
+    pub fn recordings(&self) -> &[Recording] {
+        &self.recordings
+    }
+
+    pub fn recording_coordination(&self) -> Option<&RecordingCoordination> {
+        self.recording_coordination.as_ref()
+    }
+
+    pub fn activities(&self) -> &[ActivityEvent] {
+        &self.activities
+    }
+
+    pub fn participant_count(&self) -> usize {
+        self.participations.len()
+    }
 
     pub fn complete_by(&mut self, actor: &ParticipantId) -> Result<(), ProductionSessionError> {
         self.authorize(actor, ProductionAction::CompleteSession)?;
-        if self.status != ProductionStatus::Active || !self.has_owner() {
-            return Err(if self.status != ProductionStatus::Active {
-                ProductionSessionError::InvalidStateTransition
-            } else {
-                ProductionSessionError::MissingOwner
-            });
+
+        if self.status != ProductionStatus::Active {
+            return Err(ProductionSessionError::InvalidStateTransition);
         }
+
+        if !self.has_owner() {
+            return Err(ProductionSessionError::MissingOwner);
+        }
+
         self.status = ProductionStatus::Completed;
         self.push_activity(Some(actor.clone()), ActivityType::SessionCompleted, None);
+
         Ok(())
     }
 
-    pub fn add_participation_by(&mut self, actor: &ParticipantId, participation: Participation) -> Result<(), ProductionSessionError> {
+    pub fn add_participation_by(
+        &mut self,
+        actor: &ParticipantId,
+        participation: Participation,
+    ) -> Result<(), ProductionSessionError> {
         if self.has_participant(&participation.participant_id) {
             return Err(ProductionSessionError::ParticipantAlreadyExists);
         }
+
         if self.participations.is_empty() {
             if !participation.is_owner() || actor != &participation.participant_id {
                 return Err(ProductionSessionError::Unauthorized);
@@ -124,121 +162,576 @@ impl ProductionSession {
         } else {
             self.authorize(actor, ProductionAction::ManageParticipants)?;
         }
+
         if self.status == ProductionStatus::Completed {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
+
         let target = participation.participant_id.value().to_owned();
         self.participations.push(participation);
-        self.push_activity(Some(actor.clone()), ActivityType::ParticipantAdded, Some(target));
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::ParticipantAdded,
+            Some(target),
+        );
+
         Ok(())
     }
 
-    pub fn add_recording_by(&mut self, actor: &ParticipantId, recording: Recording) -> Result<(), ProductionSessionError> {
+    pub fn add_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording: Recording,
+    ) -> Result<(), ProductionSessionError> {
         self.authorize(actor, ProductionAction::ManageRecordings)?;
+
         if self.status == ProductionStatus::Completed {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
+
         let target = recording.id().value().to_owned();
         self.recordings.push(recording);
-        self.push_activity(Some(actor.clone()), ActivityType::RecordingAdded, Some(target));
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingAdded,
+            Some(target),
+        );
+
         Ok(())
     }
 
-    pub fn begin_recording_by(&mut self, actor: &ParticipantId, recording_id: &RecordingId, participants: impl IntoIterator<Item = ParticipantId>) -> Result<(), ProductionSessionError> {
+    /// Begins the coordinated recording handshake for a fixed set of
+    /// recording participants. The participant set is frozen for this start
+    /// attempt. Audio capture and sync-signet emission remain outside Core.
+    pub fn begin_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+        participants: impl IntoIterator<Item = ParticipantId>,
+    ) -> Result<(), ProductionSessionError> {
         self.authorize(actor, ProductionAction::ManageRecordings)?;
+
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
+
         if self.recording_coordination.is_some() {
             return Err(ProductionSessionError::RecordingCoordinationAlreadyActive);
         }
+
         let participants: Vec<_> = participants.into_iter().collect();
         for participant in &participants {
             self.participations
                 .iter()
-                .find(|p| &p.participant_id == participant)
-                .filter(|p| p.allows(ProductionAction::ParticipateInRecording))
+                .find(|participation| &participation.participant_id == participant)
+                .filter(|participation| {
+                    participation.allows(ProductionAction::ParticipateInRecording)
+                })
                 .ok_or(ProductionSessionError::Unauthorized)?;
         }
+
         let mut coordination = RecordingCoordination::new(recording_id.clone(), participants)
             .map_err(ProductionSessionError::RecordingCoordination)?;
-        coordination.begin_waiting_for_ready().map_err(ProductionSessionError::RecordingCoordination)?;
+        coordination
+            .begin_waiting_for_ready()
+            .map_err(ProductionSessionError::RecordingCoordination)?;
+
         self.recording_coordination = Some(coordination);
+
         Ok(())
     }
 
-    pub fn mark_recording_ready_by(&mut self, actor: &ParticipantId, recording_id: &RecordingId) -> Result<bool, ProductionSessionError> {
+    /// Records that one selected participant has actually started local
+    /// capture. Returns `true` when all selected participants are ready and
+    /// the opening-signet boundary may now be emitted by the outer layer.
+    pub fn mark_recording_ready_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<bool, ProductionSessionError> {
         self.authorize(actor, ProductionAction::ParticipateInRecording)?;
-        let coordination = self.recording_coordination.as_mut().ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+
         if coordination.recording_id() != recording_id {
             return Err(ProductionSessionError::RecordingCoordinationNotFound);
         }
-        coordination.mark_ready(actor).map_err(ProductionSessionError::RecordingCoordination)
+
+        coordination
+            .mark_ready(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
     }
 
-    /// Records a technical Opening confirmation. This does not change the
-    /// fachlich authoritative recording lifecycle state.
-    pub fn confirm_recording_opening_by(&mut self, actor: &ParticipantId, recording_id: &RecordingId) -> Result<(), ProductionSessionError> {
+    pub fn start_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
         self.authorize(actor, ProductionAction::ParticipateInRecording)?;
-        let coordination = self.recording_coordination.as_mut().ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
-        if coordination.recording_id() != recording_id {
-            return Err(ProductionSessionError::RecordingCoordinationNotFound);
-        }
-        coordination.confirm_opening(actor).map_err(ProductionSessionError::RecordingCoordination)
-    }
 
-    pub fn start_recording_by(&mut self, actor: &ParticipantId, recording_id: &RecordingId) -> Result<(), ProductionSessionError> {
-        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
-        let recording = self.recordings.iter_mut().find(|r| r.id() == recording_id).ok_or(ProductionSessionError::RecordingNotFound)?;
-        recording.start().map_err(ProductionSessionError::RecordingLifecycle)?;
+
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        recording
+            .start()
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
         recording.assign_participant(actor.clone());
-        self.push_activity(Some(actor.clone()), ActivityType::RecordingStarted, Some(recording_id.value().to_owned()));
+
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingStarted,
+            Some(recording_id.value().to_owned()),
+        );
+
         Ok(())
     }
 
-    /// Persists the fachliche recording stop boundary. Callers must persist
-    /// the session after this transition before technical capture stop.
-    pub fn stop_recording_by(&mut self, actor: &ParticipantId, recording_id: &RecordingId) -> Result<(), ProductionSessionError> {
+    /// Persists the fachliche recording stop boundary.
+    ///
+    /// This transition is deliberately separate from technical capture stop,
+    /// Closing Signet emission, preservation, and completion. Callers must
+    /// persist the session after this method before performing those technical
+    /// steps.
+    pub fn stop_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
         self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
-        let recording = self.recordings.iter_mut().find(|r| r.id() == recording_id).ok_or(ProductionSessionError::RecordingNotFound)?;
-        recording.stop().map_err(ProductionSessionError::RecordingLifecycle)?;
-        self.push_activity(Some(actor.clone()), ActivityType::RecordingStopped, Some(recording_id.value().to_owned()));
+
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        recording
+            .stop()
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingStopped,
+            Some(recording_id.value().to_owned()),
+        );
+
         Ok(())
     }
 
-    /// Records a technical stop acknowledgement without making it a
-    /// completion barrier.
-    pub fn acknowledge_recording_stop_by(&mut self, actor: &ParticipantId, recording_id: &RecordingId) -> Result<(), ProductionSessionError> {
+    pub fn complete_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+        artifact_id: RecordingArtifactId,
+    ) -> Result<(), ProductionSessionError> {
         self.authorize(actor, ProductionAction::ParticipateInRecording)?;
-        let coordination = self.recording_coordination.as_mut().ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
-        if coordination.recording_id() != recording_id {
-            return Err(ProductionSessionError::RecordingCoordinationNotFound);
-        }
-        coordination.acknowledge_stop(actor).map_err(ProductionSessionError::RecordingCoordination)
-    }
 
-    pub fn complete_recording_by(&mut self, actor: &ParticipantId, recording_id: &RecordingId, artifact_id: RecordingArtifactId) -> Result<(), ProductionSessionError> {
-        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
-        let recording = self.recordings.iter_mut().find(|r| r.id() == recording_id).ok_or(ProductionSessionError::RecordingNotFound)?;
-        recording.complete(artifact_id).map_err(ProductionSessionError::RecordingLifecycle)?;
-        self.push_activity(Some(actor.clone()), ActivityType::RecordingCompleted, Some(recording_id.value().to_owned()));
+
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        recording
+            .complete(artifact_id)
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingCompleted,
+            Some(recording_id.value().to_owned()),
+        );
+
         Ok(())
     }
 
     pub fn has_participant(&self, participant_id: &ParticipantId) -> bool {
-        self.participations.iter().any(|p| &p.participant_id == participant_id)
+        self.participations
+            .iter()
+            .any(|participation| &participation.participant_id == participant_id)
     }
 
     pub fn has_owner(&self) -> bool {
-        self.participations.iter().any(|p| p.is_owner())
+        self.participations
+            .iter()
+            .any(|participation| participation.is_owner())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::role::ParticipantRole;
+
+    fn create_test_session() -> ProductionSession {
+        ProductionSession::new(ProductionId::new("test-session"))
+    }
+
+    fn create_participation(id: &str, role: ParticipantRole) -> Participation {
+        Participation::new(ParticipantId::new(id), role)
+    }
+
+    fn add_owner(session: &mut ProductionSession) -> ParticipantId {
+        let owner = ParticipantId::new("owner-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("owner-1", ParticipantRole::Owner),
+            )
+            .unwrap();
+        owner
+    }
+
+    #[test]
+    fn new_session_starts_as_created() {
+        let session = create_test_session();
+        assert_eq!(session.status(), ProductionStatus::Created);
+    }
+
+    #[test]
+    fn session_creation_can_record_actor() {
+        let owner = ParticipantId::new("owner-1");
+        let session = ProductionSession::new_with_actor(
+            ProductionId::new("test-session"),
+            Some(owner.clone()),
+        );
+
+        assert_eq!(session.activities()[0].actor, Some(owner));
+        assert_eq!(session.activities()[0].session_id, session.id);
+    }
+
+    #[test]
+    fn owner_can_start_session() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+
+        session.start_by(&owner).unwrap();
+
+        assert_eq!(session.status(), ProductionStatus::Active);
+    }
+
+    #[test]
+    fn completed_session_cannot_be_started_again() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        session.complete_by(&owner).unwrap();
+
+        assert_eq!(
+            session.start_by(&owner),
+            Err(ProductionSessionError::InvalidStateTransition)
+        );
+    }
+
+    #[test]
+    fn completing_active_session_without_owner_fails() {
+        let mut session = create_test_session();
+        let owner = ParticipantId::new("owner-1");
+
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("owner-1", ParticipantRole::Participant),
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            session.complete_by(&owner),
+            Err(ProductionSessionError::Unauthorized)
+        );
+    }
+
+    #[test]
+    fn completing_session_with_owner_changes_status_to_completed() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+
+        assert!(session.complete_by(&owner).is_ok());
+        assert_eq!(session.status(), ProductionStatus::Completed);
+    }
+
+    #[test]
+    fn duplicate_participant_cannot_be_added_to_session() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        assert_eq!(
+            session.add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Guest),
+            ),
+            Err(ProductionSessionError::ParticipantAlreadyExists)
+        );
+    }
+
+    #[test]
+    fn participant_cannot_manage_other_participants() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        let participant = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        assert_eq!(
+            session.add_participation_by(
+                &participant,
+                create_participation("participant-2", ParticipantRole::Participant),
+            ),
+            Err(ProductionSessionError::Unauthorized)
+        );
+    }
+
+    #[test]
+    fn combined_owner_producer_participant_role_has_all_capabilities() {
+        let mut session = create_test_session();
+        let owner = ParticipantId::new("owner-1");
+        let combined = Participation::with_roles(
+            owner.clone(),
+            [
+                ParticipantRole::Owner,
+                ParticipantRole::Producer,
+                ParticipantRole::Participant,
+            ],
+        );
+
+        session.add_participation_by(&owner, combined).unwrap();
+        session.start_by(&owner).unwrap();
+
+        assert_eq!(session.status(), ProductionStatus::Active);
+    }
+
+    #[test]
+    fn session_lifecycle_creates_rich_activity_history() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        session.complete_by(&owner).unwrap();
+
+        assert_eq!(session.activities().len(), 4);
+        assert_eq!(
+            session.activities()[0].activity_type,
+            ActivityType::SessionCreated
+        );
+        assert_eq!(
+            session.activities()[1].activity_type,
+            ActivityType::ParticipantAdded
+        );
+        assert_eq!(
+            session.activities()[2].activity_type,
+            ActivityType::SessionStarted
+        );
+        assert_eq!(session.activities()[2].actor, Some(owner.clone()));
+        assert_eq!(
+            session.activities()[3].activity_type,
+            ActivityType::SessionCompleted
+        );
+        assert_eq!(session.activities()[3].session_id, session.id);
+        assert_eq!(session.activities()[3].result, ActivityResult::Success);
+    }
+
+    #[test]
+    fn completed_session_rejects_participant_mutations() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        session.complete_by(&owner).unwrap();
+
+        assert_eq!(
+            session.add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            ),
+            Err(ProductionSessionError::InvalidStateTransition)
+        );
+    }
+
+    #[test]
+    fn starting_recording_binds_actor_as_participant() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+
+        session
+            .add_recording_by(&owner, Recording::new("recording-001"))
+            .unwrap();
+        session
+            .start_recording_by(&owner, &RecordingId::new("recording-001"))
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].participant_id(), Some(&owner));
+    }
+
+    #[test]
+    fn recording_stop_is_persistable_before_completion() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        session
+            .add_recording_by(&owner, Recording::new("recording-stop-001"))
+            .unwrap();
+        let recording_id = RecordingId::new("recording-stop-001");
+        session.start_recording_by(&owner, &recording_id).unwrap();
+
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        assert_eq!(
+            session.recordings()[0].status(),
+            crate::recording::RecordingStatus::Stopped
+        );
+        assert!(
+            session
+                .activities()
+                .iter()
+                .any(|activity| activity.activity_type == ActivityType::RecordingStopped)
+        );
+    }
+
+    // TEST-10
+    #[test]
+    fn owner_can_begin_recording_for_fixed_participant_set() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let participant = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        session
+            .begin_recording_by(
+                &owner,
+                &RecordingId::new("recording-002"),
+                [owner.clone(), participant.clone()],
+            )
+            .unwrap();
+
+        let coordination = session.recording_coordination().unwrap();
+        assert_eq!(coordination.participants().len(), 2);
+        assert!(coordination.participants().contains(&owner));
+        assert!(coordination.participants().contains(&participant));
+        assert_eq!(
+            coordination.status(),
+            crate::recording::RecordingCoordinationStatus::WaitingForReady
+        );
+    }
+
+    // TEST-11
+    #[test]
+    fn recording_participant_set_rejects_unselected_participant() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let selected = ParticipantId::new("participant-1");
+        let unselected = ParticipantId::new("participant-2");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-2", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        session
+            .begin_recording_by(
+                &owner,
+                &RecordingId::new("recording-003"),
+                [selected.clone()],
+            )
+            .unwrap();
+
+        assert_eq!(
+            session.mark_recording_ready_by(&unselected, &RecordingId::new("recording-003")),
+            Err(ProductionSessionError::RecordingCoordination(
+                RecordingCoordinationError::ParticipantNotSelected
+            ))
+        );
+    }
+
+    // TEST-12
+    #[test]
+    fn opening_boundary_becomes_ready_only_after_all_selected_participants_report_ready() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        let participant = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                create_participation("participant-1", ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+
+        let recording_id = RecordingId::new("recording-004");
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
+            .unwrap();
+
+        assert_eq!(
+            session.mark_recording_ready_by(&owner, &recording_id),
+            Ok(false)
+        );
+        assert!(!session.recording_coordination().unwrap().is_ready());
+
+        assert_eq!(
+            session.mark_recording_ready_by(&participant, &recording_id),
+            Ok(true)
+        );
+        assert!(session.recording_coordination().unwrap().is_ready());
+    }
+
+    // TEST-13
+    #[test]
+    fn recording_cannot_be_started_twice_while_coordination_is_active() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+
+        session
+            .begin_recording_by(&owner, &RecordingId::new("recording-005"), [owner.clone()])
+            .unwrap();
+
+        assert_eq!(
+            session.begin_recording_by(&owner, &RecordingId::new("recording-006"), [owner.clone()]),
+            Err(ProductionSessionError::RecordingCoordinationAlreadyActive)
+        );
     }
 }
