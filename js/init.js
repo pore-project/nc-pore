@@ -26,6 +26,7 @@
 	let context = null
 	let sourceTrack = null
 	let authoritativeState = null
+	let productionId = null
 
 	const startRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-start-local'))
 	const stopRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
@@ -34,6 +35,7 @@
 		if (!nextContext) return
 		context = {
 			...nextContext,
+			...(productionId ? { productionId } : {}),
 			...(authoritativeState || {}),
 			onStart: nextContext.onStart || startRequested,
 			onStop: nextContext.onStop || stopRequested,
@@ -58,6 +60,14 @@
 		window.dispatchEvent(new CustomEvent('pore:recording-local-finalized', { detail: artifact }))
 		return artifact
 	}
+
+	window.addEventListener('pore:talk-production-identity', event => {
+		const conversationId = event.detail?.conversationId || null
+		if (!conversationId) return
+
+		productionId = conversationId
+		publish({ productionId })
+	})
 
 	window.addEventListener('pore:talk-audio-track', event => {
 		if (sourceTrack && sourceTrack !== event.detail?.track && recorder.isRecording()) {
