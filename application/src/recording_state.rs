@@ -7,6 +7,7 @@ pub enum ClientRecordingPhase {
     Preparing,
     Ready,
     Recording,
+    Stopped,
     Completed,
 }
 
@@ -27,7 +28,7 @@ pub struct ClientRecordingParticipant {
 ///
 /// This is deliberately a projection of the Core-owned ProductionSession. It
 /// contains no recording lifecycle logic and does not invent states that Core
-/// cannot currently persist.
+/// can persist.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientRecordingState {
     pub recording_id: String,
@@ -77,6 +78,21 @@ pub fn recording_state(
     let (phase, participants) = match recording.status() {
         RecordingStatus::Completed => (
             ClientRecordingPhase::Completed,
+            coordination
+                .map(|coordination| {
+                    coordination
+                        .participants()
+                        .iter()
+                        .map(|participant| ClientRecordingParticipant {
+                            id: participant.value().to_owned(),
+                            ready: coordination.ready_participants().contains(participant),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        ),
+        RecordingStatus::Stopped => (
+            ClientRecordingPhase::Stopped,
             coordination
                 .map(|coordination| {
                     coordination
@@ -209,6 +225,23 @@ mod tests {
     }
 
     #[test]
+    fn reports_stopped_before_completion_from_core_recording() {
+        let mut session = session_with_recording();
+        let alice = ParticipantId::new("alice");
+        let bob = ParticipantId::new("bob");
+        let recording_id = nc_pore_core::recording::RecordingId::new("recording-001");
+        session.mark_recording_ready_by(&alice, &recording_id).unwrap();
+        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session.start_recording_by(&alice, &recording_id).unwrap();
+        session.stop_recording_by(&alice, &recording_id).unwrap();
+
+        let state = recording_state(&session, "bob", "recording-001").unwrap();
+        assert_eq!(state.phase, ClientRecordingPhase::Stopped);
+        assert!(!state.confirmed);
+        assert_eq!(state.artifact_id, None);
+    }
+
+    #[test]
     fn reports_recording_and_completion_from_core_recording() {
         let mut session = session_with_recording();
         let alice = ParticipantId::new("alice");
@@ -224,6 +257,11 @@ mod tests {
 
         let state = recording_state(&session, "bob", "recording-001").unwrap();
         assert_eq!(state.phase, ClientRecordingPhase::Recording);
+
+        session.stop_recording_by(&alice, &recording_id).unwrap();
+        let state = recording_state(&session, "alice", "recording-001").unwrap();
+        assert_eq!(state.phase, ClientRecordingPhase::Stopped);
+        assert!(!state.confirmed);
 
         session
             .complete_recording_by(
