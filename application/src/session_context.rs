@@ -70,18 +70,15 @@ where
     type Error = ProductionSessionContextError<R::Error>;
 
     fn resolve(&self, session_id: &str, actor_id: &str) -> Result<SessionContext, Self::Error> {
-        let session = get_production_session(
-            self.repository,
-            &ProductionId::new(session_id),
-        )
-        .map_err(|error| match error {
-            crate::session::GetProductionSessionError::SessionNotFound => {
-                ProductionSessionContextError::SessionNotFound
-            }
-            crate::session::GetProductionSessionError::Repository(error) => {
-                ProductionSessionContextError::Repository(error)
-            }
-        })?;
+        let session = get_production_session(self.repository, &ProductionId::new(session_id))
+            .map_err(|error| match error {
+                crate::session::GetProductionSessionError::SessionNotFound => {
+                    ProductionSessionContextError::SessionNotFound
+                }
+                crate::session::GetProductionSessionError::Repository(error) => {
+                    ProductionSessionContextError::Repository(error)
+                }
+            })?;
 
         let actor = session
             .participations()
