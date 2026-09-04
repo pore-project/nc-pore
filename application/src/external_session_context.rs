@@ -2,6 +2,7 @@ use crate::session_context::{
     SessionCapability, SessionContext, SessionContextParticipant, SessionContextProvider,
     SessionState,
 };
+use nc_pore_core::identity::ProductionId;
 
 /// Provider-neutral data returned by an external session integration.
 ///
@@ -9,7 +10,10 @@ use crate::session_context::{
 /// maps its own session model to this small boundary type before PoRE sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalSessionSnapshot {
+    /// Provider-native session identifier, retained as external context.
     pub session_id: String,
+    /// PoRE production identity selected by the provider connector.
+    pub production_id: ProductionId,
     pub state: ExternalSessionState,
     pub actor_id: String,
     pub participants: Vec<String>,
@@ -65,6 +69,7 @@ where
 
         Ok(SessionContext {
             session_id: snapshot.session_id,
+            production_id: snapshot.production_id,
             state: match snapshot.state {
                 ExternalSessionState::Available => SessionState::Available,
                 ExternalSessionState::Active => SessionState::Active,
@@ -107,23 +112,39 @@ mod tests {
         }
     }
 
+    fn snapshot() -> ExternalSessionSnapshot {
+        ExternalSessionSnapshot {
+            session_id: "talk-conversation-001".to_owned(),
+            production_id: ProductionId::new("talk-conversation-001"),
+            state: ExternalSessionState::Active,
+            actor_id: "alice".to_owned(),
+            participants: vec!["alice".to_owned(), "bob".to_owned()],
+            can_participate_in_recording: true,
+        }
+    }
+
     fn adapter(snapshot: ExternalSessionSnapshot) -> ExternalSessionContextAdapter<Fixture> {
         ExternalSessionContextAdapter::new(Fixture { snapshot })
     }
 
     #[test]
+    fn external_adapter_maps_provider_identity_to_production_id() {
+        let expected = snapshot().production_id.clone();
+        let provider = adapter(snapshot());
+
+        let context = provider.resolve("talk-conversation-001", "alice").unwrap();
+
+        assert_eq!(context.session_id, "talk-conversation-001");
+        assert_eq!(context.production_id, expected);
+        assert_eq!(context.production_id.value(), "talk-conversation-001");
+    }
+
+    #[test]
     fn external_adapter_maps_provider_state_and_participants() {
-        let provider = adapter(ExternalSessionSnapshot {
-            session_id: "external-001".to_owned(),
-            state: ExternalSessionState::Active,
-            actor_id: "alice".to_owned(),
-            participants: vec!["alice".to_owned(), "bob".to_owned()],
-            can_participate_in_recording: true,
-        });
+        let provider = adapter(snapshot());
 
-        let context = provider.resolve("external-001", "alice").unwrap();
+        let context = provider.resolve("talk-conversation-001", "alice").unwrap();
 
-        assert_eq!(context.session_id, "external-001");
         assert_eq!(context.state, SessionState::Active);
         assert_eq!(context.actor_id, "alice");
         assert_eq!(
@@ -141,15 +162,8 @@ mod tests {
 
     #[test]
     fn external_adapter_exposes_only_supported_pore_capability() {
-        let provider = adapter(ExternalSessionSnapshot {
-            session_id: "external-001".to_owned(),
-            state: ExternalSessionState::Active,
-            actor_id: "alice".to_owned(),
-            participants: vec!["alice".to_owned()],
-            can_participate_in_recording: true,
-        });
-
-        let context = provider.resolve("external-001", "alice").unwrap();
+        let provider = adapter(snapshot());
+        let context = provider.resolve("talk-conversation-001", "alice").unwrap();
 
         assert_eq!(
             context.capabilities,
@@ -159,35 +173,25 @@ mod tests {
 
     #[test]
     fn external_adapter_does_not_invent_capabilities() {
-        let provider = adapter(ExternalSessionSnapshot {
-            session_id: "external-001".to_owned(),
-            state: ExternalSessionState::Active,
-            actor_id: "alice".to_owned(),
-            participants: vec!["alice".to_owned()],
-            can_participate_in_recording: false,
-        });
+        let mut snapshot = snapshot();
+        snapshot.can_participate_in_recording = false;
+        let provider = adapter(snapshot);
 
-        let context = provider.resolve("external-001", "alice").unwrap();
+        let context = provider.resolve("talk-conversation-001", "alice").unwrap();
 
         assert!(context.capabilities.is_empty());
     }
 
     #[test]
     fn external_adapter_propagates_source_errors() {
-        let provider = adapter(ExternalSessionSnapshot {
-            session_id: "external-001".to_owned(),
-            state: ExternalSessionState::Available,
-            actor_id: "alice".to_owned(),
-            participants: vec![],
-            can_participate_in_recording: false,
-        });
+        let provider = adapter(snapshot());
 
         assert_eq!(
             provider.resolve("unknown", "alice"),
             Err("session not found")
         );
         assert_eq!(
-            provider.resolve("external-001", "bob"),
+            provider.resolve("talk-conversation-001", "bob"),
             Err("actor not found")
         );
     }
