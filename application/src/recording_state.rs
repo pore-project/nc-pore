@@ -106,7 +106,8 @@ pub fn recording_state(
                 .unwrap_or_default(),
         ),
         RecordingStatus::Prepared => {
-            let coordination = coordination.ok_or(RecordingStateError::RecordingCoordinationNotFound)?;
+            let coordination = coordination
+                .ok_or(RecordingStateError::RecordingCoordinationNotFound)?;
             let phase = match coordination.status() {
                 RecordingCoordinationStatus::Ready => ClientRecordingPhase::Ready,
                 RecordingCoordinationStatus::Preparing
@@ -213,8 +214,12 @@ mod tests {
         let alice = ParticipantId::new("alice");
         let bob = ParticipantId::new("bob");
         let recording_id = nc_pore_core::recording::RecordingId::new("recording-001");
-        session.mark_recording_ready_by(&alice, &recording_id).unwrap();
-        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&alice, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
         session.start_recording_by(&alice, &recording_id).unwrap();
 
         let state = recording_state(&session, "bob", "recording-001").unwrap();
