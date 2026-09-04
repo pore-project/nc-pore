@@ -3,6 +3,7 @@ pub mod client;
 mod client_session_context_tests;
 pub mod external_session_context;
 pub mod recording;
+pub mod recording_state;
 pub mod session;
 pub mod session_context;
 #[cfg(test)]
