@@ -202,17 +202,27 @@ where
         session_id: &str,
         actor_id: &str,
         recording_id: &str,
-    ) -> Result<crate::recording_state::ClientRecordingState, crate::recording_state::RecordingStateError> {
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>> {
         let session = get_production_session(self.repository, &ProductionId::new(session_id))
             .map_err(|error| match error {
                 crate::session::GetProductionSessionError::SessionNotFound => {
-                    crate::recording_state::RecordingStateError::RecordingNotFound
+                    ClientSessionError::SessionNotFound
                 }
-                crate::session::GetProductionSessionError::Repository(_) => {
-                    crate::recording_state::RecordingStateError::RecordingNotFound
+                crate::session::GetProductionSessionError::Repository(error) => {
+                    ClientSessionError::Repository(error)
                 }
             })?;
-        crate::recording_state::recording_state(&session, actor_id, recording_id)
+
+        crate::recording_state::recording_state(&session, actor_id, recording_id).map_err(|error| {
+            match error {
+                crate::recording_state::RecordingStateError::RecordingNotFound => {
+                    ClientSessionError::RecordingNotFound
+                }
+                crate::recording_state::RecordingStateError::RecordingCoordinationNotFound => {
+                    ClientSessionError::InvalidStateTransition
+                }
+            }
+        })
     }
 
     /// Ask the injected provider whether the actor may participate in recording now.
