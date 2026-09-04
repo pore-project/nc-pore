@@ -100,11 +100,7 @@ mod tests {
             .add_recording_by(&owner, Recording::new("recording-001"))
             .unwrap();
         session
-            .begin_recording_by(
-                &owner,
-                &RecordingId::new("recording-001"),
-                [owner.clone()],
-            )
+            .begin_recording_by(&owner, &RecordingId::new("recording-001"), [owner.clone()])
             .unwrap();
 
         InMemoryRepository {
@@ -138,11 +134,7 @@ mod tests {
         let mut repository = repository_with_recording();
         let client = ClientSessionService::new(&mut repository);
 
-        let result = client.read_recording_state(
-            "session-001",
-            "alice",
-            "missing-recording",
-        );
+        let result = client.read_recording_state("session-001", "alice", "missing-recording");
 
         assert_eq!(result, Err(ClientSessionError::RecordingNotFound));
     }
