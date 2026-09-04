@@ -31,8 +31,10 @@
 
 	const render = nextContext => {
 		if (!nextContext) return
+		const authoritative = stateBridge.getSnapshot()
 		context = {
 			...nextContext,
+			...(authoritative || {}),
 			onStart: nextContext.onStart || startRequested,
 			onStop: nextContext.onStop || stopRequested,
 		}
@@ -81,7 +83,9 @@
 
 	window.addEventListener('pore:recording-state', event => {
 		const snapshot = event.detail
-		if (!snapshot || !context) return
+		if (!snapshot) return
+		stateBridge._snapshot = snapshot
+		if (!context) return
 		publish({
 			role: snapshot.role,
 			state: snapshot.state,
