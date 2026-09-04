@@ -32,7 +32,11 @@ impl ProductionSessionRepository for InMemoryRepository {
     type Error = &'static str;
 
     fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-        if self.sessions.iter().any(|existing| existing.id == session.id) {
+        if self
+            .sessions
+            .iter()
+            .any(|existing| existing.id == session.id)
+        {
             return Err("session already exists");
         }
         self.sessions.push(session.clone());
@@ -76,10 +80,8 @@ fn main() -> std::io::Result<()> {
 
 fn seeded_repository() -> InMemoryRepository {
     let owner = ParticipantId::new(OWNER_ID);
-    let mut session = ProductionSession::new_with_actor(
-        ProductionId::new(SESSION_ID),
-        Some(owner.clone()),
-    );
+    let mut session =
+        ProductionSession::new_with_actor(ProductionId::new(SESSION_ID), Some(owner.clone()));
     session
         .add_participation_by(
             &owner,
@@ -122,7 +124,10 @@ fn handle_connection(mut stream: TcpStream, repository: &mut InMemoryRepository)
 
     let (status, body) = match (method, path) {
         ("GET", "/") => (200, INDEX_HTML.to_owned()),
-        ("GET", "/api/sessions/recording-state-feasibility-session/recordings/recording-001/state") => {
+        (
+            "GET",
+            "/api/sessions/recording-state-feasibility-session/recordings/recording-001/state",
+        ) => {
             let client = ClientSessionService::new(repository);
             match client.read_recording_state(SESSION_ID, OWNER_ID, RECORDING_ID) {
                 Ok(state) => (200, recording_state_json(&state)),
