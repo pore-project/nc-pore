@@ -49,6 +49,10 @@
 		getSnapshot() { return this._snapshot }
 	}
 
+	window.addEventListener(EVENT, event => {
+		if (window.PoRETalkRecordingUi && event.detail) window.PoRETalkRecordingUi.mount(event.detail)
+	})
+
 	window.PoRETalkRecordingStateBridge = TalkRecordingStateBridge
 	window.PoRETalkRecordingStateEvent = EVENT
 	window.PoRETalkRecordingStateNormalize = normalize
