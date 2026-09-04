@@ -77,6 +77,15 @@ where
         .start_recording()
         .map_err(ExecuteRecordingError::Workflow)?;
 
+    // ADR-080i: the fachliche stop is the hard boundary. Persist it before
+    // attempting any Closing Signet or stopping technical capture.
+    session
+        .stop_recording_by(actor, recording_id)
+        .map_err(ExecuteRecordingError::Session)?;
+    repository
+        .update(&session)
+        .map_err(ExecuteRecordingError::Repository)?;
+
     let artifact = recorder
         .stop(RecordingArtifactAssociation::new(
             production_id.value(),
@@ -86,9 +95,6 @@ where
 
     workflow
         .request_stop()
-        .map_err(ExecuteRecordingError::Workflow)?;
-    workflow
-        .acknowledge_stop(actor)
         .map_err(ExecuteRecordingError::Workflow)?;
     workflow
         .complete(RecordingArtifactId::new(artifact.id.value()))
@@ -242,7 +248,7 @@ mod tests {
     // TEST-01
     //
     // Verify: The application layer drives the domain workflow through
-    // ready-gating, recording, stop acknowledgement, and completion while
+    // ready-gating, recording, fachlicher stop, and completion while
     // the recorder remains responsible for technical capture and artifacts.
     #[test]
     fn execute_recording_completes_domain_and_technical_flow() {
