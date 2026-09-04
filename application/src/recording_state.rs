@@ -106,8 +106,8 @@ pub fn recording_state(
                 .unwrap_or_default(),
         ),
         RecordingStatus::Prepared => {
-            let coordination = coordination
-                .ok_or(RecordingStateError::RecordingCoordinationNotFound)?;
+            let coordination =
+                coordination.ok_or(RecordingStateError::RecordingCoordinationNotFound)?;
             let phase = match coordination.status() {
                 RecordingCoordinationStatus::Ready => ClientRecordingPhase::Ready,
                 RecordingCoordinationStatus::Preparing
