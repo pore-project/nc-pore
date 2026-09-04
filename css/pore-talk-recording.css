@@ -1,0 +1,124 @@
+/*
+ * NC-PoRE — Talk-native recording control surface.
+ *
+ * The component is mounted inside the Talk call root supplied by the host
+ * integration. It deliberately does not position itself against the viewport.
+ */
+
+.pore-talk-recording {
+	display: flex;
+	align-items: center;
+	gap: calc(2 * var(--default-grid-baseline));
+	padding: calc(2 * var(--default-grid-baseline));
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	box-shadow: var(--color-box-shadow);
+}
+
+.pore-talk-recording__indicator {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: 0 0 24px;
+	border-radius: 50%;
+	font-weight: 700;
+}
+
+.pore-talk-recording__indicator--preparing {
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+}
+
+.pore-talk-recording__indicator--listener {
+	background: var(--color-text-default);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--error {
+	background: var(--color-error);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--ready {
+	background: var(--color-warning);
+	color: var(--color-text-default);
+}
+
+.pore-talk-recording__indicator--recording {
+	background: var(--color-success);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--opening {
+	animation: pore-talk-recording-pulse 1s ease-in-out infinite;
+}
+
+.pore-talk-recording__indicator--transfer {
+	background: var(--color-primary-element);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--confirmed {
+	background: var(--color-main-background);
+	color: var(--color-success);
+	border: 2px solid var(--color-success);
+}
+
+.pore-talk-recording__content {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--default-grid-baseline);
+	min-width: 0;
+}
+
+.pore-talk-recording__label {
+	white-space: nowrap;
+}
+
+.pore-talk-recording__readiness,
+.pore-talk-recording__elapsed {
+	color: var(--color-text-maxcontrast);
+}
+
+.pore-talk-recording__controls {
+	display: flex;
+	gap: var(--default-grid-baseline);
+}
+
+.pore-talk-recording__button {
+	min-height: 36px;
+	padding-inline: calc(2 * var(--default-grid-baseline));
+	font-weight: 600;
+}
+
+.pore-talk-recording__button--stop {
+	border-color: var(--color-error);
+}
+
+@keyframes pore-talk-recording-pulse {
+	50% {
+		opacity: .45;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pore-talk-recording__indicator--opening {
+		animation: none;
+	}
+}
+
+@media (max-width: 700px) {
+	.pore-talk-recording {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.pore-talk-recording__controls {
+		flex: 1 1 100%;
+	}
+}
