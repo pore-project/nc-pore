@@ -81,8 +81,7 @@ fn session_with_recording() -> (ProductionSession, ProductionId, ParticipantId, 
     let production_id = ProductionId::new("production-080i");
     let actor = owner();
     let recording_id = RecordingId::new("recording-080i");
-    let mut session =
-        ProductionSession::new_with_actor(production_id.clone(), Some(actor.clone()));
+    let mut session = ProductionSession::new_with_actor(production_id.clone(), Some(actor.clone()));
 
     session
         .add_participation_by(
@@ -120,8 +119,11 @@ fn fachlicher_stop_is_persisted_before_technical_capture_stop() {
     let capture = ObservingCaptureProvider {
         observation: Arc::clone(&observation),
     };
-    let mut recorder =
-        RecorderApplication::new(RecordingSession::new("recording-080i"), capture, processor);
+    let mut recorder = RecorderApplication::new(
+        RecordingSession::new("recording-080i"),
+        capture,
+        processor,
+    );
 
     execute_recording(
         &mut repository,
