@@ -3,7 +3,7 @@
  *
  * The bridge does not own recording state. The Talk/Core integration publishes
  * snapshots from the authoritative Application/Core boundary; this adapter
- * normalizes that snapshot and forwards it to the recording UI.
+ * normalizes those snapshots into the browser event contract.
  */
 
 (() => {
@@ -48,10 +48,6 @@
 
 		getSnapshot() { return this._snapshot }
 	}
-
-	window.addEventListener(EVENT, event => {
-		if (window.PoRETalkRecordingUi && event.detail) window.PoRETalkRecordingUi.mount(event.detail)
-	})
 
 	window.PoRETalkRecordingStateBridge = TalkRecordingStateBridge
 	window.PoRETalkRecordingStateEvent = EVENT
