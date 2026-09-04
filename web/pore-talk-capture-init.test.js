@@ -3,6 +3,7 @@ import '../js/pore-talk-audio-connector.js'
 describe('Nextcloud Talk audio connector', () => {
 	const Connector = window.PoRETalkAudioCaptureConnector
 	const eventName = window.PoRETalkAudioTrackEvent
+	const productionIdentityEventName = 'pore:talk-production-identity'
 
 	const createTrack = ({ id, deviceId = id, stop = jest.fn() }) => ({
 		id,
@@ -36,8 +37,17 @@ describe('Nextcloud Talk audio connector', () => {
 		return enabler
 	}
 
-	const installTalk = trackEnabler => {
-		window.OCA = { Talk: { SimpleWebRTC: { webrtc: { _audioTrackEnabler: trackEnabler } } } }
+	const installTalk = (trackEnabler, conversationId = null) => {
+		window.OCA = {
+			Talk: {
+				SimpleWebRTC: {
+					webrtc: {
+						_audioTrackEnabler: trackEnabler,
+						signaling: { currentRoomToken: conversationId },
+					},
+				},
+			},
+		}
 	}
 
 	beforeEach(() => { window.OCA = undefined })
@@ -70,6 +80,36 @@ describe('Nextcloud Talk audio connector', () => {
 		expect(events[0].type).toBe(eventName)
 		expect(events[0].detail.track).toBe(capture)
 		expect(events[0].detail.sourceTrack).toBe(talk)
+	})
+
+	it('publishes the current Talk conversation as the provider-native production identity', () => {
+		const talk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
+		const enabler = createTrackEnabler(talk)
+		const events = []
+		installTalk(enabler, 'conversation-42')
+		const connector = new Connector({ dispatchEvent: event => events.push(event), getUserMedia: jest.fn() })
+
+		expect(connector.getCurrentConversationId()).toBe('conversation-42')
+		expect(connector.attachToTalk()).toBe(true)
+
+		const identityEvents = events.filter(event => event.type === productionIdentityEventName)
+		expect(identityEvents).toHaveLength(1)
+		expect(identityEvents[0].detail).toEqual({
+			provider: 'Talk',
+			conversationId: 'conversation-42',
+		})
+	})
+
+	it('does not publish a production identity when Talk has no joined conversation', () => {
+		const talk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
+		const enabler = createTrackEnabler(talk)
+		const events = []
+		installTalk(enabler)
+		const connector = new Connector({ dispatchEvent: event => events.push(event), getUserMedia: jest.fn() })
+
+		connector.attachToTalk()
+
+		expect(events.filter(event => event.type === productionIdentityEventName)).toHaveLength(0)
 	})
 
 	it('does not open a second capture when the selected device is unchanged', async () => {
