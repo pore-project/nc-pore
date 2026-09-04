@@ -36,8 +36,12 @@ impl From<RecordingLifecycleError> for RecordingWorkflowError {
     }
 }
 
-/// Orchestrates the domain-level ADR-068 recording sequence without owning
-/// audio capture, clock handling, or sync-signet generation.
+/// Orchestrates the domain-level recording sequence without owning audio
+/// capture, clock handling, or sync-signet generation.
+///
+/// The fachliche stop is part of the Core recording lifecycle. Stop
+/// acknowledgements remain technical coordination facts and never form a
+/// completion barrier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingWorkflow {
     recording: Recording,
@@ -120,6 +124,7 @@ impl RecordingWorkflow {
         if self.status != RecordingWorkflowStatus::Recording {
             return Err(RecordingWorkflowError::InvalidState);
         }
+        self.recording.stop()?;
         self.status = RecordingWorkflowStatus::Stopping;
         Ok(())
     }
@@ -145,9 +150,7 @@ impl RecordingWorkflow {
         &mut self,
         artifact_id: RecordingArtifactId,
     ) -> Result<(), RecordingWorkflowError> {
-        if self.status != RecordingWorkflowStatus::Stopping
-            || self.acknowledged.len() != self.coordination.participants().len()
-        {
+        if self.status != RecordingWorkflowStatus::Stopping {
             return Err(RecordingWorkflowError::InvalidState);
         }
         self.recording.complete(artifact_id)?;
@@ -217,32 +220,19 @@ mod tests {
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);
     }
 
     // TEST-04
     #[test]
-    fn workflow_requires_all_stop_acknowledgements_before_completion() {
+    fn workflow_stop_acknowledgements_do_not_block_completion() {
         let mut workflow = workflow();
         workflow.begin_ready_phase().unwrap();
         workflow.mark_ready(&participant("participant-a")).unwrap();
         workflow.mark_ready(&participant("participant-b")).unwrap();
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
-        assert!(
-            !workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
-        assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
-        assert_eq!(
-            workflow.complete(RecordingArtifactId::new("artifact-workflow-01")),
-            Err(RecordingWorkflowError::InvalidState)
-        );
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-b"))
-                .unwrap()
-        );
+
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-01"))
             .unwrap();
@@ -295,11 +285,6 @@ mod tests {
         assert!(workflow.mark_ready(&participant("participant-a")).unwrap());
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
-        assert!(
-            workflow
-                .acknowledge_stop(&participant("participant-a"))
-                .unwrap()
-        );
         workflow
             .complete(RecordingArtifactId::new("artifact-workflow-02"))
             .unwrap();
