@@ -59,11 +59,7 @@
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
 
-	const stopLocalCapture = async reason => {
-		const artifact = await recorder.stop(reason)
-		window.dispatchEvent(new CustomEvent('pore:recording-local-finalized', { detail: artifact }))
-		return artifact
-	}
+	const stopLocalCapture = async reason => recorder.stop(reason)
 
 	window.addEventListener('pore:talk-production-identity', event => {
 		const conversationId = event.detail?.conversationId || null
@@ -87,7 +83,7 @@
 		})
 	})
 
-	window.addEventListener('pore:recording-finalized', event => {
+	window.addEventListener('pore:recording-local-finalized', event => {
 		publish({ artifact: event.detail })
 	})
 
