@@ -100,7 +100,11 @@ mod tests {
             .add_recording_by(&owner, Recording::new("recording-001"))
             .unwrap();
         session
-            .begin_recording_by(&owner, &RecordingId::new("recording-001"), [owner])
+            .begin_recording_by(
+                &owner,
+                &RecordingId::new("recording-001"),
+                [owner.clone()],
+            )
             .unwrap();
 
         InMemoryRepository {
@@ -118,8 +122,14 @@ mod tests {
             .unwrap();
 
         assert_eq!(state.recording_id, "recording-001");
-        assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Preparing);
-        assert_eq!(state.role, crate::recording_state::ClientRecordingRole::Host);
+        assert_eq!(
+            state.phase,
+            crate::recording_state::ClientRecordingPhase::Preparing
+        );
+        assert_eq!(
+            state.role,
+            crate::recording_state::ClientRecordingRole::Host
+        );
         assert_eq!(state.participants.len(), 1);
     }
 
