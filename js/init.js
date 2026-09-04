@@ -23,9 +23,16 @@
 	let context = null
 	let sourceTrack = null
 
+	const startRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-start-local'))
+	const stopRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
+
 	const render = nextContext => {
 		if (!nextContext) return
-		context = { ...nextContext }
+		context = {
+			...nextContext,
+			onStart: nextContext.onStart || startRequested,
+			onStop: nextContext.onStop || stopRequested,
+		}
 		Ui.mount(context)
 	}
 
@@ -48,12 +55,11 @@
 	}
 
 	window.addEventListener('pore:talk-audio-track', event => {
-		if (sourceTrack && sourceTrack !== event.detail?.track) {
-			if (recorder.isRecording()) recorder.noteSourceChange(sourceTrack, event.detail?.track)
+		if (sourceTrack && sourceTrack !== event.detail?.track && recorder.isRecording()) {
+			recorder.noteSourceChange(sourceTrack, event.detail?.track)
 		}
 		sourceTrack = event.detail?.track || null
-		if (!sourceTrack) return
-		publish({ localCaptureAvailable: true })
+		if (sourceTrack) publish({ localCaptureAvailable: true })
 	})
 
 	window.addEventListener('pore:recording-started', event => {
@@ -68,8 +74,8 @@
 		publish({ state: 'stopping', ready: false, artifact: event.detail })
 	})
 
-	window.addEventListener('pore:recording-error', () => {
-		publish({ state: 'error', ready: false })
+	window.addEventListener('pore:recording-error', event => {
+		publish({ state: 'error', ready: false, error: event.detail?.error })
 	})
 
 	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
