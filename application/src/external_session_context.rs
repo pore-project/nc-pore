@@ -132,9 +132,7 @@ mod tests {
         let expected = snapshot().production_id.clone();
         let provider = adapter(snapshot());
 
-        let context = provider
-            .resolve("talk-conversation-001", "alice")
-            .unwrap();
+        let context = provider.resolve("talk-conversation-001", "alice").unwrap();
 
         assert_eq!(context.session_id, "talk-conversation-001");
         assert_eq!(context.production_id, expected);
