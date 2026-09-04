@@ -363,7 +363,7 @@ processes.
 Previous architecture decisions define:
 
 * Production Session as the central domain entity
-* Core as authority for business logic
+* Core as authority for domain logic
 * separation between domain and technical components
 * local recording as a central principle
 * capture boundary between recorder workflow and audio technology

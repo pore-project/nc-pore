@@ -60,7 +60,7 @@ Stattdessen werden diese über definierte Schnittstellen angebunden.
 
 ## Architekturübersicht
 
-```text id="5o2k4s"
+```text
                  Clients
 
       Linux   Windows   macOS
@@ -205,7 +205,7 @@ Dadurch können mehrere Clients dieselbe Basis verwenden.
 
 Abhängigkeiten fließen nur nach innen:
 
-```text id="8e1g8w"
+```text
 Client
 
   ↓
@@ -328,8 +328,6 @@ NC-PoRe soll wachsen können.
 
 Ein stabiler Kern, klare Grenzen und austauschbare Module ermöglichen eine Software, die über Jahre weiterentwickelt werden kann.
 
----
-
 # English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
@@ -412,7 +410,7 @@ or:
 
 # API First Principle
 
-NC-PoRe is developed API-oriented.
+NC-PoRe **follows an API-first approach**.
 
 This does not necessarily mean every API must be publicly exposed.
 
@@ -430,7 +428,7 @@ Multiple clients can therefore share the same foundation.
 
 Dependencies only point inward:
 
-```text id="y5z7u1"
+```text
 Client
 
   ↓
@@ -497,7 +495,7 @@ But:
 
 ---
 
-## 4. User Orientation
+## 4. User Focus
 
 Technical complexity remains hidden behind clear interfaces.
 

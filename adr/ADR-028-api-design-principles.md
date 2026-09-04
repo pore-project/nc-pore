@@ -59,13 +59,13 @@ Beispiel:
 
 Nicht:
 
-```text id="5k0x9m"
+```text
 LinuxClient.startRecording()
 ```
 
 Sondern:
 
-```text id="8w2v4p"
+```text
 startRecording(session)
 ```
 
@@ -79,7 +79,7 @@ Die API orientiert sich an der Fachlichkeit von NC-PoRe.
 
 Nicht:
 
-```text id="g0h4pa"
+```text
 createFile()
 uploadBlob()
 saveData()
@@ -87,7 +87,7 @@ saveData()
 
 Sondern:
 
-```text id="w7y2cp"
+```text
 createSession()
 addParticipant()
 attachAsset()
@@ -139,7 +139,7 @@ NC-PoRe wird ereignisorientierte Konzepte unterstützen.
 
 Eine Production Session erzeugt Ereignisse wie:
 
-```text id="q9j1hc"
+```text
 SessionCreated
 
 ParticipantJoined
@@ -337,7 +337,7 @@ NC-PoRe designs APIs according to the following principles:
 1. API First
 2. Domain-oriented interfaces
 3. stable and extensible contracts
-4. event orientation
+4. event-driven design
 5. security as a foundation
 6. documentation as part of the API
 
@@ -363,7 +363,7 @@ The API follows the domain language of NC-PoRe.
 
 Not:
 
-```text id="4l8vma"
+```text
 createFile()
 uploadBlob()
 saveData()
@@ -371,7 +371,7 @@ saveData()
 
 But:
 
-```text id="n3r6tx"
+```text
 createSession()
 addParticipant()
 attachAsset()
@@ -415,11 +415,11 @@ Goals:
 
 # Events as Part of Architecture
 
-NC-PoRe will support event-oriented concepts.
+NC-PoRe will support event-driven concepts.
 
 A Production Session creates events such as:
 
-```text id="p1m7zc"
+```text
 SessionCreated
 
 ParticipantJoined

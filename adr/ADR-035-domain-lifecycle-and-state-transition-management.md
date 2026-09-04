@@ -318,7 +318,7 @@ a defined domain rule.
 
 - invalid domain states are prevented
 - Domain Rules remain centralized in the Core
-- clients do not need to duplicate business logic
+- clients do not need to duplicate domain logic
 - lifecycles remain understandable and documented
 - tests can verify domain rules directly
 

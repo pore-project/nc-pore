@@ -378,7 +378,7 @@ It does not describe:
 - roles
 - participants
 - session lifecycles
-- business logic
+- domain logic
 
 These remain exclusively inside the Core.
 

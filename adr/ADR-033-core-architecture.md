@@ -212,7 +212,7 @@ NC-PoRe uses a Core architecture as the central domain authority.
 
 The Core is responsible for:
 
-- domain business logic
+- domain logic
 - management of Production Sessions
 - enforcement of Domain Rules
 - management of domain states
