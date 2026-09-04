@@ -25,16 +25,16 @@
 
 	let context = null
 	let sourceTrack = null
+	let authoritativeState = null
 
 	const startRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-start-local'))
 	const stopRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
 
 	const render = nextContext => {
 		if (!nextContext) return
-		const authoritative = stateBridge.getSnapshot()
 		context = {
 			...nextContext,
-			...(authoritative || {}),
+			...(authoritativeState || {}),
 			onStart: nextContext.onStart || startRequested,
 			onStop: nextContext.onStop || stopRequested,
 		}
@@ -84,7 +84,7 @@
 	window.addEventListener('pore:recording-state', event => {
 		const snapshot = event.detail
 		if (!snapshot) return
-		stateBridge._snapshot = snapshot
+		authoritativeState = snapshot
 		if (!context) return
 		publish({
 			role: snapshot.role,
