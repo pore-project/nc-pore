@@ -51,7 +51,11 @@
 
 	const startLocalCapture = async () => {
 		if (!sourceTrack) throw new Error('Talk audio track is not available')
-		await recorder.start(sourceTrack, context?.sourceMetadata || {})
+		if (!productionId) throw new Error('Talk production identity is not available')
+		await recorder.start(sourceTrack, {
+			...(context?.sourceMetadata || {}),
+			productionId,
+		})
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
 
