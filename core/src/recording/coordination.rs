@@ -38,9 +38,11 @@ impl RecordingCoordination {
         if participants.is_empty() {
             return Err(RecordingCoordinationError::NoParticipants);
         }
-        if participants.iter().enumerate().any(|(index, participant)| {
-            participants[..index].contains(participant)
-        }) {
+        if participants
+            .iter()
+            .enumerate()
+            .any(|(index, participant)| participants[..index].contains(participant))
+        {
             return Err(RecordingCoordinationError::ParticipantNotSelected);
         }
 

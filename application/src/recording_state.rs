@@ -230,8 +230,12 @@ mod tests {
         let alice = ParticipantId::new("alice");
         let bob = ParticipantId::new("bob");
         let recording_id = nc_pore_core::recording::RecordingId::new("recording-001");
-        session.mark_recording_ready_by(&alice, &recording_id).unwrap();
-        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&alice, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
         session.start_recording_by(&alice, &recording_id).unwrap();
         session.stop_recording_by(&alice, &recording_id).unwrap();
 
