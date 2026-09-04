@@ -14,17 +14,24 @@ pub enum RecordingCoordinationError {
     NoParticipants,
     ParticipantNotSelected,
     AlreadyReady,
+    AlreadyOpeningConfirmed,
+    AlreadyStopAcknowledged,
     InvalidState,
 }
 
 /// Coordinates the distributed start of one recording across a fixed set of
 /// recording participants. It does not perform audio capture or emit a sync
 /// signet; those belong to the technical boundary outside the domain.
+///
+/// Opening confirmations and stop acknowledgements are retained as technical
+/// coordination facts only. They are deliberately not lifecycle barriers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordingCoordination {
     recording_id: RecordingId,
     participants: Vec<ParticipantId>,
     ready: Vec<ParticipantId>,
+    opening_confirmed: Vec<ParticipantId>,
+    stop_acknowledged: Vec<ParticipantId>,
     status: RecordingCoordinationStatus,
 }
 
@@ -49,6 +56,8 @@ impl RecordingCoordination {
             recording_id,
             participants,
             ready: Vec::new(),
+            opening_confirmed: Vec::new(),
+            stop_acknowledged: Vec::new(),
             status: RecordingCoordinationStatus::Preparing,
         })
     }
@@ -63,6 +72,14 @@ impl RecordingCoordination {
 
     pub fn ready_participants(&self) -> &[ParticipantId] {
         &self.ready
+    }
+
+    pub fn opening_confirmed_participants(&self) -> &[ParticipantId] {
+        &self.opening_confirmed
+    }
+
+    pub fn stop_acknowledged_participants(&self) -> &[ParticipantId] {
+        &self.stop_acknowledged
     }
 
     pub fn status(&self) -> RecordingCoordinationStatus {
@@ -100,6 +117,38 @@ impl RecordingCoordination {
         Ok(false)
     }
 
+    /// Records that a participant confirmed the technical Opening marker.
+    /// This fact does not change the recording lifecycle state.
+    pub fn confirm_opening(
+        &mut self,
+        participant_id: &ParticipantId,
+    ) -> Result<(), RecordingCoordinationError> {
+        if !self.participants.contains(participant_id) {
+            return Err(RecordingCoordinationError::ParticipantNotSelected);
+        }
+        if self.opening_confirmed.contains(participant_id) {
+            return Err(RecordingCoordinationError::AlreadyOpeningConfirmed);
+        }
+        self.opening_confirmed.push(participant_id.clone());
+        Ok(())
+    }
+
+    /// Records a technical stop acknowledgement without making it a
+    /// completion barrier. The fachliche stop lives on `RecordingStatus`.
+    pub fn acknowledge_stop(
+        &mut self,
+        participant_id: &ParticipantId,
+    ) -> Result<(), RecordingCoordinationError> {
+        if !self.participants.contains(participant_id) {
+            return Err(RecordingCoordinationError::ParticipantNotSelected);
+        }
+        if self.stop_acknowledged.contains(participant_id) {
+            return Err(RecordingCoordinationError::AlreadyStopAcknowledged);
+        }
+        self.stop_acknowledged.push(participant_id.clone());
+        Ok(())
+    }
+
     pub fn is_ready(&self) -> bool {
         self.status == RecordingCoordinationStatus::Ready
     }
@@ -121,25 +170,14 @@ mod tests {
         .unwrap()
     }
 
-    // TEST-01
     #[test]
     fn recording_participant_set_is_frozen_at_creation() {
         let coordination = coordination();
-
         assert_eq!(coordination.participants().len(), 2);
-        assert!(
-            coordination
-                .participants()
-                .contains(&participant("participant-a"))
-        );
-        assert!(
-            coordination
-                .participants()
-                .contains(&participant("participant-b"))
-        );
+        assert!(coordination.participants().contains(&participant("participant-a")));
+        assert!(coordination.participants().contains(&participant("participant-b")));
     }
 
-    // TEST-02
     #[test]
     fn empty_recording_participant_set_is_rejected() {
         assert_eq!(
@@ -148,68 +186,50 @@ mod tests {
         );
     }
 
-    // TEST-03
     #[test]
     fn ready_requires_all_selected_participants() {
         let mut coordination = coordination();
         coordination.begin_waiting_for_ready().unwrap();
-
-        assert_eq!(
-            coordination.mark_ready(&participant("participant-a")),
-            Ok(false)
-        );
+        assert_eq!(coordination.mark_ready(&participant("participant-a")), Ok(false));
         assert_eq!(
             coordination.status(),
             RecordingCoordinationStatus::WaitingForReady
         );
         assert!(!coordination.is_ready());
-
-        assert_eq!(
-            coordination.mark_ready(&participant("participant-b")),
-            Ok(true)
-        );
+        assert_eq!(coordination.mark_ready(&participant("participant-b")), Ok(true));
         assert!(coordination.is_ready());
     }
 
-    // TEST-04
     #[test]
     fn unselected_participant_cannot_report_ready() {
         let mut coordination = coordination();
         coordination.begin_waiting_for_ready().unwrap();
-
         assert_eq!(
             coordination.mark_ready(&participant("participant-c")),
             Err(RecordingCoordinationError::ParticipantNotSelected)
         );
     }
 
-    // TEST-05
     #[test]
     fn participant_cannot_report_ready_twice() {
         let mut coordination = coordination();
         coordination.begin_waiting_for_ready().unwrap();
-        coordination
-            .mark_ready(&participant("participant-a"))
-            .unwrap();
-
+        coordination.mark_ready(&participant("participant-a")).unwrap();
         assert_eq!(
             coordination.mark_ready(&participant("participant-a")),
             Err(RecordingCoordinationError::AlreadyReady)
         );
     }
 
-    // TEST-06
     #[test]
     fn ready_cannot_be_reported_before_start_waiting_state() {
         let mut coordination = coordination();
-
         assert_eq!(
             coordination.mark_ready(&participant("participant-a")),
             Err(RecordingCoordinationError::InvalidState)
         );
     }
 
-    // TEST-07
     #[test]
     fn duplicate_recording_participant_is_rejected() {
         assert_eq!(
@@ -219,5 +239,15 @@ mod tests {
             ),
             Err(RecordingCoordinationError::ParticipantNotSelected)
         );
+    }
+
+    #[test]
+    fn opening_and_stop_markers_are_technical_facts_not_lifecycle_transitions() {
+        let mut coordination = coordination();
+        coordination.confirm_opening(&participant("participant-a")).unwrap();
+        coordination.acknowledge_stop(&participant("participant-a")).unwrap();
+        assert_eq!(coordination.status(), RecordingCoordinationStatus::Preparing);
+        assert_eq!(coordination.opening_confirmed_participants().len(), 1);
+        assert_eq!(coordination.stop_acknowledged_participants().len(), 1);
     }
 }
