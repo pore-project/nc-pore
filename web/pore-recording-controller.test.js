@@ -24,4 +24,23 @@ describe('Browser recording controller', () => {
 		expect(recorder.start).toHaveBeenCalledTimes(1)
 		expect(artifact.source.productionId).toBe('conversation-42')
 	})
+
+	it('publishes the enriched artifact at the local finalization boundary', async () => {
+		const recorder = {
+			start: jest.fn().mockResolvedValue(undefined),
+			stop: jest.fn().mockResolvedValue({ kind: 'audio', format: 'audio/wav' }),
+		}
+		const controller = new Controller({ recorderFactory: () => recorder })
+		const handler = jest.fn()
+		window.addEventListener('pore:recording-local-finalized', handler)
+
+		await controller.start(createTrack(), { productionId: 'conversation-42' })
+		const artifact = await controller.stop('host')
+
+		expect(handler).toHaveBeenCalledTimes(1)
+		expect(handler.mock.calls[0][0].detail).toEqual(artifact)
+		expect(handler.mock.calls[0][0].detail.source.productionId).toBe('conversation-42')
+
+		window.removeEventListener('pore:recording-local-finalized', handler)
+	})
 })
