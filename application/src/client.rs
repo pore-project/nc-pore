@@ -181,9 +181,6 @@ where
     }
 
     /// Resolve provider-independent session context through an injected provider.
-    ///
-    /// The client service depends only on the application contract, so a native or
-    /// external provider can be supplied without coupling the client to its role model.
     pub fn context<P>(
         &self,
         provider: &P,
@@ -196,10 +193,29 @@ where
         provider.resolve(session_id, actor_id)
     }
 
-    /// Ask the injected provider whether the actor may participate in recording now.
+    /// Return the Core-backed recording state for a client-facing actor.
     ///
-    /// Participation is available only while the session is active; the client still
-    /// evaluates the application capability rather than inspecting provider-specific roles.
+    /// The projection reads directly from the persisted ProductionSession; no
+    /// browser-side lifecycle state is consulted or created.
+    pub fn recording_state(
+        &self,
+        session_id: &str,
+        actor_id: &str,
+        recording_id: &str,
+    ) -> Result<crate::recording_state::ClientRecordingState, crate::recording_state::RecordingStateError> {
+        let session = get_production_session(self.repository, &ProductionId::new(session_id))
+            .map_err(|error| match error {
+                crate::session::GetProductionSessionError::SessionNotFound => {
+                    crate::recording_state::RecordingStateError::RecordingNotFound
+                }
+                crate::session::GetProductionSessionError::Repository(_) => {
+                    crate::recording_state::RecordingStateError::RecordingNotFound
+                }
+            })?;
+        crate::recording_state::recording_state(&session, actor_id, recording_id)
+    }
+
+    /// Ask the injected provider whether the actor may participate in recording now.
     pub fn can_participate<P>(
         &self,
         provider: &P,
