@@ -11,6 +11,8 @@
 /// Sample representation requested for a recording.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SampleFormat {
+    /// Signed 16-bit PCM samples.
+    Pcm16,
     /// Signed 24-bit PCM samples.
     Pcm24,
     /// Signed 32-bit floating-point samples.
@@ -151,6 +153,15 @@ mod tests {
     }
 
     // TEST-03
+    // Verify: Native PCM16 is representable without pretending it is PCM24.
+    #[test]
+    fn configuration_supports_native_pcm16() {
+        let configuration = RecordingConfiguration::new(48_000, 1, SampleFormat::Pcm16);
+
+        assert_eq!(configuration.sample_format(), SampleFormat::Pcm16);
+    }
+
+    // TEST-04
     // Verify: The supported chunk durations remain explicit and stable.
     #[test]
     fn chunk_duration_values_are_explicit() {

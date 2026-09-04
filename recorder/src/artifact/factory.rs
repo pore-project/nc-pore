@@ -14,9 +14,7 @@
 //! - ADR-058 Recording Payload Representation
 
 use crate::artifact::{RecordingArtifact, RecordingChunk, RecordingTrack};
-use crate::audio::{
-    CaptureChunk, CaptureResult, CaptureTrack, RecordingConfiguration, SampleFormat,
-};
+use crate::audio::CaptureResult;
 use crate::session::RecordingSessionId;
 
 /// Creates RecordingArtifact instances.
