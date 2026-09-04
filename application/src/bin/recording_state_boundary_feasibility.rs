@@ -94,7 +94,7 @@ fn seeded_repository() -> InMemoryRepository {
         .add_recording_by(&owner, Recording::new(RECORDING_ID))
         .expect("recording must be addable");
     session
-        .begin_recording_by(&owner, &RecordingId::new(RECORDING_ID), [owner])
+        .begin_recording_by(&owner, &RecordingId::new(RECORDING_ID), [owner.clone()])
         .expect("recording must be prepared");
 
     InMemoryRepository {
