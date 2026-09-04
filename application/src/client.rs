@@ -11,7 +11,6 @@ use nc_pore_core::role::ParticipantRole;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::{ProductionSession, ProductionSessionError, ProductionStatus};
 
-/// Stable role vocabulary exposed to a client without leaking the domain role type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientRole {
     Owner,
@@ -63,6 +62,7 @@ impl From<ProductionStatus> for ClientProductionStatus {
 pub enum ClientRecordingStatus {
     Prepared,
     Recording,
+    Stopped,
     Completed,
 }
 
@@ -71,19 +71,18 @@ impl From<RecordingStatus> for ClientRecordingStatus {
         match status {
             RecordingStatus::Prepared => Self::Prepared,
             RecordingStatus::Recording => Self::Recording,
+            RecordingStatus::Stopped => Self::Stopped,
             RecordingStatus::Completed => Self::Completed,
         }
     }
 }
 
-/// Client-facing participant representation. It deliberately contains no domain behavior.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientParticipant {
     pub id: String,
     pub roles: Vec<ClientRole>,
 }
 
-/// Client-facing recording representation. The artifact remains an opaque reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientRecording {
     pub id: String,
@@ -91,7 +90,6 @@ pub struct ClientRecording {
     pub artifact_id: Option<String>,
 }
 
-/// Read model returned across the application/client boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientProductionSession {
     pub id: String,
@@ -160,11 +158,6 @@ impl<E> From<ProductionSessionError> for ClientSessionError<E> {
     }
 }
 
-/// Minimal application-facing client facade.
-///
-/// It intentionally stops at the application boundary: transport, HTTP, WebSocket,
-/// authentication and serialization are outside this type and can be added by a
-/// concrete client without changing Core or the application use cases.
 pub struct ClientSessionService<'a, R>
 where
     R: ProductionSessionRepository,
@@ -180,7 +173,6 @@ where
         Self { repository }
     }
 
-    /// Resolve provider-independent session context through an injected provider.
     pub fn context<P>(
         &self,
         provider: &P,
@@ -193,10 +185,6 @@ where
         provider.resolve(session_id, actor_id)
     }
 
-    /// Return the Core-backed recording state for a client-facing actor.
-    ///
-    /// The projection reads directly from the persisted ProductionSession; no
-    /// browser-side lifecycle state is consulted or created.
     pub fn recording_state(
         &self,
         session_id: &str,
@@ -225,7 +213,6 @@ where
         })
     }
 
-    /// Ask the injected provider whether the actor may participate in recording now.
     pub fn can_participate<P>(
         &self,
         provider: &P,
