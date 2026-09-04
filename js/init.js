@@ -1,9 +1,9 @@
 /*
- * NC-PoRe — Talk recording UI bootstrap.
+ * NC-PoRE — Talk recording UI bootstrap.
  *
- * Talk supplies the mount point and role/context. This module bridges the
- * Talk audio track into the neutral browser recorder and keeps the UI driven
- * by explicit recording lifecycle events.
+ * Talk supplies the mount point and role/context. Core/Application supplies the
+ * authoritative recording state through the state bridge. Local recorder events
+ * remain technical capture signals and never become a second lifecycle machine.
  */
 
 (() => {
@@ -12,13 +12,16 @@
 	const Connector = window.PoRETalkAudioCaptureConnector
 	const Recorder = window.PoREBrowserRecordingController
 	const Ui = window.PoRETalkRecordingUi
+	const StateBridge = window.PoRETalkRecordingStateBridge
 
-	if (!Connector || !Recorder || !Ui) return
+	if (!Connector || !Recorder || !Ui || !StateBridge) return
 
 	const connector = new Connector()
 	const recorder = new Recorder()
+	const stateBridge = new StateBridge()
 	window.__poreTalkAudioConnector = connector
 	window.__poreTalkRecordingController = recorder
+	window.__poreTalkRecordingStateBridge = stateBridge
 
 	let context = null
 	let sourceTrack = null
@@ -45,12 +48,12 @@
 	const startLocalCapture = async () => {
 		if (!sourceTrack) throw new Error('Talk audio track is not available')
 		await recorder.start(sourceTrack, context?.sourceMetadata || {})
-		publish({ state: 'recording', ready: true })
+		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
 
 	const stopLocalCapture = async reason => {
 		const artifact = await recorder.stop(reason)
-		publish({ state: 'stopping', ready: false, artifact })
+		window.dispatchEvent(new CustomEvent('pore:recording-local-finalized', { detail: artifact }))
 		return artifact
 	}
 
@@ -64,18 +67,34 @@
 
 	window.addEventListener('pore:recording-started', event => {
 		publish({
-			state: 'recording',
-			ready: true,
 			startedAt: event.detail?.startedAt || event.detail?.source?.startedAt,
 		})
 	})
 
 	window.addEventListener('pore:recording-finalized', event => {
-		publish({ state: 'stopping', ready: false, artifact: event.detail })
+		publish({ artifact: event.detail })
 	})
 
 	window.addEventListener('pore:recording-error', event => {
-		publish({ state: 'error', ready: false, error: event.detail?.error })
+		publish({ localCaptureError: event.detail?.error })
+	})
+
+	window.addEventListener('pore:recording-state', event => {
+		const snapshot = event.detail
+		if (!snapshot || !context) return
+		publish({
+			role: snapshot.role,
+			state: snapshot.state,
+			listener: snapshot.listener,
+			confirmed: snapshot.confirmed,
+			ready: snapshot.ready,
+			readyCount: snapshot.readyCount,
+			participantCount: snapshot.participantCount,
+			participants: snapshot.participants,
+			elapsedSeconds: snapshot.elapsedSeconds,
+			startedAt: snapshot.startedAt,
+			error: snapshot.error,
+		})
 	})
 
 	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
@@ -84,7 +103,7 @@
 		try {
 			await startLocalCapture()
 		} catch (error) {
-			publish({ state: 'error', ready: false, error })
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		}
 	})
 
@@ -92,7 +111,7 @@
 		try {
 			await stopLocalCapture(event.detail?.reason || 'host')
 		} catch (error) {
-			publish({ state: 'error', ready: false, error })
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		}
 	})
 
