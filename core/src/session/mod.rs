@@ -296,6 +296,42 @@ impl ProductionSession {
         Ok(())
     }
 
+    /// Persists the fachliche recording stop boundary.
+    ///
+    /// This transition is deliberately separate from technical capture stop,
+    /// Closing Signet emission, preservation, and completion. Callers must
+    /// persist the session after this method before performing those technical
+    /// steps.
+    pub fn stop_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+
+        if self.status != ProductionStatus::Active {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+
+        recording
+            .stop()
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingStopped,
+            Some(recording_id.value().to_owned()),
+        );
+
+        Ok(())
+    }
+
     pub fn complete_recording_by(
         &mut self,
         actor: &ParticipantId,
@@ -554,6 +590,31 @@ mod tests {
             .unwrap();
 
         assert_eq!(session.recordings()[0].participant_id(), Some(&owner));
+    }
+
+    #[test]
+    fn recording_stop_is_persistable_before_completion() {
+        let mut session = create_test_session();
+        let owner = add_owner(&mut session);
+        session.start_by(&owner).unwrap();
+        session
+            .add_recording_by(&owner, Recording::new("recording-stop-001"))
+            .unwrap();
+        let recording_id = RecordingId::new("recording-stop-001");
+        session.start_recording_by(&owner, &recording_id).unwrap();
+
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        assert_eq!(
+            session.recordings()[0].status(),
+            crate::recording::RecordingStatus::Stopped
+        );
+        assert!(
+            session
+                .activities()
+                .iter()
+                .any(|activity| activity.activity_type == ActivityType::RecordingStopped)
+        );
     }
 
     // TEST-10
