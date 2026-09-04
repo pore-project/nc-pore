@@ -175,7 +175,7 @@ mod tests {
             .begin_recording_by(
                 &owner,
                 &nc_pore_core::recording::RecordingId::new("recording-001"),
-                [owner, bob],
+                [owner.clone(), bob],
             )
             .unwrap();
         session
