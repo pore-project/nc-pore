@@ -44,11 +44,9 @@ impl RecordingCoordination {
         if participants.is_empty() {
             return Err(RecordingCoordinationError::NoParticipants);
         }
-        if participants
-            .iter()
-            .enumerate()
-            .any(|(index, participant)| participants[..index].contains(participant))
-        {
+        if participants.iter().enumerate().any(|(index, participant)| {
+            participants[..index].contains(participant)
+        }) {
             return Err(RecordingCoordinationError::ParticipantNotSelected);
         }
 
@@ -174,8 +172,16 @@ mod tests {
     fn recording_participant_set_is_frozen_at_creation() {
         let coordination = coordination();
         assert_eq!(coordination.participants().len(), 2);
-        assert!(coordination.participants().contains(&participant("participant-a")));
-        assert!(coordination.participants().contains(&participant("participant-b")));
+        assert!(
+            coordination
+                .participants()
+                .contains(&participant("participant-a"))
+        );
+        assert!(
+            coordination
+                .participants()
+                .contains(&participant("participant-b"))
+        );
     }
 
     #[test]
@@ -190,13 +196,19 @@ mod tests {
     fn ready_requires_all_selected_participants() {
         let mut coordination = coordination();
         coordination.begin_waiting_for_ready().unwrap();
-        assert_eq!(coordination.mark_ready(&participant("participant-a")), Ok(false));
+        assert_eq!(
+            coordination.mark_ready(&participant("participant-a")),
+            Ok(false)
+        );
         assert_eq!(
             coordination.status(),
             RecordingCoordinationStatus::WaitingForReady
         );
         assert!(!coordination.is_ready());
-        assert_eq!(coordination.mark_ready(&participant("participant-b")), Ok(true));
+        assert_eq!(
+            coordination.mark_ready(&participant("participant-b")),
+            Ok(true)
+        );
         assert!(coordination.is_ready());
     }
 
@@ -214,7 +226,9 @@ mod tests {
     fn participant_cannot_report_ready_twice() {
         let mut coordination = coordination();
         coordination.begin_waiting_for_ready().unwrap();
-        coordination.mark_ready(&participant("participant-a")).unwrap();
+        coordination
+            .mark_ready(&participant("participant-a"))
+            .unwrap();
         assert_eq!(
             coordination.mark_ready(&participant("participant-a")),
             Err(RecordingCoordinationError::AlreadyReady)
@@ -244,9 +258,16 @@ mod tests {
     #[test]
     fn opening_and_stop_markers_are_technical_facts_not_lifecycle_transitions() {
         let mut coordination = coordination();
-        coordination.confirm_opening(&participant("participant-a")).unwrap();
-        coordination.acknowledge_stop(&participant("participant-a")).unwrap();
-        assert_eq!(coordination.status(), RecordingCoordinationStatus::Preparing);
+        coordination
+            .confirm_opening(&participant("participant-a"))
+            .unwrap();
+        coordination
+            .acknowledge_stop(&participant("participant-a"))
+            .unwrap();
+        assert_eq!(
+            coordination.status(),
+            RecordingCoordinationStatus::Preparing
+        );
         assert_eq!(coordination.opening_confirmed_participants().len(), 1);
         assert_eq!(coordination.stop_acknowledged_participants().len(), 1);
     }
