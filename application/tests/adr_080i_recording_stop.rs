@@ -119,7 +119,8 @@ fn fachlicher_stop_is_persisted_before_technical_capture_stop() {
     let capture = ObservingCaptureProvider {
         observation: Arc::clone(&observation),
     };
-    let mut recorder = RecorderApplication::new(RecordingSession::new("recording-080i"), capture, processor);
+    let mut recorder =
+        RecorderApplication::new(RecordingSession::new("recording-080i"), capture, processor);
 
     execute_recording(
         &mut repository,
