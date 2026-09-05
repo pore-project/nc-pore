@@ -7,7 +7,6 @@ edition = "2021"
 chrono = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nc-pore-core = { package = "core", path = "../core" }
 nc-pore-application = { path = "../application" }
-nc-pore-storage = { path = "../storage" }
 recorder = { path = "../recorder" }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
