@@ -2,20 +2,21 @@
 
 ## Status
 
-Implemented as the first thin Nextcloud host adapter around the host-neutral PoRE Runtime boundary.
+Implemented as the thin normal Nextcloud app boundary for V1 recording artifact delivery.
 
-## Boundary
+## V1 boundary
 
 ```text
 Browser completion
-    -> Nextcloud OCS endpoint
+    -> authenticated Nextcloud OCS endpoint
     -> RecordingTransportController
-    -> RuntimeClient
-    -> pore-runtime process
-    -> PoRE Application / Recorder / Persistence
+    -> Nextcloud Files API
+    -> authoritative stored artifact
 ```
 
-The Nextcloud layer owns only the transport and host concerns. It does not create a second recording lifecycle or persistence implementation.
+The browser already owns a fully finalized and durably persisted transfer artifact. V1 therefore does not introduce a second PoRE synchronization queue, sync worker, or remote-transfer lifecycle. Nextcloud is the host and owns the authoritative file storage.
+
+The host-neutral PoRE Runtime remains a separate boundary for PoRE-owned processing and future host variants; it is not required to duplicate the authoritative Nextcloud file in V1.
 
 ## Browser request
 
@@ -30,40 +31,48 @@ The request contains:
 
 The browser sets `OCS-APIRequest: true` and uses the existing Nextcloud session. No second authentication mechanism is introduced.
 
-## Nextcloud adapter
+## Nextcloud storage handoff
 
 `RecordingTransportController` validates the request and obtains the uploaded temporary file through `IRequest::getUploadedFile()`.
 
-`RuntimeClient` starts the configured `pore-runtime` executable without a shell, writes the length-prefixed JSON header followed by the payload bytes to stdin, and decodes the length-prefixed JSON response from stdout.
+`NextcloudArtifactStorage` then uses Nextcloud's public `IRootFolder` / `IUserSession` filesystem APIs. It creates the destination path inside the authenticated user's Nextcloud Files tree and streams the temporary upload into the destination in bounded chunks. It does not access Nextcloud's underlying data directory directly.
 
-The payload is copied in bounded chunks from the PHP upload temporary file; it is not base64-encoded.
+V1 target layout is:
 
-## Configuration
+```text
+PoRE/
+└── Productions/
+    └── <production_id>/
+        └── Recordings/
+            └── <recording_id>/
+                └── <capture_id>.wav
+```
 
-The current development adapter expects two app configuration values:
+## Authoritative completion
 
-- `runtime_binary`: absolute path to the executable `pore-runtime`
-- `runtime_persistence_root`: local filesystem path used by the runtime persistence provider
+A successful HTTP/OCS response alone is not considered sufficient for PoRE completion.
 
-These values are intentionally explicit. V1 packaging and installation automation must later provide the correct runtime binary for the host platform rather than silently guessing a platform-specific executable.
+After writing, the adapter verifies both:
 
-## Completion state
+1. the stored Nextcloud file size equals the finalized payload size;
+2. SHA-256 of the file read back through the Nextcloud Files API equals SHA-256 of the finalized transfer payload.
 
-After a successful `stored` response, the browser completion job records the transport as `completed` in its durable IndexedDB manifest.
+Only after both checks succeed does the controller return `status: stored` together with the Nextcloud file id, path, size and SHA-256. The browser then marks the durable completion job as completed.
 
-If the browser or page disappears before completion, the existing recovery scan can prepare the finalized capture again. The transport adapter is therefore downstream of the durable local preservation boundary.
+This gives PoRE the concrete host-side acknowledgement it needs: the artifact exists in Nextcloud Files and is bit-for-bit identical to the finalized transfer artifact.
 
 ## Explicit non-goals
 
 - No AppAPI dependency
 - No ExApp
-- No standalone PoRE HTTP server
-- No Nextcloud-specific logic inside the Rust runtime
-- No direct WebDAV upload from the browser
-- No second persistence path
+- No standalone PoRE HTTP server for V1
+- No direct browser WebDAV dependency
+- No PoRE synchronization work queue for V1
+- No V1 sync worker
+- No second authoritative persistence path
 - No identity aliasing
-- No production packaging decision for platform-specific runtime binaries
+- No direct access to Nextcloud's private data directory
 
-## Next technical step
+## Architectural consequence
 
-Complete runtime binary packaging/installation for supported Nextcloud environments and then extend the runtime/application handoff from `stored` to synchronization enqueue and authoritative recording completion.
+Nextcloud owns the transport and storage responsibility that it already provides. PoRE owns the capture, durable browser preservation, artifact identity and integrity proof up to the host boundary. V1 completion is the successful, size-checked and hash-checked handoff into Nextcloud Files.
