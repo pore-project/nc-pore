@@ -72,7 +72,9 @@ impl From<serde_json::Error> for RuntimeProtocolError {
 ///
 /// The framing deliberately avoids base64 and keeps the runtime protocol
 /// independent of HTTP, Nextcloud, Talk, or a particular IPC mechanism.
-pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
+pub fn read_request<R: Read>(
+    reader: &mut R,
+) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
     let header_len = read_u32(reader)? as usize;
     if header_len == 0 || header_len > 1024 * 1024 {
         return Err(RuntimeProtocolError::InvalidHeader(
