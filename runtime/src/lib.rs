@@ -4,6 +4,8 @@
 //! framed finalized-artifact request and returns a protocol-level result, but
 //! it does not persist the artifact. Host adapters own the authoritative
 //! storage lifecycle.
+//!
+//! V1 uses the Nextcloud adapter as the authoritative artifact sink.
 
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
