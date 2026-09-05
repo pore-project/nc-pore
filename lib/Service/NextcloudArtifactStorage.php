@@ -14,7 +14,6 @@ use OCP\IUserSession;
 use RuntimeException;
 
 final class NextcloudArtifactStorage {
-	private const DEFAULT_STORAGE_ROOT = 'audio';
 	private const COPY_CHUNK_SIZE = 1024 * 1024;
 	private const CONFIG_STORAGE_ROOT = 'storage_root';
 
@@ -61,31 +60,21 @@ final class NextcloudArtifactStorage {
 			throw new RuntimeException('Unable to calculate finalized artifact hash.');
 		}
 
-		$this->assertPathSegment($productionId);
-		$this->assertPathSegment($productionLabel);
-		$this->assertPathSegment($recordingId);
-		$this->assertPathSegment($captureId);
-
-		$timestamp = $this->parseStartedAt($startedAt);
-		$year = $timestamp->format('Y');
-		$month = $timestamp->format('m');
-		$dayAndTime = $timestamp->format('d - H:i');
-		$leaf = $dayAndTime . ' ' . $productionLabel . ' - ' . $productionId;
+		$path = NextcloudArtifactPath::build(
+			$this->normalizedConfiguredRoot($user->getUID()),
+			$productionId,
+			$productionLabel,
+			$captureId,
+			$startedAt,
+		);
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$configuredRoot = $this->normalizedConfiguredRoot($user->getUID());
-		$folder = $this->ensureConfiguredRoot($userFolder, $configuredRoot);
-		$effectiveRoot = $configuredRoot;
-		if ($effectiveRoot === '') {
-			$effectiveRoot = self::DEFAULT_STORAGE_ROOT;
-			$folder = $this->ensureFolder($folder, self::DEFAULT_STORAGE_ROOT);
-		}
-		$folder = $this->ensureFolder($folder, $year);
-		$folder = $this->ensureFolder($folder, $month);
-		$folder = $this->ensureFolder($folder, $leaf);
+		$folder = $this->ensureConfiguredRoot($userFolder, $path['root']);
+		$folder = $this->ensureFolder($folder, $path['year']);
+		$folder = $this->ensureFolder($folder, $path['month']);
+		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		$filename = $captureId . '.wav';
-		$file = $this->getOrCreateFile($folder, $filename);
+		$file = $this->getOrCreateFile($folder, $path['filename']);
 		$output = $file->fopen('w');
 		if ($output === false) {
 			throw new RuntimeException('Unable to open Nextcloud destination for writing.');
@@ -141,55 +130,29 @@ final class NextcloudArtifactStorage {
 			throw new RuntimeException('Nextcloud stored artifact hash does not match the finalized artifact.');
 		}
 
-		$relativePath = implode('/', array_filter([
-			$effectiveRoot,
-			$year,
-			$month,
-			$leaf,
-			$filename,
-		], static fn (string $part): bool => $part !== ''));
-
 		return [
 			'file_id' => $file->getId(),
-			'path' => $relativePath,
+			'path' => $path['relative_path'],
 			'size' => $storedSize,
 			'sha256' => $storedHash,
 		];
 	}
 
 	private function ensureConfiguredRoot(Folder $userFolder, string $configured): Folder {
-		if ($configured === '') {
-			return $userFolder;
-		}
-
-		$segments = preg_split('#/#', $configured, -1, PREG_SPLIT_NO_EMPTY);
-		if ($segments === false) {
-			throw new RuntimeException('Configured PoRe storage root is invalid.');
-		}
-
 		$folder = $userFolder;
-		foreach ($segments as $segment) {
-			$this->assertPathSegment($segment);
+		foreach (explode('/', $configured) as $segment) {
 			$folder = $this->ensureFolder($folder, $segment);
 		}
 		return $folder;
 	}
 
 	private function normalizedConfiguredRoot(string $userId): string {
-		$configured = trim($this->config->getUserValue(
+		return NextcloudArtifactPath::normalizeRoot($this->config->getUserValue(
 			$userId,
 			Application::APP_ID,
 			self::CONFIG_STORAGE_ROOT,
 			'',
 		));
-		$configured = preg_replace('#[\\/]+#', '/', trim($configured, "\\/")) ?? '';
-		if ($configured === '.') {
-			return '';
-		}
-		if ($configured === '..' || str_starts_with($configured, '../') || str_contains($configured, '/../')) {
-			throw new RuntimeException('Configured PoRe storage root may not escape the user Files root.');
-		}
-		return $configured;
 	}
 
 	private function ensureFolder(Folder $parent, string $name): Folder {
@@ -213,20 +176,6 @@ final class NextcloudArtifactStorage {
 			return $node;
 		} catch (NotFoundException) {
 			return $folder->newFile($filename);
-		}
-	}
-
-	private function assertPathSegment(string $value): void {
-		if ($value === '' || $value === '.' || $value === '..' || strpbrk($value, '/\\') !== false || str_contains($value, "\0")) {
-			throw new RuntimeException('Invalid path segment in finalized artifact identity.');
-		}
-	}
-
-	private function parseStartedAt(string $startedAt): \DateTimeImmutable {
-		try {
-			return new \DateTimeImmutable($startedAt);
-		} catch (\Exception) {
-			throw new RuntimeException('Invalid recording start timestamp.');
 		}
 	}
 }
