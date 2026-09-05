@@ -9,7 +9,10 @@
 use nc_pore_application::browser_recording_artifact::{
     BrowserRecordingArtifact, browser_artifact_processor, persist_browser_recording_artifact,
 };
+use nc_pore_application::synchronization::PersistentSynchronizationQueue;
 use nc_pore_core::identity::ProductionId;
+use nc_pore_core::recording::RecordingArtifactId;
+use nc_pore_infrastructure::FilesystemSynchronizationWorkStore;
 use recorder::persistence::FilesystemPersistenceProvider;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
@@ -125,7 +128,9 @@ fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
 }
 
 /// Handles the V1 finalized-artifact operation through the existing
-/// application/persistence boundary.
+/// application/persistence boundary and records the persisted artifact as
+/// synchronization work. The runtime remains host-neutral: the concrete
+/// remote transfer is deliberately left to a later synchronization worker.
 pub fn handle_submit(
     request: SubmitFinalizedArtifactRequest,
     payload: Vec<u8>,
@@ -154,17 +159,36 @@ pub fn handle_submit(
         payload,
     );
 
-    let persistence = FilesystemPersistenceProvider::new(PathBuf::from(persistence_root.as_ref()));
+    let persistence_root = PathBuf::from(persistence_root.as_ref());
+    let persistence = FilesystemPersistenceProvider::new(&persistence_root);
     let mut processor = browser_artifact_processor(persistence);
 
     match persist_browser_recording_artifact(&mut processor, artifact) {
-        Ok(stored) => SubmitFinalizedArtifactResponse {
-            protocol_version: PROTOCOL_VERSION,
-            request_id,
-            status: "stored".to_owned(),
-            artifact_id: Some(stored.id.value().to_owned()),
-            error_code: None,
-        },
+        Ok(stored) => {
+            let mut queue = PersistentSynchronizationQueue::new(
+                FilesystemSynchronizationWorkStore::new(&persistence_root),
+            );
+            if queue
+                .enqueue(RecordingArtifactId::new(stored.id.value()), *stored.manifest_hash().as_bytes())
+                .is_err()
+            {
+                return SubmitFinalizedArtifactResponse {
+                    protocol_version: PROTOCOL_VERSION,
+                    request_id,
+                    status: "failed".to_owned(),
+                    artifact_id: Some(stored.id.value().to_owned()),
+                    error_code: Some("synchronization_enqueue_failed".to_owned()),
+                };
+            }
+
+            SubmitFinalizedArtifactResponse {
+                protocol_version: PROTOCOL_VERSION,
+                request_id,
+                status: "stored".to_owned(),
+                artifact_id: Some(stored.id.value().to_owned()),
+                error_code: None,
+            }
+        }
         Err(_) => SubmitFinalizedArtifactResponse {
             protocol_version: PROTOCOL_VERSION,
             request_id,
