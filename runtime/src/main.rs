@@ -1,13 +1,7 @@
 use pore_runtime::{handle_submit, read_request, write_response};
-use std::env;
 use std::io::{self, BufReader, BufWriter};
 
 fn main() {
-    let persistence_root = env::var("PORE_PERSISTENCE_ROOT").unwrap_or_else(|_| {
-        eprintln!("PORE_PERSISTENCE_ROOT is required");
-        std::process::exit(2);
-    });
-
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut input = BufReader::new(stdin.lock());
@@ -21,7 +15,7 @@ fn main() {
         }
     };
 
-    let response = handle_submit(request, payload, persistence_root);
+    let response = handle_submit(&request, &payload);
 
     if let Err(error) = write_response(&mut output, &response) {
         eprintln!("runtime response error: {error:?}");
