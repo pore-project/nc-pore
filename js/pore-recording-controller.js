@@ -1,5 +1,5 @@
 /*
- * NC-PoRe — neutral browser recording boundary.
+ * NC-PoRE — neutral browser recording boundary.
  *
  * The recording controller consumes the independent PoRE capture supplied by
  * a host connector. It deliberately does not use MediaRecorder: browser codec
@@ -74,6 +74,9 @@
 				} : null
 				this.recorder = null
 				this.state = 'idle'
+				if (enriched) {
+					window.dispatchEvent(new CustomEvent('pore:recording-local-finalized', { detail: enriched }))
+				}
 				return enriched
 			} catch (error) {
 				this.recorder = null
@@ -88,6 +91,8 @@
 				trackId: track?.id || null,
 				trackLabel: track?.label || null,
 				deviceId: metadata.deviceId || settings.deviceId || null,
+				productionId: metadata.productionId || null,
+				recordingId: metadata.recordingId || null,
 				sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
 				sampleSize: Number.isFinite(settings.sampleSize) ? settings.sampleSize : null,
 				channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,

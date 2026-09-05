@@ -26,6 +26,7 @@
 	let context = null
 	let sourceTrack = null
 	let authoritativeState = null
+	let productionId = null
 
 	const startRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-start-local'))
 	const stopRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
@@ -34,6 +35,7 @@
 		if (!nextContext) return
 		context = {
 			...nextContext,
+			...(productionId ? { productionId } : {}),
 			...(authoritativeState || {}),
 			onStart: nextContext.onStart || startRequested,
 			onStop: nextContext.onStop || stopRequested,
@@ -49,15 +51,25 @@
 
 	const startLocalCapture = async () => {
 		if (!sourceTrack) throw new Error('Talk audio track is not available')
-		await recorder.start(sourceTrack, context?.sourceMetadata || {})
+		if (!productionId) throw new Error('Talk production identity is not available')
+		if (!authoritativeState?.recordingId) throw new Error('Authoritative recording identity is not available')
+		await recorder.start(sourceTrack, {
+			...(context?.sourceMetadata || {}),
+			productionId,
+			recordingId: authoritativeState.recordingId,
+		})
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
 
-	const stopLocalCapture = async reason => {
-		const artifact = await recorder.stop(reason)
-		window.dispatchEvent(new CustomEvent('pore:recording-local-finalized', { detail: artifact }))
-		return artifact
-	}
+	const stopLocalCapture = async reason => recorder.stop(reason)
+
+	window.addEventListener('pore:talk-production-identity', event => {
+		const conversationId = event.detail?.conversationId || null
+		if (!conversationId) return
+
+		productionId = conversationId
+		publish({ productionId })
+	})
 
 	window.addEventListener('pore:talk-audio-track', event => {
 		if (sourceTrack && sourceTrack !== event.detail?.track && recorder.isRecording()) {
@@ -73,7 +85,7 @@
 		})
 	})
 
-	window.addEventListener('pore:recording-finalized', event => {
+	window.addEventListener('pore:recording-local-finalized', event => {
 		publish({ artifact: event.detail })
 	})
 
@@ -85,8 +97,11 @@
 		const snapshot = event.detail
 		if (!snapshot) return
 		authoritativeState = snapshot
+		if (snapshot.productionId) productionId = snapshot.productionId
 		if (!context) return
 		publish({
+			productionId: snapshot.productionId || productionId,
+			recordingId: snapshot.recordingId,
 			role: snapshot.role,
 			state: snapshot.state,
 			listener: snapshot.listener,

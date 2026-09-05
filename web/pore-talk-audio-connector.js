@@ -5,6 +5,10 @@
  * only to learn which microphone Talk currently has selected. PoRE opens its
  * own capture from that device before Talk's communication processing/encoding
  * path. The resulting capture track is owned by PoRE.
+ *
+ * The connector may also expose the current Talk conversation identity. This is
+ * host context only: callers map the provider-native conversation token to
+ * Core.ProductionId without creating a second identity.
  */
 
 (() => {
@@ -73,6 +77,7 @@
 			this._trackSink = sink
 			this._trackEnabler = trackEnabler
 			trackEnabler.connectTrackSink('default', sink)
+			this._publishProductionIdentity()
 			return true
 		}
 
@@ -92,8 +97,29 @@
 			return this.getCurrentCaptureTrack()
 		}
 
+		/**
+		 * Returns the provider-native Talk conversation token, if Talk currently
+		 * has a conversation joined. The value is intentionally not renamed or
+		 * reinterpreted inside the connector.
+		 */
+		getCurrentConversationId() {
+			return window.OCA?.Talk?.SimpleWebRTC?.webrtc?.signaling?.currentRoomToken ?? null
+		}
+
 		dispose() {
 			this._detachFromTalk()
+		}
+
+		_publishProductionIdentity() {
+			const conversationId = this.getCurrentConversationId()
+			if (!conversationId) return
+
+			this._dispatchEvent(new CustomEvent('pore:talk-production-identity', {
+				detail: {
+					provider: 'Talk',
+					conversationId,
+				},
+			}))
 		}
 
 		_acceptTalkSelection(sourceTrack) {
@@ -103,6 +129,8 @@
 				this._replaceCurrent(null)
 				return
 			}
+
+			this._publishProductionIdentity()
 
 			const deviceId = sourceTrack.getSettings?.().deviceId || null
 			const audio = {
