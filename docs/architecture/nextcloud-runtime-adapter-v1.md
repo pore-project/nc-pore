@@ -14,9 +14,9 @@ Browser completion
     -> authoritative stored artifact
 ```
 
-The browser already owns a fully finalized and durably persisted transfer artifact. V1 therefore does not introduce a second PoRE synchronization queue, sync worker, or remote-transfer lifecycle. Nextcloud is the host and owns the authoritative file storage.
+The browser already owns a fully finalized and durably persisted transfer artifact. V1 therefore does not introduce a second server-side artifact lifecycle. Nextcloud is the host and owns the authoritative file storage.
 
-The host-neutral PoRE Runtime remains a separate boundary for PoRE-owned processing and future host variants; it is not required to duplicate the authoritative Nextcloud file in V1.
+The host-neutral PoRe Runtime remains a separate boundary for PoRe-owned processing and future host variants; it is not required to duplicate the authoritative Nextcloud file in V1.
 
 ## Browser request
 
@@ -112,8 +112,6 @@ The setting endpoint accepts only a relative Files path. Absolute server paths a
 - No ExApp
 - No standalone PoRe HTTP server for V1
 - No direct browser WebDAV dependency
-- No PoRe synchronization work queue for V1
-- No V1 sync worker
 - No second authoritative persistence path
 - No identity aliasing
 - No direct access to Nextcloud's private data directory
