@@ -56,8 +56,10 @@ final class RecordingTransportController extends OCSController {
 
 			$stored = $this->artifactStorage->storeFinalizedArtifact(
 				$this->requiredString($decoded, 'production_id'),
+				$this->requiredString($decoded, 'production_label'),
 				$this->requiredString($decoded, 'recording_id'),
 				$this->requiredString($decoded, 'capture_id'),
+				$this->requiredString($decoded, 'started_at'),
 				$payloadPath,
 				(int)$payloadLength,
 			);
