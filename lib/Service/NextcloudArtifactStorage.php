@@ -93,7 +93,6 @@ final class NextcloudArtifactStorage {
 			throw new RuntimeException('Nextcloud stored size does not match the finalized artifact.');
 		}
 
-		$storedHash = hash_final(hash_init('sha256'));
 		$storedInput = $file->fopen('r');
 		if ($storedInput === false) {
 			throw new RuntimeException('Unable to reopen stored Nextcloud artifact.');
