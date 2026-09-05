@@ -1,5 +1,5 @@
 use nc_pore_application::synchronization::{PersistentSynchronizationQueue, SynchronizationWorkStore};
-use nc_pore_infrastructure::FilesystemSynchronizationWorkStore;
+use nc_pore_storage::FilesystemSynchronizationWorkStore;
 use recorder::persistence::{
     FilesystemPersistenceProvider, PersistenceLoadResult, PersistenceProvider,
 };
@@ -123,7 +123,9 @@ fn runtime_process_persists_a_finalized_browser_artifact_and_queues_sync_end_to_
             let queue = PersistentSynchronizationQueue::new(
                 FilesystemSynchronizationWorkStore::new(&persistence_root),
             );
-            let work = queue.list().expect("synchronization work should be readable");
+            let work = queue
+                .list()
+                .expect("synchronization work should be readable");
             assert_eq!(work.len(), 1);
             assert_eq!(work[0].artifact_id().value(), request.capture_id);
             assert_eq!(work[0].manifest_hash(), artifact.manifest_hash().as_bytes());
