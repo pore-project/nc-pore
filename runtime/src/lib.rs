@@ -7,7 +7,7 @@
 //! second synchronization path.
 
 use nc_pore_application::browser_recording_artifact::{
-    browser_artifact_processor, persist_browser_recording_artifact, BrowserRecordingArtifact,
+    BrowserRecordingArtifact, browser_artifact_processor, persist_browser_recording_artifact,
 };
 use nc_pore_core::identity::ProductionId;
 use recorder::persistence::FilesystemPersistenceProvider;
