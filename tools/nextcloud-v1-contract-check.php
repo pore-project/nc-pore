@@ -23,12 +23,17 @@ check($custom['relative_path'] === 'Büro/interviews/2026/09/05 - 15:42 Intervie
 $audioRoot = NextcloudArtifactPath::build('audio', 'prod-123', 'Interview', 'capture-456', '2026-09-05T15:42:31+02:00');
 check($audioRoot['relative_path'] === 'audio/2026/09/05 - 15:42 Interview - prod-123/capture-456.wav', 'A custom audio root must not become audio/audio.');
 
-foreach (['../escape', 'foo/../escape', '/absolute/path', "foo\0bar"] as $invalidRoot) {
+foreach (['../escape', 'foo/../escape', '/absolute/path', '\\absolute\\path', 'C:/absolute/path', "foo\0bar"] as $invalidRoot) {
 	try {
 		NextcloudArtifactPath::normalizeRoot($invalidRoot);
 		throw new RuntimeException('Invalid root was accepted: ' . $invalidRoot);
 	} catch (RuntimeException $exception) {
-		check(str_contains($exception->getMessage(), 'escape') || str_contains($exception->getMessage(), 'Invalid path'), 'Invalid root failed for an unexpected reason.');
+		check(
+			str_contains($exception->getMessage(), 'escape')
+				|| str_contains($exception->getMessage(), 'Invalid path')
+				|| str_contains($exception->getMessage(), 'relative Files path'),
+			'Invalid root failed for an unexpected reason.',
+		);
 	}
 }
 
