@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace OCA\PoRe\Service;
 
-use OCP\App\IAppManager;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -14,7 +13,7 @@ use OCP\IUserSession;
 use RuntimeException;
 
 final class NextcloudArtifactStorage {
-	private const DEFAULT_STORAGE_ROOT = 'audio';
+	private const DEFAULT_STORAGE_ROOT = '';
 	private const AUDIO_FOLDER = 'audio';
 	private const COPY_CHUNK_SIZE = 1024 * 1024;
 	private const CONFIG_STORAGE_ROOT = 'storage_root';
@@ -75,7 +74,11 @@ final class NextcloudArtifactStorage {
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 		$folder = $this->ensureConfiguredRoot($userFolder);
-		$folder = $this->ensureFolder($folder, self::AUDIO_FOLDER);
+		if ($this->configuredRootEndsWithAudio()) {
+			// The host explicitly selected an audio root; do not create audio/audio.
+		} else {
+			$folder = $this->ensureFolder($folder, self::AUDIO_FOLDER);
+		}
 		$folder = $this->ensureFolder($folder, $year);
 		$folder = $this->ensureFolder($folder, $month);
 		$folder = $this->ensureFolder($folder, $leaf);
@@ -137,22 +140,41 @@ final class NextcloudArtifactStorage {
 			throw new RuntimeException('Nextcloud stored artifact hash does not match the finalized artifact.');
 		}
 
+		$relativeBase = $this->normalizedConfiguredRoot();
+		$relativePath = implode('/', array_filter([
+			$relativeBase,
+			self::AUDIO_FOLDER,
+			$year,
+			$month,
+			$leaf,
+			$filename,
+		], static fn (string $part): bool => $part !== ''));
+		if ($this->configuredRootEndsWithAudio()) {
+			$relativePath = implode('/', array_filter([
+			$relativeBase,
+			$year,
+			$month,
+			$leaf,
+			$filename,
+		], static fn (string $part): bool => $part !== ''));
+		}
+
 		return [
 			'file_id' => $file->getId(),
-			'path' => $folder->getPath() . '/' . $filename,
+			'path' => $relativePath,
 			'size' => $storedSize,
 			'sha256' => $storedHash,
 		];
 	}
 
 	private function ensureConfiguredRoot(Folder $userFolder): Folder {
-		$configured = trim($this->config->getAppValue('pore', self::CONFIG_STORAGE_ROOT, self::DEFAULT_STORAGE_ROOT));
+		$configured = $this->normalizedConfiguredRoot();
 		if ($configured === '') {
-			$configured = self::DEFAULT_STORAGE_ROOT;
+			return $userFolder;
 		}
 
-		$segments = preg_split('#[\\/]+#', trim($configured, "\\/"), -1, PREG_SPLIT_NO_EMPTY);
-		if ($segments === false || $segments === []) {
+		$segments = preg_split('#/#', $configured, -1, PREG_SPLIT_NO_EMPTY);
+		if ($segments === false) {
 			throw new RuntimeException('Configured PoRE storage root is invalid.');
 		}
 
@@ -162,6 +184,23 @@ final class NextcloudArtifactStorage {
 			$folder = $this->ensureFolder($folder, $segment);
 		}
 		return $folder;
+	}
+
+	private function normalizedConfiguredRoot(): string {
+		$configured = trim($this->config->getAppValue('pore', self::CONFIG_STORAGE_ROOT, self::DEFAULT_STORAGE_ROOT));
+		$configured = preg_replace('#[\\/]+#', '/', trim($configured, "\\/")) ?? '';
+		if ($configured === '.') {
+			return '';
+		}
+		if ($configured === '..' || str_starts_with($configured, '../') || str_contains($configured, '/../')) {
+			throw new RuntimeException('Configured PoRE storage root may not escape the user Files root.');
+		}
+		return $configured;
+	}
+
+	private function configuredRootEndsWithAudio(): bool {
+		$root = $this->normalizedConfiguredRoot();
+		return $root === self::AUDIO_FOLDER || str_ends_with($root, '/' . self::AUDIO_FOLDER);
 	}
 
 	private function ensureFolder(Folder $parent, string $name): Folder {
