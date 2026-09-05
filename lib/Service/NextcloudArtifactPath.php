@@ -30,7 +30,7 @@ final class NextcloudArtifactPath {
 
 		try {
 			$timestamp = new \DateTimeImmutable($startedAt);
-		} catch (\Exception) {
+		} catch (\Throwable) {
 			throw new RuntimeException('Invalid recording start timestamp.');
 		}
 
