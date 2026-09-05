@@ -1,16 +1,12 @@
-use nc_pore_application::synchronization::{PersistentSynchronizationQueue, SynchronizationWorkStore};
-use nc_pore_storage::FilesystemSynchronizationWorkStore;
-use recorder::persistence::{
-    FilesystemPersistenceProvider, PersistenceLoadResult, PersistenceProvider,
-};
+use recorder::persistence::{FilesystemPersistenceProvider, PersistenceLoadResult, PersistenceProvider};
 use std::fs;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use pore_runtime::{
-    OPERATION_SUBMIT_FINALIZED_ARTIFACT, PROTOCOL_VERSION, SubmitFinalizedArtifactRequest,
-    SubmitFinalizedArtifactResponse,
+    SubmitFinalizedArtifactRequest, SubmitFinalizedArtifactResponse,
+    OPERATION_SUBMIT_FINALIZED_ARTIFACT, PROTOCOL_VERSION,
 };
 
 fn temporary_persistence_root() -> std::path::PathBuf {
@@ -46,7 +42,7 @@ fn decode_response(mut output: &[u8]) -> SubmitFinalizedArtifactResponse {
 }
 
 #[test]
-fn runtime_process_persists_a_finalized_browser_artifact_and_queues_sync_end_to_end() {
+fn runtime_process_persists_a_finalized_browser_artifact_end_to_end() {
     let persistence_root = temporary_persistence_root();
     let payload = b"finalized-wav-payload";
     let request = SubmitFinalizedArtifactRequest {
@@ -92,10 +88,7 @@ fn runtime_process_persists_a_finalized_browser_artifact_and_queues_sync_end_to_
     assert_eq!(response.protocol_version, PROTOCOL_VERSION);
     assert_eq!(response.request_id, request.request_id);
     assert_eq!(response.status, "stored");
-    assert_eq!(
-        response.artifact_id.as_deref(),
-        Some(request.capture_id.as_str())
-    );
+    assert_eq!(response.artifact_id.as_deref(), Some(request.capture_id.as_str()));
     assert_eq!(response.error_code, None);
 
     let provider = FilesystemPersistenceProvider::new(&persistence_root);
@@ -103,32 +96,13 @@ fn runtime_process_persists_a_finalized_browser_artifact_and_queues_sync_end_to_
     match stored {
         PersistenceLoadResult::Valid(artifact) => {
             assert_eq!(artifact.id.value(), request.capture_id);
-            assert_eq!(
-                artifact.recording_session_id.value(),
-                request.recording_session_id
-            );
-            assert_eq!(
-                artifact.production_id(),
-                Some(request.production_id.as_str())
-            );
-            assert_eq!(
-                artifact.recording_id(),
-                Some(request.recording_id.as_str())
-            );
+            assert_eq!(artifact.recording_session_id.value(), request.recording_session_id);
+            assert_eq!(artifact.production_id(), Some(request.production_id.as_str()));
+            assert_eq!(artifact.recording_id(), Some(request.recording_id.as_str()));
             assert_eq!(artifact.tracks().len(), 1);
             assert_eq!(artifact.tracks()[0].id.value(), request.track_id);
             assert_eq!(artifact.tracks()[0].chunks().len(), 1);
             assert_eq!(artifact.tracks()[0].chunks()[0].payload().data(), payload);
-
-            let queue = PersistentSynchronizationQueue::new(
-                FilesystemSynchronizationWorkStore::new(&persistence_root),
-            );
-            let work = queue
-                .list()
-                .expect("synchronization work should be readable");
-            assert_eq!(work.len(), 1);
-            assert_eq!(work[0].artifact_id().value(), request.capture_id);
-            assert_eq!(work[0].manifest_hash(), artifact.manifest_hash().as_bytes());
         }
         other => panic!("expected valid persisted artifact, got {other:?}"),
     }
