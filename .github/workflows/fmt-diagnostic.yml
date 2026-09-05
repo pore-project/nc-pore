@@ -19,3 +19,4 @@ jobs:
         with:
           name: rustfmt-diff
           path: rustfmt.diff
+# temporary diagnostic
