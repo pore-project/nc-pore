@@ -1,22 +1,17 @@
 mod artifact_transfer;
 mod config;
 mod error;
-mod synchronization;
 mod webdav;
 
 pub use artifact_transfer::NextcloudArtifactTransfer;
 pub use config::{NextcloudConnectionConfig, NextcloudCredentials};
 pub use error::{NextcloudProviderError, WebDavTransportError};
-pub use synchronization::{
-    new_nextcloud_synchronization_orchestrator, NextcloudSynchronizationError,
-    NextcloudSynchronizationOrchestrator, NextcloudSynchronizationOutcome, NextcloudTransferResult,
-};
 pub use webdav::{HttpWebDavTransport, WebDavClient, WebDavEntry, WebDavTransport};
 
 /// A configured Nextcloud connection for the v1 provider.
 ///
 /// Credentials remain in the infrastructure layer and are never part of the
-/// vendor-neutral synchronization domain.
+/// vendor-neutral recording domain.
 #[derive(Clone, Debug)]
 pub struct NextcloudConnection {
     config: NextcloudConnectionConfig,
