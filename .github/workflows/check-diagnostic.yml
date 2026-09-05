@@ -1,0 +1,28 @@
+name: Temporary Check Diagnostic
+on:
+  push:
+    branches:
+      - feat/v1-nextcloud-runtime-adapter
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt
+      - name: Cargo check
+        run: |
+          set +e
+          cargo check --workspace > cargo-check.log 2>&1
+          status=$?
+          cat cargo-check.log
+          echo "$status" > cargo-check.status
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cargo-check-diagnostic
+          path: |
+            cargo-check.log
+            cargo-check.status
