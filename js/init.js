@@ -14,19 +14,22 @@
 	const Ui = window.PoRETalkRecordingUi
 	const StateBridge = window.PoRETalkRecordingStateBridge
 	const CompletionJob = window.PoREBrowserCompletionJob
+	const RuntimeTransport = window.PoREBrowserRuntimeTransport
 
-	if (!Connector || !Recorder || !Ui || !StateBridge || !CompletionJob) return
+	if (!Connector || !Recorder || !Ui || !StateBridge || !CompletionJob || !RuntimeTransport) return
 
 	const connector = new Connector()
 	const recorder = new Recorder()
 	const stateBridge = new StateBridge()
 	const persistenceStore = window.PoREBrowserPcmPersistenceStore ? new window.PoREBrowserPcmPersistenceStore() : null
 	const completionJob = new CompletionJob({ persistenceStoreFactory: () => persistenceStore })
+	const runtimeTransport = new RuntimeTransport({ completionJob })
 	window.__poreTalkAudioConnector = connector
 	window.__poreTalkRecordingController = recorder
 	window.__poreTalkRecordingStateBridge = stateBridge
 	window.__poreBrowserPcmPersistenceStore = persistenceStore
 	window.__poreBrowserCompletionJob = completionJob
+	window.__poreBrowserRuntimeTransport = runtimeTransport
 
 	let context = null
 	let sourceTrack = null
@@ -62,6 +65,7 @@
 			...(context?.sourceMetadata || {}),
 			productionId,
 			recordingId: authoritativeState.recordingId,
+			productionLabel: context?.productionLabel || context?.title || productionId,
 		})
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}

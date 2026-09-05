@@ -100,6 +100,27 @@
 	border-color: var(--color-error);
 }
 
+.pore-talk-settings {
+	width: 100%;
+}
+
+.pore-talk-settings input[type='text'] {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+}
+
+.pore-talk-settings__description,
+.pore-talk-settings__status {
+	margin-top: var(--default-grid-baseline);
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.pore-talk-settings__status--error {
+	color: var(--color-error);
+}
+
 @keyframes pore-talk-recording-pulse {
 	50% {
 		opacity: .45;

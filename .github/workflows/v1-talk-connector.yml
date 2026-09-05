@@ -3,7 +3,7 @@ name: V1 Talk Connector
 on:
   push:
     branches:
-      - feat/v1-talk-recording-ui
+      - feat/v1-nextcloud-runtime-adapter
   pull_request:
 
 jobs:
@@ -16,10 +16,32 @@ jobs:
           node-version: 22
       - name: Syntax check browser scripts
         run: |
+          node --check js/init.js
+          node --check js/pore-browser-completion-job.js
+          node --check js/pore-browser-pcm-persistence.js
+          node --check js/pore-browser-pcm-recorder.js
+          node --check js/pore-browser-runtime-transport.js
           node --check js/pore-recording-controller.js
           node --check js/pore-talk-audio-connector.js
           node --check js/pore-talk-recording-ui.js
-          node --check js/init.js
+          node --check js/pore-talk-settings.js
+
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP CLI
+        run: sudo apt-get update && sudo apt-get install -y php-cli
+      - name: Syntax check Nextcloud PHP boundary
+        run: |
+          php -l lib/AppInfo/Application.php
+          php -l lib/Controller/RecordingTransportController.php
+          php -l lib/Controller/SettingsController.php
+          php -l lib/Service/NextcloudArtifactPath.php
+          php -l lib/Service/NextcloudArtifactStorage.php
+          php -l tools/nextcloud-v1-contract-check.php
+      - name: Run Nextcloud V1 path contract checks
+        run: php tools/nextcloud-v1-contract-check.php
 
   rust:
     runs-on: ubuntu-latest

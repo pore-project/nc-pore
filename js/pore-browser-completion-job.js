@@ -1,4 +1,4 @@
-/* NC-PoRe — durable browser completion job. */
+/* NC-PoRE — durable browser completion job. */
 (() => {
 	'use strict'
 
@@ -44,7 +44,9 @@
 					captureId: stored.manifest.captureId,
 					recordingSessionId: stored.manifest.recordingSessionId,
 					productionId: stored.manifest.productionId,
+					productionLabel: stored.manifest.productionLabel || stored.manifest.productionTitle || stored.manifest.productionId,
 					recordingId: stored.manifest.recordingId,
+					startedAt: stored.manifest.startedAt || stored.manifest.createdAt || new Date().toISOString(),
 					format: 'audio/wav',
 					encoding: 'pcm_s24le',
 					sampleRate,
@@ -75,6 +77,16 @@
 				})
 				throw error
 			}
+		}
+
+		async markCompleted(captureId, details = {}) {
+			const store = this._store()
+			return store.finalizeCapture(captureId, {
+				completionJob: {
+					status: 'completed',
+					...details,
+				},
+			})
 		}
 
 		async recover() {

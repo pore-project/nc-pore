@@ -1,20 +1,14 @@
-//! Minimal, host-neutral PoRE Runtime boundary.
+//! Minimal, host-neutral PoRE Runtime protocol boundary.
 //!
-//! The runtime is deliberately unaware of Nextcloud and Talk. A host adapter
-//! hands a finalized browser artifact to this boundary using a small framed
-//! stdin/stdout protocol. The runtime translates that request into the
-//! existing Application browser-artifact boundary; it does not create a
-//! second persistence or synchronization path.
+//! The runtime is deliberately unaware of Nextcloud and Talk. It validates a
+//! framed finalized-artifact request and returns a protocol-level result, but
+//! it does not persist the artifact. Host adapters own the authoritative
+//! storage lifecycle.
+//!
+//! V1 uses the Nextcloud adapter as the authoritative artifact sink.
 
-use nc_pore_application::browser_recording_artifact::{
-    browser_artifact_processor, persist_browser_recording_artifact,
-    BrowserRecordingArtifact,
-};
-use nc_pore_core::identity::ProductionId;
-use recorder::persistence::FilesystemPersistenceProvider;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
-use std::path::Path;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const OPERATION_SUBMIT_FINALIZED_ARTIFACT: &str = "recording.submit_finalized_artifact";
@@ -70,10 +64,9 @@ impl From<serde_json::Error> for RuntimeProtocolError {
 ///   4-byte big-endian JSON header length
 ///   UTF-8 JSON header
 ///   raw payload bytes, whose length is declared by `payload_length`
-///
-/// The framing deliberately avoids base64 and keeps the runtime protocol
-/// independent of HTTP, Nextcloud, Talk, or a particular IPC mechanism.
-pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
+pub fn read_request<R: Read>(
+    reader: &mut R,
+) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
     let header_len = read_u32(reader)? as usize;
     if header_len == 0 || header_len > 1024 * 1024 {
         return Err(RuntimeProtocolError::InvalidHeader(
@@ -103,76 +96,50 @@ pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactR
     Ok((request, payload))
 }
 
-/// Writes one JSON response frame to stdout.
 pub fn write_response<W: Write>(
     writer: &mut W,
     response: &SubmitFinalizedArtifactResponse,
 ) -> Result<(), RuntimeProtocolError> {
     let bytes = serde_json::to_vec(response)?;
-    let len = u32::try_from(bytes.len()).map_err(|_| {
-        RuntimeProtocolError::InvalidHeader("response header too large".to_owned())
-    })?;
+    let len = u32::try_from(bytes.len())
+        .map_err(|_| RuntimeProtocolError::InvalidHeader("response header too large".to_owned()))?;
     writer.write_all(&len.to_be_bytes())?;
     writer.write_all(&bytes)?;
     writer.flush()?;
     Ok(())
 }
 
-fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
-    let mut bytes = [0_u8; 4];
-    reader.read_exact(&mut bytes)?;
-    Ok(u32::from_be_bytes(bytes))
-}
-
-/// Handles the V1 finalized-artifact operation through the existing
-/// application/persistence boundary.
+/// Validates a finalized artifact at the host-neutral protocol boundary.
+///
+/// This function deliberately does not persist the payload. In V1, the
+/// Nextcloud adapter owns authoritative storage and integrity confirmation.
 pub fn handle_submit(
-    request: SubmitFinalizedArtifactRequest,
-    payload: Vec<u8>,
-    persistence_root: impl AsRef<Path>,
+    request: &SubmitFinalizedArtifactRequest,
+    payload: &[u8],
 ) -> SubmitFinalizedArtifactResponse {
-    let request_id = request.request_id.clone();
-
     if request.payload_length != payload.len() as u64 {
         return SubmitFinalizedArtifactResponse {
             protocol_version: PROTOCOL_VERSION,
-            request_id,
+            request_id: request.request_id.clone(),
             status: "rejected".to_owned(),
             artifact_id: None,
             error_code: Some("payload_length_mismatch".to_owned()),
         };
     }
 
-    let artifact = BrowserRecordingArtifact::new(
-        request.capture_id,
-        request.recording_session_id,
-        ProductionId::new(request.production_id),
-        request.recording_id,
-        request.track_id,
-        request.sample_rate_hz,
-        request.channels,
-        payload,
-    );
-
-    let persistence = FilesystemPersistenceProvider::new(persistence_root);
-    let mut processor = browser_artifact_processor(persistence);
-
-    match persist_browser_recording_artifact(&mut processor, artifact) {
-        Ok(stored) => SubmitFinalizedArtifactResponse {
-            protocol_version: PROTOCOL_VERSION,
-            request_id,
-            status: "stored".to_owned(),
-            artifact_id: Some(stored.id.value().to_owned()),
-            error_code: None,
-        },
-        Err(_) => SubmitFinalizedArtifactResponse {
-            protocol_version: PROTOCOL_VERSION,
-            request_id,
-            status: "failed".to_owned(),
-            artifact_id: None,
-            error_code: Some("persistence_failed".to_owned()),
-        },
+    SubmitFinalizedArtifactResponse {
+        protocol_version: PROTOCOL_VERSION,
+        request_id: request.request_id.clone(),
+        status: "accepted".to_owned(),
+        artifact_id: Some(request.capture_id.clone()),
+        error_code: None,
     }
+}
+
+fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
+    let mut bytes = [0_u8; 4];
+    reader.read_exact(&mut bytes)?;
+    Ok(u32::from_be_bytes(bytes))
 }
 
 #[cfg(test)]
@@ -210,11 +177,34 @@ mod tests {
     }
 
     #[test]
+    fn accepted_request_does_not_claim_persistence() {
+        let request = request();
+        let response = handle_submit(&request, &[1, 2, 3, 4]);
+
+        assert_eq!(response.status, "accepted");
+        assert_eq!(response.artifact_id.as_deref(), Some("capture-001"));
+        assert_eq!(response.error_code, None);
+    }
+
+    #[test]
+    fn payload_length_mismatch_is_rejected() {
+        let request = request();
+        let response = handle_submit(&request, &[1, 2, 3]);
+
+        assert_eq!(response.status, "rejected");
+        assert_eq!(response.artifact_id, None);
+        assert_eq!(
+            response.error_code.as_deref(),
+            Some("payload_length_mismatch")
+        );
+    }
+
+    #[test]
     fn response_is_a_small_json_frame() {
         let response = SubmitFinalizedArtifactResponse {
             protocol_version: PROTOCOL_VERSION,
             request_id: "request-001".to_owned(),
-            status: "stored".to_owned(),
+            status: "accepted".to_owned(),
             artifact_id: Some("capture-001".to_owned()),
             error_code: None,
         };
