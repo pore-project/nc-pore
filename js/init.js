@@ -19,9 +19,11 @@
 	const connector = new Connector()
 	const recorder = new Recorder()
 	const stateBridge = new StateBridge()
+	const persistenceStore = window.PoREBrowserPcmPersistenceStore ? new window.PoREBrowserPcmPersistenceStore() : null
 	window.__poreTalkAudioConnector = connector
 	window.__poreTalkRecordingController = recorder
 	window.__poreTalkRecordingStateBridge = stateBridge
+	window.__poreBrowserPcmPersistenceStore = persistenceStore
 
 	let context = null
 	let sourceTrack = null
@@ -142,10 +144,21 @@
 		}
 	})
 
+	const announceRecoveryCandidates = async () => {
+		if (!persistenceStore) return
+		try {
+			const captures = await persistenceStore.listRecoverableCaptures()
+			if (captures.length) window.dispatchEvent(new CustomEvent('pore:recording-recovery-available', { detail: { captures } }))
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		}
+	}
+
 	const tryAttach = () => {
 		if (connector.attachToTalk()) return
 		window.setTimeout(tryAttach, 100)
 	}
 
+	void announceRecoveryCandidates()
 	tryAttach()
 })()

@@ -22,6 +22,7 @@ class Application extends App implements IBootstrap {
 
 	public function boot(IBootContext $context): void {
 		Util::addStyle(self::APP_ID, 'pore-talk-recording');
+		Util::addInitScript(self::APP_ID, 'pore-browser-pcm-persistence');
 		Util::addInitScript(self::APP_ID, 'pore-recording-controller');
 		Util::addInitScript(self::APP_ID, 'pore-browser-pcm-recorder');
 		Util::addInitScript(self::APP_ID, 'pore-talk-audio-connector');

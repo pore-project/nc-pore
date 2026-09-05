@@ -47,7 +47,11 @@
 			this.state = 'starting'
 
 			try {
-				await this.recorder.start(track)
+				await this.recorder.start(track, {
+					...sourceMetadata,
+					captureId: this.captureId,
+					recordingSessionId: this.recordingSessionId,
+				})
 				this.state = 'recording'
 				window.dispatchEvent(new CustomEvent('pore:recording-started', { detail: {
 					sequence: this.sequence,
