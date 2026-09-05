@@ -13,17 +13,20 @@
 	const Recorder = window.PoREBrowserRecordingController
 	const Ui = window.PoRETalkRecordingUi
 	const StateBridge = window.PoRETalkRecordingStateBridge
+	const CompletionJob = window.PoREBrowserCompletionJob
 
-	if (!Connector || !Recorder || !Ui || !StateBridge) return
+	if (!Connector || !Recorder || !Ui || !StateBridge || !CompletionJob) return
 
 	const connector = new Connector()
 	const recorder = new Recorder()
 	const stateBridge = new StateBridge()
 	const persistenceStore = window.PoREBrowserPcmPersistenceStore ? new window.PoREBrowserPcmPersistenceStore() : null
+	const completionJob = new CompletionJob({ persistenceStoreFactory: () => persistenceStore })
 	window.__poreTalkAudioConnector = connector
 	window.__poreTalkRecordingController = recorder
 	window.__poreTalkRecordingStateBridge = stateBridge
 	window.__poreBrowserPcmPersistenceStore = persistenceStore
+	window.__poreBrowserCompletionJob = completionJob
 
 	let context = null
 	let sourceTrack = null
@@ -68,23 +71,18 @@
 	window.addEventListener('pore:talk-production-identity', event => {
 		const conversationId = event.detail?.conversationId || null
 		if (!conversationId) return
-
 		productionId = conversationId
 		publish({ productionId })
 	})
 
 	window.addEventListener('pore:talk-audio-track', event => {
-		if (sourceTrack && sourceTrack !== event.detail?.track && recorder.isRecording()) {
-			recorder.noteSourceChange(sourceTrack, event.detail?.track)
-		}
+		if (sourceTrack && sourceTrack !== event.detail?.track && recorder.isRecording()) recorder.noteSourceChange(sourceTrack, event.detail?.track)
 		sourceTrack = event.detail?.track || null
 		if (sourceTrack) publish({ localCaptureAvailable: true })
 	})
 
 	window.addEventListener('pore:recording-started', event => {
-		publish({
-			startedAt: event.detail?.startedAt || event.detail?.source?.startedAt,
-		})
+		publish({ startedAt: event.detail?.startedAt || event.detail?.source?.startedAt })
 	})
 
 	window.addEventListener('pore:recording-local-finalized', event => {
@@ -93,15 +91,16 @@
 		if (!artifact) return
 		try {
 			const handoff = recorder.createPersistenceHandoff(artifact)
+			void completionJob.enqueue(handoff).catch(error => {
+				window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+			})
 			window.dispatchEvent(new CustomEvent('pore:recording-artifact-persistence-ready', { detail: handoff }))
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		}
 	})
 
-	window.addEventListener('pore:recording-error', event => {
-		publish({ localCaptureError: event.detail?.error })
-	})
+	window.addEventListener('pore:recording-error', event => publish({ localCaptureError: event.detail?.error }))
 
 	window.addEventListener('pore:recording-state', event => {
 		const snapshot = event.detail
@@ -129,19 +128,11 @@
 	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
 
 	window.addEventListener('pore:recording-ui-start-local', async () => {
-		try {
-			await startLocalCapture()
-		} catch (error) {
-			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
-		}
+		try { await startLocalCapture() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 	})
 
 	window.addEventListener('pore:recording-ui-stop-local', async event => {
-		try {
-			await stopLocalCapture(event.detail?.reason || 'host')
-		} catch (error) {
-			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
-		}
+		try { await stopLocalCapture(event.detail?.reason || 'host') } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 	})
 
 	const announceRecoveryCandidates = async () => {
@@ -149,10 +140,15 @@
 		try {
 			const captures = await persistenceStore.listRecoverableCaptures()
 			if (captures.length) window.dispatchEvent(new CustomEvent('pore:recording-recovery-available', { detail: { captures } }))
+			await completionJob.recover()
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		}
 	}
+
+	window.addEventListener('pore:recording-transport-ready', event => {
+		window.dispatchEvent(new CustomEvent('pore:recording-completion-prepared', { detail: event.detail }))
+	})
 
 	const tryAttach = () => {
 		if (connector.attachToTalk()) return

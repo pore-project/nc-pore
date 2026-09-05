@@ -78,7 +78,7 @@
 			const db = await this._database()
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
 			if (!manifest) throw new Error(`PoRE capture manifest not found: ${captureId}`)
-			const finalized = { ...manifest, ...patch, status: 'finalized', finalizedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+			const finalized = { ...manifest, ...patch, status: 'finalized', finalizedAt: manifest.finalizedAt || new Date().toISOString(), updatedAt: new Date().toISOString() }
 			await this._put(db, MANIFEST_STORE, finalized)
 			return finalized
 		}
@@ -100,7 +100,7 @@
 		async listRecoverableCaptures() {
 			const db = await this._database()
 			const manifests = await this._getAll(db, MANIFEST_STORE)
-			return manifests.filter(manifest => manifest.status !== 'finalized')
+			return manifests.filter(manifest => manifest.status !== 'finalized' || manifest.completionJob?.status !== 'completed')
 		}
 
 		async removeCapture(captureId) {
