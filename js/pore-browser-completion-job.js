@@ -1,4 +1,4 @@
-/* NC-PoRe — durable browser completion job. */
+/* NC-PoRE — durable browser completion job. */
 (() => {
 	'use strict'
 
@@ -75,6 +75,16 @@
 				})
 				throw error
 			}
+		}
+
+		async markCompleted(captureId, details = {}) {
+			const store = this._store()
+			return store.finalizeCapture(captureId, {
+				completionJob: {
+					status: 'completed',
+					...details,
+				},
+			})
 		}
 
 		async recover() {
