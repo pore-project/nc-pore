@@ -50,7 +50,15 @@ final class NextcloudArtifactPath {
 	}
 
 	public static function normalizeRoot(string $configuredRoot): string {
-		$root = preg_replace('#[\\/]+#', '/', trim($configuredRoot, " \\//")) ?? '';
+		$raw = trim($configuredRoot);
+		if ($raw === '' || $raw === '.') {
+			return '';
+		}
+		if (str_starts_with($raw, '/') || str_starts_with($raw, '\\') || preg_match('/^[A-Za-z]:[\\\\\/]/', $raw) === 1) {
+			throw new RuntimeException('Configured PoRe storage root must be a relative Files path.');
+		}
+
+		$root = preg_replace('#[\\/]+#', '/', trim($raw, "\\/")) ?? '';
 		if ($root === '' || $root === '.') {
 			return '';
 		}
