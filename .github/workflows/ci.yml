@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - feat/v1-nextcloud-runtime-adapter
   pull_request:
     branches:
       - main
