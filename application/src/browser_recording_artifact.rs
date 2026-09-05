@@ -87,11 +87,8 @@ impl BrowserRecordingArtifact {
     /// No Core identity is reused as a technical artifact/session identity.
     pub fn into_capture_result(&self) -> CaptureResult {
         let mut result = CaptureResult::new(self.capture_id.clone());
-        let configuration = RecordingConfiguration::new(
-            self.sample_rate_hz,
-            self.channels,
-            SampleFormat::Pcm24,
-        );
+        let configuration =
+            RecordingConfiguration::new(self.sample_rate_hz, self.channels, SampleFormat::Pcm24);
         let mut track = CaptureTrack::with_configuration(self.track_id.clone(), configuration);
         track.add_chunk(CaptureChunk::with_payload(1, self.payload.clone()));
         result.add_track(track);
