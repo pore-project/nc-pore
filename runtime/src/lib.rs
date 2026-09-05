@@ -99,9 +99,8 @@ pub fn write_response<W: Write>(
     response: &SubmitFinalizedArtifactResponse,
 ) -> Result<(), RuntimeProtocolError> {
     let bytes = serde_json::to_vec(response)?;
-    let len = u32::try_from(bytes.len()).map_err(|_| {
-        RuntimeProtocolError::InvalidHeader("response header too large".to_owned())
-    })?;
+    let len = u32::try_from(bytes.len())
+        .map_err(|_| RuntimeProtocolError::InvalidHeader("response header too large".to_owned()))?;
     writer.write_all(&len.to_be_bytes())?;
     writer.write_all(&bytes)?;
     writer.flush()?;
