@@ -1,4 +1,4 @@
-/* NC-PoRE — browser-to-host runtime transport adapter. */
+/* NC-PoRE — browser-to-Nextcloud artifact transport adapter. */
 (() => {
 	'use strict'
 
@@ -14,9 +14,9 @@
 		}
 
 		async submit(descriptor) {
-			if (!descriptor?.blob) throw new Error('PoRE runtime transport requires a finalized payload')
+			if (!descriptor?.blob) throw new Error('PoRE transport requires a finalized payload')
 			if (!descriptor.captureId || !descriptor.recordingSessionId || !descriptor.productionId || !descriptor.recordingId) {
-				throw new Error('PoRE runtime transport requires authoritative and technical identities')
+				throw new Error('PoRE transport requires authoritative and technical identities')
 			}
 			if (this.active.has(descriptor.captureId)) return null
 			this.active.add(descriptor.captureId)
@@ -57,13 +57,17 @@
 				})
 				const body = await response.json()
 				if (!response.ok || body?.ocs?.meta?.status !== 'ok' || body?.ocs?.data?.status !== 'stored') {
-					throw new Error(body?.ocs?.data?.error_code || `PoRE runtime transport failed (${response.status})`)
+					throw new Error(body?.ocs?.data?.error_code || `PoRE transport failed (${response.status})`)
 				}
 
 				if (this.completionJob?.markCompleted) {
 					await this.completionJob.markCompleted(descriptor.captureId, {
 						requestId,
 						artifactId: body.ocs.data.artifact_id,
+						fileId: body.ocs.data.file_id,
+						path: body.ocs.data.path,
+						size: body.ocs.data.size,
+						sha256: body.ocs.data.sha256,
 						completedAt: new Date().toISOString(),
 					})
 				}
