@@ -154,7 +154,7 @@ pub fn handle_submit(
         payload,
     );
 
-    let persistence = FilesystemPersistenceProvider::new(persistence_root);
+    let persistence = FilesystemPersistenceProvider::new(persistence_root.as_ref().to_path_buf());
     let mut processor = browser_artifact_processor(persistence);
 
     match persist_browser_recording_artifact(&mut processor, artifact) {
