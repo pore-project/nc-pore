@@ -26,6 +26,12 @@ describe('Browser recording controller', () => {
 		})
 		const artifact = await controller.stop('host')
 
+		expect(recorder.start).toHaveBeenCalledWith(createTrack(), {
+			productionId: 'conversation-42',
+			recordingId: 'recording-17',
+			captureId: 'capture-17',
+			recordingSessionId: 'recorder-session-17',
+		})
 		expect(recorder.start).toHaveBeenCalledTimes(1)
 		expect(artifact.source.productionId).toBe('conversation-42')
 		expect(artifact.source.recordingId).toBe('recording-17')
