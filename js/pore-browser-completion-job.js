@@ -94,6 +94,9 @@
 		_validateHandoff(handoff) {
 			const required = ['productionId', 'recordingId', 'captureId', 'recordingSessionId']
 			if (!handoff || required.some(key => !handoff[key])) throw new Error('PoRE completion job requires authoritative and technical identities')
+			if (handoff.captureId === handoff.productionId || handoff.captureId === handoff.recordingId || handoff.recordingSessionId === handoff.productionId || handoff.recordingSessionId === handoff.recordingId) {
+				throw new Error('PoRE completion job requires distinct technical identities')
+			}
 		}
 	}
 
