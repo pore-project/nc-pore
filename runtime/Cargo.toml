@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 nc-pore-application = { package = "nc-pore-application", path = "../application" }
 nc-pore-core = { package = "core", path = "../core" }
-nc-pore-infrastructure = { package = "infrastructure", path = "../infrastructure" }
+nc-pore-storage = { path = "../storage" }
 recorder = { path = "../recorder" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
