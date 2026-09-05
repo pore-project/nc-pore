@@ -109,10 +109,7 @@ fn runtime_process_persists_a_finalized_browser_artifact_end_to_end() {
                 artifact.production_id(),
                 Some(request.production_id.as_str())
             );
-            assert_eq!(
-                artifact.recording_id(),
-                Some(request.recording_id.as_str())
-            );
+            assert_eq!(artifact.recording_id(), Some(request.recording_id.as_str()));
             assert_eq!(artifact.tracks().len(), 1);
             assert_eq!(artifact.tracks()[0].id.value(), request.track_id);
             assert_eq!(artifact.tracks()[0].chunks().len(), 1);
