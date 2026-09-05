@@ -4,30 +4,43 @@ declare(strict_types=1);
 
 namespace OCA\PoRe\Service;
 
+use OCP\App\IAppManager;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
+use OCP\IConfig;
 use OCP\IUserSession;
 use RuntimeException;
 
 final class NextcloudArtifactStorage {
-	private const ROOT_FOLDER = 'PoRE';
+	private const DEFAULT_STORAGE_ROOT = 'audio';
+	private const AUDIO_FOLDER = 'audio';
 	private const COPY_CHUNK_SIZE = 1024 * 1024;
+	private const CONFIG_STORAGE_ROOT = 'storage_root';
 
 	public function __construct(
 		private readonly IRootFolder $rootFolder,
 		private readonly IUserSession $userSession,
+		private readonly IConfig $config,
 	) {
 	}
 
 	/**
+	 * Store the finalized artifact strictly below the authenticated user's Files root.
+	 *
+	 * The configured storage root is a Nextcloud Files-relative path, never a server
+	 * filesystem path. For example: "Büro/interviews" becomes
+	 * "Büro/interviews/audio/YYYY/MM/..." inside the current user's Files tree.
+	 *
 	 * @return array{file_id:int, path:string, size:int, sha256:string}
 	 */
 	public function storeFinalizedArtifact(
 		string $productionId,
+		string $productionLabel,
 		string $recordingId,
 		string $captureId,
+		string $startedAt,
 		string $payloadPath,
 		int $payloadLength,
 	): array {
@@ -50,15 +63,22 @@ final class NextcloudArtifactStorage {
 		}
 
 		$this->assertPathSegment($productionId);
+		$this->assertPathSegment($productionLabel);
 		$this->assertPathSegment($recordingId);
 		$this->assertPathSegment($captureId);
 
+		$timestamp = $this->parseStartedAt($startedAt);
+		$year = $timestamp->format('Y');
+		$month = $timestamp->format('m');
+		$dayAndTime = $timestamp->format('d - H:i');
+		$leaf = $dayAndTime . ' ' . $productionLabel . ' - ' . $productionId;
+
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$folder = $this->ensureFolder($userFolder, self::ROOT_FOLDER);
-		$folder = $this->ensureFolder($folder, 'Productions');
-		$folder = $this->ensureFolder($folder, $productionId);
-		$folder = $this->ensureFolder($folder, 'Recordings');
-		$folder = $this->ensureFolder($folder, $recordingId);
+		$folder = $this->ensureConfiguredRoot($userFolder);
+		$folder = $this->ensureFolder($folder, self::AUDIO_FOLDER);
+		$folder = $this->ensureFolder($folder, $year);
+		$folder = $this->ensureFolder($folder, $month);
+		$folder = $this->ensureFolder($folder, $leaf);
 
 		$filename = $captureId . '.wav';
 		$file = $this->getOrCreateFile($folder, $filename);
@@ -119,10 +139,29 @@ final class NextcloudArtifactStorage {
 
 		return [
 			'file_id' => $file->getId(),
-			'path' => self::ROOT_FOLDER . '/Productions/' . $productionId . '/Recordings/' . $recordingId . '/' . $filename,
+			'path' => $folder->getPath() . '/' . $filename,
 			'size' => $storedSize,
 			'sha256' => $storedHash,
 		];
+	}
+
+	private function ensureConfiguredRoot(Folder $userFolder): Folder {
+		$configured = trim($this->config->getAppValue('pore', self::CONFIG_STORAGE_ROOT, self::DEFAULT_STORAGE_ROOT));
+		if ($configured === '') {
+			$configured = self::DEFAULT_STORAGE_ROOT;
+		}
+
+		$segments = preg_split('#[\\/]+#', trim($configured, "\\/"), -1, PREG_SPLIT_NO_EMPTY);
+		if ($segments === false || $segments === []) {
+			throw new RuntimeException('Configured PoRE storage root is invalid.');
+		}
+
+		$folder = $userFolder;
+		foreach ($segments as $segment) {
+			$this->assertPathSegment($segment);
+			$folder = $this->ensureFolder($folder, $segment);
+		}
+		return $folder;
 	}
 
 	private function ensureFolder(Folder $parent, string $name): Folder {
@@ -150,8 +189,16 @@ final class NextcloudArtifactStorage {
 	}
 
 	private function assertPathSegment(string $value): void {
-		if ($value === '' || $value === '.' || $value === '..' || strpbrk($value, '/\\') !== false) {
+		if ($value === '' || $value === '.' || $value === '..' || strpbrk($value, '/\\') !== false || str_contains($value, "\0")) {
 			throw new RuntimeException('Invalid path segment in finalized artifact identity.');
+		}
+	}
+
+	private function parseStartedAt(string $startedAt): \DateTimeImmutable {
+		try {
+			return new \DateTimeImmutable($startedAt);
+		} catch (\Exception) {
+			throw new RuntimeException('Invalid recording start timestamp.');
 		}
 	}
 }
