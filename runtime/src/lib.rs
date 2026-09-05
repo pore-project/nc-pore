@@ -7,8 +7,7 @@
 //! second persistence or synchronization path.
 
 use nc_pore_application::browser_recording_artifact::{
-    browser_artifact_processor, persist_browser_recording_artifact,
-    BrowserRecordingArtifact,
+    BrowserRecordingArtifact, browser_artifact_processor, persist_browser_recording_artifact,
 };
 use nc_pore_core::identity::ProductionId;
 use recorder::persistence::FilesystemPersistenceProvider;
@@ -73,7 +72,9 @@ impl From<serde_json::Error> for RuntimeProtocolError {
 ///
 /// The framing deliberately avoids base64 and keeps the runtime protocol
 /// independent of HTTP, Nextcloud, Talk, or a particular IPC mechanism.
-pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
+pub fn read_request<R: Read>(
+    reader: &mut R,
+) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
     let header_len = read_u32(reader)? as usize;
     if header_len == 0 || header_len > 1024 * 1024 {
         return Err(RuntimeProtocolError::InvalidHeader(
@@ -109,9 +110,8 @@ pub fn write_response<W: Write>(
     response: &SubmitFinalizedArtifactResponse,
 ) -> Result<(), RuntimeProtocolError> {
     let bytes = serde_json::to_vec(response)?;
-    let len = u32::try_from(bytes.len()).map_err(|_| {
-        RuntimeProtocolError::InvalidHeader("response header too large".to_owned())
-    })?;
+    let len = u32::try_from(bytes.len())
+        .map_err(|_| RuntimeProtocolError::InvalidHeader("response header too large".to_owned()))?;
     writer.write_all(&len.to_be_bytes())?;
     writer.write_all(&bytes)?;
     writer.flush()?;
