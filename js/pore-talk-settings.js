@@ -1,5 +1,5 @@
 /*
- * NC-PoRe settings embedded into the Nextcloud Talk settings dialog.
+ * NC-PoRE settings embedded into the Nextcloud Talk settings dialog.
  * Talk exposes this extension point as OCA.Talk.Settings.
  */
 
