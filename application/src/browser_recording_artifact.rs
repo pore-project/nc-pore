@@ -55,14 +55,30 @@ impl BrowserRecordingArtifact {
         }
     }
 
-    pub fn capture_id(&self) -> &str { &self.capture_id }
-    pub fn recording_session_id(&self) -> &str { &self.recording_session_id }
-    pub fn production_id(&self) -> &ProductionId { &self.production_id }
-    pub fn recording_id(&self) -> &str { &self.recording_id }
-    pub fn track_id(&self) -> &str { &self.track_id }
-    pub fn sample_rate_hz(&self) -> u32 { self.sample_rate_hz }
-    pub fn channels(&self) -> u16 { self.channels }
-    pub fn payload(&self) -> &[u8] { &self.payload }
+    pub fn capture_id(&self) -> &str {
+        &self.capture_id
+    }
+    pub fn recording_session_id(&self) -> &str {
+        &self.recording_session_id
+    }
+    pub fn production_id(&self) -> &ProductionId {
+        &self.production_id
+    }
+    pub fn recording_id(&self) -> &str {
+        &self.recording_id
+    }
+    pub fn track_id(&self) -> &str {
+        &self.track_id
+    }
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+    pub fn channels(&self) -> u16 {
+        self.channels
+    }
+    pub fn payload(&self) -> &[u8] {
+        &self.payload
+    }
 
     /// Adapts the browser payload to the existing recorder capture boundary.
     ///
