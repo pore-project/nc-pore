@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace OCA\PoRe\Controller;
 
 use OCA\PoRe\AppInfo\Application;
-use OCA\PoRe\Service\RuntimeClient;
+use OCA\PoRe\Service\NextcloudArtifactStorage;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
@@ -15,7 +15,7 @@ use RuntimeException;
 final class RecordingTransportController extends OCSController {
 	public function __construct(
 		IRequest $request,
-		private readonly RuntimeClient $runtimeClient,
+		private readonly NextcloudArtifactStorage $artifactStorage,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -45,27 +45,24 @@ final class RecordingTransportController extends OCSController {
 				throw new RuntimeException('Unable to determine finalized artifact size.');
 			}
 
-			$runtimeResponse = $this->runtimeClient->submitFinalizedArtifact(
-				[
-					'request_id' => $requestId,
-					'capture_id' => $this->requiredString($decoded, 'capture_id'),
-					'recording_session_id' => $this->requiredString($decoded, 'recording_session_id'),
-					'production_id' => $this->requiredString($decoded, 'production_id'),
-					'recording_id' => $this->requiredString($decoded, 'recording_id'),
-					'track_id' => $this->requiredString($decoded, 'track_id'),
-					'sample_rate_hz' => $this->positiveInt($decoded, 'sample_rate_hz'),
-					'channels' => $this->positiveInt($decoded, 'channels'),
-				],
+			$stored = $this->artifactStorage->storeFinalizedArtifact(
+				$this->requiredString($decoded, 'production_id'),
+				$this->requiredString($decoded, 'recording_id'),
+				$this->requiredString($decoded, 'capture_id'),
 				$payloadPath,
 				(int)$payloadLength,
 			);
 
 			return new DataResponse([
-				'protocol_version' => $runtimeResponse['protocol_version'],
-				'request_id' => $runtimeResponse['request_id'],
-				'status' => $runtimeResponse['status'],
-				'artifact_id' => $runtimeResponse['artifact_id'] ?? null,
-				'error_code' => $runtimeResponse['error_code'] ?? null,
+				'protocol_version' => 1,
+				'request_id' => $requestId,
+				'status' => 'stored',
+				'artifact_id' => $this->requiredString($decoded, 'capture_id'),
+				'file_id' => $stored['file_id'],
+				'path' => $stored['path'],
+				'size' => $stored['size'],
+				'sha256' => $stored['sha256'],
+				'error_code' => null,
 			]);
 		} catch (\Throwable $exception) {
 			return new DataResponse([
@@ -73,7 +70,11 @@ final class RecordingTransportController extends OCSController {
 				'request_id' => $requestId,
 				'status' => 'rejected',
 				'artifact_id' => null,
-				'error_code' => 'runtime_handoff_failed',
+				'file_id' => null,
+				'path' => null,
+				'size' => null,
+				'sha256' => null,
+				'error_code' => 'nextcloud_storage_failed',
 			], 500);
 		}
 	}
@@ -83,19 +84,6 @@ final class RecordingTransportController extends OCSController {
 		$value = $metadata[$key] ?? null;
 		if (!is_string($value) || trim($value) === '') {
 			throw new RuntimeException(sprintf('Metadata field "%s" is required.', $key));
-		}
-		return $value;
-	}
-
-	/** @param array<string, mixed> $metadata */
-	private function positiveInt(array $metadata, string $key): int {
-		$value = $metadata[$key] ?? null;
-		if (!is_int($value) && !is_string($value)) {
-			throw new RuntimeException(sprintf('Metadata field "%s" is required.', $key));
-		}
-		$value = filter_var($value, FILTER_VALIDATE_INT);
-		if ($value === false || $value < 1) {
-			throw new RuntimeException(sprintf('Metadata field "%s" must be a positive integer.', $key));
 		}
 		return $value;
 	}
