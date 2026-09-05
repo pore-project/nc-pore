@@ -12,19 +12,22 @@
 	const SECTION_ID = 'pore'
 	const ELEMENT_NAME = 'pore-talk-settings'
 
-	const request = async (method, body = null) => {
-		const response = await fetch(SETTINGS_URL, {
+	const request = async (method, storageRoot = null) => {
+		const options = {
 			method,
 			credentials: 'same-origin',
 			headers: {
-			Accept: 'application/json',
-			'OCS-APIRequest': 'true',
-			...(body !== null ? { 'Content-Type': 'application/json' } : {}),
-			...(window.OC?.requestToken ? { 'requesttoken': window.OC.requestToken } : {}),
-		},
-		...(body !== null ? { body: JSON.stringify(body) } : {}),
-		})
+				Accept: 'application/json',
+				'OCS-APIRequest': 'true',
+			},
+		}
+		if (method === 'PUT') {
+			const form = new URLSearchParams()
+			form.set('storageRoot', storageRoot ?? '')
+			options.body = form
+		}
 
+		const response = await fetch(SETTINGS_URL, options)
 		const payload = await response.json()
 		if (!response.ok || payload?.ocs?.meta?.status !== 'ok') {
 			throw new Error(payload?.ocs?.meta?.message || 'Unable to update NC-PoRe settings')
@@ -41,9 +44,9 @@
 		render() {
 			this.innerHTML = `
 				<div class="pore-talk-settings">
-					<label for="pore-storage-root">${this.escape(window.t ? window.t(APP_ID, 'Speicherort für Aufnahmen') : 'Speicherort für Aufnahmen')}</label>
+					<label for="pore-storage-root">Speicherort für Aufnahmen</label>
 					<input id="pore-storage-root" type="text" autocomplete="off" placeholder="${DEFAULT_ROOT}">
-					<p class="pore-talk-settings__description">${this.escape(window.t ? window.t(APP_ID, 'Relativer Pfad innerhalb deiner Nextcloud-Dateien. Leer bedeutet audio.') : 'Relativer Pfad innerhalb deiner Nextcloud-Dateien. Leer bedeutet audio.')}</p>
+					<p class="pore-talk-settings__description">Relativer Pfad innerhalb deiner Nextcloud-Dateien. Leer bedeutet audio.</p>
 					<p class="pore-talk-settings__status" aria-live="polite"></p>
 				</div>
 			`
@@ -73,7 +76,7 @@
 			this.setStatus('')
 			this.input.disabled = true
 			try {
-				const settings = await request('PUT', { storage_root: value })
+				const settings = await request('PUT', value)
 				this.input.value = settings.storage_root || ''
 				this.setStatus('Gespeichert')
 			} catch (error) {
@@ -86,10 +89,6 @@
 		setStatus(message, error = false) {
 			this.status.textContent = message
 			this.status.classList.toggle('pore-talk-settings__status--error', error)
-		}
-
-		escape(value) {
-			return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character])
 		}
 	}
 
