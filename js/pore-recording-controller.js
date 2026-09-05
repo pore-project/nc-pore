@@ -9,6 +9,11 @@
 (() => {
 	'use strict'
 
+	const technicalId = prefix => {
+		if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`
+		return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+	}
+
 	class PoREBrowserRecordingController {
 		constructor({ recorderFactory = () => new window.PoREBrowserPcmRecorder() } = {}) {
 			this.recorderFactory = recorderFactory
@@ -17,6 +22,8 @@
 			this.sequence = 0
 			this.sourceChanges = []
 			this.initialSource = null
+			this.captureId = null
+			this.recordingSessionId = null
 		}
 
 		getState() { return this.state }
@@ -30,7 +37,13 @@
 			this.recorder = this.recorderFactory()
 			this.sourceChanges = []
 			this.sequence += 1
-			this.initialSource = this._sourceMetadata(track, sourceMetadata)
+			this.captureId = sourceMetadata.captureId || technicalId('browser-capture')
+			this.recordingSessionId = sourceMetadata.recordingSessionId || technicalId('browser-session')
+			this.initialSource = this._sourceMetadata(track, {
+				...sourceMetadata,
+				captureId: this.captureId,
+				recordingSessionId: this.recordingSessionId,
+			})
 			this.state = 'starting'
 
 			try {
@@ -43,6 +56,8 @@
 			} catch (error) {
 				this.state = 'error'
 				this.recorder = null
+				this.captureId = null
+				this.recordingSessionId = null
 				throw error
 			}
 		}
@@ -82,6 +97,11 @@
 				this.recorder = null
 				this.state = 'error'
 				throw error
+			} finally {
+				if (this.state === 'idle' || this.state === 'error') {
+					this.captureId = null
+					this.recordingSessionId = null
+				}
 			}
 		}
 
@@ -93,10 +113,40 @@
 				deviceId: metadata.deviceId || settings.deviceId || null,
 				productionId: metadata.productionId || null,
 				recordingId: metadata.recordingId || null,
+				captureId: metadata.captureId || null,
+				recordingSessionId: metadata.recordingSessionId || null,
 				sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
 				sampleSize: Number.isFinite(settings.sampleSize) ? settings.sampleSize : null,
 				channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,
 				startedAt: this._startTime || new Date().toISOString(),
+			}
+		}
+
+		createPersistenceHandoff(artifact) {
+			if (!artifact) return null
+			const source = artifact.source || {}
+			const required = ['productionId', 'recordingId', 'captureId', 'recordingSessionId']
+			if (required.some(key => !source[key])) {
+				throw new Error('PoRE browser artifact is missing authoritative or technical identity')
+			}
+			if (!(artifact.blob instanceof Blob)) throw new Error('PoRE browser artifact has no payload Blob')
+
+			return {
+				productionId: source.productionId,
+				recordingId: source.recordingId,
+				captureId: source.captureId,
+				recordingSessionId: source.recordingSessionId,
+				trackId: source.trackId || 'browser-track',
+				sampleRate: artifact.sampleRate || source.sampleRate || null,
+				channels: artifact.channels || source.channelCount || null,
+				format: artifact.format || null,
+				encoding: artifact.encoding || null,
+				size: artifact.size || artifact.blob.size,
+				sequence: artifact.sequence || null,
+				startedAt: artifact.startedAt || source.startedAt || null,
+				stoppedAt: artifact.stoppedAt || null,
+				stopReason: artifact.stopReason || null,
+				blob: artifact.blob,
 			}
 		}
 	}

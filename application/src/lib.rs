@@ -1,3 +1,4 @@
+pub mod browser_recording_artifact;
 pub mod client;
 #[cfg(test)]
 mod client_session_context_tests;

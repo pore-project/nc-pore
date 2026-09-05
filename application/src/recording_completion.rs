@@ -228,8 +228,7 @@ mod tests {
     fn mismatched_artifact_cannot_complete_recording() {
         let (mut repository, production_id, actor, recording_id) = fixture();
         let artifact = persisted_artifact(&production_id, &recording_id);
-        let mismatched =
-            persisted_artifact(&ProductionId::new("other-production"), &recording_id);
+        let mismatched = persisted_artifact(&ProductionId::new("other-production"), &recording_id);
 
         assert_eq!(
             complete_recording_from_artifact(

@@ -86,7 +86,15 @@
 	})
 
 	window.addEventListener('pore:recording-local-finalized', event => {
-		publish({ artifact: event.detail })
+		const artifact = event.detail
+		publish({ artifact })
+		if (!artifact) return
+		try {
+			const handoff = recorder.createPersistenceHandoff(artifact)
+			window.dispatchEvent(new CustomEvent('pore:recording-artifact-persistence-ready', { detail: handoff }))
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		}
 	})
 
 	window.addEventListener('pore:recording-error', event => {
