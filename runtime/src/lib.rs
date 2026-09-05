@@ -1,22 +1,19 @@
 //! Minimal, host-neutral PoRE Runtime boundary.
 //!
 //! The runtime is deliberately unaware of Nextcloud and Talk. A host adapter
-//! hands a finalized browser artifact to this boundary using a small framed
+//! can hand a finalized browser artifact to this boundary using a small framed
 //! stdin/stdout protocol. The runtime translates that request into the
 //! existing Application browser-artifact boundary; it does not create a
-//! second persistence or synchronization path.
+//! second synchronization path.
 
 use nc_pore_application::browser_recording_artifact::{
-    BrowserRecordingArtifact, browser_artifact_processor, persist_browser_recording_artifact,
+    browser_artifact_processor, persist_browser_recording_artifact, BrowserRecordingArtifact,
 };
-use nc_pore_application::synchronization::PersistentSynchronizationQueue;
 use nc_pore_core::identity::ProductionId;
-use nc_pore_core::recording::RecordingArtifactId;
-use nc_pore_storage::FilesystemSynchronizationWorkStore;
 use recorder::persistence::FilesystemPersistenceProvider;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const OPERATION_SUBMIT_FINALIZED_ARTIFACT: &str = "recording.submit_finalized_artifact";
@@ -66,9 +63,16 @@ impl From<serde_json::Error> for RuntimeProtocolError {
     }
 }
 
-pub fn read_request<R: Read>(
-    reader: &mut R,
-) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
+/// Reads one request frame from stdin.
+///
+/// Frame format:
+///   4-byte big-endian JSON header length
+///   UTF-8 JSON header
+///   raw payload bytes, whose length is declared by `payload_length`
+///
+/// The framing deliberately avoids base64 and keeps the runtime protocol
+/// independent of HTTP, Nextcloud, Talk, or a particular IPC mechanism.
+pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
     let header_len = read_u32(reader)? as usize;
     if header_len == 0 || header_len > 1024 * 1024 {
         return Err(RuntimeProtocolError::InvalidHeader(
@@ -117,9 +121,9 @@ fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
     Ok(u32::from_be_bytes(bytes))
 }
 
-/// Persists the finalized artifact and creates the corresponding durable
-/// synchronization work item. The runtime remains host-neutral; a later
-/// synchronization worker owns the concrete remote transfer.
+/// Handles the finalized-artifact operation through the existing
+/// application/persistence boundary. Concrete host storage remains outside
+/// this runtime; the host owns the authoritative remote artifact lifecycle.
 pub fn handle_submit(
     request: SubmitFinalizedArtifactRequest,
     payload: Vec<u8>,
@@ -148,39 +152,17 @@ pub fn handle_submit(
         payload,
     );
 
-    let persistence_root = PathBuf::from(persistence_root.as_ref());
-    let persistence = FilesystemPersistenceProvider::new(&persistence_root);
+    let persistence = FilesystemPersistenceProvider::new(persistence_root);
     let mut processor = browser_artifact_processor(persistence);
 
     match persist_browser_recording_artifact(&mut processor, artifact) {
-        Ok(stored) => {
-            let mut queue = PersistentSynchronizationQueue::new(
-                FilesystemSynchronizationWorkStore::new(&persistence_root),
-            );
-            if queue
-                .enqueue(
-                    RecordingArtifactId::new(stored.id.value()),
-                    *stored.manifest_hash().as_bytes(),
-                )
-                .is_err()
-            {
-                return SubmitFinalizedArtifactResponse {
-                    protocol_version: PROTOCOL_VERSION,
-                    request_id,
-                    status: "failed".to_owned(),
-                    artifact_id: Some(stored.id.value().to_owned()),
-                    error_code: Some("synchronization_enqueue_failed".to_owned()),
-                };
-            }
-
-            SubmitFinalizedArtifactResponse {
-                protocol_version: PROTOCOL_VERSION,
-                request_id,
-                status: "stored".to_owned(),
-                artifact_id: Some(stored.id.value().to_owned()),
-                error_code: None,
-            }
-        }
+        Ok(stored) => SubmitFinalizedArtifactResponse {
+            protocol_version: PROTOCOL_VERSION,
+            request_id,
+            status: "stored".to_owned(),
+            artifact_id: Some(stored.id.value().to_owned()),
+            error_code: None,
+        },
         Err(_) => SubmitFinalizedArtifactResponse {
             protocol_version: PROTOCOL_VERSION,
             request_id,
