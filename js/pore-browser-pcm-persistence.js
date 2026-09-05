@@ -8,9 +8,10 @@
 	const CHUNK_STORE = 'chunks'
 
 	class PoREBrowserPcmPersistenceStore {
-		constructor({ indexedDBFactory = window.indexedDB, dbName = DB_NAME } = {}) {
+		constructor({ indexedDBFactory = window.indexedDB, dbName = DB_NAME, keyRangeFactory = window.IDBKeyRange } = {}) {
 			this.indexedDBFactory = indexedDBFactory
 			this.dbName = dbName
+			this.keyRangeFactory = keyRangeFactory
 			this.db = null
 		}
 
@@ -41,6 +42,7 @@
 				status: 'capturing',
 				chunkCount: 0,
 				lastChunkIndex: -1,
+				chunks: [],
 				updatedAt: new Date().toISOString(),
 			}
 			const db = await this._database()
@@ -52,14 +54,19 @@
 			if (!captureId) throw new Error('PoRE chunk requires captureId')
 			if (!Number.isInteger(index) || index < 0) throw new Error('PoRE chunk requires a non-negative index')
 			const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'application/octet-stream' })
+			const sha256 = await this._sha256(blob)
 			const db = await this._database()
 			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE], 'readwrite', transaction => {
-				transaction.objectStore(CHUNK_STORE).put({ captureId, index, payload: blob, size: blob.size })
+				transaction.objectStore(CHUNK_STORE).put({ captureId, index, payload: blob, size: blob.size, sha256 })
 				const manifestRequest = transaction.objectStore(MANIFEST_STORE).get(captureId)
 				manifestRequest.onsuccess = () => {
 					const manifest = manifestRequest.result
 					if (!manifest) throw new Error(`PoRE capture manifest not found: ${captureId}`)
-					manifest.chunkCount = Math.max(manifest.chunkCount || 0, index + 1)
+					const chunks = Array.isArray(manifest.chunks) ? manifest.chunks.filter(chunk => chunk.index !== index) : []
+					chunks.push({ index, size: blob.size, sha256 })
+					chunks.sort((a, b) => a.index - b.index)
+					manifest.chunks = chunks
+					manifest.chunkCount = chunks.length
 					manifest.lastChunkIndex = Math.max(manifest.lastChunkIndex ?? -1, index)
 					manifest.updatedAt = new Date().toISOString()
 					transaction.objectStore(MANIFEST_STORE).put(manifest)
@@ -81,6 +88,12 @@
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
 			if (!manifest) return null
 			const chunks = await this._getChunks(db, captureId)
+			for (const chunk of chunks) {
+				const expected = manifest.chunks?.find(entry => entry.index === chunk.index)?.sha256
+				if (expected && expected !== chunk.sha256) throw new Error(`PoRE capture chunk integrity check failed: ${captureId}/${chunk.index}`)
+				const actual = await this._sha256(chunk.payload)
+				if (actual !== chunk.sha256) throw new Error(`PoRE capture chunk payload integrity check failed: ${captureId}/${chunk.index}`)
+			}
 			return { manifest, chunks: chunks.map(chunk => chunk.payload) }
 		}
 
@@ -99,6 +112,12 @@
 			})
 		}
 
+		async _sha256(blob) {
+			if (!window.crypto?.subtle) throw new Error('PoRE durable browser preservation requires Web Crypto')
+			const digest = await window.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
+			return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+		}
+
 		_put(db, storeName, value) { return this._request(db, storeName, 'readwrite', store => store.put(value)) }
 		_get(db, storeName, key) { return this._request(db, storeName, 'readonly', store => store.get(key)) }
 		_getAll(db, storeName) { return this._request(db, storeName, 'readonly', store => store.getAll()) }
@@ -106,7 +125,7 @@
 		_getChunks(db, captureId) {
 			return this._request(db, CHUNK_STORE, 'readonly', store => {
 				const index = store.index('captureId')
-				return index.getAll(IDBKeyRange.only(captureId))
+				return index.getAll(this.keyRangeFactory.only(captureId))
 			}).then(chunks => chunks.sort((a, b) => a.index - b.index))
 		}
 
