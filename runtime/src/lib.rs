@@ -12,7 +12,7 @@ use nc_pore_application::browser_recording_artifact::{
 use nc_pore_application::synchronization::PersistentSynchronizationQueue;
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::recording::RecordingArtifactId;
-use nc_pore_infrastructure::FilesystemSynchronizationWorkStore;
+use nc_pore_storage::FilesystemSynchronizationWorkStore;
 use recorder::persistence::FilesystemPersistenceProvider;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
@@ -66,15 +66,6 @@ impl From<serde_json::Error> for RuntimeProtocolError {
     }
 }
 
-/// Reads one request frame from stdin.
-///
-/// Frame format:
-///   4-byte big-endian JSON header length
-///   UTF-8 JSON header
-///   raw payload bytes, whose length is declared by `payload_length`
-///
-/// The framing deliberately avoids base64 and keeps the runtime protocol
-/// independent of HTTP, Nextcloud, Talk, or a particular IPC mechanism.
 pub fn read_request<R: Read>(
     reader: &mut R,
 ) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
@@ -107,7 +98,6 @@ pub fn read_request<R: Read>(
     Ok((request, payload))
 }
 
-/// Writes one JSON response frame to stdout.
 pub fn write_response<W: Write>(
     writer: &mut W,
     response: &SubmitFinalizedArtifactResponse,
@@ -127,10 +117,9 @@ fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
     Ok(u32::from_be_bytes(bytes))
 }
 
-/// Handles the V1 finalized-artifact operation through the existing
-/// application/persistence boundary and records the persisted artifact as
-/// synchronization work. The runtime remains host-neutral: the concrete
-/// remote transfer is deliberately left to a later synchronization worker.
+/// Persists the finalized artifact and creates the corresponding durable
+/// synchronization work item. The runtime remains host-neutral; a later
+/// synchronization worker owns the concrete remote transfer.
 pub fn handle_submit(
     request: SubmitFinalizedArtifactRequest,
     payload: Vec<u8>,
@@ -169,7 +158,10 @@ pub fn handle_submit(
                 FilesystemSynchronizationWorkStore::new(&persistence_root),
             );
             if queue
-                .enqueue(RecordingArtifactId::new(stored.id.value()), *stored.manifest_hash().as_bytes())
+                .enqueue(
+                    RecordingArtifactId::new(stored.id.value()),
+                    *stored.manifest_hash().as_bytes(),
+                )
                 .is_err()
             {
                 return SubmitFinalizedArtifactResponse {
