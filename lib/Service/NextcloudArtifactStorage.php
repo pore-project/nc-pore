@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\PoRe\Service;
 
+use OCA\PoRe\AppInfo\Application;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -72,9 +73,11 @@ final class NextcloudArtifactStorage {
 		$leaf = $dayAndTime . ' ' . $productionLabel . ' - ' . $productionId;
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$configuredRoot = $this->normalizedConfiguredRoot();
+		$configuredRoot = $this->normalizedConfiguredRoot($user->getUID());
 		$folder = $this->ensureConfiguredRoot($userFolder, $configuredRoot);
-		if ($configuredRoot === '') {
+		$effectiveRoot = $configuredRoot;
+		if ($effectiveRoot === '') {
+			$effectiveRoot = self::DEFAULT_STORAGE_ROOT;
 			$folder = $this->ensureFolder($folder, self::DEFAULT_STORAGE_ROOT);
 		}
 		$folder = $this->ensureFolder($folder, $year);
@@ -138,7 +141,6 @@ final class NextcloudArtifactStorage {
 			throw new RuntimeException('Nextcloud stored artifact hash does not match the finalized artifact.');
 		}
 
-		$effectiveRoot = $configuredRoot === '' ? self::DEFAULT_STORAGE_ROOT : $configuredRoot;
 		$relativePath = implode('/', array_filter([
 			$effectiveRoot,
 			$year,
@@ -173,10 +175,10 @@ final class NextcloudArtifactStorage {
 		return $folder;
 	}
 
-	private function normalizedConfiguredRoot(): string {
+	private function normalizedConfiguredRoot(string $userId): string {
 		$configured = trim($this->config->getUserValue(
-			$this->userSession->getUser()?->getUID() ?? '',
-			'pore',
+			$userId,
+			Application::APP_ID,
 			self::CONFIG_STORAGE_ROOT,
 			'',
 		));
