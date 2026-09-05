@@ -70,12 +70,12 @@ mod tests {
     use nc_pore_core::recording::{Recording, RecordingStatus};
     use nc_pore_core::role::ParticipantRole;
     use nc_pore_core::session::ProductionSession;
+    use recorder::application::RecorderApplication;
     use recorder::artifact::coordination::ArtifactCoordinator;
     use recorder::artifact::processing::RecordingArtifactProcessor;
     use recorder::audio::{CaptureProvider, CaptureResult, RecordingConfiguration};
     use recorder::persistence::InMemoryPersistenceProvider;
     use recorder::session::RecordingSession;
-    use recorder::application::RecorderApplication;
 
     struct InMemorySessions {
         sessions: Vec<ProductionSession>,
@@ -125,10 +125,8 @@ mod tests {
         let production_id = ProductionId::new("production-001");
         let actor = ParticipantId::new("alice");
         let recording_id = RecordingId::new("recording-001");
-        let mut session = ProductionSession::new_with_actor(
-            production_id.clone(),
-            Some(actor.clone()),
-        );
+        let mut session =
+            ProductionSession::new_with_actor(production_id.clone(), Some(actor.clone()));
         session
             .add_participation_by(
                 &actor,
@@ -197,7 +195,10 @@ mod tests {
         let session = repository.get(&production_id).unwrap().unwrap();
         let recording = &session.recordings()[0];
         assert_eq!(recording.status(), RecordingStatus::Completed);
-        assert_eq!(recording.artifact_id().unwrap().value(), artifact.id.value());
+        assert_eq!(
+            recording.artifact_id().unwrap().value(),
+            artifact.id.value()
+        );
     }
 
     #[test]
@@ -227,7 +228,8 @@ mod tests {
     fn mismatched_artifact_cannot_complete_recording() {
         let (mut repository, production_id, actor, recording_id) = fixture();
         let artifact = persisted_artifact(&production_id, &recording_id);
-        let mismatched = persisted_artifact(&ProductionId::new("other-production"), &recording_id);
+        let mismatched =
+            persisted_artifact(&ProductionId::new("other-production"), &recording_id);
 
         assert_eq!(
             complete_recording_from_artifact(
