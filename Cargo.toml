@@ -4,7 +4,6 @@ members = [
     "core",
     "recorder",
     "application",
-    "storage",
     "infrastructure",
     "runtime"
 ]
