@@ -38,17 +38,6 @@ jobs:
         with:
           components: rustfmt
 
-      - name: Capture rustfmt diff
-        run: |
-          cargo fmt --all
-          git diff --binary > rustfmt.diff
-
-      - name: Upload rustfmt diff
-        uses: actions/upload-artifact@v4
-        with:
-          name: rustfmt-diff
-          path: rustfmt.diff
-
       - name: Check formatting
         run: cargo fmt --check
 
