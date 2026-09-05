@@ -87,8 +87,8 @@ pub fn read_request<R: Read>(
         ));
     }
 
-    let payload_len = usize::try_from(request.payload_length)
-        .map_err(|_| RuntimeProtocolError::InvalidPayloadLength)?;
+    let payload_len =
+        usize::try_from(request.payload_length).map_err(|_| RuntimeProtocolError::InvalidPayloadLength)?;
     let mut payload = vec![0_u8; payload_len];
     reader.read_exact(&mut payload)?;
     Ok((request, payload))
