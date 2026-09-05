@@ -92,6 +92,7 @@
 				trackLabel: track?.label || null,
 				deviceId: metadata.deviceId || settings.deviceId || null,
 				productionId: metadata.productionId || null,
+				recordingId: metadata.recordingId || null,
 				sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
 				sampleSize: Number.isFinite(settings.sampleSize) ? settings.sampleSize : null,
 				channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,

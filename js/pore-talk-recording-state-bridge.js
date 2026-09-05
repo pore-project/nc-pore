@@ -18,6 +18,8 @@
 		const participants = Array.isArray(snapshot.participants) ? snapshot.participants : []
 		const readyParticipants = participants.filter(participant => participant?.ready === true)
 		return Object.freeze({
+			productionId: snapshot.productionId || null,
+			recordingId: snapshot.recordingId || null,
 			role: snapshot.role || 'none',
 			state,
 			listener: snapshot.role === 'listener' || snapshot.listener === true,

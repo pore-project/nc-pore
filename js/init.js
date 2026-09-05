@@ -52,9 +52,11 @@
 	const startLocalCapture = async () => {
 		if (!sourceTrack) throw new Error('Talk audio track is not available')
 		if (!productionId) throw new Error('Talk production identity is not available')
+		if (!authoritativeState?.recordingId) throw new Error('Authoritative recording identity is not available')
 		await recorder.start(sourceTrack, {
 			...(context?.sourceMetadata || {}),
 			productionId,
+			recordingId: authoritativeState.recordingId,
 		})
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
@@ -95,8 +97,11 @@
 		const snapshot = event.detail
 		if (!snapshot) return
 		authoritativeState = snapshot
+		if (snapshot.productionId) productionId = snapshot.productionId
 		if (!context) return
 		publish({
+			productionId: snapshot.productionId || productionId,
+			recordingId: snapshot.recordingId,
 			role: snapshot.role,
 			state: snapshot.state,
 			listener: snapshot.listener,
