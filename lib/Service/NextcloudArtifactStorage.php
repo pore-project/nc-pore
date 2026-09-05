@@ -13,8 +13,7 @@ use OCP\IUserSession;
 use RuntimeException;
 
 final class NextcloudArtifactStorage {
-	private const DEFAULT_STORAGE_ROOT = '';
-	private const AUDIO_FOLDER = 'audio';
+	private const DEFAULT_STORAGE_ROOT = 'audio';
 	private const COPY_CHUNK_SIZE = 1024 * 1024;
 	private const CONFIG_STORAGE_ROOT = 'storage_root';
 
@@ -29,8 +28,8 @@ final class NextcloudArtifactStorage {
 	 * Store the finalized artifact strictly below the authenticated user's Files root.
 	 *
 	 * The configured storage root is a Nextcloud Files-relative path, never a server
-	 * filesystem path. For example: "Büro/interviews" becomes
-	 * "Büro/interviews/audio/YYYY/MM/..." inside the current user's Files tree.
+	 * filesystem path. A configured root such as "Büro/interviews" is the complete
+	 * PoRe root; "audio" is used only when no root has been configured.
 	 *
 	 * @return array{file_id:int, path:string, size:int, sha256:string}
 	 */
@@ -73,11 +72,10 @@ final class NextcloudArtifactStorage {
 		$leaf = $dayAndTime . ' ' . $productionLabel . ' - ' . $productionId;
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$folder = $this->ensureConfiguredRoot($userFolder);
-		if ($this->configuredRootEndsWithAudio()) {
-			// The host explicitly selected an audio root; do not create audio/audio.
-		} else {
-			$folder = $this->ensureFolder($folder, self::AUDIO_FOLDER);
+		$configuredRoot = $this->normalizedConfiguredRoot();
+		$folder = $this->ensureConfiguredRoot($userFolder, $configuredRoot);
+		if ($configuredRoot === '') {
+			$folder = $this->ensureFolder($folder, self::DEFAULT_STORAGE_ROOT);
 		}
 		$folder = $this->ensureFolder($folder, $year);
 		$folder = $this->ensureFolder($folder, $month);
@@ -140,24 +138,14 @@ final class NextcloudArtifactStorage {
 			throw new RuntimeException('Nextcloud stored artifact hash does not match the finalized artifact.');
 		}
 
-		$relativeBase = $this->normalizedConfiguredRoot();
+		$effectiveRoot = $configuredRoot === '' ? self::DEFAULT_STORAGE_ROOT : $configuredRoot;
 		$relativePath = implode('/', array_filter([
-			$relativeBase,
-			self::AUDIO_FOLDER,
+			$effectiveRoot,
 			$year,
 			$month,
 			$leaf,
 			$filename,
 		], static fn (string $part): bool => $part !== ''));
-		if ($this->configuredRootEndsWithAudio()) {
-			$relativePath = implode('/', array_filter([
-			$relativeBase,
-			$year,
-			$month,
-			$leaf,
-			$filename,
-		], static fn (string $part): bool => $part !== ''));
-		}
 
 		return [
 			'file_id' => $file->getId(),
@@ -167,15 +155,14 @@ final class NextcloudArtifactStorage {
 		];
 	}
 
-	private function ensureConfiguredRoot(Folder $userFolder): Folder {
-		$configured = $this->normalizedConfiguredRoot();
+	private function ensureConfiguredRoot(Folder $userFolder, string $configured): Folder {
 		if ($configured === '') {
 			return $userFolder;
 		}
 
 		$segments = preg_split('#/#', $configured, -1, PREG_SPLIT_NO_EMPTY);
 		if ($segments === false) {
-			throw new RuntimeException('Configured PoRE storage root is invalid.');
+			throw new RuntimeException('Configured PoRe storage root is invalid.');
 		}
 
 		$folder = $userFolder;
@@ -187,20 +174,20 @@ final class NextcloudArtifactStorage {
 	}
 
 	private function normalizedConfiguredRoot(): string {
-		$configured = trim($this->config->getAppValue('pore', self::CONFIG_STORAGE_ROOT, self::DEFAULT_STORAGE_ROOT));
+		$configured = trim($this->config->getUserValue(
+			$this->userSession->getUser()?->getUID() ?? '',
+			'pore',
+			self::CONFIG_STORAGE_ROOT,
+			'',
+		));
 		$configured = preg_replace('#[\\/]+#', '/', trim($configured, "\\/")) ?? '';
 		if ($configured === '.') {
 			return '';
 		}
 		if ($configured === '..' || str_starts_with($configured, '../') || str_contains($configured, '/../')) {
-			throw new RuntimeException('Configured PoRE storage root may not escape the user Files root.');
+			throw new RuntimeException('Configured PoRe storage root may not escape the user Files root.');
 		}
 		return $configured;
-	}
-
-	private function configuredRootEndsWithAudio(): bool {
-		$root = $this->normalizedConfiguredRoot();
-		return $root === self::AUDIO_FOLDER || str_ends_with($root, '/' . self::AUDIO_FOLDER);
 	}
 
 	private function ensureFolder(Folder $parent, string $name): Folder {
