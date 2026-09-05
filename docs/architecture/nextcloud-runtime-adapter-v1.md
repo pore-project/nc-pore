@@ -48,7 +48,7 @@ The user-facing Talk settings section shows `audio` as the default placeholder. 
 PoRE then applies its standardized structure directly below the effective root:
 
 ```text
-<effective PoRE root>/YYYY/MM/DD - HH:MIN <production label> - <core.ProductionId>/<captureId>.wav
+<effective PoRe root>/YYYY/MM/DD - HH:MIN <production label> - <core.ProductionId>/<captureId>.wav
 ```
 
 Therefore an explicitly configured root produces, for example:
@@ -75,7 +75,7 @@ The complete returned `path` is a **user-Files-relative Nextcloud path**, never 
 
 PoRE registers a custom `NC-PoRE` section in the existing Nextcloud Talk settings dialog through Talk's `OCA.Talk.Settings` extension point. This keeps PoRE configuration where Talk users already expect Talk-related settings to live and avoids introducing a separate PoRE settings page.
 
-V1 exposes the storage root as a plain relative path field. The default `audio` is shown as the field placeholder, not as an additional path component. The user may replace it with a path such as `Büro/interviews`; that value becomes the complete PoRE root.
+V1 exposes the storage root as a plain relative path field. The field is empty when no custom root has been saved, so the visible `audio` value is the default placeholder rather than a value that gets concatenated to configured paths. Entering `Büro/interviews` therefore makes `Büro/interviews` the complete PoRE root.
 
 No folder picker is required for V1. This keeps the UI aligned with the existing settings convention and avoids coupling PoRE's storage contract to a second path-selection abstraction.
 
@@ -110,7 +110,7 @@ The setting endpoint accepts only a relative Files path. Absolute server paths a
 
 - No AppAPI dependency
 - No ExApp
-- No standalone PoRE HTTP server for V1
+- No standalone PoRe HTTP server for V1
 - No direct browser WebDAV dependency
 - No PoRE synchronization work queue for V1
 - No V1 sync worker
