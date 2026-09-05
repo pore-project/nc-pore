@@ -37,22 +37,24 @@ The host chooses a **storage root inside the current user's Nextcloud Files tree
 
 `Büro/interviews`
 
-means that PoRE starts below that location through Nextcloud's Files API. PoRE must never receive, construct or use a path such as:
+means that PoRE starts directly below that location through Nextcloud's Files API. PoRE must never receive, construct or use a path such as:
 
 `/var/www/nextcloud/data/max/files/Büro/interviews/`
 
 The latter is an implementation detail of the Nextcloud installation and is deliberately outside the app contract. In particular, the app must not use direct filesystem access to bypass Nextcloud's permission model.
 
-If the host supplies no storage root, PoRE uses `audio` at the user's Files root. PoRE then applies its standardized structure below the selected root:
+The user-facing Talk settings section shows `audio` as the default placeholder. If no custom root is configured, PoRE uses `audio` at the user's Files root. If the host configures a root, that configured path is the **complete PoRE root**; PoRE does not append `audio` to it.
+
+PoRE then applies its standardized structure directly below the effective root:
 
 ```text
-<host storage root>/audio/YYYY/MM/DD - HH:MIN <production label> - <core.ProductionId>/<captureId>.wav
+<effective PoRE root>/YYYY/MM/DD - HH:MIN <production label> - <core.ProductionId>/<captureId>.wav
 ```
 
 Therefore an explicitly configured root produces, for example:
 
 ```text
-Büro/interviews/audio/2026/09/05 - 15:42 Interview mit Max Muster - <core.ProductionId>/<captureId>.wav
+Büro/interviews/2026/09/05 - 15:42 Interview mit Max Muster - <core.ProductionId>/<captureId>.wav
 ```
 
 and the default produces:
@@ -61,8 +63,6 @@ and the default produces:
 audio/2026/09/05 - 15:42 Interview mit Max Muster - <core.ProductionId>/<captureId>.wav
 ```
 
-If the host explicitly configures a root whose final component is already `audio`, PoRE does not create `audio/audio`.
-
 The responsibility split is intentional:
 
 1. **Host:** chooses the base location in its own Nextcloud Files namespace.
@@ -70,6 +70,14 @@ The responsibility split is intentional:
 3. **Nextcloud:** creates/writes the file and remains authoritative for storage and permissions.
 
 The complete returned `path` is a **user-Files-relative Nextcloud path**, never a server data-directory path.
+
+## Talk settings integration
+
+PoRE registers a custom `NC-PoRE` section in the existing Nextcloud Talk settings dialog through Talk's `OCA.Talk.Settings` extension point. This keeps PoRE configuration where Talk users already expect Talk-related settings to live and avoids introducing a separate PoRE settings page.
+
+V1 exposes the storage root as a plain relative path field. The default `audio` is shown as the field placeholder, not as an additional path component. The user may replace it with a path such as `Büro/interviews`; that value becomes the complete PoRE root.
+
+No folder picker is required for V1. This keeps the UI aligned with the existing settings convention and avoids coupling PoRE's storage contract to a second path-selection abstraction.
 
 ## Nextcloud storage handoff
 
@@ -94,9 +102,9 @@ This gives PoRE the concrete host-side acknowledgement it needs: the artifact ex
 
 ## Configuration
 
-The storage-root setting is represented as a Nextcloud Files-relative path. The V1 storage service reads the app configuration key `storage_root`; an empty value means the user's Files root, after which PoRE's default `audio` directory is applied.
+The storage-root setting is stored per authenticated Nextcloud user under the app configuration key `storage_root`. An empty stored value means that PoRE uses the default root `audio`.
 
-The user-facing PoRE/Talk settings surface is responsible for editing this logical path. It must not expose or request the Nextcloud server's physical data-directory path.
+The setting endpoint accepts only a relative Files path. Absolute server paths and traversal components are rejected. The user-facing setting therefore never exposes or requests the Nextcloud server's physical data-directory path.
 
 ## Explicit non-goals
 
