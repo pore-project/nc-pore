@@ -58,7 +58,8 @@ final class NextcloudArtifactPath {
 			throw new RuntimeException('Configured PoRe storage root must be a relative Files path.');
 		}
 
-		$root = preg_replace('#[\\/]+#', '/', trim($raw, "\\/")) ?? '';
+		$root = str_replace('\\', '/', $raw);
+		$root = preg_replace('#/+#', '/', trim($root, '/')) ?? '';
 		if ($root === '' || $root === '.') {
 			return '';
 		}
