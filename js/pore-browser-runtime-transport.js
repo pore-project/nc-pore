@@ -15,8 +15,8 @@
 
 		async submit(descriptor) {
 			if (!descriptor?.blob) throw new Error('PoRE transport requires a finalized payload')
-			if (!descriptor.captureId || !descriptor.recordingSessionId || !descriptor.productionId || !descriptor.recordingId) {
-				throw new Error('PoRE transport requires authoritative and technical identities')
+			if (!descriptor.captureId || !descriptor.recordingSessionId || !descriptor.productionId || !descriptor.recordingId || !descriptor.startedAt) {
+				throw new Error('PoRE transport requires authoritative identity and recording start time')
 			}
 			if (this.active.has(descriptor.captureId)) return null
 			this.active.add(descriptor.captureId)
@@ -29,7 +29,9 @@
 				capture_id: descriptor.captureId,
 				recording_session_id: descriptor.recordingSessionId,
 				production_id: descriptor.productionId,
+				production_label: descriptor.productionLabel || descriptor.productionId,
 				recording_id: descriptor.recordingId,
+				started_at: descriptor.startedAt,
 				track_id: descriptor.trackId || 'browser-track',
 				sample_rate_hz: descriptor.sampleRate,
 				channels: descriptor.channels,
