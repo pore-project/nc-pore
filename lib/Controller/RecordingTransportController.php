@@ -45,6 +45,15 @@ final class RecordingTransportController extends OCSController {
 				throw new RuntimeException('Unable to determine finalized artifact size.');
 			}
 
+			$expectedHash = strtolower($this->requiredString($decoded, 'payload_sha256'));
+			if (!preg_match('/^[a-f0-9]{64}$/', $expectedHash)) {
+				throw new RuntimeException('payload_sha256 must be a SHA-256 hex digest.');
+			}
+			$actualHash = hash_file('sha256', $payloadPath);
+			if ($actualHash === false || !hash_equals($expectedHash, strtolower($actualHash))) {
+				throw new RuntimeException('Uploaded payload does not match the browser transfer hash.');
+			}
+
 			$stored = $this->artifactStorage->storeFinalizedArtifact(
 				$this->requiredString($decoded, 'production_id'),
 				$this->requiredString($decoded, 'recording_id'),
