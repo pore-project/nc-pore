@@ -65,6 +65,7 @@
 			...(context?.sourceMetadata || {}),
 			productionId,
 			recordingId: authoritativeState.recordingId,
+			productionLabel: context?.productionLabel || context?.title || productionId,
 		})
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
