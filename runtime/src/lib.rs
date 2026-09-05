@@ -14,7 +14,7 @@ use nc_pore_core::identity::ProductionId;
 use recorder::persistence::FilesystemPersistenceProvider;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const OPERATION_SUBMIT_FINALIZED_ARTIFACT: &str = "recording.submit_finalized_artifact";
@@ -154,7 +154,7 @@ pub fn handle_submit(
         payload,
     );
 
-    let persistence = FilesystemPersistenceProvider::new(persistence_root);
+    let persistence = FilesystemPersistenceProvider::new(PathBuf::from(persistence_root.as_ref()));
     let mut processor = browser_artifact_processor(persistence);
 
     match persist_browser_recording_artifact(&mut processor, artifact) {
