@@ -64,7 +64,9 @@ where
     ) -> Result<ClientRecordingState, ProductionSessionError> {
         let actor_id = self.actor_id.clone();
         let recording_id = self.recording_id.clone();
-        self.mutate(|session| session.begin_recording_by(&actor_id, &recording_id, participants))?;
+        self.mutate(|session| {
+            session.begin_recording_by(&actor_id, &recording_id, participants)
+        })?;
         self.snapshot()
     }
 
@@ -96,7 +98,9 @@ where
     pub fn acknowledge_stop(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
         let actor_id = self.actor_id.clone();
         let recording_id = self.recording_id.clone();
-        self.mutate(|session| session.acknowledge_recording_stop_by(&actor_id, &recording_id))?;
+        self.mutate(|session| {
+            session.acknowledge_recording_stop_by(&actor_id, &recording_id)
+        })?;
         self.snapshot()
     }
 
@@ -135,7 +139,9 @@ where
         })
     }
 
-    fn load_session(&self) -> Result<nc_pore_core::session::ProductionSession, ProductionSessionError> {
+    fn load_session(
+        &self,
+    ) -> Result<nc_pore_core::session::ProductionSession, ProductionSessionError> {
         self.repository
             .get(&self.session_id)
             .map_err(|_| ProductionSessionError::InvalidStateTransition)?
@@ -144,7 +150,9 @@ where
 
     fn mutate<F>(&mut self, mutate: F) -> Result<(), ProductionSessionError>
     where
-        F: FnOnce(&mut nc_pore_core::session::ProductionSession) -> Result<(), ProductionSessionError>,
+        F: FnOnce(
+            &mut nc_pore_core::session::ProductionSession,
+        ) -> Result<(), ProductionSessionError>,
     {
         let mut session = self.load_session()?;
         mutate(&mut session)?;
@@ -217,7 +225,9 @@ mod tests {
             )
             .unwrap();
         session.start_by(&owner).unwrap();
-        InMemoryRepository { sessions: vec![session] }
+        InMemoryRepository {
+            sessions: vec![session],
+        }
     }
 
     #[test]
@@ -269,7 +279,10 @@ mod tests {
         );
         coordinator.complete("artifact-001").unwrap();
         let state = coordinator.snapshot().unwrap();
-        assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Completed);
+        assert_eq!(
+            state.phase,
+            crate::recording_state::ClientRecordingPhase::Completed
+        );
         assert_eq!(state.artifact_id.as_deref(), Some("artifact-001"));
     }
 
