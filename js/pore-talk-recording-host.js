@@ -12,10 +12,10 @@
 		const response = await fetch(target, {
 			credentials: 'same-origin',
 			headers: {
-				Accept: 'application/json',
-				'OCS-APIRequest': 'true',
-				...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
-				...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
+			Accept: 'application/json',
+			'OCS-APIRequest': 'true',
+			...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
+			...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
 			},
 			...options,
 		})
@@ -56,7 +56,9 @@
 		return result
 	}
 
-	const findToken = () => window.location.pathname.match(/\/apps\/spreed\/(?:call|room)\/([^/]+)/)?.[1] || null
+	// Talk 34 uses /call/<token> (and /room/<token> in other contexts),
+	// while older deployments may expose the token below /apps/spreed.
+	const findToken = () => window.location.pathname.match(/(?:\/apps\/spreed)?\/(?:call|room)\/([^/]+)/)?.[1] || null
 	const getCurrentUserId = () => window.OC?.getCurrentUser?.()?.uid || window.OC?.currentUser?.uid || null
 
 	const bootstrap = async () => {
