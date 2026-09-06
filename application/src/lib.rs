@@ -1,13 +1,14 @@
+pub mod browser_recording_artifact;
 pub mod client;
 #[cfg(test)]
 mod client_session_context_tests;
 pub mod external_session_context;
 pub mod recording;
+pub mod recording_completion;
+pub mod recording_coordinator;
+pub mod recording_state;
+pub mod recording_state_source;
 pub mod session;
 pub mod session_context;
 #[cfg(test)]
 mod session_context_contract_tests;
-pub mod synchronization;
-pub mod synchronization_metadata;
-pub mod synchronization_orchestration;
-pub mod synchronization_persistence;

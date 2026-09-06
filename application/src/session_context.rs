@@ -1,4 +1,5 @@
 use crate::session::get_production_session;
+use nc_pore_core::identity::ProductionId;
 use nc_pore_core::role::ProductionAction;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 
@@ -26,6 +27,7 @@ pub struct SessionContextParticipant {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionContext {
     pub session_id: String,
+    pub production_id: ProductionId,
     pub state: SessionState,
     pub actor_id: String,
     pub participants: Vec<SessionContextParticipant>,
@@ -68,18 +70,15 @@ where
     type Error = ProductionSessionContextError<R::Error>;
 
     fn resolve(&self, session_id: &str, actor_id: &str) -> Result<SessionContext, Self::Error> {
-        let session = get_production_session(
-            self.repository,
-            &nc_pore_core::identity::ProductionId::new(session_id),
-        )
-        .map_err(|error| match error {
-            crate::session::GetProductionSessionError::SessionNotFound => {
-                ProductionSessionContextError::SessionNotFound
-            }
-            crate::session::GetProductionSessionError::Repository(error) => {
-                ProductionSessionContextError::Repository(error)
-            }
-        })?;
+        let session = get_production_session(self.repository, &ProductionId::new(session_id))
+            .map_err(|error| match error {
+                crate::session::GetProductionSessionError::SessionNotFound => {
+                    ProductionSessionContextError::SessionNotFound
+                }
+                crate::session::GetProductionSessionError::Repository(error) => {
+                    ProductionSessionContextError::Repository(error)
+                }
+            })?;
 
         let actor = session
             .participations()
@@ -116,6 +115,7 @@ where
 
         Ok(SessionContext {
             session_id: session.id.value().to_owned(),
+            production_id: session.id.clone(),
             state: match session.status() {
                 nc_pore_core::session::ProductionStatus::Completed => SessionState::Completed,
                 nc_pore_core::session::ProductionStatus::Active => SessionState::Active,
@@ -137,7 +137,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nc_pore_core::identity::ProductionId;
     use nc_pore_core::participant::ParticipantId;
     use nc_pore_core::participation::Participation;
     use nc_pore_core::role::ParticipantRole;
@@ -189,7 +188,6 @@ mod tests {
         (repository, id)
     }
 
-    // TEST-01: The native provider resolves the provider-independent context.
     #[test]
     fn native_provider_resolves_context() {
         let (repository, id) = session_with_owner();
@@ -198,6 +196,7 @@ mod tests {
         let context = provider.resolve(id.value(), "owner-1").unwrap();
 
         assert_eq!(context.session_id, "session-001");
+        assert_eq!(context.production_id, id);
         assert_eq!(context.state, SessionState::Available);
         assert_eq!(context.actor_id, "owner-1");
         assert_eq!(context.participants.len(), 1);
@@ -209,7 +208,6 @@ mod tests {
             .contains(&SessionCapability::ManageRecordings));
     }
 
-    // TEST-02: Provider state is exposed directly instead of collapsed into availability.
     #[test]
     fn native_provider_reports_completed_session_state() {
         let (mut repository, id) = session_with_owner();
@@ -223,9 +221,9 @@ mod tests {
         let context = provider.resolve(id.value(), "owner-1").unwrap();
 
         assert_eq!(context.state, SessionState::Completed);
+        assert_eq!(context.production_id, id);
     }
 
-    // TEST-03: Provider and actor failures remain explicit application errors.
     #[test]
     fn native_provider_reports_missing_session_and_actor() {
         let (repository, id) = session_with_owner();

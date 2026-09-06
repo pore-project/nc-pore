@@ -41,6 +41,7 @@ fn completed_session() -> ProductionSession {
         .add_recording_by(&owner, Recording::new(recording_id.value()))
         .unwrap();
     session.start_recording_by(&owner, &recording_id).unwrap();
+    session.stop_recording_by(&owner, &recording_id).unwrap();
     session
         .complete_recording_by(
             &owner,
