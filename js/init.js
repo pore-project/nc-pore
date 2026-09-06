@@ -14,27 +14,61 @@
 	const Ui = window.PoRETalkRecordingUi
 	const StateBridge = window.PoRETalkRecordingStateBridge
 	const CompletionJob = window.PoREBrowserCompletionJob
+	const RuntimeTransport = window.PoREBrowserRuntimeTransport
+	const HostAdapter = window.PoRETalkRecordingHostAdapter
 
-	if (!Connector || !Recorder || !Ui || !StateBridge || !CompletionJob) return
+	if (!Connector || !Recorder || !Ui || !StateBridge || !CompletionJob || !RuntimeTransport || !HostAdapter) return
 
 	const connector = new Connector()
 	const recorder = new Recorder()
 	const stateBridge = new StateBridge()
 	const persistenceStore = window.PoREBrowserPcmPersistenceStore ? new window.PoREBrowserPcmPersistenceStore() : null
 	const completionJob = new CompletionJob({ persistenceStoreFactory: () => persistenceStore })
+	const runtimeTransport = new RuntimeTransport({ completionJob })
 	window.__poreTalkAudioConnector = connector
 	window.__poreTalkRecordingController = recorder
 	window.__poreTalkRecordingStateBridge = stateBridge
 	window.__poreBrowserPcmPersistenceStore = persistenceStore
 	window.__poreBrowserCompletionJob = completionJob
+	window.__poreBrowserRuntimeTransport = runtimeTransport
 
 	let context = null
 	let sourceTrack = null
 	let authoritativeState = null
 	let productionId = null
 
-	const startRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-start-local'))
-	const stopRequested = () => window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
+	const updateAuthoritativeState = snapshot => {
+		if (!snapshot) return
+		authoritativeState = snapshot
+		if (snapshot.productionId) productionId = snapshot.productionId
+		if (!context) return
+		publish({
+			productionId: snapshot.productionId || productionId,
+			recordingId: snapshot.recordingId,
+			role: snapshot.role,
+			state: snapshot.state,
+			listener: snapshot.listener,
+			confirmed: snapshot.confirmed,
+			ready: snapshot.ready,
+			readyCount: snapshot.readyCount,
+			participantCount: snapshot.participantCount,
+			participants: snapshot.participants,
+			elapsedSeconds: snapshot.elapsedSeconds,
+			startedAt: snapshot.startedAt,
+			error: snapshot.error,
+		})
+	}
+
+	const startRequested = async () => {
+		if (!window.__poreTalkRecordingCoordinator?.command) throw new Error('PoRE recording coordinator is not available')
+		const result = await window.__poreTalkRecordingCoordinator.command('start')
+		if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+		window.dispatchEvent(new CustomEvent('pore:recording-ui-start-local'))
+	}
+
+	const stopRequested = async () => {
+		window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
+}
 
 	const render = nextContext => {
 		if (!nextContext) return
@@ -62,6 +96,7 @@
 			...(context?.sourceMetadata || {}),
 			productionId,
 			recordingId: authoritativeState.recordingId,
+			productionLabel: context?.productionLabel || context?.title || productionId,
 		})
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
@@ -72,7 +107,7 @@
 		const conversationId = event.detail?.conversationId || null
 		if (!conversationId) return
 		productionId = conversationId
-		publish({ productionId })
+		publish({ productionId, productionLabel: event.detail?.productionLabel || conversationId })
 	})
 
 	window.addEventListener('pore:talk-audio-track', event => {
@@ -102,27 +137,17 @@
 
 	window.addEventListener('pore:recording-error', event => publish({ localCaptureError: event.detail?.error }))
 
-	window.addEventListener('pore:recording-state', event => {
-		const snapshot = event.detail
-		if (!snapshot) return
-		authoritativeState = snapshot
-		if (snapshot.productionId) productionId = snapshot.productionId
-		if (!context) return
-		publish({
-			productionId: snapshot.productionId || productionId,
-			recordingId: snapshot.recordingId,
-			role: snapshot.role,
-			state: snapshot.state,
-			listener: snapshot.listener,
-			confirmed: snapshot.confirmed,
-			ready: snapshot.ready,
-			readyCount: snapshot.readyCount,
-			participantCount: snapshot.participantCount,
-			participants: snapshot.participants,
-			elapsedSeconds: snapshot.elapsedSeconds,
-			startedAt: snapshot.startedAt,
-			error: snapshot.error,
-		})
+	window.addEventListener('pore:recording-state', event => updateAuthoritativeState(event.detail))
+
+	window.addEventListener('pore:recording-transport-completed', async event => {
+		const artifactId = event.detail?.artifact_id || event.detail?.artifactId
+		if (!artifactId || !window.__poreTalkRecordingCoordinator?.command) return
+		try {
+			const result = await window.__poreTalkRecordingCoordinator.command('complete', artifactId)
+			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		}
 	})
 
 	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
@@ -132,7 +157,13 @@
 	})
 
 	window.addEventListener('pore:recording-ui-stop-local', async event => {
-		try { await stopLocalCapture(event.detail?.reason || 'host') } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
+		try {
+			await stopLocalCapture(event.detail?.reason || 'host')
+			const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
+			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		}
 	})
 
 	const announceRecoveryCandidates = async () => {
@@ -157,4 +188,5 @@
 
 	void announceRecoveryCandidates()
 	tryAttach()
+	void HostAdapter.bootstrap().catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 })()

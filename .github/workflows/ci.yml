@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - feat/v1-nextcloud-runtime-adapter
   pull_request:
     branches:
       - main
@@ -48,3 +49,5 @@ jobs:
 
       - name: Architecture checks
         run: ./tools/architecture-checks/run-all.sh
+
+# V1 branch CI

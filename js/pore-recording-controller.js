@@ -116,13 +116,14 @@
 				trackLabel: track?.label || null,
 				deviceId: metadata.deviceId || settings.deviceId || null,
 				productionId: metadata.productionId || null,
+				productionLabel: metadata.productionLabel || null,
 				recordingId: metadata.recordingId || null,
 				captureId: metadata.captureId || null,
 				recordingSessionId: metadata.recordingSessionId || null,
 				sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
 				sampleSize: Number.isFinite(settings.sampleSize) ? settings.sampleSize : null,
 				channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,
-				startedAt: this._startTime || new Date().toISOString(),
+				startedAt: metadata.startedAt || new Date().toISOString(),
 			}
 		}
 
@@ -137,6 +138,7 @@
 
 			return {
 				productionId: source.productionId,
+				productionLabel: source.productionLabel || source.productionId,
 				recordingId: source.recordingId,
 				captureId: source.captureId,
 				recordingSessionId: source.recordingSessionId,

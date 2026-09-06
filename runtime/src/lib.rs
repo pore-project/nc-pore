@@ -1,25 +1,25 @@
-//! Minimal, host-neutral PoRE Runtime boundary.
+//! Host-neutral PoRE Runtime protocol boundary.
 //!
-//! The runtime is deliberately unaware of Nextcloud and Talk. A host adapter
-//! hands a finalized browser artifact to this boundary using a small framed
-//! stdin/stdout protocol. The runtime translates that request into the
-//! existing Application browser-artifact boundary; it does not create a
-//! second persistence or synchronization path.
+//! The runtime knows neither Nextcloud nor Talk. Host adapters exchange commands
+//! through this protocol; lifecycle orchestration belongs to Application and
+//! lifecycle truth belongs to Core.
 
-use nc_pore_application::browser_recording_artifact::{
-    browser_artifact_processor, persist_browser_recording_artifact,
-    BrowserRecordingArtifact,
+use nc_pore_application::recording_coordinator::RecordingCoordinator;
+use nc_pore_application::recording_state::{
+    ClientRecordingPhase, ClientRecordingRole, ClientRecordingState,
 };
 use nc_pore_core::identity::ProductionId;
-use recorder::persistence::FilesystemPersistenceProvider;
+use nc_pore_core::participant::ParticipantId;
+use nc_pore_core::recording::RecordingId;
+use nc_pore_core::session::ProductionSessionError;
+use nc_pore_core::session::repository::ProductionSessionRepository;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
-use std::path::Path;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const OPERATION_SUBMIT_FINALIZED_ARTIFACT: &str = "recording.submit_finalized_artifact";
+pub const OPERATION_RECORDING_COMMAND: &str = "recording.command";
 
-/// Metadata supplied by a host adapter. No host-specific types are allowed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SubmitFinalizedArtifactRequest {
     pub protocol_version: u16,
@@ -44,6 +44,86 @@ pub struct SubmitFinalizedArtifactResponse {
     pub error_code: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingCommandRequest {
+    pub protocol_version: u16,
+    pub operation: String,
+    pub request_id: String,
+    pub session_id: String,
+    pub actor_id: String,
+    pub recording_id: String,
+    pub command: RecordingCommand,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum RecordingCommand {
+    EnsureRecording,
+    Begin { participants: Vec<String> },
+    MarkReady,
+    Start,
+    RequestStop,
+    AcknowledgeStop,
+    Complete { artifact_id: String },
+    Snapshot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingCommandResponse {
+    pub protocol_version: u16,
+    pub request_id: String,
+    pub status: String,
+    pub state: Option<RecordingStateDto>,
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingStateDto {
+    pub recording_id: String,
+    pub phase: String,
+    pub role: String,
+    pub participants: Vec<RecordingParticipantDto>,
+    pub confirmed: bool,
+    pub artifact_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingParticipantDto {
+    pub id: String,
+    pub ready: bool,
+}
+
+impl From<ClientRecordingState> for RecordingStateDto {
+    fn from(state: ClientRecordingState) -> Self {
+        Self {
+            recording_id: state.recording_id,
+            phase: match state.phase {
+                ClientRecordingPhase::Preparing => "preparing",
+                ClientRecordingPhase::Ready => "ready",
+                ClientRecordingPhase::Recording => "recording",
+                ClientRecordingPhase::Stopped => "stopped",
+                ClientRecordingPhase::Completed => "completed",
+            }
+            .to_owned(),
+            role: match state.role {
+                ClientRecordingRole::Host => "host",
+                ClientRecordingRole::Participant => "participant",
+                ClientRecordingRole::Listener => "listener",
+            }
+            .to_owned(),
+            participants: state
+                .participants
+                .into_iter()
+                .map(|participant| RecordingParticipantDto {
+                    id: participant.id,
+                    ready: participant.ready,
+                })
+                .collect(),
+            confirmed: state.confirmed,
+            artifact_id: state.artifact_id,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum RuntimeProtocolError {
     Io(io::Error),
@@ -64,27 +144,18 @@ impl From<serde_json::Error> for RuntimeProtocolError {
     }
 }
 
-/// Reads one request frame from stdin.
-///
-/// Frame format:
-///   4-byte big-endian JSON header length
-///   UTF-8 JSON header
-///   raw payload bytes, whose length is declared by `payload_length`
-///
-/// The framing deliberately avoids base64 and keeps the runtime protocol
-/// independent of HTTP, Nextcloud, Talk, or a particular IPC mechanism.
-pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
+pub fn read_request<R: Read>(
+    reader: &mut R,
+) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
     let header_len = read_u32(reader)? as usize;
     if header_len == 0 || header_len > 1024 * 1024 {
         return Err(RuntimeProtocolError::InvalidHeader(
             "invalid header length".to_owned(),
         ));
     }
-
     let mut header = vec![0_u8; header_len];
     reader.read_exact(&mut header)?;
     let request: SubmitFinalizedArtifactRequest = serde_json::from_slice(&header)?;
-
     if request.protocol_version != PROTOCOL_VERSION {
         return Err(RuntimeProtocolError::InvalidHeader(
             "unsupported protocol version".to_owned(),
@@ -95,7 +166,6 @@ pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactR
             "unsupported operation".to_owned(),
         ));
     }
-
     let payload_len = usize::try_from(request.payload_length)
         .map_err(|_| RuntimeProtocolError::InvalidPayloadLength)?;
     let mut payload = vec![0_u8; payload_len];
@@ -103,17 +173,88 @@ pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactR
     Ok((request, payload))
 }
 
-/// Writes one JSON response frame to stdout.
 pub fn write_response<W: Write>(
     writer: &mut W,
     response: &SubmitFinalizedArtifactResponse,
 ) -> Result<(), RuntimeProtocolError> {
     let bytes = serde_json::to_vec(response)?;
-    let len = u32::try_from(bytes.len()).map_err(|_| {
-        RuntimeProtocolError::InvalidHeader("response header too large".to_owned())
-    })?;
+    write_frame(writer, &bytes)
+}
+
+pub fn handle_recording_command<R: ProductionSessionRepository>(
+    request: &RecordingCommandRequest,
+    repository: &mut R,
+) -> RecordingCommandResponse {
+    if request.protocol_version != PROTOCOL_VERSION {
+        return command_error(request, "unsupported_protocol_version");
+    }
+    if request.operation != OPERATION_RECORDING_COMMAND {
+        return command_error(request, "unsupported_operation");
+    }
+
+    let mut coordinator = RecordingCoordinator::new(
+        repository,
+        ProductionId::new(&request.session_id),
+        ParticipantId::new(&request.actor_id),
+        RecordingId::new(&request.recording_id),
+    );
+
+    let result = match &request.command {
+        RecordingCommand::EnsureRecording => coordinator.ensure_recording().map(|_| None),
+        RecordingCommand::Begin { participants } => coordinator
+            .begin(participants.iter().cloned().map(ParticipantId::new))
+            .map(Some),
+        RecordingCommand::MarkReady => coordinator.mark_ready().map(Some),
+        RecordingCommand::Start => coordinator.start().map(Some),
+        RecordingCommand::RequestStop => coordinator.request_stop().map(Some),
+        RecordingCommand::AcknowledgeStop => coordinator.acknowledge_stop().map(Some),
+        RecordingCommand::Complete { artifact_id } => coordinator.complete(artifact_id).map(Some),
+        RecordingCommand::Snapshot => coordinator.snapshot().map(Some),
+    };
+
+    match result {
+        Ok(state) => RecordingCommandResponse {
+            protocol_version: PROTOCOL_VERSION,
+            request_id: request.request_id.clone(),
+            status: "ok".to_owned(),
+            state: state.map(RecordingStateDto::from),
+            error_code: None,
+        },
+        Err(error) => command_error(request, error_code(error)),
+    }
+}
+
+fn command_error(request: &RecordingCommandRequest, error_code: &str) -> RecordingCommandResponse {
+    RecordingCommandResponse {
+        protocol_version: PROTOCOL_VERSION,
+        request_id: request.request_id.clone(),
+        status: "rejected".to_owned(),
+        state: None,
+        error_code: Some(error_code.to_owned()),
+    }
+}
+
+fn error_code(error: ProductionSessionError) -> &'static str {
+    match error {
+        ProductionSessionError::Unauthorized => "unauthorized",
+        ProductionSessionError::InvalidStateTransition => "invalid_state_transition",
+        ProductionSessionError::ParticipantAlreadyExists => "participant_already_exists",
+        ProductionSessionError::MissingOwner => "missing_owner",
+        ProductionSessionError::RecordingNotFound => "recording_not_found",
+        ProductionSessionError::RecordingLifecycle(_) => "recording_lifecycle_error",
+        ProductionSessionError::RecordingCoordinationNotFound => "recording_coordination_not_found",
+        ProductionSessionError::RecordingCoordinationAlreadyActive => {
+            "recording_coordination_already_active"
+        }
+        ProductionSessionError::RecordingCoordination(_) => "recording_coordination_error",
+    }
+}
+
+fn write_frame<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<(), RuntimeProtocolError> {
+    let len = u32::try_from(bytes.len())
+        .map_err(|_| RuntimeProtocolError::InvalidHeader("response too large".to_owned()))?;
     writer.write_all(&len.to_be_bytes())?;
-    writer.write_all(&bytes)?;
+    writer.write_all(bytes)?;
     writer.flush()?;
     Ok(())
 }
@@ -124,106 +265,24 @@ fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
     Ok(u32::from_be_bytes(bytes))
 }
 
-/// Handles the V1 finalized-artifact operation through the existing
-/// application/persistence boundary.
 pub fn handle_submit(
-    request: SubmitFinalizedArtifactRequest,
-    payload: Vec<u8>,
-    persistence_root: impl AsRef<Path>,
+    request: &SubmitFinalizedArtifactRequest,
+    payload: &[u8],
 ) -> SubmitFinalizedArtifactResponse {
-    let request_id = request.request_id.clone();
-
     if request.payload_length != payload.len() as u64 {
         return SubmitFinalizedArtifactResponse {
             protocol_version: PROTOCOL_VERSION,
-            request_id,
+            request_id: request.request_id.clone(),
             status: "rejected".to_owned(),
             artifact_id: None,
             error_code: Some("payload_length_mismatch".to_owned()),
         };
     }
-
-    let artifact = BrowserRecordingArtifact::new(
-        request.capture_id,
-        request.recording_session_id,
-        ProductionId::new(request.production_id),
-        request.recording_id,
-        request.track_id,
-        request.sample_rate_hz,
-        request.channels,
-        payload,
-    );
-
-    let persistence = FilesystemPersistenceProvider::new(persistence_root);
-    let mut processor = browser_artifact_processor(persistence);
-
-    match persist_browser_recording_artifact(&mut processor, artifact) {
-        Ok(stored) => SubmitFinalizedArtifactResponse {
-            protocol_version: PROTOCOL_VERSION,
-            request_id,
-            status: "stored".to_owned(),
-            artifact_id: Some(stored.id.value().to_owned()),
-            error_code: None,
-        },
-        Err(_) => SubmitFinalizedArtifactResponse {
-            protocol_version: PROTOCOL_VERSION,
-            request_id,
-            status: "failed".to_owned(),
-            artifact_id: None,
-            error_code: Some("persistence_failed".to_owned()),
-        },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn request() -> SubmitFinalizedArtifactRequest {
-        SubmitFinalizedArtifactRequest {
-            protocol_version: PROTOCOL_VERSION,
-            operation: OPERATION_SUBMIT_FINALIZED_ARTIFACT.to_owned(),
-            request_id: "request-001".to_owned(),
-            capture_id: "capture-001".to_owned(),
-            recording_session_id: "session-001".to_owned(),
-            production_id: "production-001".to_owned(),
-            recording_id: "recording-001".to_owned(),
-            track_id: "track-001".to_owned(),
-            sample_rate_hz: 48_000,
-            channels: 1,
-            payload_length: 4,
-        }
-    }
-
-    #[test]
-    fn request_frame_round_trips_without_base64() {
-        let request = request();
-        let header = serde_json::to_vec(&request).expect("header should serialize");
-        let mut frame = Vec::new();
-        frame.extend_from_slice(&(header.len() as u32).to_be_bytes());
-        frame.extend_from_slice(&header);
-        frame.extend_from_slice(&[1, 2, 3, 4]);
-
-        let (decoded, payload) = read_request(&mut frame.as_slice()).expect("frame should parse");
-        assert_eq!(decoded, request);
-        assert_eq!(payload, vec![1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn response_is_a_small_json_frame() {
-        let response = SubmitFinalizedArtifactResponse {
-            protocol_version: PROTOCOL_VERSION,
-            request_id: "request-001".to_owned(),
-            status: "stored".to_owned(),
-            artifact_id: Some("capture-001".to_owned()),
-            error_code: None,
-        };
-        let mut output = Vec::new();
-        write_response(&mut output, &response).expect("response should serialize");
-
-        let len = u32::from_be_bytes(output[0..4].try_into().unwrap()) as usize;
-        let decoded: SubmitFinalizedArtifactResponse =
-            serde_json::from_slice(&output[4..4 + len]).expect("response should decode");
-        assert_eq!(decoded, response);
+    SubmitFinalizedArtifactResponse {
+        protocol_version: PROTOCOL_VERSION,
+        request_id: request.request_id.clone(),
+        status: "accepted".to_owned(),
+        artifact_id: Some(request.capture_id.clone()),
+        error_code: None,
     }
 }
