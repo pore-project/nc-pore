@@ -66,7 +66,6 @@
 		if (!window.__poreTalkRecordingCoordinator?.command) throw new Error('PoRE recording coordinator is not available')
 		const result = await window.__poreTalkRecordingCoordinator.command('start')
 		if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-		window.dispatchEvent(new CustomEvent('pore:recording-ui-start-local'))
 	}
 
 	const stopRequested = async () => {
@@ -173,10 +172,6 @@
 	})
 
 	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
-
-	window.addEventListener('pore:recording-ui-start-local', async () => {
-		try { await startLocalCapture() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
-	})
 
 	window.addEventListener('pore:recording-ui-stop-local', async event => {
 		try {
