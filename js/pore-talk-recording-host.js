@@ -12,10 +12,10 @@
 		const response = await fetch(target, {
 			credentials: 'same-origin',
 			headers: {
-				Accept: 'application/json',
-				'OCS-APIRequest': 'true',
-				...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
-				...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
+			Accept: 'application/json',
+			'OCS-APIRequest': 'true',
+			...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
+			...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
 			},
 			...options,
 		})
@@ -56,7 +56,9 @@
 		return result
 	}
 
-	const findToken = () => window.location.pathname.match(/\/apps\/spreed\/(?:call|room)\/([^/]+)/)?.[1] || null
+	// Talk 34 uses /call/<token> (and /room/<token> in other contexts),
+	// while older deployments may expose the token below /apps/spreed.
+	const findToken = () => window.location.pathname.match(/(?:\/apps\/spreed)?\/(?:call|room)\/([^/]+)/)?.[1] || null
 	const getCurrentUserId = () => window.OC?.getCurrentUser?.()?.uid || window.OC?.currentUser?.uid || null
 
 	const bootstrap = async () => {
@@ -78,17 +80,7 @@
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
 
 		const ensure = await command(token, recordingId, 'ensure', { participants: participantIds, ownerId })
-		try {
-			const begin = await command(token, recordingId, 'begin', { participants: participantIds, ownerId })
-			if (!begin?.state && ensure?.state) publishState(ensure.state)
-		} catch (error) {
-			if (!String(error?.message || error).includes('recording_coordination_already_active')) throw error
-		}
-		try {
-			await command(token, recordingId, 'ready', { participants: participantIds, ownerId })
-		} catch (error) {
-			if (!String(error?.message || error).includes('invalid_state_transition')) throw error
-		}
+		if (ensure?.state) publishState(ensure.state)
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
 			sessionId: token,
@@ -97,6 +89,24 @@
 			ownerId,
 			command: (name, artifactId = '') => command(token, recordingId, name, { participants: participantIds, ownerId, artifactId }),
 		})
+
+		const state = ensure?.state
+		window.dispatchEvent(new CustomEvent('pore:recording-ui-context', {
+			detail: {
+				mountElement: window.PoRETalkRecordingUiMount?.getMountElement?.() || null,
+				productionId: token,
+				productionLabel: room?.displayName || room?.name || token,
+				recordingId,
+				role: state?.role || (ownerId === actorId ? 'host' : 'participant'),
+				state: state?.phase || 'preparing',
+				listener: false,
+				confirmed: state?.confirmed === true,
+				ready: state?.participants?.some(participant => participant.id === actorId && participant.ready) === true,
+				readyCount: state?.participants?.filter(participant => participant.ready).length || 0,
+				participantCount: state?.participants?.length || participantIds.length,
+				participants: state?.participants || [],
+			},
+		}))
 	}
 
 	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })

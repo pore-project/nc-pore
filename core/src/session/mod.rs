@@ -258,9 +258,14 @@ impl ProductionSession {
         actor: &ParticipantId,
         recording_id: &RecordingId,
     ) -> Result<(), ProductionSessionError> {
-        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
+        self.authorize(actor, ProductionAction::ManageRecordings)?;
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        if let Some(coordination) = self.recording_coordination.as_ref() {
+            if coordination.recording_id() != recording_id || !coordination.is_ready() {
+                return Err(ProductionSessionError::InvalidStateTransition);
+            }
         }
         let recording = self
             .recordings

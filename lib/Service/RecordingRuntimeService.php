@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace OCA\PoRe\Service;
 
+use OCP\App\IAppManager;
 use OCP\IConfig;
 use RuntimeException;
 
 final class RecordingRuntimeService {
 	private const MAX_FRAME_LENGTH = 1024 * 1024;
 
-	public function __construct(private readonly IConfig $config) {
+	public function __construct(
+		private readonly IConfig $config,
+		private readonly IAppManager $appManager,
+	) {
 	}
 
 	/**
@@ -24,16 +28,28 @@ final class RecordingRuntimeService {
 	 */
 	public function command(array $request): array {
 		$binary = trim((string)$this->config->getSystemValue('pore_runtime_binary', ''));
-		$sessionStore = trim((string)$this->config->getSystemValue('pore_runtime_session_store', ''));
-
-		if ($binary === '' || $sessionStore === '') {
-			throw new RuntimeException('PoRE runtime is not configured.');
+		if ($binary === '') {
+			$binary = rtrim($this->appManager->getAppPath('pore'), '/') . '/runtime/bin/pore-runtime';
 		}
+
+		$sessionStore = trim((string)$this->config->getSystemValue('pore_runtime_session_store', ''));
+		if ($sessionStore === '') {
+			$dataDirectory = trim((string)$this->config->getSystemValue('datadirectory', ''));
+			$instanceId = trim((string)$this->config->getSystemValue('instanceid', ''));
+			if ($dataDirectory === '' || $instanceId === '') {
+				throw new RuntimeException('Unable to determine the Nextcloud app data directory for the PoRE runtime.');
+			}
+			$sessionStore = rtrim($dataDirectory, '/') . '/appdata_' . $instanceId . '/pore/runtime/sessions';
+		}
+
 		if (!is_file($binary) || !is_executable($binary)) {
 			throw new RuntimeException('Configured PoRE runtime binary is not executable.');
 		}
-		if (!is_dir($sessionStore) || !is_writable($sessionStore)) {
-			throw new RuntimeException('Configured PoRE runtime session store is not writable.');
+		if (!is_dir($sessionStore) && !mkdir($sessionStore, 0770, true) && !is_dir($sessionStore)) {
+			throw new RuntimeException('Unable to create the PoRE runtime session store.');
+		}
+		if (!is_writable($sessionStore)) {
+			throw new RuntimeException('PoRE runtime session store is not writable.');
 		}
 
 		$request['protocol_version'] = 1;

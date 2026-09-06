@@ -2,12 +2,16 @@
  * NC-PoRe Talk recording UI mount adapter.
  *
  * Talk does not currently expose a public extension point for active-call
- * top-bar actions. Keep the Talk-specific DOM dependency isolated here.
+ * media controls. Keep the Talk-specific DOM dependency isolated here.
  */
 (function () {
 	'use strict'
 
-	const MOUNT_SELECTOR = '.top-bar.top-bar--in-call .top-bar__controls'
+	// The visible in-call controls live in BottomBar -> TopBarMediaControls.
+	// LocalAudioControlButton renders this wrapper around the microphone and
+	// its device selector. Insert PoRE immediately after that group so it sits
+	// between microphone and camera without modifying Talk itself.
+	const MOUNT_SELECTOR = '.bottom-bar .buttons-bar .local-audio-control-wrapper'
 	const ROOT_ATTRIBUTE = 'data-pore-talk-recording-ui'
 	const POLL_INTERVAL_MS = 500
 
@@ -21,17 +25,13 @@
 	}
 
 	function unmount() {
-		if (mountedRoot?.parentNode) {
-			mountedRoot.remove()
-		}
+		if (mountedRoot?.parentNode) mountedRoot.remove()
 		mountedRoot = null
 		mountedHost = null
 	}
 
 	function mount() {
-		if (!window.PoRETalkRecordingUi?.mount) {
-			return
-		}
+		if (!window.PoRETalkRecordingUi?.mount) return
 
 		const host = getMountHost()
 		if (!host) {
@@ -39,23 +39,20 @@
 			return
 		}
 
-		if (mountedHost === host && mountedRoot?.isConnected) {
-			return
-		}
+		if (mountedHost === host && mountedRoot?.isConnected) return
 
 		unmount()
 
 		const root = document.createElement('div')
 		root.setAttribute(ROOT_ATTRIBUTE, 'true')
 		root.className = 'pore-talk-recording-ui-mount'
-		host.appendChild(root)
+		host.insertAdjacentElement('afterend', root)
 
 		try {
-			window.PoRETalkRecordingUi.mount({
-			mountElement: root,
-		})
+			window.PoRETalkRecordingUi.mount({ mountElement: root })
 			mountedHost = host
 			mountedRoot = root
+			window.dispatchEvent(new CustomEvent('pore:recording-ui-mount', { detail: { mountElement: root } }))
 		} catch (error) {
 			root.remove()
 			console.error('[NC-PoRe] Failed to mount Talk recording UI', error)
@@ -63,9 +60,7 @@
 	}
 
 	function scheduleMount() {
-		if (pollTimer !== null) {
-			return
-		}
+		if (pollTimer !== null) return
 		pollTimer = window.setTimeout(() => {
 			pollTimer = null
 			mount()
@@ -73,15 +68,10 @@
 	}
 
 	function start() {
-		if (observer) {
-			return
-		}
+		if (observer) return
 		mount()
 		observer = new MutationObserver(scheduleMount)
-		observer.observe(document.body, {
-			childList: true,
-			subtree: true,
-		})
+		observer.observe(document.body, { childList: true, subtree: true })
 	}
 
 	function stop() {
@@ -96,11 +86,14 @@
 		unmount()
 	}
 
-	window.PoRETalkRecordingUiMount = { start, stop, mount, unmount }
-
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', start, { once: true })
-	} else {
-		start()
+	window.PoRETalkRecordingUiMount = {
+		start,
+		stop,
+		mount,
+		unmount,
+		getMountElement: () => mountedRoot,
 	}
+
+	if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
+	else start()
 })()
