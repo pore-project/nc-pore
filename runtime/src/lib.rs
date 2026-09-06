@@ -266,6 +266,7 @@ fn write_frame<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<(), RuntimeProt
     writer.write_all(&len.to_be_bytes())?;
     writer.write_all(bytes)?;
     writer.flush()?;
+    Ok(())
 }
 
 fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
