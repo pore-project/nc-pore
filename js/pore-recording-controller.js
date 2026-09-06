@@ -93,7 +93,7 @@
 				const enriched = artifact ? {
 					...artifact,
 					sequence: this.sequence,
-					source: this.initialSource,
+					source: { ...(this.initialSource || {}), ...(artifact.source || {}) },
 					sourceChanges: this.sourceChanges.slice(),
 				} : null
 				this.recorder = null
