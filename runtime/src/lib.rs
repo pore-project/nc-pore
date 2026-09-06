@@ -11,8 +11,8 @@ use nc_pore_application::recording_state::{
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::RecordingId;
+use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
-use nc_pore_infrastructure::FileProductionSessionRepository;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
@@ -20,7 +20,6 @@ pub const PROTOCOL_VERSION: u16 = 1;
 pub const OPERATION_SUBMIT_FINALIZED_ARTIFACT: &str = "recording.submit_finalized_artifact";
 pub const OPERATION_RECORDING_COMMAND: &str = "recording.command";
 
-/// Metadata supplied by a host adapter. No host-specific types are allowed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SubmitFinalizedArtifactRequest {
     pub protocol_version: u16,
@@ -145,7 +144,6 @@ impl From<serde_json::Error> for RuntimeProtocolError {
     }
 }
 
-/// Reads one finalized-artifact request frame from stdin.
 pub fn read_request<R: Read>(
     reader: &mut R,
 ) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
@@ -190,10 +188,13 @@ pub fn write_response<W: Write>(
 ///
 /// The repository is supplied by the runtime boundary. No recording lifecycle
 /// state is maintained in this protocol layer.
-pub fn handle_recording_command(
+pub fn handle_recording_command<R>(
     request: &RecordingCommandRequest,
-    repository: &mut FileProductionSessionRepository,
-) -> RecordingCommandResponse {
+    repository: &mut R,
+) -> RecordingCommandResponse
+where
+    R: ProductionSessionRepository,
+{
     if request.protocol_version != PROTOCOL_VERSION {
         return command_error(request, "unsupported_protocol_version");
     }
@@ -274,7 +275,6 @@ fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
     Ok(u32::from_be_bytes(bytes))
 }
 
-/// Validates a finalized artifact at the host-neutral protocol boundary.
 pub fn handle_submit(
     request: &SubmitFinalizedArtifactRequest,
     payload: &[u8],
@@ -309,7 +309,7 @@ mod tests {
         sessions: Vec<ProductionSession>,
     }
 
-    impl nc_pore_core::session::repository::ProductionSessionRepository for InMemoryRepository {
+    impl ProductionSessionRepository for InMemoryRepository {
         type Error = &'static str;
 
         fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
@@ -450,9 +450,17 @@ mod tests {
             recording_id: "recording-001".to_owned(),
             command: RecordingCommand::EnsureRecording,
         };
-        let response = handle_recording_command(&ensure, unsafe {
-            std::mem::transmute(&mut repository)
-        });
-        assert_eq!(response.status, "rejected");
+        let response = handle_recording_command(&ensure, &mut repository);
+        assert_eq!(response.status, "ok");
+        assert_eq!(response.state, None);
+
+        let snapshot = RecordingCommandRequest {
+            command: RecordingCommand::Snapshot,
+            request_id: "command-002".to_owned(),
+            ..ensure
+        };
+        let response = handle_recording_command(&snapshot, &mut repository);
+        assert_eq!(response.status, "ok");
+        assert_eq!(response.state.unwrap().phase, "preparing");
     }
 }
