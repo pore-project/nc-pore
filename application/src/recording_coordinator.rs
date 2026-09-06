@@ -1,133 +1,259 @@
-use nc_pore_core::identity::ProductionId;
-use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::recording::{RecordingId, RecordingWorkflow, RecordingWorkflowError};
+use crate::client::{ClientSessionError, ClientSessionService};
+use nc_pore_core::recording::{Recording, RecordingId};
+use nc_pore_core::session::repository::ProductionSessionRepository;
 
 /// Host-neutral application orchestration for a recording session.
 ///
-/// This layer translates host/user intent into Core workflow commands and
-/// exposes Core state. It deliberately knows nothing about Nextcloud, Talk,
+/// The coordinator is deliberately stateless with regard to the recording
+/// lifecycle. Core owns the lifecycle and the Application session repository
+/// is the authoritative persisted state. A host adapter supplies the actor and
+/// participant identities; this type knows nothing about Nextcloud, Talk,
 /// browser capture, or artifact transport.
-#[derive(Debug)]
-pub struct RecordingCoordinator {
-    workflow: RecordingWorkflow,
-    production_id: ProductionId,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecordingCoordinatorSnapshot {
-    pub production_id: String,
-    pub recording_id: String,
-    pub status: nc_pore_core::recording::RecordingWorkflowStatus,
-    pub participants: Vec<String>,
-    pub ready_participants: Vec<String>,
+pub struct RecordingCoordinator {
+    session_id: String,
+    actor_id: String,
+    recording_id: String,
 }
 
 impl RecordingCoordinator {
-    pub fn new(
-        production_id: ProductionId,
-        recording_id: RecordingId,
-        participants: impl IntoIterator<Item = ParticipantId>,
-    ) -> Result<Self, RecordingWorkflowError> {
-        let workflow = RecordingWorkflow::from_recording(
-            nc_pore_core::recording::Recording::new(recording_id.value()),
+    pub fn new(session_id: impl Into<String>, actor_id: impl Into<String>, recording_id: impl Into<String>) -> Self {
+        Self {
+            session_id: session_id.into(),
+            actor_id: actor_id.into(),
+            recording_id: recording_id.into(),
+        }
+    }
+
+    pub fn ensure_recording<R>(
+        &self,
+        client: &mut ClientSessionService<'_, R>,
+    ) -> Result<(), ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.add_recording(
+            &self.session_id,
+            &self.actor_id,
+            &self.recording_id,
+        )
+    }
+
+    pub fn begin<R>(
+        &self,
+        client: &mut ClientSessionService<'_, R>,
+        participants: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.begin_recording(
+            &self.session_id,
+            &self.actor_id,
+            &self.recording_id,
             participants,
         )?;
-        Ok(Self { workflow, production_id })
+        self.snapshot(client)
     }
 
-    pub fn begin(&mut self) -> Result<RecordingCoordinatorSnapshot, RecordingWorkflowError> {
-        self.workflow.begin_ready_phase()?;
-        Ok(self.snapshot())
+    pub fn mark_ready<R>(
+        &self,
+        client: &mut ClientSessionService<'_, R>,
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.mark_recording_ready(&self.session_id, &self.actor_id, &self.recording_id)?;
+        self.snapshot(client)
     }
 
-    pub fn mark_ready(
-        &mut self,
-        participant_id: &ParticipantId,
-    ) -> Result<RecordingCoordinatorSnapshot, RecordingWorkflowError> {
-        self.workflow.mark_ready(participant_id)?;
-        Ok(self.snapshot())
+    pub fn start<R>(
+        &self,
+        client: &mut ClientSessionService<'_, R>,
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.start_recording(&self.session_id, &self.actor_id, &self.recording_id)?;
+        self.snapshot(client)
     }
 
-    pub fn start(&mut self) -> Result<RecordingCoordinatorSnapshot, RecordingWorkflowError> {
-        self.workflow.start_recording()?;
-        Ok(self.snapshot())
+    pub fn request_stop<R>(
+        &self,
+        client: &mut ClientSessionService<'_, R>,
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.stop_recording(&self.session_id, &self.actor_id, &self.recording_id)?;
+        self.snapshot(client)
     }
 
-    pub fn request_stop(&mut self) -> Result<RecordingCoordinatorSnapshot, RecordingWorkflowError> {
-        self.workflow.request_stop()?;
-        Ok(self.snapshot())
+    pub fn acknowledge_stop<R>(
+        &self,
+        client: &mut ClientSessionService<'_, R>,
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.acknowledge_recording_stop(
+            &self.session_id,
+            &self.actor_id,
+            &self.recording_id,
+        )?;
+        self.snapshot(client)
     }
 
-    pub fn acknowledge_stop(
-        &mut self,
-        participant_id: &ParticipantId,
-    ) -> Result<bool, RecordingWorkflowError> {
-        self.workflow.acknowledge_stop(participant_id)
+    pub fn complete<R>(
+        &self,
+        client: &mut ClientSessionService<'_, R>,
+        artifact_id: impl Into<String>,
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.complete_recording(
+            &self.session_id,
+            &self.actor_id,
+            &self.recording_id,
+            artifact_id,
+        )?;
+        self.snapshot(client)
     }
 
-    pub fn snapshot(&self) -> RecordingCoordinatorSnapshot {
-        RecordingCoordinatorSnapshot {
-            production_id: self.production_id.value().to_owned(),
-            recording_id: self.workflow.recording().id().value().to_owned(),
-            status: self.workflow.status(),
-            participants: self
-                .workflow
-                .coordination()
-                .participants()
-                .iter()
-                .map(|id| id.value().to_owned())
-                .collect(),
-            ready_participants: self
-                .workflow
-                .coordination()
-                .ready_participants()
-                .iter()
-                .map(|id| id.value().to_owned())
-                .collect(),
-        }
+    pub fn snapshot<R>(
+        &self,
+        client: &ClientSessionService<'_, R>,
+    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    where
+        R: ProductionSessionRepository,
+    {
+        client.recording_state(&self.session_id, &self.actor_id, &self.recording_id)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nc_pore_core::identity::ProductionId;
+    use nc_pore_core::participant::ParticipantId;
+    use nc_pore_core::participation::Participation;
+    use nc_pore_core::role::ParticipantRole;
+    use nc_pore_core::session::ProductionSession;
 
-    fn participant(id: &str) -> ParticipantId { ParticipantId::new(id) }
+    struct InMemoryRepository {
+        sessions: Vec<ProductionSession>,
+    }
 
-    #[test]
-    fn coordinator_delegates_lifecycle_to_core() {
-        let mut coordinator = RecordingCoordinator::new(
-            ProductionId::new("production-001"),
-            RecordingId::new("recording-001"),
-            [participant("alice"), participant("bob")],
-        )
-        .unwrap();
+    impl ProductionSessionRepository for InMemoryRepository {
+        type Error = &'static str;
 
-        assert_eq!(coordinator.snapshot().status, nc_pore_core::recording::RecordingWorkflowStatus::Preparing);
-        coordinator.begin().unwrap();
-        coordinator.mark_ready(&participant("alice")).unwrap();
-        assert_eq!(coordinator.snapshot().status, nc_pore_core::recording::RecordingWorkflowStatus::WaitingForReady);
-        coordinator.mark_ready(&participant("bob")).unwrap();
-        assert_eq!(coordinator.snapshot().status, nc_pore_core::recording::RecordingWorkflowStatus::Ready);
-        coordinator.start().unwrap();
-        assert_eq!(coordinator.snapshot().status, nc_pore_core::recording::RecordingWorkflowStatus::Recording);
-        coordinator.request_stop().unwrap();
-        assert_eq!(coordinator.snapshot().status, nc_pore_core::recording::RecordingWorkflowStatus::Stopping);
+        fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            self.sessions.push(session.clone());
+            Ok(())
+        }
+
+        fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            let existing = self
+                .sessions
+                .iter_mut()
+                .find(|existing| existing.id == session.id)
+                .ok_or("session not found")?;
+            *existing = session.clone();
+            Ok(())
+        }
+
+        fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
+            Ok(self
+                .sessions
+                .iter()
+                .find(|session| &session.id == id)
+                .cloned())
+        }
+    }
+
+    fn repository() -> InMemoryRepository {
+        let owner = ParticipantId::new("alice");
+        let bob = ParticipantId::new("bob");
+        let mut session = ProductionSession::new_with_actor(
+            ProductionId::new("session-001"),
+            Some(owner.clone()),
+        );
+        session
+            .add_participation_by(
+                &owner,
+                Participation::with_roles(
+                    owner.clone(),
+                    [ParticipantRole::Owner, ParticipantRole::Producer],
+                ),
+            )
+            .unwrap();
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob, ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+        InMemoryRepository { sessions: vec![session] }
     }
 
     #[test]
-    fn coordinator_rejects_start_until_core_reports_ready() {
-        let mut coordinator = RecordingCoordinator::new(
-            ProductionId::new("production-001"),
-            RecordingId::new("recording-001"),
-            [participant("alice"), participant("bob")],
-        )
-        .unwrap();
-        coordinator.begin().unwrap();
-        coordinator.mark_ready(&participant("alice")).unwrap();
+    fn coordinator_delegates_the_complete_lifecycle_to_application_and_core() {
+        let mut repository = repository();
+        let mut client = ClientSessionService::new(&mut repository);
+        let coordinator = RecordingCoordinator::new("session-001", "alice", "recording-001");
+
+        coordinator.ensure_recording(&mut client).unwrap();
+        coordinator
+            .begin(&mut client, ["alice", "bob"])
+            .unwrap();
+
         assert_eq!(
-            coordinator.start(),
-            Err(RecordingWorkflowError::InvalidState)
+            coordinator.snapshot(&client).unwrap().phase,
+            crate::recording_state::ClientRecordingPhase::Preparing
         );
+
+        coordinator.mark_ready(&mut client).unwrap();
+        let bob = RecordingCoordinator::new("session-001", "bob", "recording-001");
+        bob.mark_ready(&mut client).unwrap();
+
+        assert_eq!(
+            coordinator.snapshot(&client).unwrap().phase,
+            crate::recording_state::ClientRecordingPhase::Ready
+        );
+
+        coordinator.start(&mut client).unwrap();
+        assert_eq!(
+            coordinator.snapshot(&client).unwrap().phase,
+            crate::recording_state::ClientRecordingPhase::Recording
+        );
+
+        coordinator.request_stop(&mut client).unwrap();
+        assert_eq!(
+            coordinator.snapshot(&client).unwrap().phase,
+            crate::recording_state::ClientRecordingPhase::Stopped
+        );
+
+        coordinator
+            .complete(&mut client, "artifact-001")
+            .unwrap();
+        let state = coordinator.snapshot(&client).unwrap();
+        assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Completed);
+        assert_eq!(state.artifact_id.as_deref(), Some("artifact-001"));
+    }
+
+    #[test]
+    fn coordinator_does_not_keep_a_second_recording_state_machine() {
+        let mut repository = repository();
+        let mut client = ClientSessionService::new(&mut repository);
+        let coordinator = RecordingCoordinator::new("session-001", "alice", "recording-001");
+
+        coordinator.ensure_recording(&mut client).unwrap();
+        coordinator.begin(&mut client, ["alice", "bob"]).unwrap();
+
+        let first = coordinator.snapshot(&client).unwrap();
+        let second = coordinator.snapshot(&client).unwrap();
+        assert_eq!(first, second);
     }
 }
