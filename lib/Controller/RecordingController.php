@@ -29,6 +29,7 @@ final class RecordingController extends OCSController {
 		string $command,
 		string $requestId = '',
 		string $participants = '[]',
+		string $ownerId = '',
 		string $artifactId = '',
 	): DataResponse {
 		$user = $this->userSession->getUser();
@@ -41,21 +42,35 @@ final class RecordingController extends OCSController {
 			return $this->rejected('unsupported_command', 400, $requestId);
 		}
 
-		$participantIds = json_decode($participants, true, 512, JSON_THROW_ON_ERROR);
+		try {
+			$participantIds = json_decode($participants, true, 512, JSON_THROW_ON_ERROR);
+		} catch (\JsonException) {
+			return $this->rejected('invalid_participants', 400, $requestId);
+		}
 		if (!is_array($participantIds) || array_filter($participantIds, static fn ($id): bool => !is_string($id)) !== []) {
 			return $this->rejected('invalid_participants', 400, $requestId);
 		}
+		if ($ownerId === '') {
+			$ownerId = $user->getUID();
+		}
 
-		$runtimeCommand = match ($command) {
-			'ensure' => ['EnsureRecording' => new \stdClass()],
-			'begin' => ['Begin' => ['participants' => array_values($participantIds)]],
-			'ready' => ['MarkReady' => new \stdClass()],
-			'start' => ['Start' => new \stdClass()],
-			'stop' => ['RequestStop' => new \stdClass()],
-			'acknowledge_stop' => ['AcknowledgeStop' => new \stdClass()],
-			'complete' => ['Complete' => ['artifact_id' => $this->requiredArtifactId($artifactId)]],
-			'snapshot' => ['Snapshot' => new \stdClass()],
-		};
+		try {
+			$runtimeCommand = match ($command) {
+				'ensure' => ['EnsureSession' => [
+					'owner_id' => $ownerId,
+					'participants' => array_values($participantIds),
+				]],
+				'begin' => ['Begin' => ['participants' => array_values($participantIds)]],
+				'ready' => ['MarkReady' => null],
+				'start' => ['Start' => null],
+				'stop' => ['RequestStop' => null],
+				'acknowledge_stop' => ['AcknowledgeStop' => null],
+				'complete' => ['Complete' => ['artifact_id' => $this->requiredArtifactId($artifactId)]],
+				'snapshot' => ['Snapshot' => null],
+			};
+		} catch (RuntimeException) {
+			return $this->rejected('invalid_artifact', 400, $requestId);
+		}
 
 		[$variant, $value] = [array_key_first($runtimeCommand), array_values($runtimeCommand)[0]];
 		$request = [
@@ -68,7 +83,7 @@ final class RecordingController extends OCSController {
 
 		try {
 			$response = $this->runtime->command($request);
-		} catch (\Throwable $exception) {
+		} catch (\Throwable) {
 			return $this->rejected('runtime_unavailable', 503, $request['request_id']);
 		}
 
