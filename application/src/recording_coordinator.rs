@@ -3,8 +3,8 @@ use crate::session::add_recording_to_production_session;
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{Recording, RecordingArtifactId, RecordingId};
-use nc_pore_core::session::ProductionSessionError;
 use nc_pore_core::session::repository::ProductionSessionRepository;
+use nc_pore_core::session::ProductionSessionError;
 
 /// Host-neutral application orchestration for a recording session.
 ///
@@ -64,9 +64,7 @@ where
     ) -> Result<ClientRecordingState, ProductionSessionError> {
         let actor_id = self.actor_id.clone();
         let recording_id = self.recording_id.clone();
-        self.mutate(|session| {
-            session.begin_recording_by(&actor_id, &recording_id, participants)
-        })?;
+        self.mutate(|session| session.begin_recording_by(&actor_id, &recording_id, participants))?;
         self.snapshot()
     }
 
@@ -98,9 +96,7 @@ where
     pub fn acknowledge_stop(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
         let actor_id = self.actor_id.clone();
         let recording_id = self.recording_id.clone();
-        self.mutate(|session| {
-            session.acknowledge_recording_stop_by(&actor_id, &recording_id)
-        })?;
+        self.mutate(|session| session.acknowledge_recording_stop_by(&actor_id, &recording_id))?;
         self.snapshot()
     }
 
@@ -124,19 +120,16 @@ where
             .map_err(|_| ProductionSessionError::InvalidStateTransition)?
             .ok_or(ProductionSessionError::InvalidStateTransition)?;
 
-        recording_state(
-            &session,
-            self.actor_id.value(),
-            self.recording_id.value(),
+        recording_state(&session, self.actor_id.value(), self.recording_id.value()).map_err(
+            |error| match error {
+                crate::recording_state::RecordingStateError::RecordingNotFound => {
+                    ProductionSessionError::RecordingNotFound
+                }
+                crate::recording_state::RecordingStateError::RecordingCoordinationNotFound => {
+                    ProductionSessionError::RecordingCoordinationNotFound
+                }
+            },
         )
-        .map_err(|error| match error {
-            crate::recording_state::RecordingStateError::RecordingNotFound => {
-                ProductionSessionError::RecordingNotFound
-            }
-            crate::recording_state::RecordingStateError::RecordingCoordinationNotFound => {
-                ProductionSessionError::RecordingCoordinationNotFound
-            }
-        })
     }
 
     fn load_session(
