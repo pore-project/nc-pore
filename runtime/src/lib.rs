@@ -11,8 +11,8 @@ use nc_pore_application::recording_state::{
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::RecordingId;
-use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
+use nc_pore_core::session::repository::ProductionSessionRepository;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
@@ -62,12 +62,16 @@ pub enum RecordingCommand {
         participants: Vec<String>,
     },
     EnsureRecording,
-    Begin { participants: Vec<String> },
+    Begin {
+        participants: Vec<String>,
+    },
     MarkReady,
     Start,
     RequestStop,
     AcknowledgeStop,
-    Complete { artifact_id: String },
+    Complete {
+        artifact_id: String,
+    },
     Snapshot,
 }
 
@@ -236,10 +240,7 @@ pub fn handle_recording_command<R: ProductionSessionRepository>(
     }
 }
 
-fn command_error(
-    request: &RecordingCommandRequest,
-    error_code: &str,
-) -> RecordingCommandResponse {
+fn command_error(request: &RecordingCommandRequest, error_code: &str) -> RecordingCommandResponse {
     RecordingCommandResponse {
         protocol_version: PROTOCOL_VERSION,
         request_id: request.request_id.clone(),
