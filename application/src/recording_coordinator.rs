@@ -1,134 +1,154 @@
-use crate::client::{ClientSessionError, ClientSessionService};
-use nc_pore_core::recording::{Recording, RecordingId};
+use crate::recording_state::{recording_state, ClientRecordingState};
+use crate::session::{add_recording_to_production_session, get_production_session};
+use nc_pore_core::identity::ProductionId;
+use nc_pore_core::participant::ParticipantId;
+use nc_pore_core::recording::{Recording, RecordingArtifactId, RecordingId};
 use nc_pore_core::session::repository::ProductionSessionRepository;
+use nc_pore_core::session::ProductionSessionError;
 
 /// Host-neutral application orchestration for a recording session.
 ///
-/// The coordinator is deliberately stateless with regard to the recording
-/// lifecycle. Core owns the lifecycle and the Application session repository
-/// is the authoritative persisted state. A host adapter supplies the actor and
-/// participant identities; this type knows nothing about Nextcloud, Talk,
-/// browser capture, or artifact transport.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecordingCoordinator {
-    session_id: String,
-    actor_id: String,
-    recording_id: String,
+/// Core owns the recording lifecycle and the supplied Application repository
+/// owns its persisted session state. The coordinator is the single command
+/// boundary between a host adapter and that state. It knows nothing about
+/// Nextcloud, Talk, browser capture, or artifact transport.
+#[derive(Debug)]
+pub struct RecordingCoordinator<'a, R>
+where
+    R: ProductionSessionRepository,
+{
+    repository: &'a mut R,
+    session_id: ProductionId,
+    actor_id: ParticipantId,
+    recording_id: RecordingId,
 }
 
-impl RecordingCoordinator {
-    pub fn new(session_id: impl Into<String>, actor_id: impl Into<String>, recording_id: impl Into<String>) -> Self {
+impl<'a, R> RecordingCoordinator<'a, R>
+where
+    R: ProductionSessionRepository,
+{
+    pub fn new(
+        repository: &'a mut R,
+        session_id: ProductionId,
+        actor_id: ParticipantId,
+        recording_id: RecordingId,
+    ) -> Self {
         Self {
-            session_id: session_id.into(),
-            actor_id: actor_id.into(),
-            recording_id: recording_id.into(),
+            repository,
+            session_id,
+            actor_id,
+            recording_id,
         }
     }
 
-    pub fn ensure_recording<R>(
-        &self,
-        client: &mut ClientSessionService<'_, R>,
-    ) -> Result<(), ClientSessionError<R::Error>>
-    where
-        R: ProductionSessionRepository,
-    {
-        client.add_recording(
+    pub fn ensure_recording(&mut self) -> Result<(), ProductionSessionError> {
+        let mut session = self.load_session()?;
+        add_recording_to_production_session(
+            self.repository,
             &self.session_id,
             &self.actor_id,
-            &self.recording_id,
+            Recording::new(self.recording_id.value()),
         )
+        .map(|_| ())
+        .map_err(|error| match error {
+            crate::session::AddRecordingToProductionSessionError::Session(error) => error,
+            crate::session::AddRecordingToProductionSessionError::SessionNotFound => {
+                // The session was already loaded, so this is an impossible repository race
+                // for the in-memory application contract. Preserve a domain error instead
+                // of inventing a coordinator-specific state.
+                ProductionSessionError::InvalidStateTransition
+            }
+            crate::session::AddRecordingToProductionSessionError::Repository(_) => {
+                ProductionSessionError::InvalidStateTransition
+            }
+        })
     }
 
-    pub fn begin<R>(
-        &self,
-        client: &mut ClientSessionService<'_, R>,
-        participants: impl IntoIterator<Item = impl Into<String>>,
-    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
-    where
-        R: ProductionSessionRepository,
-    {
-        client.begin_recording(
-            &self.session_id,
-            &self.actor_id,
-            &self.recording_id,
-            participants,
-        )?;
-        self.snapshot(client)
+    pub fn begin(
+        &mut self,
+        participants: impl IntoIterator<Item = ParticipantId>,
+    ) -> Result<ClientRecordingState, ProductionSessionError> {
+        self.mutate(|session| {
+            session.begin_recording_by(&self.actor_id, &self.recording_id, participants)
+        })?;
+        self.snapshot()
     }
 
-    pub fn mark_ready<R>(
-        &self,
-        client: &mut ClientSessionService<'_, R>,
-    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
-    where
-        R: ProductionSessionRepository,
-    {
-        client.mark_recording_ready(&self.session_id, &self.actor_id, &self.recording_id)?;
-        self.snapshot(client)
+    pub fn mark_ready(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
+        self.mutate(|session| {
+            session
+                .mark_recording_ready_by(&self.actor_id, &self.recording_id)
+                .map(|_| ())
+        })?;
+        self.snapshot()
     }
 
-    pub fn start<R>(
-        &self,
-        client: &mut ClientSessionService<'_, R>,
-    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
-    where
-        R: ProductionSessionRepository,
-    {
-        client.start_recording(&self.session_id, &self.actor_id, &self.recording_id)?;
-        self.snapshot(client)
+    pub fn start(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
+        self.mutate(|session| session.start_recording_by(&self.actor_id, &self.recording_id))?;
+        self.snapshot()
     }
 
-    pub fn request_stop<R>(
-        &self,
-        client: &mut ClientSessionService<'_, R>,
-    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
-    where
-        R: ProductionSessionRepository,
-    {
-        client.stop_recording(&self.session_id, &self.actor_id, &self.recording_id)?;
-        self.snapshot(client)
+    pub fn request_stop(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
+        self.mutate(|session| session.stop_recording_by(&self.actor_id, &self.recording_id))?;
+        self.snapshot()
     }
 
-    pub fn acknowledge_stop<R>(
-        &self,
-        client: &mut ClientSessionService<'_, R>,
-    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
-    where
-        R: ProductionSessionRepository,
-    {
-        client.acknowledge_recording_stop(
-            &self.session_id,
-            &self.actor_id,
-            &self.recording_id,
-        )?;
-        self.snapshot(client)
+    pub fn acknowledge_stop(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
+        self.mutate(|session| {
+            session.acknowledge_recording_stop_by(&self.actor_id, &self.recording_id)
+        })?;
+        self.snapshot()
     }
 
-    pub fn complete<R>(
-        &self,
-        client: &mut ClientSessionService<'_, R>,
+    pub fn complete(
+        &mut self,
         artifact_id: impl Into<String>,
-    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
-    where
-        R: ProductionSessionRepository,
-    {
-        client.complete_recording(
-            &self.session_id,
-            &self.actor_id,
-            &self.recording_id,
-            artifact_id,
-        )?;
-        self.snapshot(client)
+    ) -> Result<ClientRecordingState, ProductionSessionError> {
+        let artifact_id = RecordingArtifactId::new(artifact_id.into());
+        self.mutate(|session| {
+            session.complete_recording_by(&self.actor_id, &self.recording_id, artifact_id)
+        })?;
+        self.snapshot()
     }
 
-    pub fn snapshot<R>(
-        &self,
-        client: &ClientSessionService<'_, R>,
-    ) -> Result<crate::recording_state::ClientRecordingState, ClientSessionError<R::Error>>
+    pub fn snapshot(&self) -> Result<ClientRecordingState, ProductionSessionError> {
+        let session = self
+            .repository
+            .get(&self.session_id)
+            .map_err(|_| ProductionSessionError::InvalidStateTransition)?
+            .ok_or(ProductionSessionError::InvalidStateTransition)?;
+
+        recording_state(
+            &session,
+            self.actor_id.value(),
+            self.recording_id.value(),
+        )
+        .map_err(|error| match error {
+            crate::recording_state::RecordingStateError::RecordingNotFound => {
+                ProductionSessionError::RecordingNotFound
+            }
+            crate::recording_state::RecordingStateError::RecordingCoordinationNotFound => {
+                ProductionSessionError::RecordingCoordinationNotFound
+            }
+        })
+    }
+
+    fn load_session(&self) -> Result<nc_pore_core::session::ProductionSession, ProductionSessionError> {
+        self.repository
+            .get(&self.session_id)
+            .map_err(|_| ProductionSessionError::InvalidStateTransition)?
+            .ok_or(ProductionSessionError::InvalidStateTransition)
+    }
+
+    fn mutate<F>(&mut self, mutate: F) -> Result<(), ProductionSessionError>
     where
-        R: ProductionSessionRepository,
+        F: FnOnce(&mut nc_pore_core::session::ProductionSession) -> Result<(), ProductionSessionError>,
     {
-        client.recording_state(&self.session_id, &self.actor_id, &self.recording_id)
+        let mut session = self.load_session()?;
+        mutate(&mut session)?;
+        self.repository
+            .update(&session)
+            .map_err(|_| ProductionSessionError::InvalidStateTransition)
     }
 }
 
@@ -199,61 +219,70 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_delegates_the_complete_lifecycle_to_application_and_core() {
+    fn coordinator_delegates_the_complete_lifecycle_to_core_and_persisted_session_state() {
         let mut repository = repository();
-        let mut client = ClientSessionService::new(&mut repository);
-        let coordinator = RecordingCoordinator::new("session-001", "alice", "recording-001");
+        let mut coordinator = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-001"),
+            ParticipantId::new("alice"),
+            RecordingId::new("recording-001"),
+        );
 
-        coordinator.ensure_recording(&mut client).unwrap();
+        coordinator.ensure_recording().unwrap();
         coordinator
-            .begin(&mut client, ["alice", "bob"])
+            .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
             .unwrap();
-
         assert_eq!(
-            coordinator.snapshot(&client).unwrap().phase,
+            coordinator.snapshot().unwrap().phase,
             crate::recording_state::ClientRecordingPhase::Preparing
         );
 
-        coordinator.mark_ready(&mut client).unwrap();
-        let bob = RecordingCoordinator::new("session-001", "bob", "recording-001");
-        bob.mark_ready(&mut client).unwrap();
+        coordinator.mark_ready().unwrap();
+        let mut bob = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-001"),
+            ParticipantId::new("bob"),
+            RecordingId::new("recording-001"),
+        );
+        bob.mark_ready().unwrap();
+        drop(bob);
 
         assert_eq!(
-            coordinator.snapshot(&client).unwrap().phase,
+            coordinator.snapshot().unwrap().phase,
             crate::recording_state::ClientRecordingPhase::Ready
         );
-
-        coordinator.start(&mut client).unwrap();
+        coordinator.start().unwrap();
         assert_eq!(
-            coordinator.snapshot(&client).unwrap().phase,
+            coordinator.snapshot().unwrap().phase,
             crate::recording_state::ClientRecordingPhase::Recording
         );
-
-        coordinator.request_stop(&mut client).unwrap();
+        coordinator.request_stop().unwrap();
         assert_eq!(
-            coordinator.snapshot(&client).unwrap().phase,
+            coordinator.snapshot().unwrap().phase,
             crate::recording_state::ClientRecordingPhase::Stopped
         );
-
-        coordinator
-            .complete(&mut client, "artifact-001")
-            .unwrap();
-        let state = coordinator.snapshot(&client).unwrap();
+        coordinator.complete("artifact-001").unwrap();
+        let state = coordinator.snapshot().unwrap();
         assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Completed);
         assert_eq!(state.artifact_id.as_deref(), Some("artifact-001"));
     }
 
     #[test]
-    fn coordinator_does_not_keep_a_second_recording_state_machine() {
+    fn coordinator_has_no_local_recording_state() {
         let mut repository = repository();
-        let mut client = ClientSessionService::new(&mut repository);
-        let coordinator = RecordingCoordinator::new("session-001", "alice", "recording-001");
+        let mut coordinator = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-001"),
+            ParticipantId::new("alice"),
+            RecordingId::new("recording-001"),
+        );
+        coordinator.ensure_recording().unwrap();
+        coordinator
+            .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
+            .unwrap();
 
-        coordinator.ensure_recording(&mut client).unwrap();
-        coordinator.begin(&mut client, ["alice", "bob"]).unwrap();
-
-        let first = coordinator.snapshot(&client).unwrap();
-        let second = coordinator.snapshot(&client).unwrap();
+        let first = coordinator.snapshot().unwrap();
+        let second = coordinator.snapshot().unwrap();
         assert_eq!(first, second);
     }
 }
