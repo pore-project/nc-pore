@@ -89,7 +89,10 @@
 			const controls = document.createElement('div')
 			controls.className = 'pore-talk-recording__controls'
 
-			if (state === 'ready' && readyCount === participantCount && onStart) {
+			// The visible Talk control is the single user action that initiates
+			// the complete recording preparation. The common start is automatic
+			// once all selected clients have reported READY.
+			if (state === 'preparing' && !ready && onStart) {
 				const start = document.createElement('button')
 				start.type = 'button'
 				start.className = 'pore-talk-recording__button'
