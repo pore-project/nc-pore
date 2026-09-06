@@ -7,9 +7,8 @@
 (function () {
 	'use strict'
 
-	const MOUNT_SELECTOR = '.top-bar__controls'
+	const MOUNT_SELECTOR = '.top-bar.top-bar--in-call .top-bar__controls'
 	const ROOT_ATTRIBUTE = 'data-pore-talk-recording-ui'
-	const CALL_ROOT_SELECTOR = '[data-pore-talk-call-root]'
 	const POLL_INTERVAL_MS = 500
 
 	let observer = null
@@ -18,21 +17,10 @@
 	let mountedRoot = null
 
 	function getMountHost() {
-		const explicitRoot = document.querySelector(CALL_ROOT_SELECTOR)
-		if (explicitRoot) {
-			return explicitRoot.querySelector(MOUNT_SELECTOR) || explicitRoot
-		}
 		return document.querySelector(MOUNT_SELECTOR)
 	}
 
 	function unmount() {
-		if (mountedRoot && window.PoRETalkRecordingUi?.unmount) {
-			try {
-				window.PoRETalkRecordingUi.unmount(mountedRoot)
-			} catch (error) {
-				console.warn('[NC-PoRe] Failed to unmount Talk recording UI', error)
-			}
-		}
 		if (mountedRoot?.parentNode) {
 			mountedRoot.remove()
 		}
@@ -85,6 +73,9 @@
 	}
 
 	function start() {
+		if (observer) {
+			return
+		}
 		mount()
 		observer = new MutationObserver(scheduleMount)
 		observer.observe(document.body, {
