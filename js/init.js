@@ -36,6 +36,8 @@
 	let sourceTrack = null
 	let authoritativeState = null
 	let productionId = null
+	let localCaptureStartInFlight = false
+	let localCaptureReady = false
 
 	const updateAuthoritativeState = snapshot => {
 		if (!snapshot) return
@@ -57,6 +59,7 @@
 			startedAt: snapshot.startedAt,
 			error: snapshot.error,
 		})
+		void prepareLocalCapture()
 	}
 
 	const startRequested = async () => {
@@ -101,6 +104,23 @@
 		window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 	}
 
+	const prepareLocalCapture = async () => {
+		if (localCaptureReady || localCaptureStartInFlight) return
+		if (authoritativeState?.state !== 'preparing') return
+		if (authoritativeState?.role === 'listener' || authoritativeState?.listener === true) return
+		if (!sourceTrack || !productionId || !authoritativeState?.recordingId) return
+
+		localCaptureStartInFlight = true
+		try {
+			await startLocalCapture()
+			localCaptureReady = true
+			const result = await window.__poreTalkRecordingCoordinator?.command?.('ready')
+			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+		} finally {
+			localCaptureStartInFlight = false
+		}
+	}
+
 	const stopLocalCapture = async reason => recorder.stop(reason)
 
 	window.addEventListener('pore:talk-production-identity', event => {
@@ -108,12 +128,14 @@
 		if (!conversationId) return
 		productionId = conversationId
 		publish({ productionId, productionLabel: event.detail?.productionLabel || conversationId })
+		void prepareLocalCapture()
 	})
 
 	window.addEventListener('pore:talk-audio-track', event => {
 		if (sourceTrack && sourceTrack !== event.detail?.track && recorder.isRecording()) recorder.noteSourceChange(sourceTrack, event.detail?.track)
 		sourceTrack = event.detail?.track || null
 		if (sourceTrack) publish({ localCaptureAvailable: true })
+		void prepareLocalCapture()
 	})
 
 	window.addEventListener('pore:recording-started', event => {
