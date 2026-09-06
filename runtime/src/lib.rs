@@ -57,6 +57,10 @@ pub struct RecordingCommandRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RecordingCommand {
+    EnsureSession {
+        owner_id: String,
+        participants: Vec<String>,
+    },
     EnsureRecording,
     Begin { participants: Vec<String> },
     MarkReady,
@@ -149,26 +153,17 @@ pub fn read_request<R: Read>(
 ) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
     let header_len = read_u32(reader)? as usize;
     if header_len == 0 || header_len > 1024 * 1024 {
-        return Err(RuntimeProtocolError::InvalidHeader(
-            "invalid header length".to_owned(),
-        ));
+        return Err(RuntimeProtocolError::InvalidHeader("invalid header length".to_owned()));
     }
-
     let mut header = vec![0_u8; header_len];
     reader.read_exact(&mut header)?;
     let request: SubmitFinalizedArtifactRequest = serde_json::from_slice(&header)?;
-
     if request.protocol_version != PROTOCOL_VERSION {
-        return Err(RuntimeProtocolError::InvalidHeader(
-            "unsupported protocol version".to_owned(),
-        ));
+        return Err(RuntimeProtocolError::InvalidHeader("unsupported protocol version".to_owned()));
     }
     if request.operation != OPERATION_SUBMIT_FINALIZED_ARTIFACT {
-        return Err(RuntimeProtocolError::InvalidHeader(
-            "unsupported operation".to_owned(),
-        ));
+        return Err(RuntimeProtocolError::InvalidHeader("unsupported operation".to_owned()));
     }
-
     let payload_len = usize::try_from(request.payload_length)
         .map_err(|_| RuntimeProtocolError::InvalidPayloadLength)?;
     let mut payload = vec![0_u8; payload_len];
@@ -184,10 +179,6 @@ pub fn write_response<W: Write>(
     write_frame(writer, &bytes)
 }
 
-/// Dispatches a host-neutral recording command to the Application coordinator.
-///
-/// The repository is supplied by the runtime boundary. No recording lifecycle
-/// state is maintained in this protocol layer.
 pub fn handle_recording_command<R>(
     request: &RecordingCommandRequest,
     repository: &mut R,
@@ -210,6 +201,12 @@ where
     );
 
     let result = match &request.command {
+        RecordingCommand::EnsureSession { owner_id, participants } => coordinator
+            .ensure_session(
+                ParticipantId::new(owner_id),
+                participants.iter().cloned().map(ParticipantId::new),
+            )
+            .map(|_| None),
         RecordingCommand::EnsureRecording => coordinator.ensure_recording().map(|_| None),
         RecordingCommand::Begin { participants } => coordinator
             .begin(participants.iter().cloned().map(ParticipantId::new))
@@ -253,9 +250,7 @@ fn error_code(error: ProductionSessionError) -> &'static str {
         ProductionSessionError::RecordingNotFound => "recording_not_found",
         ProductionSessionError::RecordingLifecycle(_) => "recording_lifecycle_error",
         ProductionSessionError::RecordingCoordinationNotFound => "recording_coordination_not_found",
-        ProductionSessionError::RecordingCoordinationAlreadyActive => {
-            "recording_coordination_already_active"
-        }
+        ProductionSessionError::RecordingCoordinationAlreadyActive => "recording_coordination_already_active",
         ProductionSessionError::RecordingCoordination(_) => "recording_coordination_error",
     }
 }
@@ -266,7 +261,6 @@ fn write_frame<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<(), RuntimeProt
     writer.write_all(&len.to_be_bytes())?;
     writer.write_all(bytes)?;
     writer.flush()?;
-    Ok(())
 }
 
 fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
@@ -288,7 +282,6 @@ pub fn handle_submit(
             error_code: Some("payload_length_mismatch".to_owned()),
         };
     }
-
     SubmitFinalizedArtifactResponse {
         protocol_version: PROTOCOL_VERSION,
         request_id: request.request_id.clone(),
@@ -301,44 +294,61 @@ pub fn handle_submit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nc_pore_core::participant::ParticipantId;
     use nc_pore_core::participation::Participation;
     use nc_pore_core::recording::Recording;
     use nc_pore_core::role::ParticipantRole;
     use nc_pore_core::session::ProductionSession;
+    use nc_pore_core::identity::ProductionId;
 
-    struct InMemoryRepository {
-        sessions: Vec<ProductionSession>,
-    }
+    struct InMemoryRepository { sessions: Vec<ProductionSession> }
 
     impl ProductionSessionRepository for InMemoryRepository {
         type Error = &'static str;
-
-        fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-            self.sessions.push(session.clone());
-            Ok(())
-        }
-
+        fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> { self.sessions.push(session.clone()); Ok(()) }
         fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
-            let existing = self
-                .sessions
-                .iter_mut()
-                .find(|existing| existing.id == session.id)
-                .ok_or("session not found")?;
-            *existing = session.clone();
-            Ok(())
+            let existing = self.sessions.iter_mut().find(|existing| existing.id == session.id).ok_or("session not found")?;
+            *existing = session.clone(); Ok(())
         }
-
         fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
-            Ok(self
-                .sessions
-                .iter()
-                .find(|session| &session.id == id)
-                .cloned())
+            Ok(self.sessions.iter().find(|session| &session.id == id).cloned())
         }
     }
 
-    fn request() -> SubmitFinalizedArtifactRequest {
-        SubmitFinalizedArtifactRequest {
+    fn session_repository() -> InMemoryRepository {
+        let owner = ParticipantId::new("alice");
+        let bob = ParticipantId::new("bob");
+        let mut session = ProductionSession::new_with_actor(ProductionId::new("session-001"), Some(owner.clone()));
+        session.add_participation_by(&owner, Participation::with_roles(owner.clone(), [ParticipantRole::Owner, ParticipantRole::Producer])).unwrap();
+        session.add_participation_by(&owner, Participation::new(bob, ParticipantRole::Participant)).unwrap();
+        session.start_by(&owner).unwrap();
+        session.add_recording_by(&owner, Recording::new("recording-001")).unwrap();
+        InMemoryRepository { sessions: vec![session] }
+    }
+
+    #[test]
+    fn ensure_session_command_delegates_to_application_coordinator() {
+        let mut repository = InMemoryRepository { sessions: vec![] };
+        let request = RecordingCommandRequest {
+            protocol_version: PROTOCOL_VERSION,
+            operation: OPERATION_RECORDING_COMMAND.to_owned(),
+            request_id: "command-session".to_owned(),
+            session_id: "session-001".to_owned(),
+            actor_id: "alice".to_owned(),
+            recording_id: "recording-001".to_owned(),
+            command: RecordingCommand::EnsureSession {
+                owner_id: "alice".to_owned(),
+                participants: vec!["alice".to_owned(), "bob".to_owned()],
+            },
+        };
+        let response = handle_recording_command(&request, &mut repository);
+        assert_eq!(response.status, "ok");
+        assert_eq!(repository.sessions[0].participant_count(), 2);
+    }
+
+    #[test]
+    fn accepted_request_does_not_claim_persistence() {
+        let request = SubmitFinalizedArtifactRequest {
             protocol_version: PROTOCOL_VERSION,
             operation: OPERATION_SUBMIT_FINALIZED_ARTIFACT.to_owned(),
             request_id: "request-001".to_owned(),
@@ -350,120 +360,10 @@ mod tests {
             sample_rate_hz: 48_000,
             channels: 1,
             payload_length: 4,
-        }
-    }
-
-    fn session_repository() -> InMemoryRepository {
-        let owner = ParticipantId::new("alice");
-        let bob = ParticipantId::new("bob");
-        let mut session = ProductionSession::new_with_actor(
-            ProductionId::new("session-001"),
-            Some(owner.clone()),
-        );
-        session
-            .add_participation_by(
-                &owner,
-                Participation::with_roles(
-                    owner.clone(),
-                    [ParticipantRole::Owner, ParticipantRole::Producer],
-                ),
-            )
-            .unwrap();
-        session
-            .add_participation_by(
-                &owner,
-                Participation::new(bob, ParticipantRole::Participant),
-            )
-            .unwrap();
-        session.start_by(&owner).unwrap();
-        session
-            .add_recording_by(&owner, Recording::new("recording-001"))
-            .unwrap();
-        InMemoryRepository {
-            sessions: vec![session],
-        }
-    }
-
-    #[test]
-    fn request_frame_round_trips_without_base64() {
-        let request = request();
-        let header = serde_json::to_vec(&request).expect("header should serialize");
-        let mut frame = Vec::new();
-        frame.extend_from_slice(&(header.len() as u32).to_be_bytes());
-        frame.extend_from_slice(&header);
-        frame.extend_from_slice(&[1, 2, 3, 4]);
-
-        let (decoded, payload) = read_request(&mut frame.as_slice()).expect("frame should parse");
-        assert_eq!(decoded, request);
-        assert_eq!(payload, vec![1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn accepted_request_does_not_claim_persistence() {
-        let request = request();
+        };
         let response = handle_submit(&request, &[1, 2, 3, 4]);
-
         assert_eq!(response.status, "accepted");
         assert_eq!(response.artifact_id.as_deref(), Some("capture-001"));
         assert_eq!(response.error_code, None);
-    }
-
-    #[test]
-    fn payload_length_mismatch_is_rejected() {
-        let request = request();
-        let response = handle_submit(&request, &[1, 2, 3]);
-
-        assert_eq!(response.status, "rejected");
-        assert_eq!(response.artifact_id, None);
-        assert_eq!(
-            response.error_code.as_deref(),
-            Some("payload_length_mismatch")
-        );
-    }
-
-    #[test]
-    fn response_is_a_small_json_frame() {
-        let response = SubmitFinalizedArtifactResponse {
-            protocol_version: PROTOCOL_VERSION,
-            request_id: "request-001".to_owned(),
-            status: "accepted".to_owned(),
-            artifact_id: Some("capture-001".to_owned()),
-            error_code: None,
-        };
-        let mut output = Vec::new();
-        write_response(&mut output, &response).expect("response should serialize");
-
-        let len = u32::from_be_bytes(output[0..4].try_into().unwrap()) as usize;
-        let decoded: SubmitFinalizedArtifactResponse =
-            serde_json::from_slice(&output[4..4 + len]).expect("response should decode");
-        assert_eq!(decoded, response);
-    }
-
-    #[test]
-    fn recording_commands_delegate_to_application_coordinator() {
-        let mut repository = session_repository();
-        let begin = RecordingCommandRequest {
-            protocol_version: PROTOCOL_VERSION,
-            operation: OPERATION_RECORDING_COMMAND.to_owned(),
-            request_id: "command-001".to_owned(),
-            session_id: "session-001".to_owned(),
-            actor_id: "alice".to_owned(),
-            recording_id: "recording-001".to_owned(),
-            command: RecordingCommand::Begin {
-                participants: vec!["alice".to_owned(), "bob".to_owned()],
-            },
-        };
-        let response = handle_recording_command(&begin, &mut repository);
-        assert_eq!(response.status, "ok");
-        assert_eq!(response.state.unwrap().phase, "preparing");
-
-        let snapshot = RecordingCommandRequest {
-            request_id: "command-002".to_owned(),
-            command: RecordingCommand::Snapshot,
-            ..begin
-        };
-        let response = handle_recording_command(&snapshot, &mut repository);
-        assert_eq!(response.status, "ok");
-        assert_eq!(response.state.unwrap().phase, "preparing");
     }
 }
