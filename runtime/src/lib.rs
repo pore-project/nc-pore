@@ -243,7 +243,9 @@ fn error_code(error: ProductionSessionError) -> &'static str {
         ProductionSessionError::RecordingNotFound => "recording_not_found",
         ProductionSessionError::RecordingLifecycle(_) => "recording_lifecycle_error",
         ProductionSessionError::RecordingCoordinationNotFound => "recording_coordination_not_found",
-        ProductionSessionError::RecordingCoordinationAlreadyActive => "recording_coordination_already_active",
+        ProductionSessionError::RecordingCoordinationAlreadyActive => {
+            "recording_coordination_already_active"
+        }
         ProductionSessionError::RecordingCoordination(_) => "recording_coordination_error",
     }
 }
