@@ -29,6 +29,7 @@ class Application extends App implements IBootstrap {
 		Util::addInitScript(self::APP_ID, 'pore-talk-audio-connector');
 		Util::addInitScript(self::APP_ID, 'pore-talk-recording-state-bridge');
 		Util::addInitScript(self::APP_ID, 'pore-talk-recording-ui');
+		Util::addInitScript(self::APP_ID, 'pore-talk-recording-ui-mount');
 		Util::addInitScript(self::APP_ID, 'pore-browser-runtime-transport');
 		Util::addInitScript(self::APP_ID, 'init');
 	}
