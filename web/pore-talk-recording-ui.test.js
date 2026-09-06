@@ -34,10 +34,10 @@ describe('Talk recording UI', () => {
 			onStop: jest.fn(),
 		})
 
-		expect(participant.querySelector('button')).toBeNull()
+		expect(participant.querySelector('[aria-label="NC-PoRE"]')).not.toBeNull()
+		expect(participant.textContent).not.toContain('Aufnahme beenden')
 		expect(host.querySelector('[aria-label="NC-PoRE"]')).not.toBeNull()
 		expect(host.querySelector('[aria-label="NC-PoRE öffnen"]')).not.toBeNull()
-		expect(host.querySelector('button')?.textContent).toBe('')
 		expect(host.textContent).toContain('Aufnahme beenden')
 	})
 
@@ -46,9 +46,9 @@ describe('Talk recording UI', () => {
 		expect(host.textContent).toContain('Aufnahme starten')
 	})
 
-	it('does not expose a recording action to a non-recording member', () => {
-		const none = Ui.create({ role: 'none', listener: true, state: 'recording' })
-		expect(none.querySelector('button')).not.toBeNull()
-		expect(none.textContent).toContain('Listener')
+	it('does not expose a recording action to a non-host member', () => {
+		const participant = Ui.create({ role: 'participant', state: 'preparing', participantCount: 1, onStart: jest.fn() })
+		expect(participant.textContent).not.toContain('Aufnahme starten')
+		expect(participant.textContent).not.toContain('Aufnahme beenden')
 	})
 })
