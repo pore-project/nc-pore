@@ -445,14 +445,25 @@ mod tests {
     #[test]
     fn recording_commands_delegate_to_application_coordinator() {
         let mut repository = session_repository();
-        let snapshot = RecordingCommandRequest {
+        let begin = RecordingCommandRequest {
             protocol_version: PROTOCOL_VERSION,
             operation: OPERATION_RECORDING_COMMAND.to_owned(),
             request_id: "command-001".to_owned(),
             session_id: "session-001".to_owned(),
             actor_id: "alice".to_owned(),
             recording_id: "recording-001".to_owned(),
+            command: RecordingCommand::Begin {
+                participants: vec!["alice".to_owned(), "bob".to_owned()],
+            },
+        };
+        let response = handle_recording_command(&begin, &mut repository);
+        assert_eq!(response.status, "ok");
+        assert_eq!(response.state.unwrap().phase, "preparing");
+
+        let snapshot = RecordingCommandRequest {
+            request_id: "command-002".to_owned(),
             command: RecordingCommand::Snapshot,
+            ..begin
         };
         let response = handle_recording_command(&snapshot, &mut repository);
         assert_eq!(response.status, "ok");
