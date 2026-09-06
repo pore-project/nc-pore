@@ -23,7 +23,7 @@ describe('Talk recording UI', () => {
 		expect(Ui.formatElapsed(3661)).toBe('61:01')
 	})
 
-	it('only exposes start/stop controls to the host', () => {
+	it('exposes the compact Talk-like control and host recording action', () => {
 		const participant = Ui.create({ role: 'participant', state: 'recording', ready: true, elapsedSeconds: 12 })
 		const host = Ui.create({
 			role: 'host',
@@ -35,12 +35,20 @@ describe('Talk recording UI', () => {
 		})
 
 		expect(participant.querySelector('button')).toBeNull()
-		expect(host.querySelector('button')?.textContent).toBe('Aufnahme beenden')
+		expect(host.querySelector('[aria-label="NC-PoRE"]')).not.toBeNull()
+		expect(host.querySelector('[aria-label="NC-PoRE öffnen"]')).not.toBeNull()
+		expect(host.querySelector('button')?.textContent).toBe('')
+		expect(host.textContent).toContain('Aufnahme beenden')
 	})
 
-	it('does not expose a recording UI to a non-recording member', () => {
+	it('shows the host start action only while preparing', () => {
+		const host = Ui.create({ role: 'host', state: 'preparing', participantCount: 1, readyCount: 0, onStart: jest.fn() })
+		expect(host.textContent).toContain('Aufnahme starten')
+	})
+
+	it('does not expose a recording action to a non-recording member', () => {
 		const none = Ui.create({ role: 'none', listener: true, state: 'recording' })
-		expect(none.querySelector('button')).toBeNull()
+		expect(none.querySelector('button')).not.toBeNull()
 		expect(none.textContent).toContain('Listener')
 	})
 })
