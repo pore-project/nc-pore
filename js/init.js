@@ -42,6 +42,7 @@
 	let openingSignetEmitted = false
 	let coordinationPollTimer = null
 	let hostStartInFlight = false
+	let talkUiMountElement = null
 
 	const updateAuthoritativeState = snapshot => {
 		if (!snapshot) return
@@ -103,7 +104,8 @@
 			if (!snapshot) return
 			updateAuthoritativeState(snapshot)
 
-			if (snapshot.state === 'preparing' && !localCaptureReady && snapshot.role !== 'listener') {
+			// Local capture is started only after the host explicitly pressed Start.
+			if (snapshot.state === 'preparing' && startRequestedByHost && !localCaptureReady && snapshot.role !== 'listener') {
 				await startLocalCapture()
 			}
 
@@ -148,6 +150,7 @@
 			...nextContext,
 			...(productionId ? { productionId } : {}),
 			...(authoritativeState || {}),
+			...(talkUiMountElement ? { mountElement: talkUiMountElement } : {}),
 			onStart: nextContext.onStart || startRequested,
 			onStop: nextContext.onStop || stopRequested,
 		}
@@ -156,11 +159,16 @@
 
 	const publish = patch => {
 		if (!context) return
-		context = { ...context, ...patch }
+		context = { ...context, ...patch, ...(talkUiMountElement ? { mountElement: talkUiMountElement } : {}) }
 		Ui.mount(context)
 	}
 
 	const stopLocalCapture = async reason => recorder.stop(reason)
+
+	window.addEventListener('pore:recording-ui-mount', event => {
+		talkUiMountElement = event.detail?.mountElement || null
+		if (context) publish({ mountElement: talkUiMountElement })
+	})
 
 	window.addEventListener('pore:talk-production-identity', event => {
 		const conversationId = event.detail?.conversationId || null
