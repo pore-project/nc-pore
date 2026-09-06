@@ -62,35 +62,41 @@ where
         &mut self,
         participants: impl IntoIterator<Item = ParticipantId>,
     ) -> Result<ClientRecordingState, ProductionSessionError> {
-        self.mutate(|session| {
-            session.begin_recording_by(&self.actor_id, &self.recording_id, participants)
-        })?;
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
+        self.mutate(|session| session.begin_recording_by(&actor_id, &recording_id, participants))?;
         self.snapshot()
     }
 
     pub fn mark_ready(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
         self.mutate(|session| {
             session
-                .mark_recording_ready_by(&self.actor_id, &self.recording_id)
+                .mark_recording_ready_by(&actor_id, &recording_id)
                 .map(|_| ())
         })?;
         self.snapshot()
     }
 
     pub fn start(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
-        self.mutate(|session| session.start_recording_by(&self.actor_id, &self.recording_id))?;
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
+        self.mutate(|session| session.start_recording_by(&actor_id, &recording_id))?;
         self.snapshot()
     }
 
     pub fn request_stop(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
-        self.mutate(|session| session.stop_recording_by(&self.actor_id, &self.recording_id))?;
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
+        self.mutate(|session| session.stop_recording_by(&actor_id, &recording_id))?;
         self.snapshot()
     }
 
     pub fn acknowledge_stop(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
-        self.mutate(|session| {
-            session.acknowledge_recording_stop_by(&self.actor_id, &self.recording_id)
-        })?;
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
+        self.mutate(|session| session.acknowledge_recording_stop_by(&actor_id, &recording_id))?;
         self.snapshot()
     }
 
@@ -98,9 +104,11 @@ where
         &mut self,
         artifact_id: impl Into<String>,
     ) -> Result<ClientRecordingState, ProductionSessionError> {
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
         let artifact_id = RecordingArtifactId::new(artifact_id.into());
         self.mutate(|session| {
-            session.complete_recording_by(&self.actor_id, &self.recording_id, artifact_id)
+            session.complete_recording_by(&actor_id, &recording_id, artifact_id)
         })?;
         self.snapshot()
     }
