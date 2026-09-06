@@ -1,0 +1,33 @@
+name: V1 Runtime Package
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install audio development dependency
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+
+      - name: Build V1 runtime
+        run: cargo build --release -p pore-runtime
+
+      - name: Package Nextcloud app
+        run: bash tools/package-nextcloud-v1.sh
+
+      - name: Verify package contents
+        run: |
+          tar -tzf build/artifacts/pore.tar.gz | grep -Fx 'pore/runtime/bin/pore-runtime'
+
+      - name: Upload Nextcloud app package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nc-pore-nextcloud-v1
+          path: build/artifacts/pore.tar.gz
