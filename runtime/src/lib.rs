@@ -5,12 +5,14 @@
 //! lifecycle truth belongs to Core.
 
 use nc_pore_application::recording_coordinator::RecordingCoordinator;
-use nc_pore_application::recording_state::{ClientRecordingPhase, ClientRecordingRole, ClientRecordingState};
+use nc_pore_application::recording_state::{
+    ClientRecordingPhase, ClientRecordingRole, ClientRecordingState,
+};
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::RecordingId;
-use nc_pore_core::session::ProductionSessionError;
 use nc_pore_core::session::repository::ProductionSessionRepository;
+use nc_pore_core::session::ProductionSessionError;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
@@ -55,7 +57,10 @@ pub struct RecordingCommandRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RecordingCommand {
-    EnsureSession { owner_id: String, participants: Vec<String> },
+    EnsureSession {
+        owner_id: String,
+        participants: Vec<String>,
+    },
     EnsureRecording,
     Begin { participants: Vec<String> },
     MarkReady,
@@ -101,13 +106,22 @@ impl From<ClientRecordingState> for RecordingStateDto {
                 ClientRecordingPhase::Recording => "recording",
                 ClientRecordingPhase::Stopped => "stopped",
                 ClientRecordingPhase::Completed => "completed",
-            }.to_owned(),
+            }
+            .to_owned(),
             role: match state.role {
                 ClientRecordingRole::Host => "host",
                 ClientRecordingRole::Participant => "participant",
                 ClientRecordingRole::Listener => "listener",
-            }.to_owned(),
-            participants: state.participants.into_iter().map(|p| RecordingParticipantDto { id: p.id, ready: p.ready }).collect(),
+            }
+            .to_owned(),
+            participants: state
+                .participants
+                .into_iter()
+                .map(|p| RecordingParticipantDto {
+                    id: p.id,
+                    ready: p.ready,
+                })
+                .collect(),
             confirmed: state.confirmed,
             artifact_id: state.artifact_id,
         }
@@ -122,37 +136,86 @@ pub enum RuntimeProtocolError {
     Json(serde_json::Error),
 }
 
-impl From<io::Error> for RuntimeProtocolError { fn from(value: io::Error) -> Self { Self::Io(value) } }
-impl From<serde_json::Error> for RuntimeProtocolError { fn from(value: serde_json::Error) -> Self { Self::Json(value) } }
+impl From<io::Error> for RuntimeProtocolError {
+    fn from(value: io::Error) -> Self {
+        Self::Io(value)
+    }
+}
 
-pub fn read_request<R: Read>(reader: &mut R) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
+impl From<serde_json::Error> for RuntimeProtocolError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Json(value)
+    }
+}
+
+pub fn read_request<R: Read>(
+    reader: &mut R,
+) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
     let header_len = read_u32(reader)? as usize;
-    if header_len == 0 || header_len > 1024 * 1024 { return Err(RuntimeProtocolError::InvalidHeader("invalid header length".into())); }
+    if header_len == 0 || header_len > 1024 * 1024 {
+        return Err(RuntimeProtocolError::InvalidHeader(
+            "invalid header length".into(),
+        ));
+    }
     let mut header = vec![0; header_len];
     reader.read_exact(&mut header)?;
     let request: SubmitFinalizedArtifactRequest = serde_json::from_slice(&header)?;
-    if request.protocol_version != PROTOCOL_VERSION { return Err(RuntimeProtocolError::InvalidHeader("unsupported protocol version".into())); }
-    if request.operation != OPERATION_SUBMIT_FINALIZED_ARTIFACT { return Err(RuntimeProtocolError::InvalidHeader("unsupported operation".into())); }
-    let payload_len = usize::try_from(request.payload_length).map_err(|_| RuntimeProtocolError::InvalidPayloadLength)?;
+    if request.protocol_version != PROTOCOL_VERSION {
+        return Err(RuntimeProtocolError::InvalidHeader(
+            "unsupported protocol version".into(),
+        ));
+    }
+    if request.operation != OPERATION_SUBMIT_FINALIZED_ARTIFACT {
+        return Err(RuntimeProtocolError::InvalidHeader(
+            "unsupported operation".into(),
+        ));
+    }
+    let payload_len = usize::try_from(request.payload_length)
+        .map_err(|_| RuntimeProtocolError::InvalidPayloadLength)?;
     let mut payload = vec![0; payload_len];
     reader.read_exact(&mut payload)?;
     Ok((request, payload))
 }
 
-pub fn write_response<W: Write>(writer: &mut W, response: &SubmitFinalizedArtifactResponse) -> Result<(), RuntimeProtocolError> {
+pub fn write_response<W: Write>(
+    writer: &mut W,
+    response: &SubmitFinalizedArtifactResponse,
+) -> Result<(), RuntimeProtocolError> {
     let bytes = serde_json::to_vec(response)?;
     write_frame(writer, &bytes)
 }
 
-pub fn handle_recording_command<R: ProductionSessionRepository>(request: &RecordingCommandRequest, repository: &mut R) -> RecordingCommandResponse {
-    if request.protocol_version != PROTOCOL_VERSION { return command_error(request, "unsupported_protocol_version"); }
-    if request.operation != OPERATION_RECORDING_COMMAND { return command_error(request, "unsupported_operation"); }
+pub fn handle_recording_command<R: ProductionSessionRepository>(
+    request: &RecordingCommandRequest,
+    repository: &mut R,
+) -> RecordingCommandResponse {
+    if request.protocol_version != PROTOCOL_VERSION {
+        return command_error(request, "unsupported_protocol_version");
+    }
+    if request.operation != OPERATION_RECORDING_COMMAND {
+        return command_error(request, "unsupported_operation");
+    }
 
-    let mut coordinator = RecordingCoordinator::new(repository, ProductionId::new(&request.session_id), ParticipantId::new(&request.actor_id), RecordingId::new(&request.recording_id));
+    let mut coordinator = RecordingCoordinator::new(
+        repository,
+        ProductionId::new(&request.session_id),
+        ParticipantId::new(&request.actor_id),
+        RecordingId::new(&request.recording_id),
+    );
     let result = match &request.command {
-        RecordingCommand::EnsureSession { owner_id, participants } => coordinator.ensure_session(ParticipantId::new(owner_id), participants.iter().cloned().map(ParticipantId::new)).map(|_| None),
+        RecordingCommand::EnsureSession {
+            owner_id,
+            participants,
+        } => coordinator
+            .ensure_session(
+                ParticipantId::new(owner_id),
+                participants.iter().cloned().map(ParticipantId::new),
+            )
+            .map(|_| None),
         RecordingCommand::EnsureRecording => coordinator.ensure_recording().map(|_| None),
-        RecordingCommand::Begin { participants } => coordinator.begin(participants.iter().cloned().map(ParticipantId::new)).map(Some),
+        RecordingCommand::Begin { participants } => coordinator
+            .begin(participants.iter().cloned().map(ParticipantId::new))
+            .map(Some),
         RecordingCommand::MarkReady => coordinator.mark_ready().map(Some),
         RecordingCommand::Start => coordinator.start().map(Some),
         RecordingCommand::RequestStop => coordinator.request_stop().map(Some),
@@ -160,14 +223,30 @@ pub fn handle_recording_command<R: ProductionSessionRepository>(request: &Record
         RecordingCommand::Complete { artifact_id } => coordinator.complete(artifact_id).map(Some),
         RecordingCommand::Snapshot => coordinator.snapshot().map(Some),
     };
+
     match result {
-        Ok(state) => RecordingCommandResponse { protocol_version: PROTOCOL_VERSION, request_id: request.request_id.clone(), status: "ok".into(), state: state.map(RecordingStateDto::from), error_code: None },
+        Ok(state) => RecordingCommandResponse {
+            protocol_version: PROTOCOL_VERSION,
+            request_id: request.request_id.clone(),
+            status: "ok".into(),
+            state: state.map(RecordingStateDto::from),
+            error_code: None,
+        },
         Err(error) => command_error(request, error_code(error)),
     }
 }
 
-fn command_error(request: &RecordingCommandRequest, error_code: &str) -> RecordingCommandResponse {
-    RecordingCommandResponse { protocol_version: PROTOCOL_VERSION, request_id: request.request_id.clone(), status: "rejected".into(), state: None, error_code: Some(error_code.into()) }
+fn command_error(
+    request: &RecordingCommandRequest,
+    error_code: &str,
+) -> RecordingCommandResponse {
+    RecordingCommandResponse {
+        protocol_version: PROTOCOL_VERSION,
+        request_id: request.request_id.clone(),
+        status: "rejected".into(),
+        state: None,
+        error_code: Some(error_code.into()),
+    }
 }
 
 fn error_code(error: ProductionSessionError) -> &'static str {
@@ -179,13 +258,16 @@ fn error_code(error: ProductionSessionError) -> &'static str {
         ProductionSessionError::RecordingNotFound => "recording_not_found",
         ProductionSessionError::RecordingLifecycle(_) => "recording_lifecycle_error",
         ProductionSessionError::RecordingCoordinationNotFound => "recording_coordination_not_found",
-        ProductionSessionError::RecordingCoordinationAlreadyActive => "recording_coordination_already_active",
+        ProductionSessionError::RecordingCoordinationAlreadyActive => {
+            "recording_coordination_already_active"
+        }
         ProductionSessionError::RecordingCoordination(_) => "recording_coordination_error",
     }
 }
 
 fn write_frame<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<(), RuntimeProtocolError> {
-    let len = u32::try_from(bytes.len()).map_err(|_| RuntimeProtocolError::InvalidHeader("response too large".into()))?;
+    let len = u32::try_from(bytes.len())
+        .map_err(|_| RuntimeProtocolError::InvalidHeader("response too large".into()))?;
     writer.write_all(&len.to_be_bytes())?;
     writer.write_all(bytes)?;
     writer.flush()?;
@@ -198,9 +280,24 @@ fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
     Ok(u32::from_be_bytes(bytes))
 }
 
-pub fn handle_submit(request: &SubmitFinalizedArtifactRequest, payload: &[u8]) -> SubmitFinalizedArtifactResponse {
+pub fn handle_submit(
+    request: &SubmitFinalizedArtifactRequest,
+    payload: &[u8],
+) -> SubmitFinalizedArtifactResponse {
     if request.payload_length != payload.len() as u64 {
-        return SubmitFinalizedArtifactResponse { protocol_version: PROTOCOL_VERSION, request_id: request.request_id.clone(), status: "rejected".into(), artifact_id: None, error_code: Some("payload_length_mismatch".into()) };
+        return SubmitFinalizedArtifactResponse {
+            protocol_version: PROTOCOL_VERSION,
+            request_id: request.request_id.clone(),
+            status: "rejected".into(),
+            artifact_id: None,
+            error_code: Some("payload_length_mismatch".into()),
+        };
     }
-    SubmitFinalizedArtifactResponse { protocol_version: PROTOCOL_VERSION, request_id: request.request_id.clone(), status: "accepted".into(), artifact_id: Some(request.capture_id.clone()), error_code: None }
+    SubmitFinalizedArtifactResponse {
+        protocol_version: PROTOCOL_VERSION,
+        request_id: request.request_id.clone(),
+        status: "accepted".into(),
+        artifact_id: Some(request.capture_id.clone()),
+        error_code: None,
+    }
 }
