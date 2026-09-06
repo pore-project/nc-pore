@@ -10,6 +10,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Recording#command',
+			'url' => '/v1/recordings/command',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Settings#getSettings',
 			'url' => '/v1/settings',
 			'verb' => 'GET',
