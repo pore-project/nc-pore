@@ -4,6 +4,7 @@
 
 	const API_VERSION = '/ocs/v2.php/apps/pore/v1/recordings/command'
 	const TALK_API_VERSION = '/ocs/v2.php/apps/spreed/api/v4'
+	let coordinatorContext = null
 
 	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
 
@@ -25,6 +26,23 @@
 		return body.ocs.data
 	}
 
+	const publishState = snapshot => {
+		if (!snapshot || !coordinatorContext) return
+		const actorId = coordinatorContext.actorId
+		window.__poreTalkRecordingStateBridge?.publish({
+			productionId: coordinatorContext.sessionId,
+			recordingId: snapshot.recording_id,
+			role: snapshot.role,
+			state: snapshot.phase,
+			confirmed: snapshot.confirmed,
+			ready: snapshot.participants?.some(participant => participant.id === actorId && participant.ready) === true,
+			readyCount: snapshot.participants?.filter(participant => participant.ready).length || 0,
+			participantCount: snapshot.participants?.length || coordinatorContext.participants.length,
+			participants: snapshot.participants || [],
+			artifactId: snapshot.artifact_id || null,
+		})
+	}
+
 	const command = async (sessionId, recordingId, name, { participants = [], ownerId = '', artifactId = '' } = {}) => {
 		const params = new URLSearchParams({
 			sessionId,
@@ -35,7 +53,9 @@
 			ownerId,
 			artifactId,
 		})
-		return requestJson(url(API_VERSION), { method: 'POST', body: params })
+		const result = await requestJson(url(API_VERSION), { method: 'POST', body: params })
+		publishState(result?.state)
+		return result
 	}
 
 	const findToken = () => {
@@ -52,47 +72,31 @@
 
 		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}`))
 		const participants = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}/participants`))
-		const participantIds = (Array.isArray(participants) ? participants : [])
-			.filter(participant => participant?.actorType === 'users')
-			.map(participant => participant.actorId)
-			.filter(Boolean)
-		const current = (Array.isArray(participants) ? participants : []).find(participant => participant?.actorType === 'users' && participant.actorId === actorId)
+		const participantList = Array.isArray(participants) ? participants : []
+		const participantIds = participantList.filter(participant => participant?.actorType === 'users').map(participant => participant.actorId).filter(Boolean)
+		const current = participantList.find(participant => participant?.actorType === 'users' && participant.actorId === actorId)
 		if (!current) return
 
-		const owner = (Array.isArray(participants) ? participants : []).find(participant => participant?.actorType === 'users' && participant.participantType === 1)
+		const owner = participantList.find(participant => participant?.actorType === 'users' && participant.participantType === 1)
 		const ownerId = owner?.actorId || actorId
 		const recordingId = `recording-${token}`
+		coordinatorContext = { sessionId: token, recordingId, actorId, ownerId, participants: participantIds }
 
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', {
-			detail: {
-				conversationId: token,
-				productionLabel: room?.displayName || room?.name || token,
-			},
+			detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token },
 		}))
 
 		const ensure = await command(token, recordingId, 'ensure', { participants: participantIds, ownerId })
-		const begin = await command(token, recordingId, 'begin', { participants: participantIds, ownerId })
-		let snapshot = begin?.state || ensure?.state || null
 		try {
-			const ready = await command(token, recordingId, 'ready', { participants: participantIds, ownerId })
-			snapshot = ready?.state || snapshot
+			const begin = await command(token, recordingId, 'begin', { participants: participantIds, ownerId })
+			if (!begin?.state && ensure?.state) publishState(ensure.state)
+		} catch (error) {
+			if (!String(error?.message || error).includes('recording_coordination_already_active')) throw error
+		}
+		try {
+			await command(token, recordingId, 'ready', { participants: participantIds, ownerId })
 		} catch (error) {
 			if (!String(error?.message || error).includes('invalid_state_transition')) throw error
-		}
-
-		if (snapshot) {
-			window.__poreTalkRecordingStateBridge?.publish({
-				productionId: token,
-				recordingId: snapshot.recording_id,
-				role: snapshot.role,
-				state: snapshot.phase,
-				confirmed: snapshot.confirmed,
-				ready: snapshot.participants?.some(participant => participant.id === actorId && participant.ready) === true,
-				readyCount: snapshot.participants?.filter(participant => participant.ready).length || 0,
-				participantCount: snapshot.participants?.length || participantIds.length,
-				participants: snapshot.participants || [],
-				artifactId: snapshot.artifact_id || null,
-			})
 		}
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
@@ -104,6 +108,6 @@
 		})
 	}
 
-	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command })
+	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })
 	void bootstrap().catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 })()
