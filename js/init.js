@@ -103,7 +103,7 @@
 			if (!snapshot) return
 			updateAuthoritativeState(snapshot)
 
-			if (snapshot.state === 'preparing' && !localCaptureReady && snapshot.role !== 'listener' && startRequestedByHost || snapshot.state === 'preparing' && !localCaptureReady && snapshot.role !== 'listener') {
+			if (snapshot.state === 'preparing' && !localCaptureReady && snapshot.role !== 'listener') {
 				await startLocalCapture()
 			}
 
@@ -180,6 +180,10 @@
 	})
 
 	window.addEventListener('pore:recording-local-finalized', event => {
+		localCaptureReady = false
+		openingSignetEmitted = false
+		startRequestedByHost = false
+		hostStartInFlight = false
 		const artifact = event.detail
 		publish({ artifact })
 		if (!artifact) return
