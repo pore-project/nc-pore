@@ -66,6 +66,11 @@
 			}
 		}
 
+		markOpeningSignet(at = new Date().toISOString()) {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE opening signet requires an active local capture')
+			return this.recorder.markOpeningSignet(at)
+		}
+
 		noteSourceChange(previousTrack, nextTrack, occurredAt = new Date().toISOString(), metadata = {}) {
 			if (!this.isRecording()) return null
 			const change = {
@@ -152,6 +157,7 @@
 				startedAt: artifact.startedAt || source.startedAt || null,
 				stoppedAt: artifact.stoppedAt || null,
 				stopReason: artifact.stopReason || null,
+				openingSignet: artifact.openingSignet || source.openingSignet || null,
 				blob: artifact.blob,
 			}
 		}
