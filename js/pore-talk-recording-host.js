@@ -78,17 +78,7 @@
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
 
 		const ensure = await command(token, recordingId, 'ensure', { participants: participantIds, ownerId })
-		try {
-			const begin = await command(token, recordingId, 'begin', { participants: participantIds, ownerId })
-			if (!begin?.state && ensure?.state) publishState(ensure.state)
-		} catch (error) {
-			if (!String(error?.message || error).includes('recording_coordination_already_active')) throw error
-		}
-		try {
-			await command(token, recordingId, 'ready', { participants: participantIds, ownerId })
-		} catch (error) {
-			if (!String(error?.message || error).includes('invalid_state_transition')) throw error
-		}
+		if (ensure?.state) publishState(ensure.state)
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
 			sessionId: token,
