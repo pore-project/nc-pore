@@ -11,8 +11,8 @@ use nc_pore_application::recording_state::{
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::RecordingId;
-use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
+use nc_pore_core::session::repository::ProductionSessionRepository;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
@@ -266,7 +266,6 @@ fn write_frame<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<(), RuntimeProt
     writer.write_all(&len.to_be_bytes())?;
     writer.write_all(bytes)?;
     writer.flush()?;
-    Ok(())
 }
 
 fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
@@ -328,10 +327,7 @@ mod tests {
             Ok(())
         }
 
-        fn get(
-            &self,
-            id: &ProductionId,
-        ) -> Result<Option<ProductionSession>, Self::Error> {
+        fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
             Ok(self
                 .sessions
                 .iter()
