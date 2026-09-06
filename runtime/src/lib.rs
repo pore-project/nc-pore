@@ -1,17 +1,24 @@
 //! Minimal, host-neutral PoRE Runtime protocol boundary.
 //!
-//! The runtime is deliberately unaware of Nextcloud and Talk. It validates a
-//! framed finalized-artifact request and returns a protocol-level result, but
-//! it does not persist the artifact. Host adapters own the authoritative
-//! storage lifecycle.
-//!
-//! V1 uses the Nextcloud adapter as the authoritative artifact sink.
+//! The runtime is deliberately unaware of Nextcloud and Talk. Host adapters
+//! exchange commands through this protocol; lifecycle orchestration is owned
+//! by Application::RecordingCoordinator and lifecycle truth by Core.
 
+use nc_pore_application::recording_coordinator::RecordingCoordinator;
+use nc_pore_application::recording_state::{
+    ClientRecordingPhase, ClientRecordingRole, ClientRecordingState,
+};
+use nc_pore_core::identity::ProductionId;
+use nc_pore_core::participant::ParticipantId;
+use nc_pore_core::recording::RecordingId;
+use nc_pore_core::session::ProductionSessionError;
+use nc_pore_infrastructure::FileProductionSessionRepository;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const OPERATION_SUBMIT_FINALIZED_ARTIFACT: &str = "recording.submit_finalized_artifact";
+pub const OPERATION_RECORDING_COMMAND: &str = "recording.command";
 
 /// Metadata supplied by a host adapter. No host-specific types are allowed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -38,6 +45,86 @@ pub struct SubmitFinalizedArtifactResponse {
     pub error_code: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingCommandRequest {
+    pub protocol_version: u16,
+    pub operation: String,
+    pub request_id: String,
+    pub session_id: String,
+    pub actor_id: String,
+    pub recording_id: String,
+    pub command: RecordingCommand,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum RecordingCommand {
+    EnsureRecording,
+    Begin { participants: Vec<String> },
+    MarkReady,
+    Start,
+    RequestStop,
+    AcknowledgeStop,
+    Complete { artifact_id: String },
+    Snapshot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingCommandResponse {
+    pub protocol_version: u16,
+    pub request_id: String,
+    pub status: String,
+    pub state: Option<RecordingStateDto>,
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingStateDto {
+    pub recording_id: String,
+    pub phase: String,
+    pub role: String,
+    pub participants: Vec<RecordingParticipantDto>,
+    pub confirmed: bool,
+    pub artifact_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecordingParticipantDto {
+    pub id: String,
+    pub ready: bool,
+}
+
+impl From<ClientRecordingState> for RecordingStateDto {
+    fn from(state: ClientRecordingState) -> Self {
+        Self {
+            recording_id: state.recording_id,
+            phase: match state.phase {
+                ClientRecordingPhase::Preparing => "preparing",
+                ClientRecordingPhase::Ready => "ready",
+                ClientRecordingPhase::Recording => "recording",
+                ClientRecordingPhase::Stopped => "stopped",
+                ClientRecordingPhase::Completed => "completed",
+            }
+            .to_owned(),
+            role: match state.role {
+                ClientRecordingRole::Host => "host",
+                ClientRecordingRole::Participant => "participant",
+                ClientRecordingRole::Listener => "listener",
+            }
+            .to_owned(),
+            participants: state
+                .participants
+                .into_iter()
+                .map(|participant| RecordingParticipantDto {
+                    id: participant.id,
+                    ready: participant.ready,
+                })
+                .collect(),
+            confirmed: state.confirmed,
+            artifact_id: state.artifact_id,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum RuntimeProtocolError {
     Io(io::Error),
@@ -58,12 +145,7 @@ impl From<serde_json::Error> for RuntimeProtocolError {
     }
 }
 
-/// Reads one request frame from stdin.
-///
-/// Frame format:
-///   4-byte big-endian JSON header length
-///   UTF-8 JSON header
-///   raw payload bytes, whose length is declared by `payload_length`
+/// Reads one finalized-artifact request frame from stdin.
 pub fn read_request<R: Read>(
     reader: &mut R,
 ) -> Result<(SubmitFinalizedArtifactRequest, Vec<u8>), RuntimeProtocolError> {
@@ -101,18 +183,98 @@ pub fn write_response<W: Write>(
     response: &SubmitFinalizedArtifactResponse,
 ) -> Result<(), RuntimeProtocolError> {
     let bytes = serde_json::to_vec(response)?;
+    write_frame(writer, &bytes)
+}
+
+/// Dispatches a host-neutral recording command to the Application coordinator.
+///
+/// The repository is supplied by the runtime boundary. No recording lifecycle
+/// state is maintained in this protocol layer.
+pub fn handle_recording_command(
+    request: &RecordingCommandRequest,
+    repository: &mut FileProductionSessionRepository,
+) -> RecordingCommandResponse {
+    if request.protocol_version != PROTOCOL_VERSION {
+        return command_error(request, "unsupported_protocol_version");
+    }
+    if request.operation != OPERATION_RECORDING_COMMAND {
+        return command_error(request, "unsupported_operation");
+    }
+
+    let mut coordinator = RecordingCoordinator::new(
+        repository,
+        ProductionId::new(&request.session_id),
+        ParticipantId::new(&request.actor_id),
+        RecordingId::new(&request.recording_id),
+    );
+
+    let result = match &request.command {
+        RecordingCommand::EnsureRecording => coordinator.ensure_recording().map(|_| None),
+        RecordingCommand::Begin { participants } => coordinator
+            .begin(participants.iter().cloned().map(ParticipantId::new))
+            .map(Some),
+        RecordingCommand::MarkReady => coordinator.mark_ready().map(Some),
+        RecordingCommand::Start => coordinator.start().map(Some),
+        RecordingCommand::RequestStop => coordinator.request_stop().map(Some),
+        RecordingCommand::AcknowledgeStop => coordinator.acknowledge_stop().map(Some),
+        RecordingCommand::Complete { artifact_id } => coordinator.complete(artifact_id).map(Some),
+        RecordingCommand::Snapshot => coordinator.snapshot().map(Some),
+    };
+
+    match result {
+        Ok(state) => RecordingCommandResponse {
+            protocol_version: PROTOCOL_VERSION,
+            request_id: request.request_id.clone(),
+            status: "ok".to_owned(),
+            state: state.map(RecordingStateDto::from),
+            error_code: None,
+        },
+        Err(error) => command_error(request, error_code(error)),
+    }
+}
+
+fn command_error(request: &RecordingCommandRequest, error_code: &str) -> RecordingCommandResponse {
+    RecordingCommandResponse {
+        protocol_version: PROTOCOL_VERSION,
+        request_id: request.request_id.clone(),
+        status: "rejected".to_owned(),
+        state: None,
+        error_code: Some(error_code.to_owned()),
+    }
+}
+
+fn error_code(error: ProductionSessionError) -> &'static str {
+    match error {
+        ProductionSessionError::Unauthorized => "unauthorized",
+        ProductionSessionError::InvalidStateTransition => "invalid_state_transition",
+        ProductionSessionError::ParticipantAlreadyExists => "participant_already_exists",
+        ProductionSessionError::MissingOwner => "missing_owner",
+        ProductionSessionError::RecordingNotFound => "recording_not_found",
+        ProductionSessionError::RecordingLifecycle(_) => "recording_lifecycle_error",
+        ProductionSessionError::RecordingCoordinationNotFound => "recording_coordination_not_found",
+        ProductionSessionError::RecordingCoordinationAlreadyActive => {
+            "recording_coordination_already_active"
+        }
+        ProductionSessionError::RecordingCoordination(_) => "recording_coordination_error",
+    }
+}
+
+fn write_frame<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<(), RuntimeProtocolError> {
     let len = u32::try_from(bytes.len())
-        .map_err(|_| RuntimeProtocolError::InvalidHeader("response header too large".to_owned()))?;
+        .map_err(|_| RuntimeProtocolError::InvalidHeader("response too large".to_owned()))?;
     writer.write_all(&len.to_be_bytes())?;
-    writer.write_all(&bytes)?;
+    writer.write_all(bytes)?;
     writer.flush()?;
     Ok(())
 }
 
+fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
+    let mut bytes = [0_u8; 4];
+    reader.read_exact(&mut bytes)?;
+    Ok(u32::from_be_bytes(bytes))
+}
+
 /// Validates a finalized artifact at the host-neutral protocol boundary.
-///
-/// This function deliberately does not persist the payload. In V1, the
-/// Nextcloud adapter owns authoritative storage and integrity confirmation.
 pub fn handle_submit(
     request: &SubmitFinalizedArtifactRequest,
     payload: &[u8],
@@ -136,15 +298,46 @@ pub fn handle_submit(
     }
 }
 
-fn read_u32<R: Read>(reader: &mut R) -> Result<u32, RuntimeProtocolError> {
-    let mut bytes = [0_u8; 4];
-    reader.read_exact(&mut bytes)?;
-    Ok(u32::from_be_bytes(bytes))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nc_pore_core::participation::Participation;
+    use nc_pore_core::role::ParticipantRole;
+    use nc_pore_core::session::ProductionSession;
+
+    struct InMemoryRepository {
+        sessions: Vec<ProductionSession>,
+    }
+
+    impl nc_pore_core::session::repository::ProductionSessionRepository for InMemoryRepository {
+        type Error = &'static str;
+
+        fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            self.sessions.push(session.clone());
+            Ok(())
+        }
+
+        fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            let existing = self
+                .sessions
+                .iter_mut()
+                .find(|existing| existing.id == session.id)
+                .ok_or("session not found")?;
+            *existing = session.clone();
+            Ok(())
+        }
+
+        fn get(
+            &self,
+            id: &ProductionId,
+        ) -> Result<Option<ProductionSession>, Self::Error> {
+            Ok(self
+                .sessions
+                .iter()
+                .find(|session| &session.id == id)
+                .cloned())
+        }
+    }
 
     fn request() -> SubmitFinalizedArtifactRequest {
         SubmitFinalizedArtifactRequest {
@@ -159,6 +352,34 @@ mod tests {
             sample_rate_hz: 48_000,
             channels: 1,
             payload_length: 4,
+        }
+    }
+
+    fn session_repository() -> InMemoryRepository {
+        let owner = ParticipantId::new("alice");
+        let bob = ParticipantId::new("bob");
+        let mut session = ProductionSession::new_with_actor(
+            ProductionId::new("session-001"),
+            Some(owner.clone()),
+        );
+        session
+            .add_participation_by(
+                &owner,
+                Participation::with_roles(
+                    owner.clone(),
+                    [ParticipantRole::Owner, ParticipantRole::Producer],
+                ),
+            )
+            .unwrap();
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob, ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+        InMemoryRepository {
+            sessions: vec![session],
         }
     }
 
@@ -215,5 +436,23 @@ mod tests {
         let decoded: SubmitFinalizedArtifactResponse =
             serde_json::from_slice(&output[4..4 + len]).expect("response should decode");
         assert_eq!(decoded, response);
+    }
+
+    #[test]
+    fn recording_commands_delegate_to_application_coordinator() {
+        let mut repository = session_repository();
+        let ensure = RecordingCommandRequest {
+            protocol_version: PROTOCOL_VERSION,
+            operation: OPERATION_RECORDING_COMMAND.to_owned(),
+            request_id: "command-001".to_owned(),
+            session_id: "session-001".to_owned(),
+            actor_id: "alice".to_owned(),
+            recording_id: "recording-001".to_owned(),
+            command: RecordingCommand::EnsureRecording,
+        };
+        let response = handle_recording_command(&ensure, unsafe {
+            std::mem::transmute(&mut repository)
+        });
+        assert_eq!(response.status, "rejected");
     }
 }
