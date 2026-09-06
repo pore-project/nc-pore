@@ -87,6 +87,24 @@
 			ownerId,
 			command: (name, artifactId = '') => command(token, recordingId, name, { participants: participantIds, ownerId, artifactId }),
 		})
+
+		const state = ensure?.state
+		window.dispatchEvent(new CustomEvent('pore:recording-ui-context', {
+			detail: {
+				mountElement: window.PoRETalkRecordingUiMount?.getMountElement?.() || null,
+				productionId: token,
+				productionLabel: room?.displayName || room?.name || token,
+				recordingId,
+				role: state?.role || (ownerId === actorId ? 'host' : 'participant'),
+				state: state?.phase || 'preparing',
+				listener: false,
+				confirmed: state?.confirmed === true,
+				ready: state?.participants?.some(participant => participant.id === actorId && participant.ready) === true,
+				readyCount: state?.participants?.filter(participant => participant.ready).length || 0,
+				participantCount: state?.participants?.length || participantIds.length,
+				participants: state?.participants || [],
+			},
+		}))
 	}
 
 	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })
