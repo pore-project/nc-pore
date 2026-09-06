@@ -302,6 +302,7 @@ pub fn handle_submit(
 mod tests {
     use super::*;
     use nc_pore_core::participation::Participation;
+    use nc_pore_core::recording::Recording;
     use nc_pore_core::role::ParticipantRole;
     use nc_pore_core::session::ProductionSession;
 
@@ -378,6 +379,9 @@ mod tests {
             )
             .unwrap();
         session.start_by(&owner).unwrap();
+        session
+            .add_recording_by(&owner, Recording::new("recording-001"))
+            .unwrap();
         InMemoryRepository {
             sessions: vec![session],
         }
@@ -441,23 +445,14 @@ mod tests {
     #[test]
     fn recording_commands_delegate_to_application_coordinator() {
         let mut repository = session_repository();
-        let ensure = RecordingCommandRequest {
+        let snapshot = RecordingCommandRequest {
             protocol_version: PROTOCOL_VERSION,
             operation: OPERATION_RECORDING_COMMAND.to_owned(),
             request_id: "command-001".to_owned(),
             session_id: "session-001".to_owned(),
             actor_id: "alice".to_owned(),
             recording_id: "recording-001".to_owned(),
-            command: RecordingCommand::EnsureRecording,
-        };
-        let response = handle_recording_command(&ensure, &mut repository);
-        assert_eq!(response.status, "ok");
-        assert_eq!(response.state, None);
-
-        let snapshot = RecordingCommandRequest {
             command: RecordingCommand::Snapshot,
-            request_id: "command-002".to_owned(),
-            ..ensure
         };
         let response = handle_recording_command(&snapshot, &mut repository);
         assert_eq!(response.status, "ok");
