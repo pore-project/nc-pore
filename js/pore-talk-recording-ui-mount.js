@@ -21,17 +21,13 @@
 	}
 
 	function unmount() {
-		if (mountedRoot?.parentNode) {
-			mountedRoot.remove()
-		}
+		if (mountedRoot?.parentNode) mountedRoot.remove()
 		mountedRoot = null
 		mountedHost = null
 	}
 
 	function mount() {
-		if (!window.PoRETalkRecordingUi?.mount) {
-			return
-		}
+		if (!window.PoRETalkRecordingUi?.mount) return
 
 		const host = getMountHost()
 		if (!host) {
@@ -39,9 +35,7 @@
 			return
 		}
 
-		if (mountedHost === host && mountedRoot?.isConnected) {
-			return
-		}
+		if (mountedHost === host && mountedRoot?.isConnected) return
 
 		unmount()
 
@@ -51,11 +45,10 @@
 		host.appendChild(root)
 
 		try {
-			window.PoRETalkRecordingUi.mount({
-			mountElement: root,
-		})
+			window.PoRETalkRecordingUi.mount({ mountElement: root })
 			mountedHost = host
 			mountedRoot = root
+			window.dispatchEvent(new CustomEvent('pore:recording-ui-mount', { detail: { mountElement: root } }))
 		} catch (error) {
 			root.remove()
 			console.error('[NC-PoRe] Failed to mount Talk recording UI', error)
@@ -63,9 +56,7 @@
 	}
 
 	function scheduleMount() {
-		if (pollTimer !== null) {
-			return
-		}
+		if (pollTimer !== null) return
 		pollTimer = window.setTimeout(() => {
 			pollTimer = null
 			mount()
@@ -73,15 +64,10 @@
 	}
 
 	function start() {
-		if (observer) {
-			return
-		}
+		if (observer) return
 		mount()
 		observer = new MutationObserver(scheduleMount)
-		observer.observe(document.body, {
-			childList: true,
-			subtree: true,
-		})
+		observer.observe(document.body, { childList: true, subtree: true })
 	}
 
 	function stop() {
@@ -96,11 +82,14 @@
 		unmount()
 	}
 
-	window.PoRETalkRecordingUiMount = { start, stop, mount, unmount }
-
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', start, { once: true })
-	} else {
-		start()
+	window.PoRETalkRecordingUiMount = {
+		start,
+		stop,
+		mount,
+		unmount,
+		getMountElement: () => mountedRoot,
 	}
+
+	if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
+	else start()
 })()
