@@ -8,8 +8,6 @@ use OCP\IConfig;
 use RuntimeException;
 
 final class RecordingRuntimeService {
-	private const CONFIG_RUNTIME_BINARY = 'runtime_binary';
-	private const CONFIG_SESSION_STORE = 'runtime_session_store';
 	private const MAX_FRAME_LENGTH = 1024 * 1024;
 
 	public function __construct(private readonly IConfig $config) {
@@ -25,8 +23,8 @@ final class RecordingRuntimeService {
 	 * @return array<string, mixed>
 	 */
 	public function command(array $request): array {
-		$binary = trim((string)$this->config->getSystemValue('pore', [])['runtime_binary'] ?? '');
-		$sessionStore = trim((string)$this->config->getSystemValue('pore', [])['runtime_session_store'] ?? '');
+		$binary = trim((string)$this->config->getSystemValue('pore_runtime_binary', ''));
+		$sessionStore = trim((string)$this->config->getSystemValue('pore_runtime_session_store', ''));
 
 		if ($binary === '' || $sessionStore === '') {
 			throw new RuntimeException('PoRE runtime is not configured.');
