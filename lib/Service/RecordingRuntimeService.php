@@ -41,12 +41,18 @@ final class RecordingRuntimeService {
 		$payload = json_encode($request, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
 		$frame = pack('N', strlen($payload)) . $payload;
 
+		$environment = getenv();
+		if (!is_array($environment)) {
+			throw new RuntimeException('Unable to read the process environment for the PoRE runtime.');
+		}
+		$environment['PORE_SESSION_STORE'] = $sessionStore;
+
 		$descriptors = [
 			0 => ['pipe', 'r'],
 			1 => ['pipe', 'w'],
 			2 => ['pipe', 'w'],
 		];
-		$process = proc_open([$binary], $descriptors, $pipes);
+		$process = proc_open([$binary], $descriptors, $pipes, null, $environment);
 		if (!is_resource($process)) {
 			throw new RuntimeException('Unable to start the PoRE runtime.');
 		}
