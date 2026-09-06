@@ -33,10 +33,14 @@ final class RecordingController extends OCSController {
 		string $artifactId = '',
 	): DataResponse {
 		$user = $this->userSession->getUser();
-		if ($user === null) return $this->rejected('unauthorized', 401, $requestId);
+		if ($user === null) {
+			return $this->rejected('unauthorized', 401, $requestId);
+		}
 
 		$allowed = ['ensure', 'begin', 'ready', 'start', 'stop', 'acknowledge_stop', 'complete', 'snapshot'];
-		if (!in_array($command, $allowed, true)) return $this->rejected('unsupported_command', 400, $requestId);
+		if (!in_array($command, $allowed, true)) {
+			return $this->rejected('unsupported_command', 400, $requestId);
+		}
 
 		try {
 			$participantIds = json_decode($participants, true, 512, JSON_THROW_ON_ERROR);
@@ -46,17 +50,10 @@ final class RecordingController extends OCSController {
 		if (!is_array($participantIds) || array_filter($participantIds, static fn ($id): bool => !is_string($id)) !== []) {
 			return $this->rejected('invalid_participants', 400, $requestId);
 		}
-		if ($ownerId === '') $ownerId = $user->getUID();
 		$requestId = $requestId !== '' ? $requestId : bin2hex(random_bytes(16));
 
 		try {
 			if ($command === 'ensure') {
-				$this->execute($requestId, $sessionId, $recordingId, $user->getUID(), [
-					'EnsureSession' => [
-						'owner_id' => $ownerId,
-						'participants' => array_values($participantIds),
-					],
-				]);
 				$response = $this->execute($requestId, $sessionId, $recordingId, $user->getUID(), ['EnsureRecording' => null]);
 			} else {
 				try {
@@ -95,7 +92,9 @@ final class RecordingController extends OCSController {
 	}
 
 	private function requiredArtifactId(string $artifactId): string {
-		if (trim($artifactId) === '') throw new RuntimeException('artifactId is required for completion.');
+		if (trim($artifactId) === '') {
+			throw new RuntimeException('artifactId is required for completion.');
+		}
 		return $artifactId;
 	}
 
