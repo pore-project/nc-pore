@@ -10,7 +10,7 @@
 		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = 'pore-browser-pcm-worklet.js', persistenceStoreFactory = () => new window.PoREBrowserPcmPersistenceStore(), persistenceChunkBytes = 128 * 1024 } = {}) {
 			this.AudioContextClass = AudioContextClass; this.workletUrl = workletUrl; this.persistenceStoreFactory = persistenceStoreFactory; this.persistenceChunkBytes = persistenceChunkBytes
 			this.state = 'idle'; this.context = null; this.source = null; this.worklet = null; this.stream = null; this.sampleRate = null; this.channels = 1; this.startedAt = null; this.stoppedAt = null; this.sequence = 0
-			this.captureId = null; this.recordingSessionId = null; this.productionId = null; this.productionLabel = null; this.recordingId = null; this.persistenceStore = null; this.persistenceChain = Promise.resolve(); this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.openingSignet = null; this.capturedSamples = 0; this.openingTestTonePending = false
+			this.captureId = null; this.recordingSessionId = null; this.productionId = null; this.productionLabel = null; this.recordingId = null; this.persistenceStore = null; this.persistenceChain = Promise.resolve(); this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.openingSignet = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0
 		}
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
@@ -22,7 +22,7 @@
 			if (!this.AudioContextClass) throw new Error('Web Audio is not available in this browser')
 			if (!window.PoREBrowserPcmPersistenceStore && !metadata.persistenceStore) throw new Error('PoRE durable browser preservation is not available')
 
-			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceChain = Promise.resolve(); this.openingSignet = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
+			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceChain = Promise.resolve(); this.openingSignet = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
 			try {
 				this.context = new this.AudioContextClass(); await this.context.audioWorklet.addModule(this.workletUrl); this.sampleRate = this.context.sampleRate
 				await this.persistenceStore.beginCapture({ captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, sequence: this.sequence, startedAt: this.startedAt, sampleRate: this.sampleRate, channels: this.channels, encoding: 'pcm_s24le', format: 'audio/wav' })
@@ -37,6 +37,7 @@
 			if (!this.isRecording()) throw new Error('PoRE opening signet requires an active local capture')
 			if (this.openingSignet) return this.openingSignet
 			this.openingTestTonePending = true
+			this.openingTestToneSamplesWritten = 0
 			this.openingSignet = { kind: 'opening-test-tone', occurredAt: at, elapsedMs: null, sampleOffset: null, toneHz: OPENING_TEST_TONE_HZ, toneDurationMs: OPENING_TEST_TONE_MS }
 			window.dispatchEvent(new CustomEvent('pore:recording-opening-signet', { detail: { sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, ...this.openingSignet } }))
 			return this.openingSignet
@@ -46,10 +47,15 @@
 			if (this.openingTestTonePending) {
 				const sampleOffset = this.capturedSamples
 				const toneSamples = Math.round(this.sampleRate * OPENING_TEST_TONE_MS / 1000)
-				const tone = Math.min(toneSamples, samples.length)
-				for (let i = 0; i < tone; i += 1) samples[i] = Math.max(-1, Math.min(1, samples[i] + OPENING_TEST_TONE_AMPLITUDE * Math.sin(2 * Math.PI * OPENING_TEST_TONE_HZ * (i / this.sampleRate))))
-				this.openingTestTonePending = tone < toneSamples
-				if (this.openingSignet) { this.openingSignet.sampleOffset = sampleOffset; this.openingSignet.elapsedMs = sampleOffset * 1000 / this.sampleRate }
+				const remaining = toneSamples - this.openingTestToneSamplesWritten
+				const tone = Math.min(remaining, samples.length)
+				for (let i = 0; i < tone; i += 1) {
+					const sampleIndex = this.openingTestToneSamplesWritten + i
+					samples[i] = Math.max(-1, Math.min(1, samples[i] + OPENING_TEST_TONE_AMPLITUDE * Math.sin(2 * Math.PI * OPENING_TEST_TONE_HZ * (sampleIndex / this.sampleRate))))
+				}
+				this.openingTestToneSamplesWritten += tone
+				this.openingTestTonePending = this.openingTestToneSamplesWritten < toneSamples
+				if (this.openingSignet && this.openingSignet.sampleOffset === null) { this.openingSignet.sampleOffset = sampleOffset; this.openingSignet.elapsedMs = sampleOffset * 1000 / this.sampleRate }
 			}
 			this.capturedSamples += samples.length
 			const chunk = float32ToPcm24(samples); this.pendingParts.push(chunk); this.pendingBytes += chunk.length
