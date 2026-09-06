@@ -33,14 +33,10 @@ final class RecordingController extends OCSController {
 		string $artifactId = '',
 	): DataResponse {
 		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return $this->rejected('unauthorized', 401, $requestId);
-		}
+		if ($user === null) return $this->rejected('unauthorized', 401, $requestId);
 
 		$allowed = ['ensure', 'begin', 'ready', 'start', 'stop', 'acknowledge_stop', 'complete', 'snapshot'];
-		if (!in_array($command, $allowed, true)) {
-			return $this->rejected('unsupported_command', 400, $requestId);
-		}
+		if (!in_array($command, $allowed, true)) return $this->rejected('unsupported_command', 400, $requestId);
 
 		try {
 			$participantIds = json_decode($participants, true, 512, JSON_THROW_ON_ERROR);
@@ -50,51 +46,56 @@ final class RecordingController extends OCSController {
 		if (!is_array($participantIds) || array_filter($participantIds, static fn ($id): bool => !is_string($id)) !== []) {
 			return $this->rejected('invalid_participants', 400, $requestId);
 		}
-		if ($ownerId === '') {
-			$ownerId = $user->getUID();
-		}
+		if ($ownerId === '') $ownerId = $user->getUID();
+		$requestId = $requestId !== '' ? $requestId : bin2hex(random_bytes(16));
 
 		try {
-			$runtimeCommand = match ($command) {
-				'ensure' => ['EnsureSession' => [
-					'owner_id' => $ownerId,
-					'participants' => array_values($participantIds),
-				]],
-				'begin' => ['Begin' => ['participants' => array_values($participantIds)]],
-				'ready' => ['MarkReady' => null],
-				'start' => ['Start' => null],
-				'stop' => ['RequestStop' => null],
-				'acknowledge_stop' => ['AcknowledgeStop' => null],
-				'complete' => ['Complete' => ['artifact_id' => $this->requiredArtifactId($artifactId)]],
-				'snapshot' => ['Snapshot' => null],
-			};
-		} catch (RuntimeException) {
-			return $this->rejected('invalid_artifact', 400, $requestId);
-		}
-
-		[$variant, $value] = [array_key_first($runtimeCommand), array_values($runtimeCommand)[0]];
-		$request = [
-			'request_id' => $requestId !== '' ? $requestId : bin2hex(random_bytes(16)),
-			'session_id' => $sessionId,
-			'actor_id' => $user->getUID(),
-			'recording_id' => $recordingId,
-			'command' => [$variant => $value],
-		];
-
-		try {
-			$response = $this->runtime->command($request);
+			if ($command === 'ensure') {
+				$this->execute($requestId, $sessionId, $recordingId, $user->getUID(), [
+					'EnsureSession' => [
+						'owner_id' => $ownerId,
+						'participants' => array_values($participantIds),
+					],
+				]);
+				$response = $this->execute($requestId, $sessionId, $recordingId, $user->getUID(), ['EnsureRecording' => null]);
+			} else {
+				try {
+					$runtimeCommand = match ($command) {
+						'begin' => ['Begin' => ['participants' => array_values($participantIds)]],
+						'ready' => ['MarkReady' => null],
+						'start' => ['Start' => null],
+						'stop' => ['RequestStop' => null],
+						'acknowledge_stop' => ['AcknowledgeStop' => null],
+						'complete' => ['Complete' => ['artifact_id' => $this->requiredArtifactId($artifactId)]],
+						'snapshot' => ['Snapshot' => null],
+					};
+				} catch (RuntimeException) {
+					return $this->rejected('invalid_artifact', 400, $requestId);
+				}
+				$response = $this->execute($requestId, $sessionId, $recordingId, $user->getUID(), $runtimeCommand);
+			}
 		} catch (\Throwable) {
-			return $this->rejected('runtime_unavailable', 503, $request['request_id']);
+			return $this->rejected('runtime_unavailable', 503, $requestId);
 		}
 
 		$status = ($response['status'] ?? null) === 'ok' ? 200 : 409;
 		return new DataResponse($response, $status);
 	}
 
+	/** @param array<string, mixed> $command */
+	private function execute(string $requestId, string $sessionId, string $recordingId, string $actorId, array $command): array {
+		[$variant, $value] = [array_key_first($command), array_values($command)[0]];
+		return $this->runtime->command([
+			'request_id' => $requestId,
+			'session_id' => $sessionId,
+			'actor_id' => $actorId,
+			'recording_id' => $recordingId,
+			'command' => [$variant => $value],
+		]);
+	}
+
 	private function requiredArtifactId(string $artifactId): string {
-		if (trim($artifactId) === '') {
-			throw new RuntimeException('artifactId is required for completion.');
-		}
+		if (trim($artifactId) === '') throw new RuntimeException('artifactId is required for completion.');
 		return $artifactId;
 	}
 
