@@ -109,5 +109,4 @@
 	}
 
 	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })
-	void bootstrap().catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 })()
