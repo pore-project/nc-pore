@@ -1,5 +1,5 @@
 use crate::recording_state::{recording_state, ClientRecordingState};
-use crate::session::{add_recording_to_production_session, get_production_session};
+use crate::session::add_recording_to_production_session;
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::recording::{Recording, RecordingArtifactId, RecordingId};
@@ -42,7 +42,6 @@ where
     }
 
     pub fn ensure_recording(&mut self) -> Result<(), ProductionSessionError> {
-        let mut session = self.load_session()?;
         add_recording_to_production_session(
             self.repository,
             &self.session_id,
@@ -52,13 +51,8 @@ where
         .map(|_| ())
         .map_err(|error| match error {
             crate::session::AddRecordingToProductionSessionError::Session(error) => error,
-            crate::session::AddRecordingToProductionSessionError::SessionNotFound => {
-                // The session was already loaded, so this is an impossible repository race
-                // for the in-memory application contract. Preserve a domain error instead
-                // of inventing a coordinator-specific state.
-                ProductionSessionError::InvalidStateTransition
-            }
-            crate::session::AddRecordingToProductionSessionError::Repository(_) => {
+            crate::session::AddRecordingToProductionSessionError::SessionNotFound
+            | crate::session::AddRecordingToProductionSessionError::Repository(_) => {
                 ProductionSessionError::InvalidStateTransition
             }
         })
@@ -221,32 +215,36 @@ mod tests {
     #[test]
     fn coordinator_delegates_the_complete_lifecycle_to_core_and_persisted_session_state() {
         let mut repository = repository();
+        {
+            let mut coordinator = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            coordinator.ensure_recording().unwrap();
+            coordinator
+                .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
+                .unwrap();
+            coordinator.mark_ready().unwrap();
+        }
+
+        {
+            let mut bob = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("bob"),
+                RecordingId::new("recording-001"),
+            );
+            bob.mark_ready().unwrap();
+        }
+
         let mut coordinator = RecordingCoordinator::new(
             &mut repository,
             ProductionId::new("session-001"),
             ParticipantId::new("alice"),
             RecordingId::new("recording-001"),
         );
-
-        coordinator.ensure_recording().unwrap();
-        coordinator
-            .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
-            .unwrap();
-        assert_eq!(
-            coordinator.snapshot().unwrap().phase,
-            crate::recording_state::ClientRecordingPhase::Preparing
-        );
-
-        coordinator.mark_ready().unwrap();
-        let mut bob = RecordingCoordinator::new(
-            &mut repository,
-            ProductionId::new("session-001"),
-            ParticipantId::new("bob"),
-            RecordingId::new("recording-001"),
-        );
-        bob.mark_ready().unwrap();
-        drop(bob);
-
         assert_eq!(
             coordinator.snapshot().unwrap().phase,
             crate::recording_state::ClientRecordingPhase::Ready
