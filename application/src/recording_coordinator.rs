@@ -1,8 +1,13 @@
 use crate::recording_state::{recording_state, ClientRecordingState};
-use crate::session::add_recording_to_production_session;
+use crate::session::{
+    add_participation_to_production_session, add_recording_to_production_session,
+    create_production_session, start_production_session,
+};
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
+use nc_pore_core::participation::Participation;
 use nc_pore_core::recording::{Recording, RecordingArtifactId, RecordingId};
+use nc_pore_core::role::ParticipantRole;
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
 
@@ -39,6 +44,76 @@ where
             actor_id,
             recording_id,
         }
+    }
+
+    pub fn ensure_session(
+        &mut self,
+        owner_id: ParticipantId,
+        participants: impl IntoIterator<Item = ParticipantId>,
+    ) -> Result<(), ProductionSessionError> {
+        if self
+            .repository
+            .get(&self.session_id)
+            .map_err(|_| ProductionSessionError::InvalidStateTransition)?
+            .is_none()
+        {
+            create_production_session(self.repository, self.session_id.clone(), owner_id.clone())
+                .map_err(|error| match error {
+                    crate::session::CreateProductionSessionError::Session(error) => error,
+                    crate::session::CreateProductionSessionError::Repository(_) => {
+                        ProductionSessionError::InvalidStateTransition
+                    }
+                })?;
+        }
+
+        let participants: Vec<_> = participants.into_iter().collect();
+        for participant_id in participants {
+            let exists = self
+                .repository
+                .get(&self.session_id)
+                .map_err(|_| ProductionSessionError::InvalidStateTransition)?
+                .map(|session| {
+                    session
+                        .participations()
+                        .iter()
+                        .any(|participation| participation.participant_id == participant_id)
+                })
+                .unwrap_or(false);
+            if exists {
+                continue;
+            }
+            add_participation_to_production_session(
+                self.repository,
+                &self.session_id,
+                &owner_id,
+                Participation::new(participant_id, ParticipantRole::Participant),
+            )
+            .map_err(|error| match error {
+                crate::session::AddParticipationToProductionSessionError::Session(error) => error,
+                crate::session::AddParticipationToProductionSessionError::SessionNotFound
+                | crate::session::AddParticipationToProductionSessionError::Repository(_) => {
+                    ProductionSessionError::InvalidStateTransition
+                }
+            })?;
+        }
+
+        let session = self
+            .repository
+            .get(&self.session_id)
+            .map_err(|_| ProductionSessionError::InvalidStateTransition)?
+            .ok_or(ProductionSessionError::InvalidStateTransition)?;
+        if session.status() == nc_pore_core::session::ProductionStatus::Created {
+            start_production_session(self.repository, &self.session_id, &owner_id).map_err(|error| {
+                match error {
+                    crate::session::StartProductionSessionError::Session(error) => error,
+                    crate::session::StartProductionSessionError::SessionNotFound
+                    | crate::session::StartProductionSessionError::Repository(_) => {
+                        ProductionSessionError::InvalidStateTransition
+                    }
+                }
+            })?;
+        }
+        Ok(())
     }
 
     pub fn ensure_recording(&mut self) -> Result<(), ProductionSessionError> {
@@ -197,35 +272,48 @@ mod tests {
 
     fn repository() -> InMemoryRepository {
         let owner = ParticipantId::new("alice");
-        let bob = ParticipantId::new("bob");
-        let mut session = ProductionSession::new_with_actor(
-            ProductionId::new("session-001"),
-            Some(owner.clone()),
-        );
-        session
-            .add_participation_by(
-                &owner,
-                Participation::with_roles(
-                    owner.clone(),
-                    [ParticipantRole::Owner, ParticipantRole::Producer],
-                ),
-            )
-            .unwrap();
-        session
-            .add_participation_by(
-                &owner,
-                Participation::new(bob, ParticipantRole::Participant),
-            )
-            .unwrap();
-        session.start_by(&owner).unwrap();
         InMemoryRepository {
-            sessions: vec![session],
+            sessions: vec![ProductionSession::new_with_actor(
+                ProductionId::new("session-001"),
+                Some(owner),
+            )],
         }
+    }
+
+    #[test]
+    fn coordinator_can_establish_session_and_participants() {
+        let mut repository = InMemoryRepository { sessions: vec![] };
+        let mut coordinator = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-001"),
+            ParticipantId::new("alice"),
+            RecordingId::new("recording-001"),
+        );
+        coordinator
+            .ensure_session(
+                ParticipantId::new("alice"),
+                [ParticipantId::new("alice"), ParticipantId::new("bob")],
+            )
+            .unwrap();
+        let session = repository.sessions[0].clone();
+        assert_eq!(session.participant_count(), 2);
+        assert_eq!(session.status(), nc_pore_core::session::ProductionStatus::Active);
     }
 
     #[test]
     fn coordinator_delegates_the_complete_lifecycle_to_core_and_persisted_session_state() {
         let mut repository = repository();
+        let owner = ParticipantId::new("alice");
+        repository
+            .sessions
+            .get_mut(0)
+            .unwrap()
+            .add_participation_by(
+                &owner,
+                Participation::new(ParticipantId::new("bob"), ParticipantRole::Participant),
+            )
+            .unwrap();
+        repository.sessions[0].start_by(&owner).unwrap();
         {
             let mut coordinator = RecordingCoordinator::new(
                 &mut repository,
@@ -239,7 +327,6 @@ mod tests {
                 .unwrap();
             coordinator.mark_ready().unwrap();
         }
-
         {
             let mut bob = RecordingCoordinator::new(
                 &mut repository,
@@ -249,39 +336,37 @@ mod tests {
             );
             bob.mark_ready().unwrap();
         }
-
         let mut coordinator = RecordingCoordinator::new(
             &mut repository,
             ProductionId::new("session-001"),
             ParticipantId::new("alice"),
             RecordingId::new("recording-001"),
         );
-        assert_eq!(
-            coordinator.snapshot().unwrap().phase,
-            crate::recording_state::ClientRecordingPhase::Ready
-        );
+        assert_eq!(coordinator.snapshot().unwrap().phase, crate::recording_state::ClientRecordingPhase::Ready);
         coordinator.start().unwrap();
-        assert_eq!(
-            coordinator.snapshot().unwrap().phase,
-            crate::recording_state::ClientRecordingPhase::Recording
-        );
+        assert_eq!(coordinator.snapshot().unwrap().phase, crate::recording_state::ClientRecordingPhase::Recording);
         coordinator.request_stop().unwrap();
-        assert_eq!(
-            coordinator.snapshot().unwrap().phase,
-            crate::recording_state::ClientRecordingPhase::Stopped
-        );
+        assert_eq!(coordinator.snapshot().unwrap().phase, crate::recording_state::ClientRecordingPhase::Stopped);
         coordinator.complete("artifact-001").unwrap();
         let state = coordinator.snapshot().unwrap();
-        assert_eq!(
-            state.phase,
-            crate::recording_state::ClientRecordingPhase::Completed
-        );
+        assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Completed);
         assert_eq!(state.artifact_id.as_deref(), Some("artifact-001"));
     }
 
     #[test]
     fn coordinator_has_no_local_recording_state() {
         let mut repository = repository();
+        let owner = ParticipantId::new("alice");
+        repository
+            .sessions
+            .get_mut(0)
+            .unwrap()
+            .add_participation_by(
+                &owner,
+                Participation::new(ParticipantId::new("bob"), ParticipantRole::Participant),
+            )
+            .unwrap();
+        repository.sessions[0].start_by(&owner).unwrap();
         let mut coordinator = RecordingCoordinator::new(
             &mut repository,
             ProductionId::new("session-001"),
@@ -292,7 +377,6 @@ mod tests {
         coordinator
             .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
             .unwrap();
-
         let first = coordinator.snapshot().unwrap();
         let second = coordinator.snapshot().unwrap();
         assert_eq!(first, second);
