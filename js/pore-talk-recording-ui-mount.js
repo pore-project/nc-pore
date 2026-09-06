@@ -2,12 +2,16 @@
  * NC-PoRe Talk recording UI mount adapter.
  *
  * Talk does not currently expose a public extension point for active-call
- * top-bar actions. Keep the Talk-specific DOM dependency isolated here.
+ * media controls. Keep the Talk-specific DOM dependency isolated here.
  */
 (function () {
 	'use strict'
 
-	const MOUNT_SELECTOR = '.top-bar.top-bar--in-call .top-bar__controls'
+	// The visible in-call controls live in BottomBar -> TopBarMediaControls.
+	// LocalAudioControlButton renders this wrapper around the microphone and
+	// its device selector. Insert PoRE immediately after that group so it sits
+	// between microphone and camera without modifying Talk itself.
+	const MOUNT_SELECTOR = '.bottom-bar .buttons-bar .local-audio-control-wrapper'
 	const ROOT_ATTRIBUTE = 'data-pore-talk-recording-ui'
 	const POLL_INTERVAL_MS = 500
 
@@ -42,7 +46,7 @@
 		const root = document.createElement('div')
 		root.setAttribute(ROOT_ATTRIBUTE, 'true')
 		root.className = 'pore-talk-recording-ui-mount'
-		host.appendChild(root)
+		host.insertAdjacentElement('afterend', root)
 
 		try {
 			window.PoRETalkRecordingUi.mount({ mountElement: root })
