@@ -20,9 +20,7 @@
 			...options,
 		})
 		const body = await response.json()
-		if (!response.ok || body?.ocs?.meta?.status !== 'ok') {
-			throw new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
-		}
+		if (!response.ok || body?.ocs?.meta?.status !== 'ok') throw new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
 		return body.ocs.data
 	}
 
@@ -58,11 +56,7 @@
 		return result
 	}
 
-	const findToken = () => {
-		const match = window.location.pathname.match(/\/apps\/spreed\/(?:call|room)\/([^/]+)/)
-		return match?.[1] || null
-	}
-
+	const findToken = () => window.location.pathname.match(/\/apps\/spreed\/(?:call|room)\/([^/]+)/)?.[1] || null
 	const getCurrentUserId = () => window.OC?.getCurrentUser?.()?.uid || window.OC?.currentUser?.uid || null
 
 	const bootstrap = async () => {
@@ -73,18 +67,15 @@
 		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}`))
 		const participants = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}/participants`))
 		const participantList = Array.isArray(participants) ? participants : []
-		const participantIds = participantList.filter(participant => participant?.actorType === 'users').map(participant => participant.actorId).filter(Boolean)
-		const current = participantList.find(participant => participant?.actorType === 'users' && participant.actorId === actorId)
-		if (!current) return
+		const participantIds = participantList.filter(p => p?.actorType === 'users').map(p => p.actorId).filter(Boolean)
+		if (!participantList.some(p => p?.actorType === 'users' && p.actorId === actorId)) return
 
-		const owner = participantList.find(participant => participant?.actorType === 'users' && participant.participantType === 1)
+		const owner = participantList.find(p => p?.actorType === 'users' && p.participantType === 1)
 		const ownerId = owner?.actorId || actorId
 		const recordingId = `recording-${token}`
 		coordinatorContext = { sessionId: token, recordingId, actorId, ownerId, participants: participantIds }
 
-		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', {
-			detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token },
-		}))
+		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
 
 		const ensure = await command(token, recordingId, 'ensure', { participants: participantIds, ownerId })
 		try {
@@ -104,7 +95,7 @@
 			recordingId,
 			participants: participantIds,
 			ownerId,
-			command: name => command(token, recordingId, name, { participants: participantIds, ownerId }),
+			command: (name, artifactId = '') => command(token, recordingId, name, { participants: participantIds, ownerId, artifactId }),
 		})
 	}
 
