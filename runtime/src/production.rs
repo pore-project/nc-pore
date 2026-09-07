@@ -64,12 +64,14 @@ pub fn handle_production_command<R: ProductionSessionRepository>(
             protocol_version: PROTOCOL_VERSION,
             request_id: request.request_id.clone(),
             status: "ok".to_owned(),
-            production_status: Some(match session.status {
-                ClientProductionStatus::Created => "created",
-                ClientProductionStatus::Active => "active",
-                ClientProductionStatus::Completed => "completed",
-            }
-            .to_owned()),
+            production_status: Some(
+                match session.status {
+                    ClientProductionStatus::Created => "created",
+                    ClientProductionStatus::Active => "active",
+                    ClientProductionStatus::Completed => "completed",
+                }
+                .to_owned(),
+            ),
             participants: session
                 .participants
                 .into_iter()
@@ -81,7 +83,7 @@ pub fn handle_production_command<R: ProductionSessionRepository>(
     }
 }
 
-fn production_error<R: ProductionSessionRepository>(
+fn production_error(
     request: &ProductionCommandRequest,
     error_code: &str,
 ) -> ProductionCommandResponse {
