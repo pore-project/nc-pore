@@ -214,15 +214,16 @@ mod tests {
     #[test]
     fn coordinator_ensure_is_idempotent_for_the_same_recording_id() {
         let mut repository = repository();
-        let mut coordinator = RecordingCoordinator::new(
-            &mut repository,
-            ProductionId::new("session-001"),
-            ParticipantId::new("alice"),
-            RecordingId::new("recording-001"),
-        );
-
-        coordinator.ensure_recording().unwrap();
-        coordinator.ensure_recording().unwrap();
+        {
+            let mut coordinator = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            coordinator.ensure_recording().unwrap();
+            coordinator.ensure_recording().unwrap();
+        }
 
         let session = repository.sessions.first().unwrap();
         assert_eq!(session.recordings().len(), 1);
@@ -241,28 +242,31 @@ mod tests {
     #[test]
     fn coordinator_ensure_does_not_replace_existing_recording_state() {
         let mut repository = repository();
-        let mut coordinator = RecordingCoordinator::new(
-            &mut repository,
-            ProductionId::new("session-001"),
-            ParticipantId::new("alice"),
-            RecordingId::new("recording-001"),
-        );
-        coordinator.ensure_recording().unwrap();
-        coordinator
-            .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
-            .unwrap();
-        drop(coordinator);
+        {
+            let mut coordinator = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            coordinator.ensure_recording().unwrap();
+            coordinator
+                .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
+                .unwrap();
+        }
 
-        let mut coordinator = RecordingCoordinator::new(
-            &mut repository,
-            ProductionId::new("session-001"),
-            ParticipantId::new("alice"),
-            RecordingId::new("recording-001"),
-        );
-        coordinator.ensure_recording().unwrap();
+        {
+            let mut coordinator = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            coordinator.ensure_recording().unwrap();
+            let state = coordinator.snapshot().unwrap();
+            assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Preparing);
+        }
 
-        let state = coordinator.snapshot().unwrap();
-        assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Preparing);
         assert_eq!(repository.sessions.first().unwrap().recordings().len(), 1);
     }
 
