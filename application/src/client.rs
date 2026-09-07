@@ -149,6 +149,7 @@ impl<E> From<ProductionSessionError> for ClientSessionError<E> {
             ProductionSessionError::InvalidStateTransition => Self::InvalidStateTransition,
             ProductionSessionError::ParticipantAlreadyExists => Self::ParticipantAlreadyExists,
             ProductionSessionError::MissingOwner => Self::MissingOwner,
+            ProductionSessionError::RecordingAlreadyExists => Self::InvalidStateTransition,
             ProductionSessionError::RecordingNotFound => Self::RecordingNotFound,
             ProductionSessionError::RecordingLifecycle(_) => Self::InvalidStateTransition,
             ProductionSessionError::RecordingCoordinationNotFound
