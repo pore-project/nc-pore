@@ -394,3 +394,64 @@ impl ProductionSession {
             .any(|participation| participation.is_owner())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn active_session() -> (ProductionSession, ParticipantId) {
+        let owner = ParticipantId::new("owner-1");
+        let mut session = ProductionSession::new_with_actor(
+            ProductionId::new("production-1"),
+            Some(owner.clone()),
+        );
+        session
+            .add_participation_by(
+                &owner,
+                Participation::with_roles(
+                    owner.clone(),
+                    [ParticipantRole::Owner, ParticipantRole::Producer],
+                ),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+        (session, owner)
+    }
+
+    #[test]
+    fn production_rejects_duplicate_recording_ids() {
+        let (mut session, owner) = active_session();
+        let recording_id = RecordingId::new("recording-1");
+
+        session
+            .add_recording_by(&owner, Recording::new(recording_id.value()))
+            .unwrap();
+        let result = session.add_recording_by(&owner, Recording::new(recording_id.value()));
+
+        assert_eq!(
+            result,
+            Err(ProductionSessionError::RecordingAlreadyExists)
+        );
+        assert_eq!(session.recordings().len(), 1);
+    }
+
+    #[test]
+    fn ensure_recording_is_idempotent_for_the_same_recording_id() {
+        let (mut session, owner) = active_session();
+        let recording_id = RecordingId::new("recording-1");
+
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+
+        assert_eq!(session.recordings().len(), 1);
+        assert_eq!(session.recordings()[0].id(), &recording_id);
+        assert_eq!(
+            session
+                .activities()
+                .iter()
+                .filter(|activity| activity.activity_type == ActivityType::RecordingAdded)
+                .count(),
+            1
+        );
+    }
+}
