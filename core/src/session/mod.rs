@@ -398,6 +398,7 @@ impl ProductionSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::role::ParticipantRole;
 
     fn active_session() -> (ProductionSession, ParticipantId) {
         let owner = ParticipantId::new("owner-1");
@@ -428,10 +429,7 @@ mod tests {
             .unwrap();
         let result = session.add_recording_by(&owner, Recording::new(recording_id.value()));
 
-        assert_eq!(
-            result,
-            Err(ProductionSessionError::RecordingAlreadyExists)
-        );
+        assert_eq!(result, Err(ProductionSessionError::RecordingAlreadyExists));
         assert_eq!(session.recordings().len(), 1);
     }
 
