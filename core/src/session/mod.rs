@@ -21,6 +21,7 @@ pub enum ProductionStatus {
 pub enum ProductionSessionError {
     ParticipantAlreadyExists,
     MissingOwner,
+    RecordingAlreadyExists,
     RecordingNotFound,
     RecordingCoordinationNotFound,
     RecordingCoordinationAlreadyActive,
@@ -175,6 +176,13 @@ impl ProductionSession {
         if self.status == ProductionStatus::Completed {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
+        if self
+            .recordings
+            .iter()
+            .any(|existing| existing.id() == recording.id())
+        {
+            return Err(ProductionSessionError::RecordingAlreadyExists);
+        }
         let target = recording.id().value().to_owned();
         self.recordings.push(recording);
         self.push_activity(
@@ -183,6 +191,25 @@ impl ProductionSession {
             Some(target),
         );
         Ok(())
+    }
+
+    pub fn ensure_recording_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ManageRecordings)?;
+        if self.status == ProductionStatus::Completed {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        if self
+            .recordings
+            .iter()
+            .any(|recording| recording.id() == recording_id)
+        {
+            return Ok(());
+        }
+        self.add_recording_by(actor, Recording::new(recording_id.value()))
     }
 
     pub fn begin_recording_by(
