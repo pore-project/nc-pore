@@ -187,7 +187,10 @@
 				start.type = 'button'
 				start.className = 'pore-talk-recording__button'
 				start.textContent = 'Aufnahme starten'
-				start.addEventListener('click', onStart)
+				start.addEventListener('click', event => {
+					event.stopPropagation()
+					onStart(event)
+				})
 				panel.appendChild(start)
 			}
 			if (state === 'recording' && onStop) {
@@ -195,7 +198,10 @@
 				stop.type = 'button'
 				stop.className = 'pore-talk-recording__button'
 				stop.textContent = 'Aufnahme beenden'
-				stop.addEventListener('click', onStop)
+				stop.addEventListener('click', event => {
+					event.stopPropagation()
+					onStop(event)
+				})
 				panel.appendChild(stop)
 			}
 		}
