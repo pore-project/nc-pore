@@ -1,7 +1,10 @@
 use nc_pore_infrastructure::FileProductionSessionRepository;
+use pore_runtime::production::{
+    OPERATION_PRODUCTION_COMMAND, ProductionCommandRequest, ProductionCommandResponse,
+    handle_production_command,
+};
 use pore_runtime::{
-    ProductionCommandRequest, ProductionCommandResponse, RecordingCommandRequest,
-    RecordingCommandResponse, SubmitFinalizedArtifactRequest, handle_production_command,
+    RecordingCommandRequest, RecordingCommandResponse, SubmitFinalizedArtifactRequest,
     handle_recording_command, handle_submit, write_response,
 };
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -32,7 +35,7 @@ fn main() {
     };
 
     match operation.as_deref() {
-        Some(pore_runtime::OPERATION_PRODUCTION_COMMAND) => {
+        Some(OPERATION_PRODUCTION_COMMAND) => {
             let request: ProductionCommandRequest = match serde_json::from_slice(&frame) {
                 Ok(request) => request,
                 Err(error) => {
