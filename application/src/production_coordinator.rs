@@ -1,4 +1,6 @@
-use crate::client::{ClientProductionSession, ClientRole, ClientSessionError, ClientSessionService};
+use crate::client::{
+    ClientProductionSession, ClientRole, ClientSessionError, ClientSessionService,
+};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 
 /// Materialize the provider-selected Production identity without activating it.

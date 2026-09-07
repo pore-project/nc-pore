@@ -43,8 +43,8 @@ fn main() {
                     std::process::exit(3);
                 }
             };
-            let root = std::env::var("PORE_SESSION_STORE")
-                .unwrap_or_else(|_| "./var/sessions".to_owned());
+            let root =
+                std::env::var("PORE_SESSION_STORE").unwrap_or_else(|_| "./var/sessions".to_owned());
             let mut repository = match FileProductionSessionRepository::new(root) {
                 Ok(repository) => repository,
                 Err(error) => {
@@ -67,8 +67,8 @@ fn main() {
                     std::process::exit(3);
                 }
             };
-            let root = std::env::var("PORE_SESSION_STORE")
-                .unwrap_or_else(|_| "./var/sessions".to_owned());
+            let root =
+                std::env::var("PORE_SESSION_STORE").unwrap_or_else(|_| "./var/sessions".to_owned());
             let mut repository = match FileProductionSessionRepository::new(root) {
                 Ok(repository) => repository,
                 Err(error) => {
