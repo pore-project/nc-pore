@@ -6,7 +6,10 @@ use nc_pore_core::activity::{ActivityEvent, ActivityResult, ActivityType};
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
 use nc_pore_core::participation::Participation;
-use nc_pore_core::recording::{Recording, RecordingArtifactId, RecordingId, RecordingStatus};
+use nc_pore_core::recording::{
+    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError,
+    RecordingCoordinationStatus, RecordingId, RecordingStatus,
+};
 use nc_pore_core::role::ParticipantRole;
 use nc_pore_core::session::{
     repository::ProductionSessionRepository, ProductionSession, ProductionStatus,
@@ -18,6 +21,7 @@ pub enum FileProductionSessionRepositoryError {
     Io(std::io::Error),
     Serialization(serde_json::Error),
     InvalidTimestamp(u128),
+    InvalidRecordingCoordinationState(String),
     AlreadyExists,
 }
 
@@ -30,6 +34,12 @@ impl std::fmt::Display for FileProductionSessionRepositoryError {
             }
             Self::InvalidTimestamp(value) => {
                 write!(formatter, "invalid persisted activity timestamp: {value}")
+            }
+            Self::InvalidRecordingCoordinationState(error) => {
+                write!(
+                    formatter,
+                    "invalid persisted recording coordination state: {error}"
+                )
             }
             Self::AlreadyExists => write!(formatter, "production session already exists"),
         }
@@ -56,6 +66,8 @@ struct PersistedProductionSession {
     status: PersistedProductionStatus,
     participations: Vec<PersistedParticipation>,
     recordings: Vec<PersistedRecording>,
+    #[serde(default)]
+    recording_coordination: Option<PersistedRecordingCoordination>,
     activities: Vec<PersistedActivityEvent>,
 }
 
@@ -93,7 +105,25 @@ struct PersistedRecording {
 enum PersistedRecordingStatus {
     Prepared,
     Recording,
+    Stopped,
     Completed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedRecordingCoordination {
+    recording_id: String,
+    participants: Vec<String>,
+    ready: Vec<String>,
+    opening_confirmed: Vec<String>,
+    stop_acknowledged: Vec<String>,
+    status: PersistedRecordingCoordinationStatus,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+enum PersistedRecordingCoordinationStatus {
+    Preparing,
+    WaitingForReady,
+    Ready,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +145,7 @@ enum PersistedActivityType {
     ParticipantAdded,
     RecordingAdded,
     RecordingStarted,
+    RecordingStopped,
     RecordingCompleted,
 }
 
@@ -171,6 +202,7 @@ impl From<RecordingStatus> for PersistedRecordingStatus {
         match status {
             RecordingStatus::Prepared => Self::Prepared,
             RecordingStatus::Recording => Self::Recording,
+            RecordingStatus::Stopped => Self::Stopped,
             RecordingStatus::Completed => Self::Completed,
         }
     }
@@ -181,7 +213,18 @@ impl From<PersistedRecordingStatus> for RecordingStatus {
         match status {
             PersistedRecordingStatus::Prepared => Self::Prepared,
             PersistedRecordingStatus::Recording => Self::Recording,
+            PersistedRecordingStatus::Stopped => Self::Stopped,
             PersistedRecordingStatus::Completed => Self::Completed,
+        }
+    }
+}
+
+impl From<RecordingCoordinationStatus> for PersistedRecordingCoordinationStatus {
+    fn from(status: RecordingCoordinationStatus) -> Self {
+        match status {
+            RecordingCoordinationStatus::Preparing => Self::Preparing,
+            RecordingCoordinationStatus::WaitingForReady => Self::WaitingForReady,
+            RecordingCoordinationStatus::Ready => Self::Ready,
         }
     }
 }
@@ -195,6 +238,7 @@ impl From<ActivityType> for PersistedActivityType {
             ActivityType::ParticipantAdded => Self::ParticipantAdded,
             ActivityType::RecordingAdded => Self::RecordingAdded,
             ActivityType::RecordingStarted => Self::RecordingStarted,
+            ActivityType::RecordingStopped => Self::RecordingStopped,
             ActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
@@ -209,6 +253,7 @@ impl From<PersistedActivityType> for ActivityType {
             PersistedActivityType::ParticipantAdded => Self::ParticipantAdded,
             PersistedActivityType::RecordingAdded => Self::RecordingAdded,
             PersistedActivityType::RecordingStarted => Self::RecordingStarted,
+            PersistedActivityType::RecordingStopped => Self::RecordingStopped,
             PersistedActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
@@ -229,6 +274,100 @@ impl From<PersistedActivityResult> for ActivityResult {
             PersistedActivityResult::Success => Self::Success,
             PersistedActivityResult::Rejected => Self::Rejected,
         }
+    }
+}
+
+impl PersistedRecordingCoordination {
+    fn from_domain(coordination: &RecordingCoordination) -> Self {
+        Self {
+            recording_id: coordination.recording_id().value().to_owned(),
+            participants: coordination
+                .participants()
+                .iter()
+                .map(|participant| participant.value().to_owned())
+                .collect(),
+            ready: coordination
+                .ready_participants()
+                .iter()
+                .map(|participant| participant.value().to_owned())
+                .collect(),
+            opening_confirmed: coordination
+                .opening_confirmed_participants()
+                .iter()
+                .map(|participant| participant.value().to_owned())
+                .collect(),
+            stop_acknowledged: coordination
+                .stop_acknowledged_participants()
+                .iter()
+                .map(|participant| participant.value().to_owned())
+                .collect(),
+            status: coordination.status().into(),
+        }
+    }
+
+    fn into_domain(self) -> Result<RecordingCoordination, FileProductionSessionRepositoryError> {
+        let persisted_status = self.status;
+        let mut coordination = RecordingCoordination::new(
+            RecordingId::new(self.recording_id),
+            self.participants.into_iter().map(ParticipantId::new),
+        )
+        .map_err(Self::coordination_error)?;
+
+        if !matches!(
+            persisted_status,
+            PersistedRecordingCoordinationStatus::Preparing
+        ) {
+            coordination
+                .begin_waiting_for_ready()
+                .map_err(Self::coordination_error)?;
+        }
+
+        for participant in self.ready {
+            coordination
+                .mark_ready(&ParticipantId::new(participant))
+                .map_err(Self::coordination_error)?;
+        }
+
+        for participant in self.opening_confirmed {
+            coordination
+                .confirm_opening(&ParticipantId::new(participant))
+                .map_err(Self::coordination_error)?;
+        }
+
+        for participant in self.stop_acknowledged {
+            coordination
+                .acknowledge_stop(&ParticipantId::new(participant))
+                .map_err(Self::coordination_error)?;
+        }
+
+        let expected_status = match persisted_status {
+            PersistedRecordingCoordinationStatus::Preparing => {
+                RecordingCoordinationStatus::Preparing
+            }
+            PersistedRecordingCoordinationStatus::WaitingForReady => {
+                RecordingCoordinationStatus::WaitingForReady
+            }
+            PersistedRecordingCoordinationStatus::Ready => RecordingCoordinationStatus::Ready,
+        };
+        if coordination.status() != expected_status {
+            return Err(
+                FileProductionSessionRepositoryError::InvalidRecordingCoordinationState(format!(
+                    "persisted status {:?} does not match reconstructed status {:?}",
+                    persisted_status,
+                    coordination.status()
+                )),
+            );
+        }
+
+        Ok(coordination)
+    }
+
+    fn coordination_error(
+        error: RecordingCoordinationError,
+    ) -> FileProductionSessionRepositoryError {
+        FileProductionSessionRepositoryError::InvalidRecordingCoordinationState(format!(
+            "{error:?}"
+        ))
     }
 }
 
@@ -262,6 +401,9 @@ impl PersistedProductionSession {
                     artifact_id: recording.artifact_id().map(|id| id.value().to_owned()),
                 })
                 .collect(),
+            recording_coordination: session
+                .recording_coordination()
+                .map(PersistedRecordingCoordination::from_domain),
             activities: session
                 .activities()
                 .iter()
@@ -286,6 +428,11 @@ impl PersistedProductionSession {
     }
 
     fn into_domain(self) -> Result<ProductionSession, FileProductionSessionRepositoryError> {
+        let recording_coordination = self
+            .recording_coordination
+            .map(PersistedRecordingCoordination::into_domain)
+            .transpose()?;
+
         let participations = self
             .participations
             .into_iter()
@@ -341,13 +488,13 @@ impl PersistedProductionSession {
                 self.status.into(),
                 participations,
                 recordings,
+                recording_coordination,
                 activities,
             ),
         )
     }
 }
 
-/// Concrete local filesystem persistence for `ProductionSession`.
 pub struct FileProductionSessionRepository {
     root: PathBuf,
 }
@@ -482,11 +629,69 @@ mod tests {
             .start_recording_by(&owner, &RecordingId::new("recording-001"))
             .unwrap();
         session
+            .stop_recording_by(&owner, &RecordingId::new("recording-001"))
+            .unwrap();
+        session
             .complete_recording_by(
                 &owner,
                 &RecordingId::new("recording-001"),
                 RecordingArtifactId::new("artifact-001"),
             )
+            .unwrap();
+        session
+    }
+
+    fn coordinated_session() -> ProductionSession {
+        let id = ProductionId::new("production-coordination-001");
+        let owner = ParticipantId::new("owner-1");
+        let participant = ParticipantId::new("participant-1");
+        let recording_id = RecordingId::new("recording-coordination-001");
+        let mut session = ProductionSession::new_with_actor(id, Some(owner.clone()));
+        session
+            .add_participation_by(
+                &owner,
+                Participation::with_roles(
+                    owner.clone(),
+                    [
+                        ParticipantRole::Owner,
+                        ParticipantRole::Producer,
+                        ParticipantRole::Participant,
+                    ],
+                ),
+            )
+            .unwrap();
+        session
+            .add_participation_by(
+                &owner,
+                Participation::with_roles(participant.clone(), [ParticipantRole::Participant]),
+            )
+            .unwrap();
+        session.start_by(&owner).unwrap();
+        session
+            .add_recording_by(&owner, Recording::new(recording_id.value()))
+            .unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
+            .unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&participant, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&participant, &recording_id)
+            .unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+        session
+            .acknowledge_recording_stop_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .acknowledge_recording_stop_by(&participant, &recording_id)
             .unwrap();
         session
     }
@@ -506,6 +711,36 @@ mod tests {
         assert_eq!(reloaded.participations(), session.participations());
         assert_eq!(reloaded.recordings(), session.recordings());
         assert_eq!(reloaded.activities(), session.activities());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_repository_round_trips_recording_coordination_barrier_state() {
+        let root = temp_root();
+        let mut repository = FileProductionSessionRepository::new(&root).unwrap();
+        let session = coordinated_session();
+        let id = session.id.clone();
+        let coordination = session.recording_coordination().unwrap();
+
+        repository.store(&session).unwrap();
+        let reloaded = repository.get(&id).unwrap().unwrap();
+        let reloaded_coordination = reloaded.recording_coordination().unwrap();
+
+        assert_eq!(reloaded_coordination, coordination);
+        assert_eq!(
+            reloaded_coordination.ready_participants(),
+            coordination.ready_participants()
+        );
+        assert_eq!(
+            reloaded_coordination.opening_confirmed_participants(),
+            coordination.opening_confirmed_participants()
+        );
+        assert_eq!(
+            reloaded_coordination.stop_acknowledged_participants(),
+            coordination.stop_acknowledged_participants()
+        );
+        assert_eq!(reloaded_coordination.status(), coordination.status());
 
         let _ = fs::remove_dir_all(root);
     }

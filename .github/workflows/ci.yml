@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - develop
+      - feat/v1-nextcloud-runtime-adapter
   pull_request:
     branches:
       - main
       - develop
+  workflow_dispatch:
 
 jobs:
   check:
@@ -45,5 +47,10 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Build V1 runtime
+        run: cargo build --release -p pore-runtime
+
       - name: Architecture checks
         run: ./tools/architecture-checks/run-all.sh
+
+# V1 branch CI

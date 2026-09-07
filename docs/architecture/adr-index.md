@@ -75,7 +75,7 @@ This document provides an overview and navigation entry.
 - ADR-057 Domain Recording to Recording Artifact Association Boundary
 - ADR-058 Recording Payload Representation
 - ADR-059 Recording Payload Filesystem Persistence
-- ADR-060 Filesystem Store Semantics
+- ADR-060 Recording Artifact Processing Lifecycle and Idempotency
 - ADR-061 Configurable Recording Configuration
 - ADR-062 Browser-First Guest Participation
 - ADR-063 Active Session Synchronisation
@@ -85,6 +85,11 @@ This document provides an overview and navigation entry.
 - ADR-067 Session Context and External Provider Contract
 - ADR-068 Recording Start and Audio Synchronization Signet
 - ADR-069 Nextcloud Remote Artifact Storage v1
+- ADR-070 Audio Delivery Format and FLAC Default
+- ADR-071 Recording Capture, Preservation and Transport Formats
+- ADR-072 Host-Integrated Local Audio Capture via Connector
+- ADR-074 Talk Capture Quality
+- ADR-075 Local Capture Independence from Communication Pipeline
 
 ---
 

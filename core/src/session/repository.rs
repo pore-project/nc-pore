@@ -9,7 +9,7 @@
 use crate::activity::ActivityEvent;
 use crate::identity::ProductionId;
 use crate::participation::Participation;
-use crate::recording::Recording;
+use crate::recording::{Recording, RecordingCoordination};
 
 use super::{ProductionSession, ProductionStatus};
 
@@ -45,6 +45,7 @@ pub fn reconstitute_production_session(
     status: ProductionStatus,
     participations: Vec<Participation>,
     recordings: Vec<Recording>,
+    recording_coordination: Option<RecordingCoordination>,
     activities: Vec<ActivityEvent>,
 ) -> ProductionSession {
     ProductionSession {
@@ -52,7 +53,7 @@ pub fn reconstitute_production_session(
         status,
         participations,
         recordings,
-        recording_coordination: None,
+        recording_coordination,
         activities,
     }
 }
