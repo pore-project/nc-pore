@@ -264,7 +264,10 @@ mod tests {
             );
             coordinator.ensure_recording().unwrap();
             let state = coordinator.snapshot().unwrap();
-            assert_eq!(state.phase, crate::recording_state::ClientRecordingPhase::Preparing);
+            assert_eq!(
+                state.phase,
+                crate::recording_state::ClientRecordingPhase::Preparing
+            );
         }
 
         assert_eq!(repository.sessions.first().unwrap().recordings().len(), 1);
