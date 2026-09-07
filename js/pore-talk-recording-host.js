@@ -3,6 +3,7 @@
 	'use strict'
 
 	const API_VERSION = '/ocs/v2.php/apps/pore/v1/recordings/command'
+	const PRODUCTION_API_VERSION = '/ocs/v2.php/apps/pore/v1/productions/command'
 	const TALK_API_VERSION = '/ocs/v2.php/apps/spreed/api/v4'
 	let coordinatorContext = null
 
@@ -41,7 +42,18 @@
 		})
 	}
 
-	const command = async (sessionId, recordingId, name, { participants = [], ownerId = '', artifactId = '' } = {}) => {
+	const productionCommand = async (sessionId, name, { participants = [], ownerId = '' } = {}) => {
+		const params = new URLSearchParams({
+			sessionId,
+			command: name,
+			requestId: window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+			participants: JSON.stringify(participants),
+			ownerId,
+		})
+		return requestJson(url(PRODUCTION_API_VERSION), { method: 'POST', body: params })
+	}
+
+	const recordingCommand = async (sessionId, recordingId, name, { participants = [], ownerId = '', artifactId = '' } = {}) => {
 		const params = new URLSearchParams({
 			sessionId,
 			recordingId,
@@ -54,6 +66,13 @@
 		const result = await requestJson(url(API_VERSION), { method: 'POST', body: params })
 		publishState(result?.state)
 		return result
+	}
+
+	const command = async (sessionId, recordingId, name, options = {}) => {
+		if (name === 'begin') {
+			await productionCommand(sessionId, 'start', options)
+		}
+		return recordingCommand(sessionId, recordingId, name, options)
 	}
 
 	// Talk 34 uses /call/<token> (and /room/<token> in other contexts),
@@ -79,7 +98,8 @@
 
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
 
-		const ensure = await command(token, recordingId, 'ensure', { participants: participantIds, ownerId })
+		await productionCommand(token, 'ensure', { participants: participantIds, ownerId })
+		const ensure = await recordingCommand(token, recordingId, 'ensure', { participants: participantIds, ownerId })
 		if (ensure?.state) publishState(ensure.state)
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({

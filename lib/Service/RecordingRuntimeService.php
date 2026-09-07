@@ -18,15 +18,15 @@ final class RecordingRuntimeService {
 	}
 
 	/**
-	 * Execute one host-neutral recording command through the PoRE runtime.
+	 * Execute one host-neutral PoRE command through the runtime.
 	 *
 	 * This class is deliberately only a transport adapter: it does not interpret
-	 * recording lifecycle state and does not duplicate Core/Application logic.
+	 * lifecycle state and does not duplicate Core/Application logic.
 	 *
 	 * @param array<string, mixed> $request
 	 * @return array<string, mixed>
 	 */
-	public function command(array $request): array {
+	public function command(array $request, string $operation = 'recording.command'): array {
 		$binary = trim((string)$this->config->getSystemValue('pore_runtime_binary', ''));
 		if ($binary === '') {
 			$binary = rtrim($this->appManager->getAppPath('pore'), '/') . '/runtime/bin/pore-runtime';
@@ -53,7 +53,7 @@ final class RecordingRuntimeService {
 		}
 
 		$request['protocol_version'] = 1;
-		$request['operation'] = 'recording.command';
+		$request['operation'] = $operation;
 		$payload = json_encode($request, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
 		$frame = pack('N', strlen($payload)) . $payload;
 

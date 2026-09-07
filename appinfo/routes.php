@@ -15,6 +15,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Production#command',
+			'url' => '/v1/productions/command',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Settings#getSettings',
 			'url' => '/v1/settings',
 			'verb' => 'GET',
