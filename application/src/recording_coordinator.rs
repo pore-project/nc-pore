@@ -1,8 +1,7 @@
 use crate::recording_state::{recording_state, ClientRecordingState};
-use crate::session::add_recording_to_production_session;
 use nc_pore_core::identity::ProductionId;
 use nc_pore_core::participant::ParticipantId;
-use nc_pore_core::recording::{Recording, RecordingArtifactId, RecordingId};
+use nc_pore_core::recording::{RecordingArtifactId, RecordingId};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use nc_pore_core::session::ProductionSessionError;
 
@@ -42,20 +41,9 @@ where
     }
 
     pub fn ensure_recording(&mut self) -> Result<(), ProductionSessionError> {
-        add_recording_to_production_session(
-            self.repository,
-            &self.session_id,
-            &self.actor_id,
-            Recording::new(self.recording_id.value()),
-        )
-        .map(|_| ())
-        .map_err(|error| match error {
-            crate::session::AddRecordingToProductionSessionError::Session(error) => error,
-            crate::session::AddRecordingToProductionSessionError::SessionNotFound
-            | crate::session::AddRecordingToProductionSessionError::Repository(_) => {
-                ProductionSessionError::InvalidStateTransition
-            }
-        })
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
+        self.mutate(|session| session.ensure_recording_by(&actor_id, &recording_id))
     }
 
     pub fn begin(
@@ -221,6 +209,68 @@ mod tests {
         InMemoryRepository {
             sessions: vec![session],
         }
+    }
+
+    #[test]
+    fn coordinator_ensure_is_idempotent_for_the_same_recording_id() {
+        let mut repository = repository();
+        {
+            let mut coordinator = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            coordinator.ensure_recording().unwrap();
+            coordinator.ensure_recording().unwrap();
+        }
+
+        let session = repository.sessions.first().unwrap();
+        assert_eq!(session.recordings().len(), 1);
+        assert_eq!(session.recordings()[0].id().value(), "recording-001");
+        assert_eq!(
+            session
+                .activities()
+                .iter()
+                .filter(|activity| activity.activity_type
+                    == nc_pore_core::activity::ActivityType::RecordingAdded)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn coordinator_ensure_does_not_replace_existing_recording_state() {
+        let mut repository = repository();
+        {
+            let mut coordinator = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            coordinator.ensure_recording().unwrap();
+            coordinator
+                .begin([ParticipantId::new("alice"), ParticipantId::new("bob")])
+                .unwrap();
+        }
+
+        {
+            let mut coordinator = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            coordinator.ensure_recording().unwrap();
+            let state = coordinator.snapshot().unwrap();
+            assert_eq!(
+                state.phase,
+                crate::recording_state::ClientRecordingPhase::Preparing
+            );
+        }
+
+        assert_eq!(repository.sessions.first().unwrap().recordings().len(), 1);
     }
 
     #[test]
