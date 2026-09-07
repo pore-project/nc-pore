@@ -240,6 +240,7 @@ fn error_code(error: ProductionSessionError) -> &'static str {
         ProductionSessionError::InvalidStateTransition => "invalid_state_transition",
         ProductionSessionError::ParticipantAlreadyExists => "participant_already_exists",
         ProductionSessionError::MissingOwner => "missing_owner",
+        ProductionSessionError::RecordingAlreadyExists => "recording_already_exists",
         ProductionSessionError::RecordingNotFound => "recording_not_found",
         ProductionSessionError::RecordingLifecycle(_) => "recording_lifecycle_error",
         ProductionSessionError::RecordingCoordinationNotFound => "recording_coordination_not_found",
