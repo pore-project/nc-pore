@@ -1,7 +1,7 @@
 # NC-PoRe Project Status
 
-- Version: 3.4
-- Date: 2026-08-21
+- Version: 3.5
+- Date: 2026-09-01
 
 ---
 
@@ -36,26 +36,15 @@ Implementiert:
 - Participant Modell
 - Participation Modell
 - Activity History Grundstruktur
-- ProductionSession-, Participant- und Participation-Semantik
 - sessionbezogene Rollen- und Berechtigungssemantik für Owner, Producer, Participant und Guest
-- API Operationen für ProductionSession Lifecycle
-- API Operationen für ProductionSession-Verwaltung und Recording-Verknüpfung
-- stabile Application/API-Grenzen für Production-Management-Operationen
+- API Operationen für ProductionSession Lifecycle und Verwaltung
+- Recording-Verknüpfungen
 - Read-API-Operationen für Participants, Recordings und Activity History
-- konsistente Domain-/Application-Fehlersemantik für Production-Management-Operationen
-- fachliche Validierung von Lifecycle-, Rollen- und Participation-Invarianten an der Domain-Grenze
-- Production Activity/History-Semantik einschließlich Actor-, Action-, Target-, Session- und Result-Kontext
+- konsistente Domain-/Application-Fehlersemantik
+- fachliche Validierung von Lifecycle-, Rollen- und Participation-Invarianten
+- Production Activity/History-Semantik
 
 Die Production-Management- und Collaboration-Foundation ist damit als zusammenhängende fachliche Grundlage für spätere Clients und Kollaborationsfunktionen implementiert und validiert.
-
-Relevante Architekturentscheidungen:
-
-- ADR-027 Core Architecture and Module Boundaries
-- ADR-031 Identity, Authentication and User Roles
-- ADR-032 Auditability and Activity History
-- ADR-033 Core Architecture
-- ADR-034 Implementation Architecture
-- ADR-035 Domain Lifecycle and State Transition Management
 
 ---
 
@@ -63,9 +52,8 @@ Relevante Architekturentscheidungen:
 
 Implementiert:
 
-- Session Modul
-- Statusmodell
-- Lifecycle-Methoden
+- Session Modul und Statusmodell
+- Recording Lifecycle
 - Capture Boundary Interface
 - Workflow Coordination Layer
 - Recording Artifact Model
@@ -74,44 +62,50 @@ Implementiert:
 - Capture-to-Artifact Data Boundary
 - Artifact Lifecycle Management
 - Local Artifact Registry
-- Artifact Coordination Boundary
 - Artifact Processing Boundary
 - Recorder Application Boundary
 - Local Recording Artifact Flow
 - Artifact Recovery Boundary
-- RecordingSessionId Value Object für technische Session-Referenzen
-- ArtifactId und RecordingSessionId als explizite Identitätstypen an Artifact-Grenzen
-- storage-provider-unabhängige Payload-Referenz und technische Payload-Daten für Recording Chunks
-- Persistenz des tatsächlichen Recording-Payloads im Filesystem Persistence Provider
-- definierte Filesystem-Store-Semantik für lokale Recording Artifacts
-- abgeschlossener lokaler RecordingArtifact-Persistenzpfad einschließlich Recovery und Konsistenzbewertung
+- RecordingSessionId, ArtifactId und weitere explizite technische Identitätstypen
+- storage-provider-unabhängige Payload-Referenzen
+- Filesystem Persistence Provider einschließlich Recovery und Konsistenzbewertung
 - CPAL-basierte konkrete CaptureProvider-Implementierung
-- erfolgreicher Aufbau und Start eines lokalen CPAL Input-Streams
-- Übernahme empfangener F32-Samples in ein CaptureResult
-- durchgängiger Recorder Application Flow von CPAL Capture bis RecordingArtifact-Persistenz
-- realer lokaler Audio-Capture bis zur Erzeugung und Verarbeitung eines RecordingArtifacts
-- technische Recording-Konfiguration entlang des Capture-to-Artifact-Pfades
-- definierte Chunking- und Payload-Grenzen
-- produktionsgeeignete Stream-Fehlerpropagation bis zur RecorderApplication-Grenze
+- native Capture-Fähigkeitsermittlung und Auswahl über ADR-061
+- native PCM16-, PCM24- und F32-Auswahl ohne Resampling oder Bit-Tiefen-Erweiterung
+- erfolgreicher lokaler CPAL Capture-to-Artifact-Pfad
+- technische Recording-Konfiguration entlang der Capture-to-Artifact-Grenze
+- produktionsgeeignete Stream-Fehlerpropagation
 - Lifecycle- und Fehlerbehandlung für fehlgeschlagenes Capture
 
-Die lokale technische Recording-Pipeline ist damit als zusammenhängender Capture-to-Artifact-Pfad implementiert und validiert.
+Die lokale technische Recording-Pipeline ist damit als zusammenhängender Capture-to-Artifact-Pfad implementiert und validiert. Die native Capture-Selection ist in PR #228 als separater, backend-unabhängiger Entwicklungsschritt abgeschlossen vorbereitet; der PR wird nach vollständig grünem CI und Review abgeschlossen.
+
+---
+
+## Nextcloud Talk V1 Integration
+
+Der erste Browser-Host-Pfad ist als technischer V1-Schnitt implementiert:
+
+- Talk-spezifischer Connector zur lokalen Audio-Quelle
+- unabhängige PoRE-Capture-Quelle getrennt vom Talk-Kommunikationspfad
+- PoRE-Capture mit deaktivierter Kommunikationsverarbeitung, soweit der Browser diese Constraints unterstützt
+- Talk dient nur zur Erkennung der aktuell ausgewählten Mikrofonquelle und eines Quellenwechsels
+- Mikrofonwechsel wird als Recording-Grenze behandelt und nicht stillschweigend in einer Aufnahme fortgeführt
+- generischer browserseitiger Recording Controller ohne Talk-Abhängigkeit
+- explizite **Aufnahme starten** / **Aufnahme beenden** Steuerung
+- sichtbarer Recording-Status
+- Anzeige des tatsächlich gelieferten lokalen Mikrofonnamens und, soweit vom Browser verfügbar, Sample Rate, Sample Size und Kanalzahl
+- Fehlerzustand bei nicht möglicher unabhängiger PoRE-Capture-Quelle
+- keine Kopplung des Recording-Stopps an das Ende des Talk-Raums
+
+Der Browserpfad verwendet in dieser V1-Stufe `MediaRecorder` und erzeugt zunächst ein Browser-Artifact. Dieses ist noch kein persistiertes `RecordingArtifact`; die explizite Übergabe in den bestehenden PoRE Artifact-/Persistence-Lifecycle ist als nächste Integrationsgrenze definiert.
 
 Relevante Architekturentscheidungen:
 
-- ADR-039 Recording Architecture and Capture Boundary
-- ADR-040 Recorder Workflow and Capture Lifecycle Coordination
-- ADR-042 Recording Artifact Model and Lifecycle Boundary
-- ADR-047 Local Artifact Registry and Discovery Strategy
-- ADR-049 Artifact Creation and Workflow Integration
-- ADR-051 Recording Artifact Processing Boundary
-- ADR-053 Artifact Recovery and Consistency Boundary
-- ADR-054 Local Recording Data Association
-- ADR-056 Capture Result and Recording Artifact Data Boundary
-- ADR-057 Domain Recording to RecordingArtifact Association Boundary
-- ADR-058 Recording Payload Representation
-- ADR-059 Recording Payload Filesystem Persistence
-- ADR-060 Filesystem Artifact Store Semantics
+- ADR-062 Browser-First Guest Participation
+- ADR-068 Recording Start and Audio Synchronization Signet
+- ADR-071 Recording Capture, Preservation and Transport Formats
+- ADR-072 Host-Integrated Local Audio Capture via Connector
+- ADR-075 Local Capture Independence from Communication Pipeline
 
 ---
 
@@ -125,72 +119,27 @@ Implementiert:
 - Filesystem Persistence Provider
 - Persistence Integration Tests
 - Persistenz des tatsächlichen Recording-Payloads einschließlich temporärer Veröffentlichung und vollständiger Artifact-Verzeichnisse
-- definierte Semantik für das Speichern von Recording Artifacts im Filesystem Persistence Provider
+- definierte Store-Semantik
 - Idempotenz für äquivalente persistierte Artifacts
 - Conflict-Verhalten bei abweichendem Inhalt unter gleicher Artifact-Identität
 - Schutz vor dem stillschweigenden Überschreiben unvollständiger persistierter Artifacts
 - Trennung der konkreten Persistence-Implementierung von der Core-Domain
 
-Die Persistenzarchitektur bleibt unabhängig von konkreten Storage-Technologien.
-
-Relevante Architekturentscheidungen:
-
-- ADR-036 Persistence Boundary and Storage Strategy
-- ADR-044 Persistence Provider Interface
-- ADR-048 Artifact Registry and Persistence Coordination
-- ADR-052 Local Filesystem Persistence Provider
-- ADR-055 Filesystem Persistence Layout
-- ADR-059 Recording Payload Filesystem Persistence
-- ADR-060 Filesystem Store Semantics
-
 ---
 
 # Validation
 
-Aktueller dokumentierter Teststand:
+Dokumentierter lokaler technischer Teststand:
 
 - core tests: 40 passed
 - recorder tests: 46 passed
+- CPAL Default Audio Input Device erfolgreich erkannt
+- reale lokale Audiodaten erfolgreich bis zum RecordingArtifact erfasst
+- native Capture-Selection in der CPAL-Integration ausgeführt
+- V1 Talk Browser-Skripte bestehen den JavaScript-Syntax-Check in GitHub Actions
+- V1 Talk Rust Workspace Check, Workspace Tests und Rustfmt-Check sind in GitHub Actions grün
 
-Zusätzliche technische Integration wurde erfolgreich manuell ausgeführt:
-
-- Default Audio Input Device erkannt
-- Default Input Configuration erkannt: 2 Kanäle, 48000 Hz, F32
-- CPAL Input-Stream erfolgreich gestartet
-- innerhalb eines Testintervalls 95232 Samples empfangen
-- CaptureChunk mit 380928 Payload-Bytes erzeugt
-- CaptureTrack und CaptureResult erfolgreich aufgebaut
-- vollständiger Recorder Application Flow mit CpalCaptureProvider erfolgreich ausgeführt
-- reale Audiodaten aus dem lokalen Default-Input erfasst
-- CaptureResult und RecordingArtifact mit den erfassten technischen Daten aufgebaut
-- RecordingArtifact mit einem Track erzeugt und durch den bestehenden Persistenzpfad verarbeitet
-- Recording-Konfiguration entlang der Capture-to-Artifact-Grenze erhalten
-
-Die Tests validieren unter anderem:
-
-- Lifecycle-Übergänge
-- ProductionSession Lifecycle-Invarianten
-- API Boundary Operationen für ProductionSession
-- Rollen- und Zustandslogik
-- Participant- und Participation-Semantik
-- Recording-Verknüpfungen
-- Application/API Boundary für Production Management
-- konsistente Fehlersemantik für Production-Management-Operationen
-- Activity History Semantik und Persistenz
-- Artifact Lifecycle
-- Artifact Registry Verhalten
-- Persistence Provider Verhalten
-- Filesystem Persistence Verhalten
-- Workflow Coordination
-- vollständiger Recorder Application Flow
-- Recording Artifact Creation and Storage Flow
-- Artifact Processing Coordination
-- Artifact Recovery aus persistierten Daten
-- Capture-to-Artifact Track-/Chunk-Übernahme
-- Recording-Payload-Übernahme und Persistenz
-- Idempotenz und Konfliktverhalten der Filesystem-Persistenz
-- Konsistenzbewertung unvollständiger und inkonsistenter persistierter Artifacts
-- Capture-Fehlerpropagation und Verhinderung nachgelagerter Artifact-/Persistence-Verarbeitung bei fehlgeschlagenem Capture
+Die Talk-Browser-Unit-Spezifikationen dokumentieren den Connector-Lifecycle und die unabhängige Capture-Quelle; die CI-Stufe führt derzeit den deterministischen Syntax-Check der Browser-Skripte aus. Reale Browser-/Talk-Runtime-Validierung bleibt ein separater manueller Validierungsschritt.
 
 ---
 
@@ -205,40 +154,26 @@ NC-PoRe folgt aktuell diesen Architekturprinzipien:
 - Capture und Storage werden über technische Grenzen abstrahiert
 - Artifact Registry und Persistence bleiben getrennte Verantwortlichkeiten
 - Application Flow verbindet Workflow, Artifact Processing und Persistence über definierte Grenzen
-- Production Management wird über stabile Application/API-Grenzen koordiniert, ohne Domainregeln an Recorder oder Storage zu koppeln
 - Participant Identity und sessionbezogene Participation bleiben getrennte fachliche Konzepte
-- Rollen sind sessionbezogen und folgen der definierten Owner/Producer/Participant/Guest-Autoritätsrichtung
 - Activity History gehört zur ProductionSession und bleibt auf Produktionsaktivitäten bezogen
 - Recovery stellt technische Konsistenz zwischen Persistence und Registry her
 - CaptureResult und RecordingArtifact besitzen getrennte technische Datenmodelle
 - RecordingArtifact strukturiert Tracks und Chunks unabhängig von der physischen Persistenz
-- RecordingChunk kann tatsächliche technische Payload-Daten über eine storage-provider-unabhängige Referenz repräsentieren
 - Persistenz bleibt austauschbar
 - lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
 - Repository-Inhalt ist die technische Quelle der Wahrheit
-- Identitäten innerhalb technischer Grenzen werden über explizite Value Objects modelliert
-- Filesystem Persistence folgt definierten Store-Semantiken für Recording Artifacts
+- Filesystem Persistence folgt definierten Store-Semantiken
 - die konkrete Capture-Technologie bleibt hinter CaptureProvider verborgen
-- der aktuelle CPAL-Pfad bildet einen funktionierenden technischen Capture-to-Artifact-Pfad
-- Recording-Konfiguration wird entlang der technischen Capture-to-Artifact-Grenze explizit erhalten
-- der fachliche Recording-Lifecycle ist über ProductionSession, Recording, Artifact, Persistence und Recovery konsistent definiert
-- Recovery wird für ein konkretes ProductionSession/Recording-Paar orchestriert und wahrt die Domain-Invarianten
+- native Capture-Selection ist backend-unabhängig und verhindert künstliche Qualitätsversprechen
+- Kommunikationspipeline und PoRE-Aufnahmepipeline sind getrennt
+- Host-spezifische Talk-Logik bleibt im Connector
+- Talk ist nicht die Aufnahmepipeline und nicht das Recording-Masterformat
 
 ---
 
 # Completed Milestones
 
-Die historische Entwicklung wird in einzelnen Milestones dokumentiert:
-
-- `docs/milestones/2026-07-24-architecture-foundation-complete.md`
-- `docs/milestones/2026-07-30-first-core-implementation.md`
-- `docs/milestones/2026-07-31-recorder-architecture-foundation.md`
-- `docs/milestones/2026-08-01-local-recording-persistence-foundation.md`
-- `docs/milestones/2026-08-02-artifact-management-foundation.md`
-- `docs/milestones/2026-08-07-artifact-recovery-foundation.md`
-- `docs/milestones/2026-08-09-recording-artifact-data-boundary-foundation.md`
-- `docs/milestones/2026-08-14-local-recording-artifact-persistence-complete.md`
-- `docs/milestones/2026-08-15-cpal-capture-integration.md`
+Die historische Entwicklung wird in einzelnen Milestones dokumentiert. Zusätzlich zum bestehenden lokalen Recording-Fortschritt ist die technische Grundlage für die erste Talk-Browser-Integration vorhanden.
 
 Abgeschlossen:
 
@@ -247,44 +182,31 @@ Abgeschlossen:
 - **Milestone #65 – Production Management & Collaboration Foundation**
 - **ADR-068 – Recording Start and Audio Synchronization Signet** (Accepted)
 
-Milestone #64 umfasst insbesondere den fachlichen Recording-Lifecycle, die Verbindung von Recording und RecordingArtifact, die Application Use Cases sowie die definierten Recovery- und Reconciliation-Semantiken.
-
-Milestone #65 umfasst insbesondere ProductionSession-Management, Participant- und Participation-Semantik, sessionbezogene Rollen und Berechtigungen, stabile Production-Management-Application/API-Grenzen sowie Production Activity/History.
-
-### Accepted Architectural Decision – ADR-068
-
-**ADR-068 – Recording Start and Audio Synchronization Signet** wurde am 2026-08-21 als akzeptierte Architekturentscheidung übernommen. Die Entscheidung bildet die architektonische Grundlage für den gemeinsamen Recording-Start, die Recording-Teilnehmersemantik, `READY`-Bestätigungen sowie Opening- und Closing-Sync-Signet als logische Audio-Referenzpunkte.
-
-Die Entscheidung definiert insbesondere:
-
-- einen expliziten gemeinsamen Start durch den Host,
-- die Trennung von Session-Mitgliedschaft und Recording-Teilnahme,
-- eine zum Startzeitpunkt eingefrorene Recording-Teilnehmermenge,
-- einen `READY`-Status erst nach tatsächlich gestarteter lokaler Aufnahme,
-- ein gemeinsames Opening Sync Signet als logischen Beginn des Recordings,
-- ein gemeinsames Closing Sync Signet als logisches Ende des Recordings,
-- die technische Beendigung der lokalen Recorder erst nach dem Closing Signet,
-- sowie zwei akustische Synchronisationsanker für die spätere manuelle oder automatisierte Ausrichtung der Audiospuren.
-
-ADR-068 grenzt bewusst spätere automatische DAW-Integration, automatische Spurausrichtung, kontinuierliche Synchronisationskorrektur, Driftmessung und vollständige Recovery-/Re-Join-Verfahren aus. Diese Möglichkeiten bleiben für spätere Versionen offen und werden durch ADR-068 nicht vorgezogen.
-
-Die daraus folgende technische Arbeit ist dem bestehenden architektonischen Meilenstein **#66 – Distributed Recording & Synchronisation** zugeordnet. Der artifact-level Synchronisationslebenszyklus aus **#140 – Define RecordingArtifact synchronization lifecycle invariants** ist bereits implementiert und bildet die Grundlage für die weiteren Synchronisationsarbeiten.
-
 ---
 
 # Next Steps
 
-Die nächsten Arbeiten werden als größere technische Meilensteine verfolgt. Ein Meilenstein darf mehrere konkrete Issues und PRs umfassen.
+Die nächsten Arbeiten werden als größere technische Meilensteine verfolgt.
 
-1. **`milestone: Distributed Recording & Synchronisation`**
+1. **Talk V1 Artifact Boundary**
 
-   Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage. Dieser Meilenstein baut auf der abgeschlossenen lokalen Recording-Pipeline, den abgeschlossenen fachlichen Recording-Lifecycle-Grenzen, der Production-Management-Foundation, der akzeptierten Architekturentscheidung ADR-068 und dem implementierten artifact-level Synchronisationsvertrag #140 auf.
+   Browser-Recording-Artifact explizit an die bestehende PoRE `RecordingArtifact`-/Persistence-Grenze anbinden, ohne einen zweiten Artifact-Lifecycle einzuführen.
 
-   Der nächste konkrete Arbeitsschritt ist **#143 – Define persistent synchronization queue and pending-transfer boundary**. Anschließend folgen **#144 – Define vendor-neutral artifact transfer boundary**, **#145 – Define resumable, idempotent artifact transfer semantics** und **#146 – Integrate synchronization recovery, retry, and offline-first orchestration**.
+2. **Distributed Recording & Synchronisation**
 
-   Diese Arbeitspakete sollen dort, wo gemeinsame technische Grenzen und Dateien betroffen sind, bewusst so entwickelt werden, dass zusammengehörige Persistenz-, Transfer- und Integritätsentscheidungen nicht mehrfach unabhängig geöffnet und implementiert werden. Die fachlichen Abhängigkeiten der Issues bleiben dabei erhalten; insbesondere dürfen Transport- und Vendor-Details nicht vor ihrer vorgesehenen Architekturgrenze in Core einfließen.
+   Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage auf Basis der abgeschlossenen lokalen Recording-Pipeline und ADR-068.
 
-Die Meilensteine sind als übergeordnete Wegpunkte zu verstehen und werden jeweils in konkrete Umsetzungsschritte zerlegt. Die konkrete Reihenfolge und die Abhängigkeiten werden vor Beginn der jeweiligen Implementierung geprüft.
+3. **Talk Recording Lifecycle**
+
+   ADR-068 mit dem tatsächlichen Host-/Browser-Lifecycle verbinden: eingefrorene Recording-Teilnehmer, READY nach realem Capture-Start sowie Opening-/Closing-Sync-Signet.
+
+4. **Talk UI / recording information**
+
+   Die V1-Oberfläche schrittweise in die produktive Talk-UI integrieren und dabei die bereits definierte Informationshierarchie beibehalten: Recording-Zustand und aktive lokale Quelle zuerst; technische Details sekundär.
+
+5. **Runtime validation**
+
+   Reale Validierung des Talk-Pfades mit Firefox, Chromium und Safari/WebKit sowie unterschiedlichen lokalen Audioquellen.
 
 ---
 
@@ -297,6 +219,7 @@ Wichtige Einstiegspunkte:
 - `docs/project/`
 - `docs/milestones/`
 - `docs/architecture/adr-index.md`
+- `docs/v1/IMPLEMENTATION-NOTE.md`
 
 ---
 
@@ -304,32 +227,8 @@ Wichtige Einstiegspunkte:
 
 The current project status mirrors the German section above.
 
-Completed milestones include:
+NC-PoRe is in active technical implementation. The local Core/Recorder/Persistence foundation is implemented and validated. The first Nextcloud Talk browser integration now has a separate PoRE capture source, explicit recording controls, visible recording state, source-change handling, and a generic browser recording boundary.
 
-- **Milestone #55 – Local Technical Recording Pipeline**
-- **Milestone #64 – Recording Lifecycle Foundation**
-- **Milestone #65 – Production Management & Collaboration Foundation**
-- **ADR-068 – Recording Start and Audio Synchronization Signet** (Accepted)
+The Talk communication track is not the PoRE recording master. The Talk connector observes the selected local microphone only to establish the PoRE capture source and detect source replacement. The browser V1 path currently produces a browser recording artifact through `MediaRecorder`; integration with the authoritative PoRE `RecordingArtifact`/persistence lifecycle remains the next explicit boundary.
 
-Milestone #64 establishes the domain-level Recording lifecycle across ProductionSession, Recording, RecordingArtifact, persistence and recovery, including application use cases and deterministic reconciliation semantics.
-
-Milestone #65 establishes the production-management and collaboration foundation across ProductionSession management, participant and participation semantics, session-scoped roles and permissions, stable production-management application/API boundaries, and production activity/history.
-
-### Accepted Architectural Decision – ADR-068
-
-**ADR-068 – Recording Start and Audio Synchronization Signet** was accepted on 2026-08-21 as the architectural basis for the shared recording start, recording participant semantics, `READY` confirmations, and Opening/Closing Sync Signets as logical audio reference points.
-
-It defines the explicit host-controlled recording start, the separation of session membership and recording participation, frozen recording participant sets, `READY` confirmations after actual local capture start, and Opening/Closing Sync Signets as logical recording boundaries. It deliberately leaves automatic DAW integration, automatic alignment, continuous synchronization correction, drift measurement, and complete recovery/re-join behavior for later versions.
-
-The resulting technical work belongs to **#66 – Distributed Recording & Synchronisation**. The artifact-level synchronization lifecycle established by **#140 – Define RecordingArtifact synchronization lifecycle invariants** is implemented and forms the basis for the subsequent synchronization work.
-
-The next major work packages are:
-
-1. **#143 – Define persistent synchronization queue and pending-transfer boundary**
-2. **#144 – Define vendor-neutral artifact transfer boundary**
-3. **#145 – Define resumable, idempotent artifact transfer semantics**
-4. **#146 – Integrate synchronization recovery, retry, and offline-first orchestration**
-
-Where these work packages share technical boundaries and files, their implementation should be coordinated to avoid repeatedly reopening and independently reshaping the same files. Their architectural dependencies remain intact, and transport/vendor details must not leak into Core before the defined boundary.
-
-Each milestone may contain multiple implementation issues and pull requests. Dependencies and implementation order are reviewed before work begins.
+The next major work packages are the Talk artifact boundary, reconciliation with the distributed recording protocol, production Talk UI integration, and real browser/runtime validation.

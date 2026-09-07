@@ -14,6 +14,7 @@ pub enum ActivityType {
     ParticipantAdded,
     RecordingAdded,
     RecordingStarted,
+    RecordingStopped,
     RecordingCompleted,
 }
 

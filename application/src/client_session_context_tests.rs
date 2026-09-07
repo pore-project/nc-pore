@@ -55,6 +55,7 @@ impl SessionContextProvider for ExternalContextProvider {
 
         Ok(SessionContext {
             session_id: session_id.to_owned(),
+            production_id: ProductionId::new(session_id),
             state: self.state,
             actor_id: actor_id.to_owned(),
             participants: vec![],
@@ -67,7 +68,6 @@ impl SessionContextProvider for ExternalContextProvider {
 mod tests {
     use super::*;
 
-    // TEST-01: The existing application client consumes an external provider through the contract.
     #[test]
     fn client_service_resolves_provider_independent_context() {
         let mut repository = InMemory { sessions: vec![] };
@@ -83,6 +83,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(context.session_id, "external-session-001");
+        assert_eq!(context.production_id.value(), "external-session-001");
         assert_eq!(context.state, SessionState::Available);
         assert_eq!(context.actor_id, "alice");
         assert!(context
@@ -90,7 +91,6 @@ mod tests {
             .contains(&SessionCapability::ParticipateInRecording));
     }
 
-    // TEST-02: The client evaluates the provider-independent capability while the session is active.
     #[test]
     fn client_service_uses_participation_capability() {
         let mut repository = InMemory { sessions: vec![] };
@@ -107,7 +107,6 @@ mod tests {
         );
     }
 
-    // TEST-03: A non-active context cannot be used for recording even if its capability remains present.
     #[test]
     fn client_service_rejects_participation_outside_active_session() {
         let mut repository = InMemory { sessions: vec![] };
@@ -133,7 +132,6 @@ mod tests {
         );
     }
 
-    // TEST-04: Provider errors remain provider-owned and are propagated unchanged.
     #[test]
     fn client_service_propagates_provider_errors() {
         let mut repository = InMemory { sessions: vec![] };

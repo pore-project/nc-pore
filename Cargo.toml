@@ -4,7 +4,7 @@ members = [
     "core",
     "recorder",
     "application",
-    "infrastructure"
+    "infrastructure",
+    "runtime"
 ]
-
 resolver = "2"
