@@ -1,5 +1,5 @@
 /*
- * NC-PoRE — Talk recording UI bootstrap.
+ * NC-PoRe — Talk recording UI bootstrap.
  *
  * Talk supplies the mount point and role/context. Core/Application supplies the
  * authoritative recording state through the state bridge. Local recorder events
@@ -252,28 +252,31 @@
 		window.setTimeout(tryAttach, 100)
 	}
 
-	const bootstrapHostAdapter = async () => {
-		const maxAttempts = 40
-		const retryDelayMs = 250
-		let lastError = null
+	let hostBootstrapInFlight = false
+	let lastBootstrappedCallPath = null
+	let talkCallPollTimer = null
 
-		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-			try {
-				await HostAdapter.bootstrap()
-				if (window.__poreTalkRecordingCoordinator?.command) {
-					startCoordinationPolling()
-					return
-				}
-			} catch (error) {
-				lastError = error
-			}
-			await new Promise(resolve => window.setTimeout(resolve, retryDelayMs))
+	const bootstrapTalkCall = async () => {
+		const callPath = window.location.pathname.match(/(?:\/apps\/spreed)?\/(?:call|room)\/([^/]+)/)?.[0] || null
+		if (!callPath || hostBootstrapInFlight || lastBootstrappedCallPath === callPath) return
+		hostBootstrapInFlight = true
+		try {
+			await HostAdapter.bootstrap()
+			if (window.__poreTalkRecordingCoordinator?.sessionId) lastBootstrappedCallPath = callPath
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		} finally {
+			hostBootstrapInFlight = false
 		}
+	}
 
-		throw lastError || new Error('PoRE recording coordinator could not be initialized')
+	const startTalkCallBootstrapPolling = () => {
+		if (talkCallPollTimer) return
+		void bootstrapTalkCall()
+		talkCallPollTimer = window.setInterval(() => { void bootstrapTalkCall() }, 500)
 	}
 
 	void announceRecoveryCandidates()
 	tryAttach()
-	void bootstrapHostAdapter().catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
+	startTalkCallBootstrapPolling()
 })()
