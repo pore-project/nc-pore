@@ -1,5 +1,5 @@
 /*
- * NC-PoRe — Nextcloud Talk audio connector
+ * NC-PoRE — Nextcloud Talk audio connector
  *
  * Talk-specific lifecycle policy lives here. The connector attaches to
  * Talk's audio pipeline at the TrackEnabler boundary.
@@ -64,21 +64,10 @@
 			trackEnabler.connectTrackSink('default', sink)
 			this._trackEnabler = trackEnabler
 			this._trackSink = sink
-			this._syncCurrentTrack(trackEnabler)
 			return true
 		}
 
 		detachFromTalk() { this._detachFromTalk() }
-
-		_syncCurrentTrack(trackEnabler) {
-			const sync = () => {
-				if (this._trackEnabler !== trackEnabler) return
-				const track = trackEnabler.getOutputTrack?.('default') || null
-				if (track) { this._acceptTrack(track); return }
-				window.setTimeout(sync, 100)
-			}
-			sync()
-		}
 
 		_acceptTrack(sourceTrack) {
 			if (!sourceTrack || typeof sourceTrack.clone !== 'function') {
