@@ -15,6 +15,13 @@
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
 
+		async primeAudioContext() {
+			if (!this.AudioContextClass) throw new Error('Web Audio is not available in this browser')
+			if (!this.context || this.context.state === 'closed') this.context = new this.AudioContextClass()
+			if (this.context.state === 'suspended') await this.context.resume()
+			return this.context
+		}
+
 		async start(track, metadata = {}) {
 			if (this.isRecording()) throw new Error('PoRE PCM recording is already active')
 			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
@@ -24,7 +31,7 @@
 
 			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceChain = Promise.resolve(); this.openingSignet = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
 			try {
-				this.context = new this.AudioContextClass(); await this.context.audioWorklet.addModule(this.workletUrl); this.sampleRate = this.context.sampleRate
+				await this.primeAudioContext(); await this.context.audioWorklet.addModule(this.workletUrl); this.sampleRate = this.context.sampleRate
 				await this.persistenceStore.beginCapture({ captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, sequence: this.sequence, startedAt: this.startedAt, sampleRate: this.sampleRate, channels: this.channels, encoding: 'pcm_s24le', format: 'audio/wav' })
 				this.source = this.context.createMediaStreamSource(this.stream); this.worklet = new AudioWorkletNode(this.context, 'pore-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers' })
 				this.worklet.port.onmessage = event => { if (this.state === 'recording' && event.data instanceof Float32Array) this._acceptSamples(event.data) }
