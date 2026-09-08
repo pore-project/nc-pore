@@ -252,7 +252,28 @@
 		window.setTimeout(tryAttach, 100)
 	}
 
+	const bootstrapHostAdapter = async () => {
+		const maxAttempts = 40
+		const retryDelayMs = 250
+		let lastError = null
+
+		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+			try {
+				await HostAdapter.bootstrap()
+				if (window.__poreTalkRecordingCoordinator?.command) {
+					startCoordinationPolling()
+					return
+				}
+			} catch (error) {
+				lastError = error
+			}
+			await new Promise(resolve => window.setTimeout(resolve, retryDelayMs))
+		}
+
+		throw lastError || new Error('PoRE recording coordinator could not be initialized')
+	}
+
 	void announceRecoveryCandidates()
 	tryAttach()
-	void HostAdapter.bootstrap().then(() => startCoordinationPolling()).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
+	void bootstrapHostAdapter().catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 })()
