@@ -243,7 +243,7 @@
 			}
 		}
 		toggle.addEventListener('click', event => { event.stopPropagation(); setOpen(panel.hidden) })
-		main.addEventListener('click', () => setOpen(!panel.hidden))
+		main.addEventListener('click', event => { event.stopPropagation(); setOpen(!panel.hidden) })
 		document.addEventListener('click', event => { if (!root.contains(event.target)) setOpen(false) }, { capture: true })
 		window.addEventListener('resize', () => { if (!panel.hidden) positionPanel() })
 
