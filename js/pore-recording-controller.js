@@ -1,5 +1,5 @@
 /*
- * NC-PoRE — neutral browser recording boundary.
+ * NC-PoRe — neutral browser recording boundary.
  *
  * The recording controller consumes the independent PoRE capture supplied by
  * a host connector. It deliberately does not use MediaRecorder: browser codec
@@ -13,6 +13,28 @@
 		if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`
 		return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 	}
+
+	const primeWebAudioFromUserGesture = event => {
+		const target = event.target
+		if (!(target instanceof Element) || !target.closest('.pore-talk-recording__button')) return
+		const AudioContextClass = window.AudioContext || window.webkitAudioContext
+		if (!AudioContextClass) return
+		try {
+			const context = window.__poreUserGestureAudioContext
+				&& window.__poreUserGestureAudioContext.state !== 'closed'
+				? window.__poreUserGestureAudioContext
+				: new AudioContextClass()
+			window.__poreUserGestureAudioContext = context
+			if (context.state === 'suspended') void context.resume()
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
+		}
+	}
+
+	// Web Audio must be created/resumed in the user's activation path. The
+	// recording command itself performs asynchronous coordination before local
+	// capture starts, so prime the browser's Web Audio permission at pointerdown.
+	window.addEventListener('pointerdown', primeWebAudioFromUserGesture, true)
 
 	class PoREBrowserRecordingController {
 		constructor({ recorderFactory = () => new window.PoREBrowserPcmRecorder() } = {}) {
