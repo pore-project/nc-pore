@@ -14,28 +14,6 @@
 		return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 	}
 
-	const primeWebAudioFromUserGesture = event => {
-		const target = event.target
-		if (!(target instanceof Element) || !target.closest('.pore-talk-recording__button')) return
-		const AudioContextClass = window.AudioContext || window.webkitAudioContext
-		if (!AudioContextClass) return
-		try {
-			const context = window.__poreUserGestureAudioContext
-				&& window.__poreUserGestureAudioContext.state !== 'closed'
-				? window.__poreUserGestureAudioContext
-				: new AudioContextClass()
-			window.__poreUserGestureAudioContext = context
-			if (context.state === 'suspended') void context.resume()
-		} catch (error) {
-			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
-		}
-	}
-
-	// Web Audio must be created/resumed in the user's activation path. The
-	// recording command itself performs asynchronous coordination before local
-	// capture starts, so prime the browser's Web Audio permission at pointerdown.
-	window.addEventListener('pointerdown', primeWebAudioFromUserGesture, true)
-
 	class PoREBrowserRecordingController {
 		constructor({ recorderFactory = () => new window.PoREBrowserPcmRecorder() } = {}) {
 			this.recorderFactory = recorderFactory
@@ -51,12 +29,18 @@
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
 
+		async primeAudioContext() {
+			if (!this.recorder) this.recorder = this.recorderFactory()
+			if (typeof this.recorder.primeAudioContext !== 'function') throw new Error('PoRE PCM recorder cannot prime Web Audio')
+			await this.recorder.primeAudioContext()
+		}
+
 		async start(track, sourceMetadata = {}) {
 			if (this.isRecording()) throw new Error('PoRE recording is already active')
 			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
 			if (track.readyState !== 'live') throw new Error('PoRE cannot start from an ended audio track')
 
-			this.recorder = this.recorderFactory()
+			if (!this.recorder) this.recorder = this.recorderFactory()
 			this.sourceChanges = []
 			this.sequence += 1
 			this.captureId = sourceMetadata.captureId || technicalId('browser-capture')
@@ -184,6 +168,19 @@
 			}
 		}
 	}
+
+	// Prime the same recorder instance that the eventual capture will use.
+	// The actual controller is created by init.js before the user can press the
+	// recording button, so pointerdown can safely reach it here.
+	window.addEventListener('pointerdown', event => {
+		const target = event.target
+		if (!(target instanceof Element) || !target.closest('.pore-talk-recording__button')) return
+		const controller = window.__poreTalkRecordingController
+		if (!controller?.primeAudioContext) return
+		void controller.primeAudioContext().catch(error => {
+			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
+		})
+	}, true)
 
 	window.PoREBrowserRecordingController = PoREBrowserRecordingController
 })()
