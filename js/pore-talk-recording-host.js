@@ -17,11 +17,16 @@
 			'OCS-APIRequest': 'true',
 			...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
 			...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
-			},
-			...options,
-		})
+		},
+		...options,
+	})
 		const body = await response.json()
-		if (!response.ok || body?.ocs?.meta?.status !== 'ok') throw new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
+		if (!response.ok || body?.ocs?.meta?.status !== 'ok') {
+			const error = new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
+			error.code = body?.ocs?.data?.error_code || null
+			error.status = response.status
+			throw error
+		}
 		return body.ocs.data
 	}
 
@@ -70,7 +75,19 @@
 
 	const command = async (sessionId, recordingId, name, options = {}) => {
 		if (name === 'begin') {
-			await productionCommand(sessionId, 'start', options)
+			// `begin` is a user intent, not a request to recreate an already
+			// running Production/recording barrier. This matters after a local
+			// capture failure or a UI reload: Core may already be waiting for READY.
+			const production = await productionCommand(sessionId, 'ensure', options)
+			if (production?.production_status === 'created') {
+				await productionCommand(sessionId, 'start', options)
+			}
+
+			try {
+				return await recordingCommand(sessionId, recordingId, 'snapshot', options)
+			} catch (error) {
+				if (error?.code !== 'recording_coordination_not_found' && error?.code !== 'invalid_state_transition') throw error
+			}
 		}
 		return recordingCommand(sessionId, recordingId, name, options)
 	}
