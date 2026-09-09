@@ -105,6 +105,19 @@
 			if (!snapshot) return
 			updateAuthoritativeState(snapshot)
 
+			// A successful snapshot means Core has an active RecordingCoordination.
+			// For a non-listener participant, that is the authoritative signal to
+			// prepare local technical capture and report READY. The client never
+			// infers lifecycle state from `preparing` alone: without a successful
+			// coordination snapshot there is nothing to prepare for yet.
+			if (snapshot.state === 'preparing' && snapshot.role !== 'listener' && !snapshot.ready && !localCaptureReady && !localCaptureStartInFlight && (sourceTrack || connector.getCurrentCloneTrack?.())) {
+				try {
+					await startLocalCapture()
+				} catch (error) {
+					window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+				}
+			}
+
 			if (snapshot.state === 'ready' && snapshot.role === 'host' && startRequestedByHost && !hostStartInFlight && snapshot.readyCount >= snapshot.participantCount) {
 				hostStartInFlight = true
 				try {
@@ -123,6 +136,9 @@
 				}
 			}
 		} catch (error) {
+			// Before the host presses Start there is normally no RecordingCoordination
+			// yet. That is an expected snapshot miss, not a local recording error.
+			if (error?.code === 'recording_coordination_not_found') return
 			if (authoritativeState?.state !== 'preparing' && authoritativeState?.state !== 'ready' && authoritativeState?.state !== 'recording') return
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		}
@@ -281,6 +297,7 @@
 		try {
 			await HostAdapter.bootstrap()
 			if (window.__poreTalkRecordingCoordinator?.sessionId) lastBootstrappedCallPath = callPath
+			startCoordinationPolling()
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		} finally {
