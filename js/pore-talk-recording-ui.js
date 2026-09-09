@@ -156,6 +156,33 @@
 		panel.className = 'pore-talk-recording__panel'
 		panel.hidden = true
 
+		const title = document.createElement('h3')
+		title.className = 'pore-talk-recording__panel-title'
+		title.textContent = 'NC-PoRE'
+		panel.appendChild(title)
+
+		const statusText = document.createElement('p')
+		statusText.className = 'pore-talk-recording__status'
+		panel.appendChild(statusText)
+
+		const readiness = document.createElement('span')
+		readiness.className = 'pore-talk-recording__readiness'
+		panel.appendChild(readiness)
+
+		const elapsed = document.createElement('span')
+		elapsed.className = 'pore-talk-recording__elapsed'
+		panel.appendChild(elapsed)
+
+		const action = document.createElement('button')
+		action.type = 'button'
+		action.className = 'pore-talk-recording__button'
+		let actionHandler = null
+		action.addEventListener('click', event => {
+			event.stopPropagation()
+			if (typeof actionHandler === 'function') void actionHandler(event)
+		})
+		panel.appendChild(action)
+
 		const settings = document.createElement('div')
 		settings.className = 'pore-talk-recording__settings'
 		settings.innerHTML = '<label for="pore-talk-storage-root">Speicherort</label><input id="pore-talk-storage-root" type="text" autocomplete="off" placeholder="audio"><p class="pore-talk-recording__settings-status" aria-live="polite"></p>'
@@ -176,6 +203,7 @@
 			}
 		})
 		settings.hidden = true
+		panel.appendChild(settings)
 
 		const positionPanel = () => {
 			const rect = toggle.getBoundingClientRect()
@@ -209,59 +237,23 @@
 			root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
 
 			const wasOpen = !panel.hidden
-			panel.replaceChildren()
-
-			const title = document.createElement('h3')
-			title.className = 'pore-talk-recording__panel-title'
-			title.textContent = 'NC-PoRE'
-			panel.appendChild(title)
-
-			const statusText = document.createElement('p')
-			statusText.className = 'pore-talk-recording__status'
 			statusText.textContent = status.label
-			panel.appendChild(statusText)
 
-			if (role === 'host' && participantCount > 0 && !listener && !confirmed) {
-				const readiness = document.createElement('span')
-				readiness.className = 'pore-talk-recording__readiness'
-				readiness.textContent = `${readyCount} / ${participantCount} bereit`
-				panel.appendChild(readiness)
-			}
+			const showReadiness = role === 'host' && participantCount > 0 && !listener && !confirmed
+			readiness.hidden = !showReadiness
+			if (showReadiness) readiness.textContent = `${readyCount} / ${participantCount} bereit`
 
-			if (state === 'recording' && !listener) {
-				const elapsed = document.createElement('span')
-				elapsed.className = 'pore-talk-recording__elapsed'
-				elapsed.textContent = formatElapsed(elapsedSeconds)
-				panel.appendChild(elapsed)
-			}
+			const showElapsed = state === 'recording' && !listener
+			elapsed.hidden = !showElapsed
+			if (showElapsed) elapsed.textContent = formatElapsed(elapsedSeconds)
 
-			if (role === 'host' && !listener) {
-				if (state === 'preparing' && !ready && onStart) {
-					const start = document.createElement('button')
-					start.type = 'button'
-					start.className = 'pore-talk-recording__button'
-					start.textContent = 'Aufnahme starten'
-					start.addEventListener('click', event => {
-						event.stopPropagation()
-						onStart(event)
-					})
-					panel.appendChild(start)
-				}
-				if (state === 'recording' && onStop) {
-					const stop = document.createElement('button')
-					stop.type = 'button'
-					stop.className = 'pore-talk-recording__button'
-					stop.textContent = 'Aufnahme beenden'
-					stop.addEventListener('click', event => {
-						event.stopPropagation()
-						onStop(event)
-					})
-					panel.appendChild(stop)
-				}
-			}
+			const canStart = role === 'host' && !listener && state === 'preparing' && !ready && typeof onStart === 'function'
+			const canStop = role === 'host' && !listener && state === 'recording' && typeof onStop === 'function'
+			actionHandler = canStart ? onStart : canStop ? onStop : null
+			action.hidden = !actionHandler
+			if (canStart) action.textContent = 'Aufnahme starten'
+			if (canStop) action.textContent = 'Aufnahme beenden'
 
-			settings.hidden = true
-			panel.appendChild(settings)
 			if (wasOpen) setOpen(true)
 		}
 
