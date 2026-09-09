@@ -273,7 +273,6 @@
 
 	let hostBootstrapInFlight = false
 	let lastBootstrappedCallPath = null
-	let talkCallPollTimer = null
 
 	const bootstrapTalkCall = async () => {
 		const callPath = window.location.pathname.match(/(?:\/apps\/spreed)?\/(?:call|room)\/([^/]+)/)?.[0] || null
@@ -289,13 +288,11 @@
 		}
 	}
 
-	const startTalkCallBootstrapPolling = () => {
-		if (talkCallPollTimer) return
+	window.addEventListener('pore:recording-ui-mount', () => {
 		void bootstrapTalkCall()
-		talkCallPollTimer = window.setInterval(() => { void bootstrapTalkCall() }, 500)
-	}
+	})
 
 	void announceRecoveryCandidates()
 	tryAttach()
-	startTalkCallBootstrapPolling()
+	void bootstrapTalkCall()
 })()
