@@ -15,33 +15,43 @@ describe('Talk recording state bridge', () => {
 			startedAt: '2026-09-04T10:00:00Z',
 		})
 
-		expect(snapshot.productionId).toBe('production-42')
-		expect(snapshot.recordingId).toBe('recording-17')
-		expect(snapshot.role).toBe('host')
-		expect(snapshot.state).toBe('recording')
-		expect(snapshot.readyCount).toBe(2)
-		expect(snapshot.participantCount).toBe(2)
-		expect(bridge.getSnapshot()).toBe(snapshot)
+	expect(snapshot.productionId).toBe('production-42')
+	expect(snapshot.recordingId).toBe('recording-17')
+	expect(snapshot.role).toBe('host')
+	expect(snapshot.state).toBe('recording')
+	expect(snapshot.readyCount).toBe(2)
+	expect(snapshot.participantCount).toBe(2)
+	expect(bridge.getSnapshot()).toBe(snapshot)
+})
+
+it('derives readiness from participant state when aggregate counts are absent', () => {
+	const snapshot = window.PoRETalkRecordingStateNormalize({
+		role: 'participant',
+		state: 'ready',
+		participants: [{ ready: true }, { ready: false }],
 	})
 
-	it('derives readiness from participant state when aggregate counts are absent', () => {
-		const snapshot = window.PoRETalkRecordingStateNormalize({
-			role: 'participant',
-			state: 'ready',
-			participants: [{ ready: true }, { ready: false }],
-		})
+	expect(snapshot.readyCount).toBe(1)
+	expect(snapshot.participantCount).toBe(2)
+})
 
-		expect(snapshot.readyCount).toBe(1)
-		expect(snapshot.participantCount).toBe(2)
+it('accepts the Core runtime phase field used by command snapshots', () => {
+	const snapshot = window.PoRETalkRecordingStateNormalize({
+		role: 'host',
+		phase: 'ready',
+		participants: [{ ready: true }],
 	})
 
-	it('keeps listener semantics separate from recording state', () => {
-		const snapshot = window.PoRETalkRecordingStateNormalize({
-			role: 'listener',
-			state: 'recording',
-		})
+	expect(snapshot.state).toBe('ready')
+})
 
-		expect(snapshot.listener).toBe(true)
-		expect(snapshot.state).toBe('recording')
+it('keeps listener semantics separate from recording state', () => {
+	const snapshot = window.PoRETalkRecordingStateNormalize({
+		role: 'listener',
+		state: 'recording',
 	})
+
+	expect(snapshot.listener).toBe(true)
+	expect(snapshot.state).toBe('recording')
+})
 })
