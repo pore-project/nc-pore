@@ -14,7 +14,8 @@
 
 	const normalize = snapshot => {
 		if (!snapshot || typeof snapshot !== 'object') return null
-		const state = REQUIRED_STATES.has(snapshot.state) ? snapshot.state : 'preparing'
+		const stateValue = snapshot.state ?? snapshot.phase
+		const state = REQUIRED_STATES.has(stateValue) ? stateValue : 'preparing'
 		const participants = Array.isArray(snapshot.participants) ? snapshot.participants : []
 		const readyParticipants = participants.filter(participant => participant?.ready === true)
 		return Object.freeze({
