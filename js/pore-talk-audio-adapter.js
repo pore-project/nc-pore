@@ -127,5 +127,27 @@
 		}
 	}
 
+	const adapter = new TalkAudioAdapter()
 	window.PoRETalkAudioAdapter = TalkAudioAdapter
+	window.__poreTalkAudioAdapter = adapter
+
+	const tryAttach = () => {
+		if (adapter.attachToTalk()) return
+		window.setTimeout(tryAttach, 100)
+	}
+
+	window.addEventListener('pore:recording-started', () => {
+		const track = window.__poreLocalAudioCapture?.getCurrentTrack?.()
+		if (!track) return
+		try {
+			adapter.connectMasterTrack(track)
+			window.dispatchEvent(new CustomEvent('pore:talk-audio-adapter-connected', { detail: { masterTrackId: track.id } }))
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
+		}
+	})
+
+	window.addEventListener('pore:recording-local-finalized', () => adapter.clearMasterTrack())
+
+	tryAttach()
 })()
