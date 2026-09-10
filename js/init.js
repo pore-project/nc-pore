@@ -195,7 +195,10 @@
 
 	window.addEventListener('pore:recording-ui-mount', event => {
 		talkUiMountElement = event.detail?.mountElement || null
-		if (context) publish({ mountElement: talkUiMountElement })
+		if (context) {
+			context = { ...context, mountElement: talkUiMountElement }
+			Ui.mount(context)
+		}
 	})
 
 	window.addEventListener('pore:talk-production-identity', event => {
