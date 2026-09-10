@@ -2,7 +2,7 @@
  * NC-PoRE — Nextcloud Talk audio connector
  *
  * Talk-specific lifecycle policy lives here. The connector attaches to
- * Talk's audio pipeline at the TrackEnabler boundary.
+ * Talk's local capture source before downstream audio processing.
  *
  * The connector owns Talk track discovery and replacement only. Recording stop
  * remains outside Talk room termination.
@@ -51,18 +51,18 @@
 		constructor({ dispatchEvent = window.dispatchEvent.bind(window) } = {}) {
 			this._dispatchEvent = dispatchEvent
 			this._current = null
-			this._trackEnabler = null
+			this._mediaDevicesSource = null
 			this._trackSink = null
 		}
 
 		attachToTalk() {
-			const trackEnabler = window.OCA?.Talk?.SimpleWebRTC?.webrtc?._audioTrackEnabler
-			if (!trackEnabler || typeof trackEnabler.connectTrackSink !== 'function' || typeof trackEnabler.disconnectTrackSink !== 'function') return false
-			if (this._trackEnabler === trackEnabler) return true
+			const mediaDevicesSource = window.OCA?.Talk?.SimpleWebRTC?.webrtc?._mediaDevicesSource
+			if (!mediaDevicesSource || typeof mediaDevicesSource.connectTrackSink !== 'function' || typeof mediaDevicesSource.disconnectTrackSink !== 'function') return false
+			if (this._mediaDevicesSource === mediaDevicesSource) return true
 			this._detachFromTalk()
 			const sink = new TalkAudioTrackSink(track => this._acceptTrack(track))
-			trackEnabler.connectTrackSink('default', sink)
-			this._trackEnabler = trackEnabler
+			mediaDevicesSource.connectTrackSink('audio', sink)
+			this._mediaDevicesSource = mediaDevicesSource
 			this._trackSink = sink
 			return true
 		}
@@ -94,8 +94,8 @@
 		}
 
 		_detachFromTalk() {
-			if (this._trackEnabler && this._trackSink) this._trackEnabler.disconnectTrackSink('default', this._trackSink)
-			this._trackEnabler = null
+			if (this._mediaDevicesSource && this._trackSink) this._mediaDevicesSource.disconnectTrackSink('audio', this._trackSink)
+			this._mediaDevicesSource = null
 			this._trackSink = null
 		}
 
