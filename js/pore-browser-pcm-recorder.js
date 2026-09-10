@@ -6,8 +6,15 @@
 	const OPENING_TEST_TONE_MS = 100
 	const OPENING_TEST_TONE_AMPLITUDE = 0.2
 
+	function resolveWorkletUrl() {
+		const recorderScript = [...document.scripts]
+			.find(script => /\/pore-browser-pcm-recorder\.js(?:\?|$)/.test(script.src))
+		if (recorderScript?.src) return new URL('pore-browser-pcm-worklet.js', recorderScript.src).href
+		return 'pore-browser-pcm-worklet.js'
+	}
+
 	class PoREBrowserPcmRecorder {
-		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = window.OC?.generateUrl ? window.OC.generateUrl('/apps/pore/js/pore-browser-pcm-worklet.js') : 'js/pore-browser-pcm-worklet.js', persistenceStoreFactory = () => new window.PoREBrowserPcmPersistenceStore(), persistenceChunkBytes = 128 * 1024 } = {}) {
+		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = resolveWorkletUrl(), persistenceStoreFactory = () => new window.PoREBrowserPcmPersistenceStore(), persistenceChunkBytes = 128 * 1024 } = {}) {
 			this.AudioContextClass = AudioContextClass; this.workletUrl = workletUrl; this.persistenceStoreFactory = persistenceStoreFactory; this.persistenceChunkBytes = persistenceChunkBytes
 			this.state = 'idle'; this.context = null; this.source = null; this.worklet = null; this.stream = null; this.sampleRate = null; this.channels = 1; this.startedAt = null; this.stoppedAt = null; this.sequence = 0
 			this.captureId = null; this.recordingSessionId = null; this.productionId = null; this.productionLabel = null; this.recordingId = null; this.persistenceStore = null; this.persistenceChain = Promise.resolve(); this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.openingSignet = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0
