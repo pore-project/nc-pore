@@ -55,12 +55,16 @@
 		attachToTalk() {
 			const source = window.OCA?.Talk?.SimpleWebRTC?.webrtc?._mediaDevicesSource
 			if (!source || typeof source.connectTrackSink !== 'function' || typeof source.disconnectTrackSink !== 'function') return false
-			if (this._mediaDevicesSource === source) return true
+			if (this._mediaDevicesSource === source) {
+				this._observeTrack(source.getOutputTrack('audio'))
+				return true
+			}
 			this._detachFromTalk()
 			const sink = new TalkMicrophoneObserverSink(track => this._observeTrack(track))
 			source.connectTrackSink('audio', sink)
 			this._mediaDevicesSource = source
 			this._trackSink = sink
+			this._observeTrack(source.getOutputTrack('audio'))
 			return true
 		}
 
