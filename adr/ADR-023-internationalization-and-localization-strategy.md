@@ -16,12 +16,12 @@ Das Projekt soll von Anfang an so gestaltet werden, dass Menschen unabhängig vo
 
 Mehrsprachigkeit darf deshalb keine nachträglich hinzugefügte Funktion sein, sondern muss Bestandteil der Architektur werden.
 
-Eine spätere Übersetzung einer ursprünglich nur einsprachig entwickelten Software verursacht häufig:
+Eine nachträgliche Übersetzung einer ursprünglich nur einsprachig entwickelten Software verursacht häufig:
 
 * hohe technische Kosten
 * uneinheitliche Benutzeroberflächen
 * schwer wartbare Texte
-* Einschränkungen bei zukünftigen Erweiterungen
+* Einschränkungen bei späteren Änderungen
 
 ---
 
@@ -98,11 +98,7 @@ Der Quellcode und technische Bezeichner verwenden Englisch als gemeinsame techni
 
 Die Architektur muss neue Sprachen ermöglichen, ohne Änderungen an der Programmlogik zu benötigen.
 
-Neue Übersetzungen sollen ergänzt werden können durch:
-
-* zusätzliche Sprachdateien
-* Übersetzungsplattformen
-* Community-Beiträge
+Neue Übersetzungen sollen durch zusätzliche Sprachressourcen ergänzt werden können. Die konkrete Organisation des Übersetzungsprozesses ist nicht Bestandteil dieser Architekturentscheidung.
 
 ---
 
@@ -110,16 +106,7 @@ Neue Übersetzungen sollen ergänzt werden können durch:
 
 NC-PoRe soll Übersetzungen durch die Community ermöglichen.
 
-Dafür sollen externe Übersetzungssysteme unterstützt werden.
-
-Mögliche Werkzeuge können sein:
-
-* Weblate
-* Transifex
-* Crowdin
-* vergleichbare Systeme
-
-Die konkrete Auswahl eines Werkzeugs ist keine Architekturentscheidung und kann später erfolgen.
+Die dafür verwendete technische Infrastruktur ist nicht durch diese ADR festgelegt.
 
 ---
 
@@ -131,7 +118,7 @@ Die konkrete Auswahl eines Werkzeugs ist keine Architekturentscheidung und kann 
 * bessere Wartbarkeit
 * einfachere Community-Beiträge
 * klare Trennung von Code und Sprache
-* Vorbereitung für zukünftige Märkte und Nutzergruppen
+* sprachunabhängige Architektur
 
 ### Nachteile
 
@@ -141,7 +128,7 @@ Die konkrete Auswahl eines Werkzeugs ist keine Architekturentscheidung und kann 
 
 Diese Nachteile werden bewusst akzeptiert.
 
-Die langfristige Flexibilität ist wichtiger als kurzfristige Einfachheit.
+Die langfristige technische Flexibilität ist wichtiger als kurzfristige Einfachheit.
 
 ---
 
@@ -153,13 +140,13 @@ Diese Entscheidung bedeutet nicht:
 * dass jede Übersetzung perfekt sein muss, bevor Software veröffentlicht wird
 * dass technische Begriffe unnötig übersetzt werden
 
-Die Architektur schafft Möglichkeiten, ohne unnötige Komplexität einzuführen.
+Die Architektur schafft die erforderliche Sprachflexibilität, ohne konkrete zukünftige Sprachpakete oder Werkzeuge vorwegzunehmen.
 
 ---
 
 ## Leitgedanke
 
-NC-PoRe soll eine Software sein, die Menschen weltweit nutzen können.
+NC-PoRe soll eine Software sein, die Menschen unabhängig von ihrer Sprache nutzen können.
 
 Sprache darf kein technisches Hindernis sein.
 
@@ -182,13 +169,13 @@ Adding translations to software that was originally designed for only one langua
 * high technical costs
 * inconsistent user interfaces
 * difficult maintenance
-* limitations for future extensions
+* limitations when the software changes later
 
 ---
 
 ## Decision
 
-NC-PoRe will be developed with internationalization support from the beginning.
+NC-PoRe is designed for internationalization from the beginning.
 
 The software separates technical logic from language-dependent content.
 
@@ -259,11 +246,7 @@ Source code and technical identifiers use English as the common technical langua
 
 The architecture must allow additional languages without changes to application logic.
 
-New translations should be possible through:
-
-* additional language files
-* translation platforms
-* community contributions
+Additional translations can be provided through language resources. The concrete organization of the translation process is not part of this architectural decision.
 
 ---
 
@@ -271,16 +254,7 @@ New translations should be possible through:
 
 NC-PoRe should allow community-driven translations.
 
-External translation systems should be supported.
-
-Possible tools include:
-
-* Weblate
-* Transifex
-* Crowdin
-* comparable systems
-
-The selection of a specific tool is not an architectural decision and can be made later.
+The technical infrastructure used for this purpose is not prescribed by this ADR.
 
 ---
 
@@ -292,7 +266,7 @@ The selection of a specific tool is not an architectural decision and can be mad
 * improved maintainability
 * easier community contributions
 * clear separation of code and language
-* preparation for future markets and users
+* language-independent architecture
 
 ### Costs
 
@@ -302,7 +276,7 @@ The selection of a specific tool is not an architectural decision and can be mad
 
 These costs are consciously accepted.
 
-Long-term flexibility is more important than short-term simplicity.
+Long-term technical flexibility is more important than short-term simplicity.
 
 ---
 
@@ -314,14 +288,14 @@ This decision does not mean:
 * requiring perfect translations before releases
 * translating technical terms unnecessarily
 
-The architecture creates possibilities without introducing unnecessary complexity.
+The architecture provides the required language flexibility without pre-announcing specific future language packages or tools.
 
 ---
 
 ## Guiding Principle
 
-NC-PoRe should be software that people around the world can use.
+NC-PoRe should be software that people can use regardless of language.
 
 Language must not become a technical barrier.
 
-Software adapts to people – not people to software.
+Software adapts to people – not people to the software.
