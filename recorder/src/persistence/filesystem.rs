@@ -60,6 +60,7 @@ struct PersistedRecordingConfiguration {
 
 #[derive(Debug, Serialize, Deserialize)]
 enum PersistedSampleFormat {
+    Pcm16,
     Pcm24,
     F32,
 }
@@ -70,6 +71,7 @@ impl From<RecordingConfiguration> for PersistedRecordingConfiguration {
             sample_rate_hz: configuration.sample_rate_hz(),
             channels: configuration.channels(),
             sample_format: match configuration.sample_format() {
+                SampleFormat::Pcm16 => PersistedSampleFormat::Pcm16,
                 SampleFormat::Pcm24 => PersistedSampleFormat::Pcm24,
                 SampleFormat::F32 => PersistedSampleFormat::F32,
             },
@@ -91,6 +93,7 @@ impl PersistedRecordingConfiguration {
         };
 
         let sample_format = match self.sample_format {
+            PersistedSampleFormat::Pcm16 => SampleFormat::Pcm16,
             PersistedSampleFormat::Pcm24 => SampleFormat::Pcm24,
             PersistedSampleFormat::F32 => SampleFormat::F32,
         };
