@@ -1,56 +1,29 @@
 # NC-PoRe Development Guide
 
-## Version
+## Deutsch ([English version below](#english-version))
 
-0.3
+## Zweck
 
-## Date
+Dieses Dokument beschreibt grundlegende Entwicklungsregeln, Arbeitsweisen und die Entwicklungsumgebung für NC-PoRe.
 
-2026-07-29
+Architekturentscheidungen selbst werden nicht hier getroffen, sondern über Architecture Decision Records (ADRs) dokumentiert.
 
----
+## Entwicklungsprinzipien
 
-# Deutsch
+NC-PoRe folgt insbesondere diesen Prinzipien:
 
----
-
-# Zweck
-
-Dieses Dokument beschreibt die grundlegenden Entwicklungsregeln,
-Arbeitsweisen und die Entwicklungsumgebung für NC-PoRe.
-
-Ziel ist eine nachvollziehbare, wartbare und gemeinschaftsfähige
-Entwicklung.
-
-Dieses Dokument definiert den praktischen Entwicklungsprozess.
-
-Architekturentscheidungen selbst werden nicht hier getroffen,
-sondern über Architecture Decision Records (ADRs) dokumentiert.
-
----
-
-# Entwicklungsprinzipien
-
-NC-PoRe folgt diesen Grundprinzipien:
-
-* Open Source first
-* nachvollziehbare Entscheidungen
-* kleine, überprüfbare Änderungen
-* offene Standards
-* saubere Dokumentation
-* Qualität vor Geschwindigkeit
-
----
+- Open Source first
+- nachvollziehbare Entscheidungen
+- kleine, überprüfbare Änderungen
+- offene Standards
+- saubere Dokumentation
+- Qualität vor Geschwindigkeit
 
 ## Code-Kommentare
 
-Code-Kommentare sind Teil der technischen Projektdokumentation.
+Der Quellcode erklärt **was** passiert. Kommentare erklären **warum** es passiert.
 
-Der Quellcode erklärt **was** passiert.
-
-Kommentare erklären **warum** es passiert.
-
-Gute Kommentare dokumentieren:
+Gute Kommentare dokumentieren insbesondere:
 
 - Architekturgrenzen
 - fachliche Regeln
@@ -59,465 +32,151 @@ Gute Kommentare dokumentieren:
 - nicht offensichtliche Designentscheidungen
 - Verweise auf relevante ADRs
 
-Vermeide Kommentare, die lediglich die Implementierung wiederholen.
-Kommentare müssen zusammen mit dem Code gepflegt werden.
-Ein veralteter Kommentar ist schädlicher als ein fehlender Kommentar,
-da er eine falsche technische Erklärung liefert.
+Kommentare werden zusammen mit dem Code gepflegt und sollen die Implementierung nicht lediglich wiederholen.
 
-Bevorzugt:
+## Repository-Struktur
 
-```rust
-// Eine Production Session benötigt vor dem Abschluss
-// einen Owner.
-//
-// Siehe ADR-031.
-```
-
----
-
-# Repository Struktur
-
-Die grundlegende Struktur:
+Die Dokumentation muss die tatsächliche Repository-Struktur widerspiegeln. Die wesentlichen Bereiche sind:
 
 ```text
 nc-pore/
-
 ├── README.md
 ├── LICENSE
-│
-├── docs/
-│   ├── vision.md
-│   ├── requirements.md
-│   ├── architecture.md
-│   ├── project-status.md
-│   │
-│   └── implementation/
-│       ├── mvp.md
-│       └── development.md
-│
 ├── adr/
-│   └── ADR-xxx-description.md
-│
+├── application/
 ├── core/
-│   └── NC-PoRe Core Source
-│
 ├── recorder/
-│   └── Recorder Client Source
-│
-├── nextcloud-app/
-│   └── Nextcloud Application Source
-│
-└── tests/
-    └── Test Resources
+├── runtime/
+├── infrastructure/
+├── web/
+├── lib/
+├── js/
+├── css/
+├── appinfo/
+├── docs/
+└── tools/
 ```
 
-Die Struktur kann durch spätere Architekturentscheidungen erweitert werden.
+Die genaue Modulstruktur wird durch den Quellcode und die jeweils geltenden ADRs bestimmt.
 
-Änderungen an grundlegenden Strukturen sollen nachvollziehbar dokumentiert werden.
+## Branch-Strategie
 
----
+Der `main`-Branch enthält den integrierten Projektstand. Größere Änderungen werden bevorzugt in klar abgegrenzten Branches entwickelt und nach Prüfung über Pull Requests integriert.
 
-# Branch Strategie
+## Commit-Richtlinien
 
-NC-PoRe verwendet eine einfache und nachvollziehbare Git-Strategie.
+Commits sollen eine klar erkennbare Aufgabe beschreiben, möglichst klein bleiben und nachvollziehbar sein.
 
-## Main Branch
-
-```text
-main
-```
-
-Der Main Branch enthält den aktuellen integrierten Entwicklungsstand.
-
-Änderungen werden nur nach erfolgreicher lokaler Prüfung integriert.
-
----
-
-## Feature Branches
-
-Größere Änderungen können über eigene Branches entwickelt werden.
-
-Beispiele:
-
-```text
-feature/activity-history
-feature/session-management
-feature/audio-recorder
-```
-
-Kleinere, klar abgegrenzte Änderungen können direkt auf dem Entwicklungsstand erfolgen.
-
----
-
-# Commit Richtlinien
-
-Commits sollen:
-
-* eine klar erkennbare Aufgabe beschreiben
-* möglichst klein bleiben
-* nachvollziehbar sein
-
-Gut:
+Beispiel:
 
 ```text
 Add production session lifecycle validation
 ```
 
-```text
-Implement activity history for session lifecycle
-```
+## Dokumentationsregeln
 
-Schlecht:
+- Architekturentscheidungen werden als ADR dokumentiert.
+- Projekt- und Implementierungsdokumentation gehört unter `docs/`.
+- Der tatsächliche Quellcode und die ADRs sind maßgeblich für technische Entscheidungen.
+- Veraltete Dokumentation soll korrigiert oder entfernt werden, sobald sie dem aktuellen Projektstand widerspricht.
 
-```text
-changes
-```
+## Coding-Prinzipien
 
-```text
-updates
-```
+NC-PoRe-Code soll lesbar, modular, testbar und dokumentiert sein.
 
-Ein Commit sollte möglichst eine fachliche oder technische Änderung darstellen.
+Der Core enthält fachliche Modelle, Geschäftsregeln, Zustände und Domain-Operationen. Benutzeroberflächen, provider-spezifische Logik und technische Speicherdetails gehören nicht in den Domain-Core.
 
----
-
-# Dokumentationsregeln
-
-Architekturentscheidungen werden als ADR dokumentiert.
-
-Grundlegende Projektdokumentation gehört nach:
-
-```text
-docs/
-```
-
-Implementierungsbezogene Dokumentation gehört nach:
-
-```text
-docs/implementation/
-```
-
-Code-Kommentare erklären:
-
-* warum etwas so gelöst wurde
-* welche technische oder fachliche Einschränkung besteht
-* welcher Architekturbezug relevant ist
-
-Code-Kommentare sollen nicht lediglich den Code wiederholen.
-
----
-
-# Coding Prinzipien
-
-NC-PoRe Code soll:
-
-* lesbar
-* modular
-* testbar
-* dokumentiert
-
-sein.
-
-Komplexität soll nur entstehen, wenn sie einen echten Nutzen bringt.
-
-Der Core folgt insbesondere den Prinzipien aus:
-
-* ADR-027 Core Architecture and Module Boundaries
-* ADR-035 Domain Lifecycle and State Transition Management
-
-Der Core enthält:
-
-* fachliche Modelle
-* Geschäftsregeln
-* Zustände
-* Domain-Operationen
-
-Der Core enthält nicht:
-
-* Benutzeroberflächen
-* Provider-spezifische Logik
-* Speicherdetails
-
----
-
-# Testing Strategie
-
-Tests sind Bestandteil der Entwicklung.
+## Testing-Strategie
 
 Jede fachlich relevante Änderung benötigt passende Tests.
 
----
+Geeignete Testebenen sind insbesondere:
 
-## Unit Tests
+- Unit Tests
+- Integration Tests
+- Real-World-/Systemtests
 
-Unit Tests prüfen einzelne fachliche Einheiten.
+Praktische Tests sollen reale Nutzungssituationen wie lange Aufnahmen, unterschiedliche Hardware und Netzwerkunterbrechungen abdecken, soweit sie für die jeweilige Änderung relevant sind.
 
-Beispiele:
+## Testbenennung
 
-* Session Lifecycle
-* Rollenprüfung
-* Identitätsprüfung
-* Datenvalidierung
+Tests werden nach fachlicher Bedeutung benannt. Eine Test-ID beschreibt die fachliche Anforderung, nicht die Position im Quellcode.
 
----
+## Entwicklungsumgebung
 
-## Integration Tests
+Die Referenzentwicklung verwendet bevorzugt freie Werkzeuge. Konkrete Technologieentscheidungen werden durch die entsprechenden ADRs festgelegt.
 
-Integration Tests prüfen das Zusammenspiel mehrerer Komponenten.
+Grundlegende Werkzeuge sind:
 
-Beispiele:
+- Git
+- Entwicklungseditor
+- Build-Werkzeuge
+- Testumgebung
 
-* Core und Storage
-* Recorder und Sessionverwaltung
-* Synchronisation
-* Export
-
----
-
-## Real World Tests
-
-Praktische Tests prüfen reale Anwendungssituationen.
-
-Beispiele:
-
-* lange Aufnahmen
-* unterschiedliche Hardware
-* Netzwerkunterbrechungen
-* große Produktionsdaten
-
----
-
-# Test Benennung
-
-Tests werden fachlich nummeriert.
-
-Beispiel:
-
-```text
-TEST-01
-```
-
-Die Nummer beschreibt die fachliche Testanforderung,
-nicht die Position im Quellcode.
-
-Tests können intern verschoben werden,
-ohne ihre fachliche Bedeutung zu verlieren.
-
----
-
-# Entwicklungsumgebung
-
-Die Referenzentwicklung erfolgt bevorzugt mit freien Werkzeugen.
-
-Aktuelle Referenzumgebung:
-
-```text
-Linux Mint
-```
-
-Entwicklung erfolgt unter einem separaten Entwicklerkonto:
-
-```text
-developer
-```
-
-Grundanforderungen:
-
-* Git
-* Entwicklungseditor
-* Build-Werkzeuge
-* Testumgebung
-
-Konkrete Technologien werden über separate Architekturentscheidungen festgelegt.
-
----
-
-# Developer Setup
-
-## Repository Zugriff
-
-NC-PoRe verwendet Git zur Versionsverwaltung.
-
-Repository:
-
-```text
-git@github.com:pore-project/nc-pore.git
-```
-
-Der private SSH-Schlüssel verbleibt ausschließlich auf dem jeweiligen Entwicklungsrechner.
-
-Nur der öffentliche Schlüssel wird beim Repository-Anbieter hinterlegt.
-
----
-
-## Lokales Entwicklungsverzeichnis
-
-Beispiel:
-
-```text
-/home/developer/projects/nc-pore
-```
-
----
-
-## Git Konfiguration
-
-Die lokale Git-Konfiguration verwendet eine Projektidentität.
-
-Beispiel:
-
-```text
-PoRe Project
-```
-
-Private Entwicklerdaten gehören nicht in öffentliche Projektdokumentation.
-
----
-
-# Entwicklungsworkflow
-
-Vor Änderungen:
-
-```bash
-git status
-```
-
-Aktueller Branch:
-
-```bash
-git branch --show-current
-```
+## Entwicklungsworkflow
 
 Typischer Ablauf:
 
 ```text
 Änderung
-
-↓
-
-lokaler Test
-
-↓
-
+  ↓
+lokale Prüfung und Tests
+  ↓
 Commit
-
-↓
-
-Push
-
-↓
-
+  ↓
+Push / Pull Request
+  ↓
 Review / Integration
 ```
 
----
+Vor Änderungen sind insbesondere Repository-Status und aktueller Branch zu prüfen.
 
-# Issue Management
+## Issue Management
 
-Aufgaben und Fehler werden nachvollziehbar dokumentiert.
+Aufgaben und Fehler werden nachvollziehbar dokumentiert. Architekturveränderungen benötigen einen ADR.
 
-Größere Änderungen sollten eine Begründung besitzen.
+## Release-Philosophie
 
-Architekturveränderungen benötigen einen ADR.
+NC-PoRe verwendet nachvollziehbare Versionen. Entwicklungsstände und stabile Releases werden klar unterschieden.
 
----
+## Contribution-Philosophie
 
-# Release Philosophie
+Beiträge von außen sind erwünscht. Änderungen sollen nachvollziehbar sein, dokumentiert werden und die Projektprinzipien einhalten.
 
-NC-PoRe verwendet nachvollziehbare Versionen.
+## Security Development
 
-Beispiel:
+Sicherheitsrelevante Änderungen werden besonders geprüft. Besondere Aufmerksamkeit gilt unter anderem Zugangsdaten, Audiodaten, Uploads, Berechtigungen und Synchronisation.
 
-```text
-0.x.x
-```
+## Leitgedanke
 
-Entwicklungsphase.
-
-```text
-1.0.0
-```
-
-Erste stabile produktive Version.
-
----
-
-# Contribution Philosophie
-
-Beiträge von außen sind erwünscht.
-
-Voraussetzungen:
-
-* nachvollziehbarer Code
-* dokumentierte Änderungen
-* Einhaltung der Projektprinzipien
-
----
-
-# Security Development
-
-Sicherheitsrelevante Änderungen werden besonders behandelt.
-
-Besondere Aufmerksamkeit:
-
-* Zugangsdaten
-* Audiodaten
-* Uploads
-* Berechtigungen
-* Synchronisation
-
----
-
-# Leitgedanke
-
-NC-PoRe soll nicht nur funktionieren.
-
-NC-PoRe soll verständlich, überprüfbar und langfristig
-weiterentwickelbar sein.
+NC-PoRe soll verständlich, überprüfbar und langfristig wartbar bleiben.
 
 ---
 
 # English Version
 
----
+## Purpose
 
-# Purpose
+This document describes the fundamental development rules, working methods and development environment for NC-PoRe.
 
-This document describes the fundamental development rules,
-working methods and development environment for NC-PoRe.
+Architecture decisions are not made here; they are documented through Architecture Decision Records (ADRs).
 
-The goal is a traceable, maintainable and collaborative
-development process.
+## Development Principles
 
-This document defines the practical development process.
+NC-PoRe follows these principles in particular:
 
-Architecture decisions are documented separately through
-Architecture Decision Records (ADRs).
-
----
-
-# Development Principles
-
-NC-PoRe follows these principles:
-
-* Open Source first
-* traceable decisions
-* small verifiable changes
-* open standards
-* clean documentation
-* quality over speed
-
----
+- Open Source first
+- traceable decisions
+- small, verifiable changes
+- open standards
+- clean documentation
+- quality over speed
 
 ## Code Comments
 
-Code comments are part of the project's technical documentation.
+The source code explains **what** happens. Comments explain **why** it happens.
 
-The source code explains **what** happens.
-
-Comments explain **why** it happens.
-
-Good comments document:
+Good comments document in particular:
 
 - architectural boundaries
 - domain rules
@@ -526,414 +185,121 @@ Good comments document:
 - non-obvious design decisions
 - references to relevant ADRs
 
-Avoid comments that simply repeat the implementation.
-Comments must be maintained together with the code.
-An outdated comment is worse than no comment,
-because it provides incorrect technical information.
+Comments are maintained together with the code and should not merely repeat the implementation.
 
-Prefer:
+## Repository Structure
 
-```rust
-// A production session requires an owner
-// before completion.
-//
-// See ADR-031.
-```
-
-Instead of:
-
-```rust
-// Complete the session.
-session.complete();
-```
-
----
-
-# Repository Structure
-
-The basic structure:
+Documentation must reflect the actual repository structure. The main areas are:
 
 ```text
 nc-pore/
-
 ├── README.md
 ├── LICENSE
-│
-├── docs/
-│   ├── vision.md
-│   ├── requirements.md
-│   ├── architecture.md
-│   ├── project-status.md
-│   │
-│   └── implementation/
-│       ├── mvp.md
-│       └── development.md
-│
 ├── adr/
-│   └── ADR-xxx-description.md
-│
+├── application/
 ├── core/
-│   └── NC-PoRe Core Source
-│
 ├── recorder/
-│   └── Recorder Client Source
-│
-├── nextcloud-app/
-│   └── Nextcloud Application Source
-│
-└── tests/
-    └── Test Resources
+├── runtime/
+├── infrastructure/
+├── web/
+├── lib/
+├── js/
+├── css/
+├── appinfo/
+├── docs/
+└── tools/
 ```
 
-The structure may be extended through later architecture decisions.
+The exact module structure is defined by the source tree and the applicable ADRs.
 
----
+## Branch Strategy
 
-# Branch Strategy
+The `main` branch contains the integrated project state. Larger changes are preferably developed in clearly scoped branches and integrated through pull requests after validation.
 
-NC-PoRe uses a simple and traceable Git strategy.
+## Commit Guidelines
 
-## Main Branch
+Commits should describe a clearly identifiable task, remain small where possible, and be traceable.
 
-```text
-main
-```
-
-The main branch contains the current integrated development state.
-
-Changes are integrated only after successful local validation.
-
----
-
-## Feature Branches
-
-Larger changes may be developed using dedicated branches.
-
-Examples:
-
-```text
-feature/activity-history
-feature/session-management
-feature/audio-recorder
-```
-
----
-
-# Commit Guidelines
-
-Commits should:
-
-* describe a clearly identifiable task
-* remain small where possible
-* be traceable
-
-Good:
+Example:
 
 ```text
 Add production session lifecycle validation
 ```
 
-```text
-Implement activity history for session lifecycle
-```
+## Documentation Rules
 
-Bad:
+- Architecture decisions are documented as ADRs.
+- Project and implementation documentation belongs under `docs/`.
+- The source tree and ADRs are authoritative for technical decisions.
+- Outdated documentation should be corrected or removed when it contradicts the current project state.
 
-```text
-changes
-```
+## Coding Principles
 
-```text
-updates
-```
+NC-PoRE code should be readable, modular, testable and documented.
 
----
+The Core contains domain models, business rules, states and domain operations. User interfaces, provider-specific logic and technical storage details do not belong in the domain Core.
 
-# Documentation Rules
-
-Architecture decisions are documented as ADRs.
-
-Project documentation belongs in:
-
-```text
-docs/
-```
-
-Implementation documentation belongs in:
-
-```text
-docs/implementation/
-```
-
-Code comments explain:
-
-* why something exists
-* technical or domain constraints
-* architectural context
-
-Comments should not simply repeat what the code does.
-
----
-
-# Coding Principles
-
-NC-PoRe code should be:
-
-* readable
-* modular
-* testable
-* documented
-
-The Core follows especially:
-
-* ADR-027 Core Architecture and Module Boundaries
-* ADR-035 Domain Lifecycle and State Transition Management
-
-The Core contains:
-
-* domain models
-* business rules
-* states
-* domain operations
-
-The Core does not contain:
-
-* user interfaces
-* provider-specific logic
-* storage details
-
----
-
-# Testing Strategy
-
-Tests are part of development.
+## Testing Strategy
 
 Relevant domain changes require corresponding tests.
 
----
+Suitable test levels include:
 
-## Unit Tests
+- unit tests
+- integration tests
+- real-world/system tests
 
-Unit tests verify individual domain units.
+Practical tests should cover real usage situations such as long recordings, different hardware and network interruptions where relevant to the change.
 
-Examples:
+## Test Naming
 
-* Session lifecycle
-* role validation
-* identity validation
-* data validation
+Tests are named according to domain meaning. A test identifier describes the functional requirement, not its location in the source tree.
 
----
+## Development Environment
 
-## Integration Tests
+The reference development environment preferably uses open-source tools. Concrete technology choices are defined by the applicable ADRs.
 
-Integration tests verify cooperation between components.
+Basic tooling includes:
 
-Examples:
+- Git
+- development editor
+- build tools
+- test environment
 
-* Core and storage
-* Recorder and session management
-* synchronization
-* export
+## Development Workflow
 
----
-
-## Real World Tests
-
-Real world tests verify practical usage scenarios.
-
-Examples:
-
-* long recordings
-* different hardware
-* network interruptions
-* large production data
-
----
-
-# Test Naming
-
-Tests are numbered by domain requirement.
-
-Example:
-
-```text
-TEST-01
-```
-
-The number describes the domain test requirement,
-not the location inside the source code.
-
-Tests may be moved internally without changing their meaning.
-
----
-
-# Development Environment
-
-The reference development environment prefers open source tools.
-
-Current reference environment:
-
-```text
-Linux Mint
-```
-
-Development account:
-
-```text
-developer
-```
-
-Requirements:
-
-* Git
-* development editor
-* build tools
-* test environment
-
-Specific technologies are defined through separate architecture decisions.
-
----
-
-# Developer Setup
-
-## Repository Access
-
-NC-PoRe uses Git for version control.
-
-Repository:
-
-```text
-git@github.com:pore-project/nc-pore.git
-```
-
-The private SSH key remains exclusively on the respective development machine.
-
-Only the public key is registered with the repository provider.
-
----
-
-## Local Development Directory
-
-Example:
-
-```text
-/home/developer/projects/nc-pore
-```
-
----
-
-## Git Configuration
-
-The local Git configuration uses a project identity.
-
-Example:
-
-```text
-PoRe Project
-```
-
-Private developer data does not belong in public project documentation.
-
----
-
-# Development Workflow
-
-Before changes:
-
-```bash
-git status
-```
-
-Current branch:
-
-```bash
-git branch --show-current
-```
-
-Workflow:
+Typical workflow:
 
 ```text
 Change
-
-↓
-
-Local Test
-
-↓
-
+  ↓
+local validation and tests
+  ↓
 Commit
-
-↓
-
-Push
-
-↓
-
+  ↓
+Push / Pull Request
+  ↓
 Review / Integration
 ```
 
----
+Before changes, check the repository status and current branch.
 
-# Issue Management
+## Issue Management
 
-Tasks and defects are documented traceably.
+Tasks and defects are documented traceably. Architecture changes require an ADR.
 
-Larger changes should have a clear reason.
+## Release Philosophy
 
-Architecture changes require an ADR.
+NC-PoRe uses traceable versions. Development states and stable releases are clearly distinguished.
 
----
+## Contribution Philosophy
 
-# Release Philosophy
+External contributions are welcome. Changes should be traceable, documented and consistent with the project principles.
 
-NC-PoRe uses traceable versions.
+## Security Development
 
-Example:
+Security-related changes receive particular attention. Important areas include credentials, audio data, uploads, permissions and synchronization.
 
-```text
-0.x.x
-```
+## Guiding Principle
 
-Development phase.
-
-```text
-1.0.0
-```
-
-First stable productive version.
-
----
-
-# Contribution Philosophy
-
-External contributions are welcome.
-
-Requirements:
-
-* traceable code
-* documented changes
-* adherence to project principles
-
----
-
-# Security Development
-
-Security-related changes receive special attention.
-
-Important areas:
-
-* credentials
-* audio data
-* uploads
-* permissions
-* synchronization
-
----
-
-# Final Principle
-
-NC-PoRe should not only work.
-
-NC-PoRe should remain understandable, verifiable and
-maintainable over many years.
+NC-PoRe should remain understandable, verifiable and maintainable over time.
