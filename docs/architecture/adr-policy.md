@@ -6,7 +6,7 @@
 
 # ADR-Richtlinie
 
-NC-PoRe Architecture Decision Records folgen einem gemeinsamen Dokumentationsvertrag.
+NC-PoRE Architecture Decision Records folgen einem gemeinsamen Dokumentationsvertrag.
 
 ## Sprache und Navigation
 
@@ -39,7 +39,7 @@ Eine ADR kann öffentlich oder intern sein.
 
 Öffentliche ADRs dokumentieren Architekturprinzipien und Entscheidungen, die NC-PoRE als Teil seiner Open-Source-Projektdokumentation offenlegen kann und will.
 
-Interne ADRs dürfen Implementierungsdetails, unveröffentlichte Fähigkeiten, Produktstrategie, kommerzielle Funktionen, Entitlement-Architektur, zukünftige Produktrichtungen oder andere Informationen dokumentieren, deren Veröffentlichung die geplante Produktoberfläche von NC-PoRE unnötig offenlegen würde.
+Interne ADRs dürfen Informationen dokumentieren, deren Veröffentlichung nicht beabsichtigt ist.
 
 Der Status „intern“ darf niemals dazu führen, dass die ADR selbst weniger sorgfältig dokumentiert wird. Interne ADRs folgen derselben zweisprachigen Struktur und denselben verbindlichen Abschnitten wie öffentliche ADRs.
 
@@ -47,13 +47,13 @@ Der Status „intern“ darf niemals dazu führen, dass die ADR selbst weniger s
 
 Architektonische Offenheit erfordert nicht die Veröffentlichung der vollständigen zukünftigen Produktplanung.
 
-Öffentliche ADRs sollen das dokumentieren, was erforderlich ist, um die veröffentlichte Architektur zu verstehen und ihre Entscheidungen nachvollziehen zu können. Sie sollen keine unveröffentlichten oder kommerziell geplanten Fähigkeiten allein deshalb detailliert aufzählen, weil die Architektur diese grundsätzlich ermöglichen könnte.
+Öffentliche ADRs sollen das dokumentieren, was erforderlich ist, um die veröffentlichte Architektur zu verstehen und ihre Entscheidungen nachvollziehen zu können. Sie sollen keine Fähigkeiten allein deshalb detailliert aufzählen, weil die Architektur diese grundsätzlich ermöglichen könnte.
 
-Zukünftige Erweiterbarkeit kann als architektonische Eigenschaft beschrieben werden, ohne eine detaillierte Liste zukünftiger Produkte oder kostenpflichtiger Funktionen zu veröffentlichen.
+Zukünftige Erweiterbarkeit kann als architektonische Eigenschaft beschrieben werden, ohne eine detaillierte Liste zukünftiger Produkte etc. zu veröffentlichen.
 
 ## Kommerziell sensible Architektur
 
-Wenn eine Architekturentscheidung eine zukünftige kommerzielle Fähigkeit unterstützt, soll die öffentliche ADR nur das stabile Architekturprinzip dokumentieren, dessen Veröffentlichung beabsichtigt ist. Produktspezifische Funktionsdetails, Entitlement-Mechanismen, Feature-Pakete, kommerzielle Stufen und unveröffentlichte Roadmap-Details gehören in interne ADRs, sofern nicht bewusst eine Veröffentlichung beschlossen wurde.
+Wenn eine Architekturentscheidung eine zukünftige Fähigkeit unterstützt, soll die öffentliche ADR nur das stabile Architekturprinzip dokumentieren, dessen Veröffentlichung beabsichtigt ist. Produktspezifische Funktionsdetails etc. gehören in interne ADRs, sofern nicht bewusst eine Veröffentlichung beschlossen wurde.
 
 ## Verhältnis zu Implementierungsdokumenten
 
@@ -77,7 +77,7 @@ Eine zukünftige Fähigkeit soll nicht allein deshalb in einer ADR veröffentlic
 
 # ADR Policy
 
-NC-PoRe Architecture Decision Records follow a common documentation contract.
+NC-PoRE Architecture Decision Records follow a common documentation contract.
 
 ## Language and navigation
 
@@ -110,7 +110,7 @@ An ADR may be public or internal.
 
 Public ADRs document architectural principles and decisions that NC-PoRE is prepared to expose as part of its open-source project documentation.
 
-Internal ADRs may document implementation details, unreleased capabilities, product strategy, commercial features, entitlement architecture, future product directions, or other information whose publication would unnecessarily disclose NC-PoRE's planned product surface.
+Internal ADRs may document information that is not intended for publication.
 
 Internal status must never be used to weaken the quality of the ADR itself. Internal ADRs follow the same bilingual structure and required sections as public ADRs.
 
@@ -118,13 +118,13 @@ Internal status must never be used to weaken the quality of the ADR itself. Inte
 
 Architectural openness does not require publication of the complete future product roadmap.
 
-Public ADRs should describe what is necessary to understand and preserve the published architecture. They should avoid enumerating unreleased or commercially planned capabilities merely because the architecture could support them.
+Public ADRs should describe what is necessary to understand and preserve the published architecture. They should avoid enumerating capabilities merely because the architecture could support them.
 
-Future extensibility may be stated as an architectural property without publishing a detailed list of future products or paid features.
+Future extensibility may be stated as an architectural property without publishing a detailed list of future products etc.
 
 ## Commercially sensitive architecture
 
-If an architectural decision supports a future commercial capability, the public ADR should document only the stable architectural principle that is appropriate for public disclosure. Product-specific capability details, entitlement mechanisms, feature packaging, commercial tiers, and unreleased roadmap details belong in internal ADRs unless there is a deliberate decision to publish them.
+If an architectural decision supports a future capability, the public ADR should document only the stable architectural principle that is appropriate for public disclosure. Product-specific capability details etc. belong in internal ADRs unless there is a deliberate decision to publish them.
 
 ## Relationship to implementation documents
 
