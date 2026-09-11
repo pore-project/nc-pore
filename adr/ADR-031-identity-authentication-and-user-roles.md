@@ -20,20 +20,16 @@ Die bisherigen Architekturentscheidungen legen fest:
 * Aufnahmen werden verteilt erzeugt und anschließend synchronisiert.
 * Der Core bleibt die zentrale Instanz für fachliche Entscheidungen.
 
-Mit zunehmender Funktionalität entsteht die Notwendigkeit, Identität, Authentifizierung und Berechtigungen sauber zu definieren.
+Damit Identität und Berechtigungen nachvollziehbar bleiben, muss zwischen drei Konzepten unterschieden werden:
 
-Dabei muss zwischen drei unterschiedlichen Konzepten unterschieden werden:
-
-```text id="p8q1md"
+```text
 Identity
 
 Wer bin ich?
 
-
 Authentication
 
 Wie beweise ich meine Identität?
-
 
 Authorization
 
@@ -50,9 +46,7 @@ NC-PoRe trennt grundsätzlich zwischen:
 2. Authentifizierung
 3. Autorisierung
 
-Benutzerrechte werden nicht ausschließlich aus der Existenz eines Benutzers abgeleitet.
-
-Sie entstehen aus der Rolle einer Person innerhalb einer Production Session.
+Benutzerrechte werden nicht ausschließlich aus der Existenz eines Benutzers abgeleitet. Sie entstehen aus der Rolle einer Person innerhalb einer Production Session.
 
 Leitprinzip:
 
@@ -70,27 +64,15 @@ Die Identität beantwortet:
 
 Die Identität ist unabhängig davon, welche Rolle eine Person in einer bestimmten Production Session besitzt.
 
-Eine Person kann beispielsweise:
-
-* Besitzer einer eigenen Session sein
-* Producer in einer anderen Session sein
-* Gast in einer dritten Session sein
-
 ---
 
 # Authentication
 
 Authentication beschreibt den Nachweis einer Identität.
 
-Beispiele:
-
-* Anmeldung über Nextcloud
-* sichere Token-basierte Kommunikation
-* zukünftige alternative Identity Provider
-
 NC-PoRe V1 verwendet Nextcloud als primären Identity Provider.
 
-Die Architektur bleibt jedoch offen für zukünftige Erweiterungen.
+Die konkrete Authentifizierungsimplementierung bleibt von der fachlichen Rollenlogik getrennt.
 
 ---
 
@@ -112,11 +94,9 @@ Sondern:
 
 # Rollenmodell V1
 
-NC-PoRe verwendet zunächst ein bewusst einfaches rollenbasiertes Modell.
+NC-PoRe verwendet zunächst ein bewusst einfaches rollenbasiertes Modell:
 
-V1 Rollen:
-
-```text id="x7b2kw"
+```text
 Owner
 
 ↓
@@ -132,13 +112,15 @@ Participant
 Guest
 ```
 
+Die Rollen beschreiben Verantwortlichkeiten innerhalb einer Production Session.
+
 ---
 
 # Owner
 
 Der Owner besitzt die zentrale Verantwortung für eine Production Session.
 
-Berechtigungen:
+Beispielhafte Berechtigungen:
 
 * Production Session erstellen
 * Teilnehmer einladen
@@ -146,26 +128,18 @@ Berechtigungen:
 * Session verwalten
 * finale Kontrolle über die Produktion behalten
 
-Beispiel:
-
-Podcast-Verantwortlicher.
-
 ---
 
 # Producer
 
 Der Producer unterstützt die operative Durchführung einer Produktion.
 
-Berechtigungen:
+Beispielhafte Berechtigungen:
 
 * Aufnahme koordinieren
 * Teilnehmer verwalten
 * Assets organisieren
 * Produktionsabläufe begleiten
-
-Beispiel:
-
-Co-Host oder Redakteur.
 
 ---
 
@@ -173,15 +147,11 @@ Co-Host oder Redakteur.
 
 Der Participant ist aktiver Teil einer Produktion.
 
-Berechtigungen:
+Beispielhafte Berechtigungen:
 
 * an Sessions teilnehmen
 * eigene Aufnahmen bereitstellen
 * eigene Assets verwalten
-
-Beispiel:
-
-Podcast-Gast.
 
 ---
 
@@ -189,7 +159,7 @@ Podcast-Gast.
 
 Der Guest nimmt eingeschränkt an einer Produktion teil.
 
-Berechtigungen:
+Beispielhafte Berechtigungen:
 
 * Einladung annehmen
 * teilnehmen
@@ -207,9 +177,9 @@ Keine Berechtigungen:
 
 Nextcloud ist in V1 der primäre Identity Provider.
 
-Die Architektur trennt jedoch:
+Die Architektur trennt:
 
-```text id="u4x8aa"
+```text
 Nextcloud Identity
 
         ↓
@@ -221,12 +191,7 @@ NC-PoRe Identity Layer
 Production Roles
 ```
 
-Dadurch bleibt NC-PoRe erweiterbar für:
-
-* weitere Identity Provider
-* mobile Clients
-* externe Teilnehmer
-* Enterprise-Umgebungen
+Damit bleibt die fachliche Rollenlogik unabhängig von der konkreten Identity-Implementierung.
 
 ---
 
@@ -234,7 +199,7 @@ Dadurch bleibt NC-PoRe erweiterbar für:
 
 Ein typischer Ablauf:
 
-```text id="1q8vzk"
+```text
 Owner erstellt Session
 
         ↓
@@ -275,18 +240,13 @@ Dabei gilt:
 
 # Erweiterbarkeit des Rollenmodells
 
-Das Rollenmodell ist bewusst erweiterbar.
-
-Spätere Rollen können beispielsweise sein:
-
-* Editor
-* Sound Engineer
-* Publisher
-* Viewer
+Das Rollenmodell bleibt erweiterbar.
 
 Neue Rollen dürfen das Grundprinzip nicht verändern:
 
 > Rechte entstehen aus Verantwortung innerhalb einer Produktion.
+
+Welche weiteren Rollen erforderlich sind, wird durch konkrete fachliche Anforderungen entschieden.
 
 ---
 
@@ -295,7 +255,7 @@ Neue Rollen dürfen das Grundprinzip nicht verändern:
 Diese Entscheidung bedeutet nicht:
 
 * dass V1 ein komplexes Enterprise-Rechtesystem benötigt
-* dass jede mögliche Rolle sofort definiert wird
+* dass jede mögliche Rolle bereits definiert wird
 * dass Benutzer außerhalb von Sessions identische Rechte besitzen
 * dass Nextcloud die komplette Geschäftslogik übernimmt
 
@@ -307,9 +267,9 @@ Diese Entscheidung bedeutet nicht:
 
 * klare Verantwortlichkeiten
 * sichere Zusammenarbeit
-* einfache Erweiterbarkeit
+* Erweiterbarkeit
 * gute Trennung von Identität und Rolle
-* passende Grundlage für mehrere Clients
+* zentrale und nachvollziehbare Berechtigungsentscheidungen
 
 ## Nachteile
 
@@ -323,7 +283,7 @@ Diese Nachteile werden bewusst akzeptiert.
 
 # Leitgedanke
 
-NC-PoRe ist eine Umgebung für Menschen, die gemeinsam produzieren.
+NC-PoRe ist eine Umgebung für Menschen, die gemeinsam Produktionen erstellen.
 
 Technik, Dateien und Aufnahmen dienen diesem Ziel.
 
@@ -339,26 +299,22 @@ NC-PoRe has been defined as a **Nextcloud Podcast Production Environment**.
 
 Previous architecture decisions established:
 
-* The **Production Session** as the central domain entity.
+* The **Production Session** is the central domain entity.
 * People collaborate on productions.
-* Clients operate on different platforms.
+* Clients may operate on different platforms.
 * Recordings are created in a distributed way and synchronized afterwards.
 * The Core remains the authority for domain decisions.
 
-As functionality grows, identity, authentication and authorization need clear definitions.
+To keep identity and permissions traceable, three concepts must be separated:
 
-These concepts must be separated:
-
-```text id="r9w3nf"
+```text
 Identity
 
 Who am I?
 
-
 Authentication
 
 How do I prove my identity?
-
 
 Authorization
 
@@ -375,7 +331,7 @@ NC-PoRe separates:
 2. Authentication
 3. Authorization
 
-Permissions are derived from a person's role inside a Production Session.
+Permissions are not derived solely from the existence of a user. They arise from the person's role within a Production Session.
 
 Guiding principle:
 
@@ -383,11 +339,49 @@ Guiding principle:
 
 ---
 
+# Identity
+
+An identity represents a person or technical subject within the system.
+
+It answers:
+
+> Who is acting?
+
+Identity is independent of the role held by a person in a particular Production Session.
+
+---
+
+# Authentication
+
+Authentication proves an identity.
+
+NC-PoRe V1 uses Nextcloud as the primary Identity Provider.
+
+The concrete authentication implementation remains separate from domain role logic.
+
+---
+
+# Authorization
+
+Authorization defines which actions an identity may perform in a given context.
+
+Authorization decisions are made by the Core.
+
+Not:
+
+> The client decides what is allowed.
+
+But:
+
+> The Core validates identity, role and permitted action.
+
+---
+
 # Role Model V1
 
-NC-PoRe starts with a deliberately simple role model:
+NC-PoRe initially uses a deliberately simple role-based model:
 
-```text id="3kq8vx"
+```text
 Owner
 
 ↓
@@ -403,15 +397,74 @@ Participant
 Guest
 ```
 
+Roles describe responsibilities within a Production Session.
+
+---
+
+# Owner
+
+The Owner has primary responsibility for a Production Session.
+
+Example responsibilities:
+
+* create a Production Session
+* invite participants
+* assign roles
+* manage the session
+* retain final control over the production
+
+---
+
+# Producer
+
+The Producer supports operational execution of a production.
+
+Example responsibilities:
+
+* coordinate recording
+* manage participants
+* organize assets
+* support production workflows
+
+---
+
+# Participant
+
+A Participant is an active part of a production.
+
+Example responsibilities:
+
+* participate in sessions
+* provide own recordings
+* manage own assets
+
+---
+
+# Guest
+
+A Guest participates with limited permissions.
+
+Example permissions:
+
+* accept an invitation
+* participate
+* provide own data
+
+The Guest cannot:
+
+* modify the production
+* manage other participants
+* change central settings
+
 ---
 
 # Nextcloud Integration
 
 Nextcloud is the primary Identity Provider for V1.
 
-The architecture keeps a separate NC-PoRe identity layer:
+The architecture separates:
 
-```text id="8m1qpd"
+```text
 Nextcloud Identity
 
         ↓
@@ -423,38 +476,93 @@ NC-PoRe Identity Layer
 Production Roles
 ```
 
+This keeps domain role logic independent from the concrete identity implementation.
+
+---
+
+# Invitation and Participation
+
+A typical flow is:
+
+```text
+Owner creates session
+
+        ↓
+
+Participant is invited
+
+        ↓
+
+Participant accepts
+
+        ↓
+
+Role is assigned
+
+        ↓
+
+Participation is allowed
+```
+
 ---
 
 # Security Principles
 
-NC-PoRe follows least privilege principles.
+NC-PoRe follows least-privilege principles.
 
-Every action requires a meaningful authorization.
+Guiding rule:
 
-The Core validates:
+> Every action requires traceable authorization.
 
-* identity
-* role
-* allowed action
+This includes:
+
+* no implicit full access
+* roles instead of ad-hoc special permissions
+* validation in the Core
+* traceable decisions
+
+---
+
+# Role Model Extensibility
+
+The role model remains extensible.
+
+New roles must not change the underlying principle:
+
+> Permissions arise from responsibility within a production.
+
+Which additional roles are required is decided by concrete domain requirements.
+
+---
+
+# Non-Goals
+
+This decision does not mean:
+
+* that V1 requires a complex enterprise permission system
+* that every possible role is already defined
+* that users have identical rights outside sessions
+* that Nextcloud owns all business logic
 
 ---
 
 # Consequences
 
-Benefits:
+## Advantages
 
 * clear responsibilities
 * secure collaboration
 * extensibility
-* separation of identity and role
+* clear separation of identity and role
+* centralized and traceable authorization decisions
 
-Costs:
+## Disadvantages
 
-* additional complexity
-* role maintenance
-* centralized authorization logic
+* additional complexity compared with a simple user/file model
+* roles require maintenance
+* authorization requires central logic
 
-These costs are consciously accepted.
+These disadvantages are consciously accepted.
 
 ---
 
@@ -462,4 +570,6 @@ These costs are consciously accepted.
 
 NC-PoRe is an environment for people who create productions together.
 
-Technology, files and recordings exist to support collaboration.
+Technology, files and recordings serve this goal.
+
+The architecture therefore focuses not only on data, but also on collaboration.
