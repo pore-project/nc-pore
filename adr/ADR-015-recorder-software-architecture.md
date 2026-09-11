@@ -14,11 +14,11 @@ Accepted
 
 # Kontext
 
-Der Recorder Client ist die erste aktive Softwarekomponente von NC-PoRe.
+Der Recorder Client ist eine aktive Softwarekomponente von NC-PoRe.
 
-Er bildet die Grundlage für die lokale Audioerfassung und spätere Verarbeitung.
+Er bildet die Grundlage für die lokale Audioerfassung und nachgelagerte Verarbeitung.
 
-Die Architektur muss langfristig erweiterbar, wartbar und für weitere Entwickler verständlich sein.
+Die Architektur soll erweiterbar, wartbar und für weitere Entwickler verständlich sein.
 
 Der Recorder soll nicht als einzelne große Softwarekomponente entstehen, sondern aus klar getrennten Verantwortungsbereichen bestehen.
 
@@ -30,7 +30,7 @@ Der NC-PoRe Recorder wird modular aufgebaut.
 
 Die grundlegenden Verantwortungsbereiche werden getrennt voneinander entwickelt.
 
-Geplante Kernbereiche:
+Die Kernbereiche sind:
 
 - Audio Capture
 - Session Management
@@ -38,7 +38,7 @@ Geplante Kernbereiche:
 - Local Storage
 - Export Interface
 
-Die konkrete technische Umsetzung einzelner Module wird durch spätere technische Entscheidungen festgelegt.
+Die konkrete technische Umsetzung einzelner Module wird durch technische Entscheidungen festgelegt.
 
 ---
 
@@ -46,9 +46,9 @@ Die konkrete technische Umsetzung einzelner Module wird durch spätere technisch
 
 Die logische Struktur des Recorders wird modular organisiert.
 
-Geplante Module:
+Konzeptionell:
 
-```
+```text
 recorder/
 └── src/
     ├── audio/
@@ -59,7 +59,7 @@ recorder/
     └── main.rs
 ```
 
-Die konkrete Dateiorganisation kann während der Entwicklung angepasst werden, wenn praktische Erfahrungen dies erforderlich machen.
+Die konkrete Dateiorganisation kann angepasst werden, wenn praktische Erfahrungen dies erforderlich machen.
 
 ---
 
@@ -113,7 +113,7 @@ Verantwortlich für:
 Verantwortlich für:
 
 - Übergabe von Aufnahmen an andere Systeme
-- zukünftige Integration mit NC-PoRe-Komponenten
+- Übergabe an andere NC-PoRe-Komponenten
 - Exportformate
 
 ---
@@ -163,11 +163,9 @@ Verworfen wegen:
 
 ---
 
-# Zukünftige Überlegungen
+# Nicht durch diese ADR festgelegt
 
-Die konkrete technische Implementierung der Module wird durch weitere ADRs und Entwicklungsentscheidungen festgelegt.
-
-Bibliotheken und Frameworks werden erst ausgewählt, wenn die technischen Anforderungen ausreichend klar sind.
+Die konkrete technische Implementierung der Module, Bibliotheken und Frameworks wird durch jeweils erforderliche technische Entscheidungen festgelegt.
 
 ---
 
@@ -195,11 +193,11 @@ Accepted
 
 # Context
 
-The Recorder Client is the first active software component of NC-PoRe.
+The Recorder Client is an active software component of NC-PoRe.
 
 It provides the foundation for local audio capture and subsequent processing.
 
-The architecture must remain extensible, maintainable, and understandable to future developers.
+The architecture should remain extensible, maintainable, and understandable to other developers.
 
 The recorder should not be built as one large software component, but as clearly separated areas of responsibility.
 
@@ -207,11 +205,11 @@ The recorder should not be built as one large software component, but as clearly
 
 # Decision
 
-The NC-PoRe Recorder will be built in a modular way.
+The NC-PoRe Recorder is built in a modular way.
 
-The fundamental areas of responsibility will be developed separately.
+The fundamental areas of responsibility are developed separately.
 
-Planned core areas:
+The core areas are:
 
 - Audio Capture
 - Session Management
@@ -219,7 +217,7 @@ Planned core areas:
 - Local Storage
 - Export Interface
 
-The concrete technical implementation of individual modules will be defined by later technical decisions.
+The concrete technical implementation of individual modules is defined by technical decisions.
 
 ---
 
@@ -227,9 +225,9 @@ The concrete technical implementation of individual modules will be defined by l
 
 The logical structure of the recorder is organized into modules.
 
-Planned modules:
+Conceptually:
 
-```
+```text
 recorder/
 └── src/
     ├── audio/
@@ -240,7 +238,7 @@ recorder/
     └── main.rs
 ```
 
-The concrete file organization may be adjusted during development if practical experience makes this necessary.
+The concrete file organization may be adjusted if practical experience requires it.
 
 ---
 
@@ -294,7 +292,7 @@ Responsible for:
 Responsible for:
 
 - handing recordings over to other systems
-- future integration with NC-PoRe components
+- handing recordings to other NC-PoRe components
 - export formats
 
 ---
@@ -344,11 +342,9 @@ Rejected because of:
 
 ---
 
-# Future Considerations
+# Not Defined by This ADR
 
-The concrete technical implementation of the modules will be defined by further ADRs and development decisions.
-
-Libraries and frameworks will only be selected once the technical requirements are sufficiently clear.
+The concrete technical implementation of modules, libraries, and frameworks is defined by technical decisions when required.
 
 ---
 

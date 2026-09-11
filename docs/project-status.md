@@ -1,234 +1,222 @@
 # NC-PoRe Project Status
 
-- Version: 3.5
-- Date: 2026-09-01
+- Version: 4.0
+- Date: 2026-09-11
 
 ---
 
 # Deutsch (English version below)
 
----
+## Projektphase
 
-# Project Phase
+NC-PoRe befindet sich in der technischen V1-Umsetzung und -Härtung.
 
-## Technical Implementation Started
-
-NC-PoRe befindet sich nach Abschluss der Architekturphase in der technischen Umsetzung.
-
-Die grundlegenden Architekturentscheidungen, Entwicklungsprinzipien und technischen Grenzen sind definiert.
-
-Die Core- und Recorder-Komponenten wurden implementiert und durch Tests validiert.
-
----
-
-# Current Implementation Status
+Die grundlegenden Core-, Recorder- und Persistence-Grenzen sind implementiert und durch Tests abgesichert. Die browserbasierte Host-Integration befindet sich in der technischen Validierung.
 
 ## Core
 
-Implementiert:
+Implementiert sind unter anderem:
 
-- Core Modulstruktur
-- ProductionSession Modell
-- ProductionSession Lifecycle
-- ProductionSession Lifecycle-Invarianten und Zustandsübergänge
-- Recording Modell
-- Recording Lifecycle
-- Participant Modell
-- Participation Modell
-- Activity History Grundstruktur
-- sessionbezogene Rollen- und Berechtigungssemantik für Owner, Producer, Participant und Guest
-- API Operationen für ProductionSession Lifecycle und Verwaltung
-- Recording-Verknüpfungen
-- Read-API-Operationen für Participants, Recordings und Activity History
-- konsistente Domain-/Application-Fehlersemantik
-- fachliche Validierung von Lifecycle-, Rollen- und Participation-Invarianten
-- Production Activity/History-Semantik
+- ProductionSession und Lifecycle
+- Recording- und Participation-Modelle
+- Participant Identity und sessionbezogene Participation
+- Rollen- und Berechtigungssemantik
+- fachliche Lifecycle- und Participation-Invarianten
+- Activity History
+- Application- und Read-APIs für die bestehenden fachlichen Bereiche
 
-Die Production-Management- und Collaboration-Foundation ist damit als zusammenhängende fachliche Grundlage für spätere Clients und Kollaborationsfunktionen implementiert und validiert.
-
----
+Der Core bleibt die fachliche Autorität. Technische Provider- und Host-Details liegen außerhalb des Domain-Core.
 
 ## Recorder
 
-Implementiert:
+Implementiert sind unter anderem:
 
-- Session Modul und Statusmodell
 - Recording Lifecycle
-- Capture Boundary Interface
-- Workflow Coordination Layer
-- Recording Artifact Model
-- Recording Artifact Track and Chunk Model
-- Capture Result Track and Chunk Model
-- Capture-to-Artifact Data Boundary
-- Artifact Lifecycle Management
-- Local Artifact Registry
-- Artifact Processing Boundary
-- Recorder Application Boundary
-- Local Recording Artifact Flow
-- Artifact Recovery Boundary
-- RecordingSessionId, ArtifactId und weitere explizite technische Identitätstypen
-- storage-provider-unabhängige Payload-Referenzen
-- Filesystem Persistence Provider einschließlich Recovery und Konsistenzbewertung
-- CPAL-basierte konkrete CaptureProvider-Implementierung
-- native Capture-Fähigkeitsermittlung und Auswahl über ADR-061
-- native PCM16-, PCM24- und F32-Auswahl ohne Resampling oder Bit-Tiefen-Erweiterung
-- erfolgreicher lokaler CPAL Capture-to-Artifact-Pfad
-- technische Recording-Konfiguration entlang der Capture-to-Artifact-Grenze
-- produktionsgeeignete Stream-Fehlerpropagation
-- Lifecycle- und Fehlerbehandlung für fehlgeschlagenes Capture
+- Capture Boundary
+- Workflow Coordination
+- RecordingArtifact mit Tracks und Chunks
+- CaptureResult- und Artifact-Datenmodell
+- Artifact Registry und Processing
+- lokale Persistenz und Recovery
+- explizite technische Identitätstypen
+- CaptureProvider-Abstraktion
+- CPAL-basierte lokale Capture-Implementierung
+- native Capture-Selection entlang der bestehenden Audio-Konfiguration
 
-Die lokale technische Recording-Pipeline ist damit als zusammenhängender Capture-to-Artifact-Pfad implementiert und validiert. Die native Capture-Selection ist in PR #228 als separater, backend-unabhängiger Entwicklungsschritt abgeschlossen vorbereitet; der PR wird nach vollständig grünem CI und Review abgeschlossen.
-
----
+Die lokale Recording-Pipeline ist damit als zusammenhängender Capture-to-Artifact-Pfad vorhanden.
 
 ## Nextcloud Talk V1 Integration
 
-Der erste Browser-Host-Pfad ist als technischer V1-Schnitt implementiert:
+Die erste Host-Integration ist Nextcloud Talk.
 
-- Talk-spezifischer Connector zur lokalen Audio-Quelle
-- unabhängige PoRE-Capture-Quelle getrennt vom Talk-Kommunikationspfad
-- PoRE-Capture mit deaktivierter Kommunikationsverarbeitung, soweit der Browser diese Constraints unterstützt
-- Talk dient nur zur Erkennung der aktuell ausgewählten Mikrofonquelle und eines Quellenwechsels
-- Mikrofonwechsel wird als Recording-Grenze behandelt und nicht stillschweigend in einer Aufnahme fortgeführt
-- generischer browserseitiger Recording Controller ohne Talk-Abhängigkeit
-- explizite **Aufnahme starten** / **Aufnahme beenden** Steuerung
-- sichtbarer Recording-Status
-- Anzeige des tatsächlich gelieferten lokalen Mikrofonnamens und, soweit vom Browser verfügbar, Sample Rate, Sample Size und Kanalzahl
-- Fehlerzustand bei nicht möglicher unabhängiger PoRE-Capture-Quelle
-- keine Kopplung des Recording-Stopps an das Ende des Talk-Raums
+Der aktuelle browserseitige Integrationsstand umfasst insbesondere:
 
-Der Browserpfad verwendet in dieser V1-Stufe `MediaRecorder` und erzeugt zunächst ein Browser-Artifact. Dieses ist noch kein persistiertes `RecordingArtifact`; die explizite Übergabe in den bestehenden PoRE Artifact-/Persistence-Lifecycle ist als nächste Integrationsgrenze definiert.
+- Talk-spezifische Ermittlung der lokalen Audioquelle
+- getrennte PoRE-Capture-Quelle für die Aufnahme
+- explizite Steuerung des Recording-Lifecycles
+- sichtbaren Recording-Status
+- Behandlung von Änderungen der lokalen Audioquelle
+- generische browserseitige Recording-Grenze ohne Talk-Abhängigkeit im Recorder-Kern
 
-Relevante Architekturentscheidungen:
+Die Talk-Kommunikationspipeline und die PoRE-Aufnahmepipeline bleiben getrennt. Talk ist nicht die fachliche Quelle des PoRE-Recording-Artifacts.
 
-- ADR-062 Browser-First Guest Participation
-- ADR-068 Recording Start and Audio Synchronization Signet
-- ADR-071 Recording Capture, Preservation and Transport Formats
-- ADR-072 Host-Integrated Local Audio Capture via Connector
-- ADR-075 Local Capture Independence from Communication Pipeline
+Die allgemeine Host-Connector-Architektur ist in **ADR-076** dokumentiert. Die Qualitätsgrenze zwischen Kommunikation und Aufnahme ist in **ADR-074** dokumentiert; die Unabhängigkeit der lokalen Aufnahme ist in **ADR-075** festgehalten.
 
----
+## Persistence und Transfer
 
-## Persistence
+Die technischen Grenzen für lokale Persistenz, Artifact-Verarbeitung, Synchronisation und kontrollierten Transfer sind vorhanden.
 
-Implementiert:
+Für V1 ist Nextcloud die konkrete Host- und Speicherintegration. Die Übergabe fertiger Browser-Artefakte wird über die bestehende Application-/Nextcloud-Grenze geführt und muss vor dem erfolgreichen Abschluss eindeutig verifiziert werden.
 
-- Local Recording Persistence Boundary
-- Persistence Provider Interface
-- In-Memory Persistence Provider
-- Filesystem Persistence Provider
-- Persistence Integration Tests
-- Persistenz des tatsächlichen Recording-Payloads einschließlich temporärer Veröffentlichung und vollständiger Artifact-Verzeichnisse
-- definierte Store-Semantik
-- Idempotenz für äquivalente persistierte Artifacts
-- Conflict-Verhalten bei abweichendem Inhalt unter gleicher Artifact-Identität
-- Schutz vor dem stillschweigenden Überschreiben unvollständiger persistierter Artifacts
-- Trennung der konkreten Persistence-Implementierung von der Core-Domain
+## Validation
 
----
+Der dokumentierte technische Stand umfasst insbesondere:
 
-# Validation
+- Core- und Recorder-Tests
+- Persistence-Integrationstests
+- automatisierte Prüfungen der Browser-Skripte
+- lokale Audioaufnahme bis zum RecordingArtifact
+- technische Validierung der Talk-Capture-Grenze
+- manuelle Validierung des browser- und hostbezogenen Media-Lifecycles
 
-Dokumentierter lokaler technischer Teststand:
+Automatisierte Tests und reale Browser-/Talk-Validierung werden als unterschiedliche Prüfebenen behandelt.
 
-- core tests: 40 passed
-- recorder tests: 46 passed
-- CPAL Default Audio Input Device erfolgreich erkannt
-- reale lokale Audiodaten erfolgreich bis zum RecordingArtifact erfasst
-- native Capture-Selection in der CPAL-Integration ausgeführt
-- V1 Talk Browser-Skripte bestehen den JavaScript-Syntax-Check in GitHub Actions
-- V1 Talk Rust Workspace Check, Workspace Tests und Rustfmt-Check sind in GitHub Actions grün
-
-Die Talk-Browser-Unit-Spezifikationen dokumentieren den Connector-Lifecycle und die unabhängige Capture-Quelle; die CI-Stufe führt derzeit den deterministischen Syntax-Check der Browser-Skripte aus. Reale Browser-/Talk-Runtime-Validierung bleibt ein separater manueller Validierungsschritt.
-
----
-
-# Current Architecture State
-
-NC-PoRe folgt aktuell diesen Architekturprinzipien:
+## Aktuelle Architekturprinzipien
 
 - Production Session als zentrale fachliche Einheit
-- Core als Autorität für Geschäftslogik, Lifecycle, Rollen und fachliche Berechtigungen
-- technische Details bleiben von der Domäne getrennt
-- Recording Artifacts bleiben von Domainobjekten getrennt
-- Capture und Storage werden über technische Grenzen abstrahiert
-- Artifact Registry und Persistence bleiben getrennte Verantwortlichkeiten
-- Application Flow verbindet Workflow, Artifact Processing und Persistence über definierte Grenzen
-- Participant Identity und sessionbezogene Participation bleiben getrennte fachliche Konzepte
-- Activity History gehört zur ProductionSession und bleibt auf Produktionsaktivitäten bezogen
-- Recovery stellt technische Konsistenz zwischen Persistence und Registry her
-- CaptureResult und RecordingArtifact besitzen getrennte technische Datenmodelle
-- RecordingArtifact strukturiert Tracks und Chunks unabhängig von der physischen Persistenz
-- Persistenz bleibt austauschbar
-- lokale Aufnahme bleibt unabhängig von Netzwerkverfügbarkeit
-- Repository-Inhalt ist die technische Quelle der Wahrheit
-- Filesystem Persistence folgt definierten Store-Semantiken
-- die konkrete Capture-Technologie bleibt hinter CaptureProvider verborgen
-- native Capture-Selection ist backend-unabhängig und verhindert künstliche Qualitätsversprechen
-- Kommunikationspipeline und PoRE-Aufnahmepipeline sind getrennt
-- Host-spezifische Talk-Logik bleibt im Connector
-- Talk ist nicht die Aufnahmepipeline und nicht das Recording-Masterformat
+- Core als Autorität für fachliche Regeln und Lifecycle
+- lokale Aufnahme unabhängig von der Kommunikationspipeline
+- Capture und Storage über klare technische Grenzen
+- RecordingArtifact getrennt von Domainobjekten
+- Persistenz und Synchronisation als getrennte Verantwortlichkeiten
+- Host-spezifische Logik in Connectors und Integrationsschichten
+- keine provider-spezifischen Media-Interna im Core
+- technische Identitäten bleiben explizit getrennt
+- bestehende Architektur wird erweitert statt parallel dupliziert
+
+## Aktueller Arbeitsstand
+
+Die weitere V1-Arbeit konzentriert sich auf die vollständige Verbindung der bereits vorhandenen Grenzen zu einem reproduzierbaren End-to-End-Ablauf und auf die dafür erforderliche reale Validierung.
+
+Konkrete Architekturentscheidungen werden in den ADRs dokumentiert; der aktuelle Entwicklungsstand ergibt sich aus dem Repository und den zugehörigen Tests.
+
+## Historische Meilensteine
+
+Die abgeschlossenen Entwicklungsschritte bleiben in `docs/milestones/` als historische Dokumentation erhalten.
+
+## Relevante Dokumentation
+
+- `adr/` — Architecture Decision Records
+- `docs/project/` — Projektziele, MVP und aktuelle Roadmap
+- `docs/implementation/` — Implementierungsdokumentation
+- `docs/milestones/` — historische Meilensteine
+- `docs/v1/` — V1-spezifische Hinweise und Prüfungen
 
 ---
 
-# Completed Milestones
+# English Version
 
-Die historische Entwicklung wird in einzelnen Milestones dokumentiert. Zusätzlich zum bestehenden lokalen Recording-Fortschritt ist die technische Grundlage für die erste Talk-Browser-Integration vorhanden.
+## Project Phase
 
-Abgeschlossen:
+NC-PoRe is in technical V1 implementation and hardening.
 
-- **Milestone #55 – Local Technical Recording Pipeline**
-- **Milestone #64 – Recording Lifecycle Foundation**
-- **Milestone #65 – Production Management & Collaboration Foundation**
-- **ADR-068 – Recording Start and Audio Synchronization Signet** (Accepted)
+The fundamental Core, Recorder and persistence boundaries are implemented and covered by tests. The browser-based host integration is under technical validation.
 
----
+## Core
 
-# Next Steps
+Implemented areas include:
 
-Die nächsten Arbeiten werden als größere technische Meilensteine verfolgt.
+- ProductionSession and lifecycle
+- recording and participation models
+- participant identity and session-specific participation
+- role and permission semantics
+- domain lifecycle and participation invariants
+- activity history
+- application and read APIs for the existing domain areas
 
-1. **Talk V1 Artifact Boundary**
+The Core remains the domain authority. Technical provider and host details remain outside the domain Core.
 
-   Browser-Recording-Artifact explizit an die bestehende PoRE `RecordingArtifact`-/Persistence-Grenze anbinden, ohne einen zweiten Artifact-Lifecycle einzuführen.
+## Recorder
 
-2. **Distributed Recording & Synchronisation**
+Implemented areas include:
 
-   Aufbau der technischen Grundlage für Offline-first verteilte Aufnahme, Synchronisation und Remote Storage auf Basis der abgeschlossenen lokalen Recording-Pipeline und ADR-068.
+- recording lifecycle
+- capture boundary
+- workflow coordination
+- RecordingArtifact with tracks and chunks
+- CaptureResult and artifact data models
+- artifact registry and processing
+- local persistence and recovery
+- explicit technical identity types
+- CaptureProvider abstraction
+- CPAL-based local capture implementation
+- native capture selection along the established audio configuration
 
-3. **Talk Recording Lifecycle**
+The local recording pipeline therefore exists as a coherent capture-to-artifact path.
 
-   ADR-068 mit dem tatsächlichen Host-/Browser-Lifecycle verbinden: eingefrorene Recording-Teilnehmer, READY nach realem Capture-Start sowie Opening-/Closing-Sync-Signet.
+## Nextcloud Talk V1 Integration
 
-4. **Talk UI / recording information**
+The first host integration is Nextcloud Talk.
 
-   Die V1-Oberfläche schrittweise in die produktive Talk-UI integrieren und dabei die bereits definierte Informationshierarchie beibehalten: Recording-Zustand und aktive lokale Quelle zuerst; technische Details sekundär.
+The current browser integration includes in particular:
 
-5. **Runtime validation**
+- Talk-specific discovery of the local audio source
+- a separate PoRE capture source for recording
+- explicit recording lifecycle control
+- visible recording state
+- handling of local audio-source changes
+- a generic browser recording boundary without Talk dependencies in the recorder core
 
-   Reale Validierung des Talk-Pfades mit Firefox, Chromium und Safari/WebKit sowie unterschiedlichen lokalen Audioquellen.
+The Talk communication pipeline and PoRE recording pipeline remain separate. Talk is not the domain source of the PoRE RecordingArtifact.
 
----
+The general host connector architecture is documented in **ADR-076**. The communication/recording quality boundary is documented in **ADR-074**, and local capture independence in **ADR-075**.
 
-# Relevant Documentation
+## Persistence and Transfer
 
-Wichtige Einstiegspunkte:
+The technical boundaries for local persistence, artifact processing, synchronization and controlled transfer are in place.
 
-- `docs/architecture/`
-- `docs/implementation/`
-- `docs/project/`
-- `docs/milestones/`
-- `docs/architecture/adr-index.md`
-- `docs/v1/IMPLEMENTATION-NOTE.md`
+For V1, Nextcloud is the concrete host and storage integration. Finalized browser artifacts are handed off through the existing Application/Nextcloud boundary and must be explicitly verified before successful completion is reported.
 
----
+## Validation
 
-# English Version (Deutsche Version oben)
+The documented technical state includes in particular:
 
-The current project status mirrors the German section above.
+- Core and Recorder tests
+- persistence integration tests
+- automated browser-script checks
+- local audio capture through RecordingArtifact
+- technical validation of the Talk capture boundary
+- manual validation of browser- and host-specific media lifecycle behavior
 
-NC-PoRe is in active technical implementation. The local Core/Recorder/Persistence foundation is implemented and validated. The first Nextcloud Talk browser integration now has a separate PoRE capture source, explicit recording controls, visible recording state, source-change handling, and a generic browser recording boundary.
+Automated tests and real browser/Talk validation are treated as separate validation levels.
 
-The Talk communication track is not the PoRE recording master. The Talk connector observes the selected local microphone only to establish the PoRE capture source and detect source replacement. The browser V1 path currently produces a browser recording artifact through `MediaRecorder`; integration with the authoritative PoRE `RecordingArtifact`/persistence lifecycle remains the next explicit boundary.
+## Current Architectural Principles
 
-The next major work packages are the Talk artifact boundary, reconciliation with the distributed recording protocol, production Talk UI integration, and real browser/runtime validation.
+- Production Session as the central domain entity
+- Core as authority for domain rules and lifecycle
+- local recording independent of the communication pipeline
+- clear technical boundaries around capture and storage
+- RecordingArtifact separated from domain objects
+- persistence and synchronization as separate responsibilities
+- host-specific logic in connectors and integration layers
+- no provider-specific media internals in Core
+- explicit separation of technical identities
+- extend existing architecture rather than creating parallel implementations
+
+## Current Work State
+
+Further V1 work focuses on connecting the existing boundaries into a reproducible end-to-end workflow and on the real-world validation required for that workflow.
+
+Concrete architectural decisions are documented in the ADRs; the current development state is represented by the repository and its tests.
+
+## Historical Milestones
+
+Completed development steps remain available as historical documentation under `docs/milestones/`.
+
+## Relevant Documentation
+
+- `adr/` — Architecture Decision Records
+- `docs/project/` — project goals, MVP and current roadmap
+- `docs/implementation/` — implementation documentation
+- `docs/milestones/` — historical milestones
+- `docs/v1/` — V1-specific notes and checks

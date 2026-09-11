@@ -19,14 +19,14 @@ Die bisherigen Entscheidungen legen fest:
 * Clients, Speicher und externe Systeme werden über definierte Schnittstellen angebunden.
 * Der Core bleibt unabhängig von konkreten technischen Implementierungen.
 
-Damit diese Architektur langfristig funktioniert, benötigt NC-PoRe eine klare API-Strategie.
+Damit diese Architektur funktioniert, benötigt NC-PoRe eine klare API-Strategie.
 
 Die API ist die Verbindung zwischen:
 
 * Core
 * Clients
 * externen Systemen
-* zukünftigen Erweiterungen
+* Erweiterungen
 
 ---
 
@@ -59,17 +59,17 @@ Beispiel:
 
 Nicht:
 
-```text id="5k0x9m"
+```text
 LinuxClient.startRecording()
 ```
 
 Sondern:
 
-```text id="8w2v4p"
+```text
 startRecording(session)
 ```
 
-Die konkrete technische Umsetzung kann später unterschiedlich erfolgen.
+Die konkrete technische Umsetzung kann unterschiedlich erfolgen.
 
 ---
 
@@ -79,7 +79,7 @@ Die API orientiert sich an der Fachlichkeit von NC-PoRe.
 
 Nicht:
 
-```text id="g0h4pa"
+```text
 createFile()
 uploadBlob()
 saveData()
@@ -87,7 +87,7 @@ saveData()
 
 Sondern:
 
-```text id="w7y2cp"
+```text
 createSession()
 addParticipant()
 attachAsset()
@@ -135,11 +135,11 @@ Eine neue Funktion soll möglichst bestehende Clients nicht unnötig beeinflusse
 
 # Events als Bestandteil der Architektur
 
-NC-PoRe wird ereignisorientierte Konzepte unterstützen.
+NC-PoRe unterstützt ereignisorientierte Konzepte.
 
 Eine Production Session erzeugt Ereignisse wie:
 
-```text id="q9j1hc"
+```text
 SessionCreated
 
 ParticipantJoined
@@ -158,7 +158,7 @@ Events ermöglichen:
 * Synchronisation
 * verteilte Clients
 * nachvollziehbare Produktionsabläufe
-* zukünftige Erweiterungen
+* Erweiterungen
 
 ---
 
@@ -243,12 +243,7 @@ Sondern:
 
 ## 3. Erweiterbarkeit vor kurzfristiger Optimierung
 
-Eine gute API erlaubt zukünftige Entwicklungen:
-
-* neue Clients
-* neue Provider
-* neue Medienformate
-* neue Kommunikationssysteme
+Eine gute API bleibt erweiterbar, ohne unnötig an bestehende Clients gebunden zu sein.
 
 ---
 
@@ -291,7 +286,7 @@ Diese Entscheidung bedeutet nicht:
 
 * dass sofort eine öffentliche Entwickler-API angeboten werden muss
 * dass ein bestimmtes Netzwerkprotokoll festgelegt wird
-* dass alle zukünftigen Funktionen bereits bekannt sein müssen
+* dass alle Funktionen bereits bekannt sein müssen
 * dass interne Implementierungen niemals geändert werden dürfen
 
 ---
@@ -317,16 +312,16 @@ Previous decisions established:
 * The **Production Session** is the central domain entity.
 * The **Core** contains the domain truth of NC-PoRe.
 * Clients, storage and external systems connect through defined interfaces.
-* The Core remains independent from concrete implementations.
+* The Core remains independent from concrete technical implementations.
 
-To make this architecture sustainable, NC-PoRe requires a clear API strategy.
+To make this architecture work, NC-PoRe requires a clear API strategy.
 
 The API connects:
 
 * Core
 * clients
 * external systems
-* future extensions
+* extensions
 
 ---
 
@@ -355,6 +350,22 @@ Instead:
 
 > The Core defines capabilities. Clients use these capabilities.
 
+Example:
+
+Not:
+
+```text
+LinuxClient.startRecording()
+```
+
+But:
+
+```text
+startRecording(session)
+```
+
+The concrete technical implementation may differ.
+
 ---
 
 # Domain-oriented API
@@ -363,7 +374,7 @@ The API follows the domain language of NC-PoRe.
 
 Not:
 
-```text id="4l8vma"
+```text
 createFile()
 uploadBlob()
 saveData()
@@ -371,7 +382,7 @@ saveData()
 
 But:
 
-```text id="n3r6tx"
+```text
 createSession()
 addParticipant()
 attachAsset()
@@ -380,6 +391,8 @@ finishSession()
 ```
 
 The API speaks the language of the product.
+
+It does not expose the internal storage structure.
 
 ---
 
@@ -411,15 +424,17 @@ Goals:
 * backward compatibility
 * clear change processes
 
+A new function should avoid unnecessarily affecting existing clients.
+
 ---
 
 # Events as Part of Architecture
 
-NC-PoRe will support event-oriented concepts.
+NC-PoRe supports event-oriented concepts.
 
 A Production Session creates events such as:
 
-```text id="p1m7zc"
+```text
 SessionCreated
 
 ParticipantJoined
@@ -437,8 +452,8 @@ Events enable:
 
 * synchronization
 * distributed clients
-* traceable workflows
-* future extensions
+* traceable production workflows
+* extensions
 
 ---
 
@@ -448,13 +463,15 @@ The API defines an architectural boundary.
 
 The technical implementation remains open.
 
-Possible implementations:
+Possible implementations include:
 
 * REST
 * WebSocket
 * gRPC
 * local interfaces
 * internal function calls
+
+The architecture does not prematurely mandate a specific protocol.
 
 ---
 
@@ -470,13 +487,15 @@ Including:
 * secure communication
 * traceable access
 
+Security is not added as an afterthought.
+
 ---
 
 # Documentation as Part of the API
 
 An API without understandable documentation is not a complete product.
 
-Stable APIs require:
+Every stable public or internal API requires:
 
 * function descriptions
 * data models
@@ -488,6 +507,82 @@ Documentation follows the internationalization strategy:
 
 * German
 * English
+
+---
+
+# Core Principles
+
+## 1. The API Is the Language of the System
+
+The API connects people, clients and systems.
+
+It describes capabilities, not technical details.
+
+---
+
+## 2. Users Think in Tasks, Not Functions
+
+The API should support actual workflows.
+
+Examples:
+
+Not:
+
+> Save file
+
+But:
+
+> Add recording to session
+
+---
+
+## 3. Extensibility Before Short-term Optimization
+
+A good API remains extensible without creating unnecessary coupling to existing clients.
+
+---
+
+## 4. Simplicity for the User
+
+Technical complexity remains behind the API.
+
+Users should not need to know:
+
+* which storage technology is used
+* which communication system is active
+* which platform is used
+
+---
+
+# Consequences
+
+## Advantages
+
+* clear separation between Core and environment
+* multiple clients are possible
+* better maintainability
+* easier extension
+* foundation for distributed systems
+* better testability
+
+## Disadvantages
+
+* additional development effort
+* APIs require long-term maintenance
+* decisions must be made carefully
+
+These disadvantages are consciously accepted.
+
+---
+
+# Non-Goals
+
+This decision does not mean:
+
+* that a public developer API must be offered immediately
+* that a specific network protocol is mandated
+* that all functions must already be known
+* that internal implementations may never change
 
 ---
 

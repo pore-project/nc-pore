@@ -1,26 +1,18 @@
-# Deutsch ([English version below](#english-version))
-
 # ADR-065: Storage Provider and Retention Policy Boundaries
 
-## Status
-
-Proposed
-
-## Date
-
-2026-08-17
-
-## Decision Type
-
-Architecture
+* Status: Proposed
+* Date: 2026-08-17
+* Decision Type: Architecture
 
 ---
 
-# Kontext
+# Deutsch ([English version below](#english-version))
+
+## Kontext
 
 NC-PoRe ist self-hosted und User/Betreiber sollen die Kontrolle über ihre Produktionsdaten behalten.
 
-Der technische Storage-Mechanismus muss dennoch austauschbar bleiben. Local Filesystem, Nextcloud-basierter Storage, S3-kompatibler Storage, WebDAV und zukünftige Provider sind plausible Implementierungen.
+Der technische Storage-Mechanismus muss dennoch austauschbar bleiben. Unterschiedliche Storage-Implementierungen sind möglich, ohne das Domain-Modell an einen konkreten Provider zu koppeln.
 
 Der Vergleich mit Ennuicastr macht außerdem Retention als sinnvolles Konzept sichtbar. Die Retention Policy darf jedoch nicht zu einer impliziten Domain-Regel für ein Recording werden.
 
@@ -41,13 +33,9 @@ Konzeptionell:
                          |
                   Artifact Storage API
                          |
-          +--------------+--------------+
-          |              |              |
-      Local FS        S3-compatible   WebDAV
-          |              |              |
-          +--------------+--------------+
+                 Storage Provider
                          |
-                  Future providers
+                 konkreter Storage
 ```
 
 Nextcloud bleibt eine wichtige Integration bzw. ein wichtiger Provider im NC-PoRe-Ökosystem, aber das Domain-Modell darf nicht von Nextclouds interner Storage-Repräsentation abhängen.
@@ -66,7 +54,7 @@ Storage Provider dürfen keine fachlichen Domain-Autoritäten werden.
 
 Self-hosted Storage ist das Default-Produktmodell.
 
-Optionale externe Storage- oder Processing-Services können später als ausdrücklich gewählte Provider-/Add-on-Fähigkeiten hinzukommen. Solche Services dürfen Produktionsdaten nicht stillschweigend außerhalb der vom Betreiber gewählten Storage-Grenze verschieben.
+Optionaler externer Storage oder externe Verarbeitung kann als ausdrücklich gewählte Provider-Fähigkeit eingesetzt werden. Solche Services dürfen Produktionsdaten nicht stillschweigend außerhalb der vom Betreiber gewählten Storage-Grenze verschieben.
 
 ---
 
@@ -74,7 +62,7 @@ Optionale externe Storage- oder Processing-Services können später als ausdrüc
 
 Retention wird als **Storage Policy** behandelt und nicht als intrinsische Recording-Lifecycle-Regel.
 
-Ein Deployment kann später beispielsweise festlegen:
+Ein Deployment kann beispielsweise festlegen:
 
 * Raw Capture für einen definierten Zeitraum behalten
 * abgeleitete Production Artifacts dauerhaft behalten
@@ -89,7 +77,7 @@ Das Domain-Modell darf keine universelle Ablaufdauer voraussetzen.
 
 Storage Provider speichern Artifacts als opaque Payloads zusammen mit den für die Artifact-Abstraktion erforderlichen Metadaten.
 
-Ein Provider muss nicht verstehen, ob ein Artifact WAV, FLAC, Opus, WebM oder ein anderes Format enthält.
+Ein Provider muss nicht verstehen, welches Medienformat ein Artifact enthält.
 
 Dadurch bleiben Formatentscheidungen in Capture-, Reconstruction- und Processing-Schichten und werden nicht Teil der Storage-Implementierung.
 
@@ -145,35 +133,21 @@ Sie ergänzt ADR-064, indem sie festlegt, wo Raw und Derived Artifacts gespeiche
 
 ---
 
-# Zukünftige Betrachtungen
+# Nicht durch diese ADR festgelegt
 
-Eine spätere Storage-Implementierungs-ADR muss das konkrete Provider-Interface, Atomicity Guarantees, Integrity Verification, Resumable Writes, Deletion Semantics und das Provider-Capability-Modell definieren.
+Diese ADR legt kein konkretes Provider-Interface und keine konkrete technische Ausgestaltung für Atomicity Guarantees, Integrity Verification, Resumable Writes, Deletion Semantics oder ein Provider-Capability-Modell fest.
+
+Solche Implementierungsdetails werden separat entschieden, sobald sie für eine konkrete technische Entscheidung erforderlich sind.
 
 ---
 
 # English Version ([Deutsche Version oben](#deutsch))
 
-# ADR-065: Storage Provider and Retention Policy Boundaries
-
-## Status
-
-Proposed
-
-## Date
-
-2026-08-17
-
-## Decision Type
-
-Architecture
-
----
-
-# Context
+## Context
 
 NC-PoRe is self-hosted and users/operators should retain control over their production data.
 
-The technical storage mechanism must nevertheless remain replaceable. Local filesystem storage, Nextcloud-backed storage, S3-compatible storage, WebDAV and future providers are plausible implementations.
+The technical storage mechanism must nevertheless remain replaceable. Different storage implementations may be used without coupling the domain model to a concrete provider.
 
 The comparison with Ennuicastr also highlights retention as a useful concept. Retention policy must not, however, become an implicit domain rule for a Recording.
 
@@ -194,16 +168,12 @@ Conceptually:
                          |
                   Artifact Storage API
                          |
-          +--------------+--------------+
-          |              |              |
-      Local FS        S3-compatible   WebDAV
-          |              |              |
-          +--------------+--------------+
+                  Storage Provider
                          |
-                  Future providers
+                  concrete storage
 ```
 
-Nextcloud remains an important integration/provider in the NC-PoRE ecosystem, but the domain model must not depend on Nextcloud's internal storage representation.
+Nextcloud remains an important integration/provider in the NC-PoRe ecosystem, but the domain model must not depend on Nextcloud's internal storage representation.
 
 ---
 
@@ -219,7 +189,7 @@ Storage providers must not become domain authorities.
 
 Self-hosted storage is the default product model.
 
-Optional external storage or processing services may later be added as explicitly selected provider/add-on capabilities. Such services must not silently move production data outside the storage boundary chosen by the operator.
+Optional external storage or external processing may be used as an explicitly selected provider capability. Such services must not silently move production data outside the storage boundary chosen by the operator.
 
 ---
 
@@ -227,7 +197,7 @@ Optional external storage or processing services may later be added as explicitl
 
 Retention is treated as a **storage policy**, not as an intrinsic Recording lifecycle rule.
 
-A deployment may later define policies such as:
+A deployment may, for example, define policies to:
 
 * retain Raw Capture for a defined period
 * retain derived Production Artifacts permanently
@@ -242,7 +212,7 @@ The domain model must not assume a universal expiry period.
 
 Storage providers store Artifacts as opaque payloads together with the metadata required by the artifact abstraction.
 
-A provider does not need to understand whether an Artifact contains WAV, FLAC, Opus, WebM or another format.
+A provider does not need to understand which media format an Artifact contains.
 
 This keeps format decisions in capture, reconstruction and processing layers rather than in storage implementations.
 
@@ -298,6 +268,8 @@ It complements ADR-064 by defining where Raw and Derived Artifacts may be stored
 
 ---
 
-# Future Considerations
+# Not Defined by This ADR
 
-A later storage implementation ADR must define the concrete provider interface, atomicity guarantees, integrity verification, resumable writes, deletion semantics and provider capability model.
+This ADR does not define a concrete provider interface or the technical details of atomicity guarantees, integrity verification, resumable writes, deletion semantics or a provider capability model.
+
+Such implementation details are decided separately when they are required for a concrete technical decision.

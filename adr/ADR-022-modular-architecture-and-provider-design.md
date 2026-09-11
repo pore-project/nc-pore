@@ -1,3 +1,5 @@
+# Deutsch ([English version below](#english-version))
+
 # ADR-022: Modulare Architektur und Provider-Design
 
 * Status: Accepted
@@ -6,22 +8,9 @@
 
 ---
 
-# Deutsch ([English version below](#english-version))
-
 ## Kontext
 
-NC-PoRe soll langfristig nicht nur ein einfacher Recorder sein, sondern ein offenes, erweiterbares System zur Erstellung und Verwaltung von Medien-Sessions.
-
-Die Architektur soll bereits in der ersten Version zukünftige Anforderungen ermöglichen:
-
-* mehrere Teilnehmer und Geräte
-* unterschiedliche Betriebssysteme und Clients
-* verschiedene Speicheranbieter
-* Konferenzintegrationen
-* zusätzliche Medienarten wie Video oder Bildschirmaufnahmen
-* professionelle Erweiterungsmodule
-
-Eine stark gekoppelte Architektur würde spätere Erweiterungen erschweren und hohe Änderungskosten verursachen.
+NC-PoRe benötigt eine modulare Architektur, in der fachliche Bereiche und technische Integrationen klar voneinander getrennt sind. Eine stark gekoppelte Architektur würde Änderungen und Erweiterungen unnötig erschweren.
 
 ---
 
@@ -29,40 +18,22 @@ Eine stark gekoppelte Architektur würde spätere Erweiterungen erschweren und h
 
 NC-PoRe wird nach dem Prinzip einer modularen Architektur entwickelt.
 
-Funktionale Bereiche werden durch klar definierte Schnittstellen getrennt.
+Funktionale Bereiche werden durch klar definierte Schnittstellen getrennt. Konkrete Technologien werden über austauschbare Provider angebunden.
 
-Konkrete Technologien werden über austauschbare Provider angebunden.
+Konzeptionell:
 
-Beispiele:
-
-```
-StorageProvider
-
-├── Nextcloud Storage
-├── Local Storage
-├── WebDAV Storage
-└── weitere Speicheranbieter
-```
-
-```
-ConferenceProvider
-
-├── Nextcloud Talk
-├── BigBlueButton
-├── Jitsi
-└── weitere Systeme
+```text
+NC-PoRe Core
+   |
+   +-- Session / Domain
+   +-- Media
+   +-- Metadata
+   +-- Storage Provider
+   +-- Export
+   +-- Host / Integration Provider
 ```
 
-```
-MediaProvider
-
-├── Audio
-├── Video
-├── Screen Capture
-└── weitere Medienquellen
-```
-
-Die Kernlogik von NC-PoRe soll nicht von einzelnen Technologien abhängig sein.
+Die Kernlogik von NC-PoRe darf nicht von einzelnen Technologien abhängig sein.
 
 ---
 
@@ -70,52 +41,19 @@ Die Kernlogik von NC-PoRe soll nicht von einzelnen Technologien abhängig sein.
 
 ### 1. Session statt Datei
 
-NC-PoRe betrachtet eine Aufnahme nicht als einzelne Datei, sondern als Session.
-
-Eine Session kann enthalten:
-
-* Teilnehmer
-* Medienströme
-* Metadaten
-* Ereignisse
-* Exportinformationen
-
-Dadurch bleibt die Architektur offen für Multi-Participant- und Multi-Media-Anwendungen.
-
----
+NC-PoRe betrachtet eine Aufnahme als Teil einer Session. Eine Session kann Teilnehmer, Medienströme, Metadaten, Ereignisse und Exportinformationen enthalten.
 
 ### 2. Klare Verantwortlichkeiten
 
-Jedes Modul besitzt eine klar definierte Aufgabe.
+Jedes Modul besitzt eine klar definierte Aufgabe. Module sollen möglichst unabhängig voneinander weiterentwickelt werden können.
 
-Beispiele:
+### 3. Provider hinter Schnittstellen
 
-* Session-Modul:
-  Verwaltung des Lebenszyklus einer Aufnahme
+Technologie- und integrationsspezifische Funktionen werden hinter definierten Grenzen gekapselt. Der Core arbeitet mit fachlichen bzw. technischen Fähigkeiten und nicht mit den internen APIs einzelner Anbieter.
 
-* Media-Modul:
-  Verarbeitung von Audio-, Video- und weiteren Medienquellen
+### 4. Erweiterbarkeit ohne unnötige Komplexität
 
-* Metadata-Modul:
-  Verwaltung zusätzlicher Informationen
-
-* Storage-Modul:
-  Speicherung und Abruf von Daten
-
-* Export-Modul:
-  Bereitstellung verschiedener Ausgabeformate
-
-Module sollen möglichst unabhängig voneinander weiterentwickelt werden können.
-
----
-
-### 3. Erweiterbarkeit durch Schnittstellen
-
-Neue Funktionen sollen bevorzugt durch neue Module oder Provider ergänzt werden.
-
-Bestehende Kernfunktionen sollen möglichst stabil bleiben.
-
-Erweiterungen sollen nicht dazu führen, dass Anwender oder Entwickler die gesamte Architektur verstehen müssen.
+Neue Funktionen sollen bevorzugt durch klar abgegrenzte Module oder Provider ergänzt werden. Bestehende Kernfunktionen sollen möglichst stabil bleiben.
 
 ---
 
@@ -126,16 +64,15 @@ Erweiterungen sollen nicht dazu führen, dass Anwender oder Entwickler die gesam
 * bessere Wartbarkeit
 * einfachere Erweiterbarkeit
 * geringere Abhängigkeit von einzelnen Technologien
-* bessere Möglichkeiten für Community-Beiträge
-* Vorbereitung auf zukünftige Plattformen
+* gute Voraussetzungen für Community-Beiträge
 
 ### Nachteile
 
 * höherer initialer Entwicklungsaufwand
 * zusätzliche Abstraktionsebenen
-* komplexere Architektur am Anfang
+* komplexere Projektstruktur
 
-Diese Nachteile werden bewusst akzeptiert, da langfristige Wartbarkeit wichtiger ist als kurzfristige Entwicklungsoptimierung.
+Diese Nachteile werden bewusst akzeptiert.
 
 ---
 
@@ -143,9 +80,9 @@ Diese Nachteile werden bewusst akzeptiert, da langfristige Wartbarkeit wichtiger
 
 Diese Entscheidung bedeutet nicht:
 
-* dass jede mögliche Plattform sofort unterstützt wird
-* dass jede Schnittstelle von Anfang an vollständig implementiert wird
-* dass unnötige Abstraktionen eingeführt werden
+* dass jede denkbare Technologie unterstützt werden muss
+* dass jede Schnittstelle sofort vollständig implementiert wird
+* dass Abstraktionen ohne konkreten Bedarf eingeführt werden
 
 Die Architektur soll Möglichkeiten schaffen, nicht unnötige Komplexität erzeugen.
 
@@ -153,73 +90,46 @@ Die Architektur soll Möglichkeiten schaffen, nicht unnötige Komplexität erzeu
 
 ## Leitgedanke
 
-NC-PoRe soll nicht als einzelner Recorder entwickelt werden.
-
-NC-PoRe ist ein offenes Session-System, das Menschen, Geräte, Medienquellen und Speicherorte miteinander verbinden kann.
-
-Komplexität soll innerhalb des Systems gelöst werden und nicht beim Anwender entstehen.
+NC-PoRe ist ein offenes Session-System. Fachliche Logik und technische Integrationen werden so getrennt, dass Änderungen an einzelnen Technologien nicht die gesamte Architektur bestimmen.
 
 ---
 
 # English Version ([Deutsche Version oben](#deutsch))
 
+# ADR-022: Modular Architecture and Provider Design
+
+* Status: Accepted
+* Date: 2026-07-23
+* Decision Type: Architecture
+
+---
+
 ## Context
 
-NC-PoRe is not intended to become only a simple recorder.
-
-The long-term goal is an open and extensible system for creating and managing media sessions.
-
-The architecture should support future requirements such as:
-
-* multiple participants and devices
-* different operating systems and clients
-* different storage providers
-* conference integrations
-* additional media types such as video or screen capture
-* professional extension modules
-
-A tightly coupled architecture would make future extensions difficult and expensive.
+NC-PoRe requires a modular architecture in which domain areas and technical integrations are clearly separated. A tightly coupled architecture would make changes and extensions unnecessarily difficult.
 
 ---
 
 ## Decision
 
-NC-PoRe will follow a modular architecture approach.
+NC-PoRe follows a modular architecture approach.
 
-Functional areas are separated through clearly defined interfaces.
+Functional areas are separated through clearly defined interfaces. Concrete technologies are connected through replaceable providers.
 
-Concrete technologies are connected through replaceable providers.
+Conceptually:
 
-Examples:
-
-```
-StorageProvider
-
-├── Nextcloud Storage
-├── Local Storage
-├── WebDAV Storage
-└── additional providers
-```
-
-```
-ConferenceProvider
-
-├── Nextcloud Talk
-├── BigBlueButton
-├── Jitsi
-└── additional systems
+```text
+NC-PoRe Core
+   |
+   +-- Session / Domain
+   +-- Media
+   +-- Metadata
+   +-- Storage Provider
+   +-- Export
+   +-- Host / Integration Provider
 ```
 
-```
-MediaProvider
-
-├── Audio
-├── Video
-├── Screen Capture
-└── additional media sources
-```
-
-The core logic of NC-PoRe should not depend on individual technologies.
+The core logic of NC-PoRe must not depend on individual technologies.
 
 ---
 
@@ -227,52 +137,19 @@ The core logic of NC-PoRe should not depend on individual technologies.
 
 ### 1. Session instead of file
 
-NC-PoRe treats a recording not as a single file, but as a session.
-
-A session may contain:
-
-* participants
-* media streams
-* metadata
-* events
-* export information
-
-This keeps the architecture open for multi-participant and multi-media scenarios.
-
----
+NC-PoRe treats a recording as part of a session. A session may contain participants, media streams, metadata, events and export information.
 
 ### 2. Clear responsibilities
 
-Each module has a clearly defined responsibility.
+Each module has a clearly defined responsibility. Modules should remain independently maintainable whenever possible.
 
-Examples:
+### 3. Providers behind interfaces
 
-* Session module:
-  manages recording lifecycle
+Technology- and integration-specific functionality is encapsulated behind defined boundaries. The Core works with domain or technical capabilities rather than the internal APIs of individual providers.
 
-* Media module:
-  handles audio, video and other media sources
+### 4. Extensibility without unnecessary complexity
 
-* Metadata module:
-  manages additional information
-
-* Storage module:
-  stores and retrieves data
-
-* Export module:
-  provides output formats
-
-Modules should remain independently maintainable whenever possible.
-
----
-
-### 3. Extension through interfaces
-
-New functionality should preferably be added through new modules or providers.
-
-Existing core functionality should remain stable whenever possible.
-
-Extensions should not require users or developers to understand the complete system architecture.
+New functionality should preferably be added through clearly separated modules or providers. Existing core functionality should remain stable whenever possible.
 
 ---
 
@@ -283,16 +160,15 @@ Extensions should not require users or developers to understand the complete sys
 * improved maintainability
 * easier extension
 * reduced dependency on individual technologies
-* better support for community contributions
-* preparation for future platforms
+* good support for community contributions
 
 ### Costs
 
 * higher initial development effort
 * additional abstraction layers
-* more complex architecture at the beginning
+* more complex project structure
 
-These costs are accepted because long-term maintainability is more important than short-term development speed.
+These costs are consciously accepted.
 
 ---
 
@@ -300,9 +176,9 @@ These costs are accepted because long-term maintainability is more important tha
 
 This decision does not mean:
 
-* supporting every possible platform immediately
-* implementing every interface from the beginning
-* introducing unnecessary abstractions
+* every conceivable technology must be supported
+* every interface must be fully implemented immediately
+* abstractions should be introduced without a concrete need
 
 The architecture should create possibilities, not unnecessary complexity.
 
@@ -310,8 +186,4 @@ The architecture should create possibilities, not unnecessary complexity.
 
 ## Guiding Principle
 
-NC-PoRe is not developed as a single recorder.
-
-NC-PoRe is an open session system connecting people, devices, media sources and storage locations.
-
-Complexity should be handled inside the system, not transferred to the user.
+NC-PoRe is an open session system. Domain logic and technical integrations are separated so that individual technology choices do not determine the entire architecture.

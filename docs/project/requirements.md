@@ -2,9 +2,7 @@
 
 ## Ziel
 
-NC-PoRe ist eine selbstgehostete Podcast-Produktionsplattform
-mit lokaler Audioaufnahme und anschließender Verarbeitung
-auf einem eigenen Server.
+NC-PoRe ist eine selbstgehostete Podcast-Produktionsplattform mit lokaler Audioaufnahme und kontrollierter Übergabe der Aufnahmen an die eigene Infrastruktur.
 
 ---
 
@@ -16,8 +14,8 @@ NC-PoRe muss:
 
 - Audio lokal auf dem Teilnehmergerät aufnehmen.
 - Die Aufnahme unabhängig von der Netzwerkqualität ermöglichen.
-- Hochwertige Audiodateien erzeugen.
-- Mehrere Teilnehmer getrennt aufnehmen können.
+- Die verfügbare Aufnahmequalität des Eingabegeräts möglichst originalgetreu erhalten.
+- Mehrere Recording-Teilnehmer getrennt aufnehmen können.
 
 ---
 
@@ -25,28 +23,23 @@ NC-PoRe muss:
 
 NC-PoRe muss:
 
-- lokale Zwischenspeicherung ermöglichen.
-- Aufnahmen in Chunks speichern.
-- abgeschlossene Aufnahmen zum Server übertragen.
-- Originalaufnahmen unverändert erhalten.
+- lokale und kontrollierte Zwischenspeicherung ermöglichen.
+- Aufnahmen in wiederherstellbaren Einheiten speichern.
+- abgeschlossene Aufnahmen kontrolliert an die zentrale Umgebung übertragen können.
+- die Originalaufnahmen beziehungsweise ihre maßgebliche Aufnahmeinformation unverändert erhalten.
 
 ---
 
 ## Teilnehmer
 
-NC-PoRe muss unterstützen:
+NC-PoRE muss unterstützen:
 
 - interne Benutzer
 - externe Gäste
 - Rollen und Berechtigungen
+- eine eindeutige Zuordnung von Personen zu Recording Sessions
 
-Geplante Rollen:
-
-- Administrator
-- Moderator
-- Benutzer
-- Editor
-- Gast
+Welche Personen an einer konkreten Aufnahme teilnehmen und welche Berechtigungen sie besitzen, wird durch die fachlichen Session- und Rollenregeln bestimmt.
 
 ---
 
@@ -55,27 +48,31 @@ Geplante Rollen:
 NC-PoRe muss:
 
 - transparent über laufende Aufnahmen informieren.
-- Zustimmung der Teilnehmer dokumentieren.
-- ohne externe Cloud-Dienste funktionieren.
+- die erforderlichen Zustimmungen beziehungsweise Aufnahmefreigaben nachvollziehbar behandeln.
+- ohne Abhängigkeit von einer externen Cloud-Infrastruktur betrieben werden können.
 
 ---
 
-## Export
+## Export und Weiterverarbeitung
 
 NC-PoRe soll ermöglichen:
 
-- Weiterverarbeitung in Audiosoftware.
-- strukturierte Ablage der Audiospuren.
-- spätere Integration von DAW-Projektexporten.
+- Weiterverarbeitung der aufgenommenen Audiodaten mit externen Werkzeugen.
+- strukturierte Ablage der Audiospuren und zugehörigen Metadaten.
+- Nutzung offener beziehungsweise nachvollziehbarer Datenrepräsentationen.
+
+Konkrete Exportformate oder Integrationen werden durch die jeweils getroffenen Architektur- und Implementierungsentscheidungen bestimmt.
 
 ---
 
-# Nicht-Ziele Version 0.1
+# Nicht-Ziele der aktuellen Ausbaustufe
 
-Nicht Bestandteil der ersten Version:
+Nicht Bestandteil der aktuellen Ausbaustufe sind insbesondere:
 
 - Videoaufnahme
 - Live-Mixing
 - Streaming
 - automatische Veröffentlichung
-- Cloud-KI-Dienste
+- automatische Verarbeitung durch externe KI-Dienste
+
+Diese Nicht-Ziele beschreiben den aktuellen Scope und stellen keine Zusage für spätere Funktionen dar.
