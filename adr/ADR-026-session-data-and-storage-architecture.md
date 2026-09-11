@@ -1,3 +1,7 @@
+<a id="deutsch"></a>
+
+# Deutsch
+
 # ADR-026: Session Data and Storage Architecture
 
 * Status: Accepted
@@ -6,542 +10,204 @@
 
 ---
 
-# Deutsch ([English version below](#english-version))
-
 ## Kontext
 
-NC-PoRe wurde als **Nextcloud Podcast Production Environment** definiert.
-
-Der zentrale Anwendungsfall ist die kollaborative Produktion von Podcasts mit mehreren Teilnehmern, unterschiedlichen Geräten und perspektivisch unterschiedlichen Medienformaten.
-
-Eine Podcast-Produktion besteht jedoch nicht nur aus einzelnen Dateien.
-
-Aus Sicht der Benutzer existiert eine zusammenhängende Produktion:
-
-* eine bestimmte Folge
-* ein bestimmtes Gespräch
-* bestimmte Teilnehmer
-* bestimmte Aufnahmen
-* ein bestimmter Produktionsprozess
-
-Daher ist eine reine Betrachtung von Audiodateien als primäre Einheit nicht ausreichend.
-
-NC-PoRe benötigt ein Datenmodell, das den tatsächlichen Arbeitsprozess abbildet.
-
----
+Eine Podcast-Produktion besteht nicht nur aus einzelnen Dateien. Aus Sicht der Benutzer existiert eine zusammenhängende Produktion mit Teilnehmern, Aufnahmen und Produktionsdaten. NC-PoRe benötigt daher ein Datenmodell, das diesen Zusammenhang abbildet.
 
 ## Entscheidung
 
-Die zentrale fachliche Einheit von NC-PoRe ist die:
+Die zentrale fachliche Einheit von NC-PoRe ist die **Production Session**.
 
-**Production Session**
+Eine Production Session umfasst die relevanten Informationen und Medien einer gemeinsamen Produktion. Medien und Dateien werden als Bestandteile einer Session betrachtet und nicht als eigenständige Primärobjekte.
 
-Eine Production Session umfasst alle relevanten Informationen und Medien, die zu einer gemeinsamen Produktion gehören.
-
-Medien und Dateien werden als Bestandteile einer Session betrachtet und nicht als eigenständige Primärobjekte.
-
-NC-PoRe verwaltet Medien als Assets, ermöglicht jedoch weiterhin den direkten Zugriff auf zugrunde liegende Mediendateien für externe Produktionswerkzeuge.
-
-Der Benutzer bleibt Eigentümer seiner Produktionsdaten und wird nicht durch das System eingeschränkt.
-
----
+NC-PoRe verwaltet Medien als Assets und erhält den direkten Zugriff auf die zugrunde liegenden Mediendaten für externe Werkzeuge. Der Benutzer bleibt Eigentümer seiner Produktionsdaten.
 
 ## Session-Modell
 
-Eine Production Session kann enthalten:
-
 ```text
 Production Session
-
 ├── Session Metadata
-│
 ├── Participants
-│
-├── Audio Streams
-│
-├── Video Streams (future)
-│
+├── Media Streams
 ├── Events
-│
 ├── Notes
-│
 ├── Assets
-│
 └── Exports
 ```
 
----
-
 ## Core-Modell und Speicherung
 
-NC-PoRe trennt zwischen:
-
-1. dem fachlichen Datenmodell
-2. der technischen Speicherung
-
-Das interne Modell von NC-PoRe definiert, was eine Session ist.
-
-Der konkrete Speicherort ist eine technische Implementierung.
-
-Die Architektur folgt diesem Prinzip:
+NC-PoRe trennt zwischen dem fachlichen Datenmodell und der technischen Speicherung.
 
 ```text
 NC-PoRe Core
-
-        |
-        |
+      |
 Session Data Model
-
-        |
-        |
+      |
 Storage Provider Layer
-
-        |
-        |
---------------------------------
-|              |               |
-Nextcloud    Local Storage   Future Providers
+      |
+Storage Provider
 ```
 
----
+Der konkrete Speicherort ist eine technische Implementierung. Das Domain-Modell darf nicht von der internen Struktur eines bestimmten Storage-Systems abhängen.
 
 ## Verhältnis zu Nextcloud
 
-Nextcloud ist die primäre Integrationsplattform der ersten Version.
+Nextcloud ist die Integrationsplattform der ersten Version. Die Nutzung von Nextcloud für Speicherung, Synchronisation, Zugriff und Zusammenarbeit darf das fachliche NC-PoRe-Datenmodell nicht bestimmen.
 
-In V1 werden Nextcloud-Funktionen genutzt für:
+## Zugriff auf Mediendateien
 
-* Speicherung von Produktionsdaten
-* Synchronisation
-* Zugriff und Austausch
-* Zusammenarbeit
-
-Das Datenmodell von NC-PoRe wird jedoch nicht durch die interne Struktur von Nextcloud vorgegeben.
-
-Nextcloud ist ein Provider.
-
-NC-PoRe bleibt Eigentümer des fachlichen Modells.
-
----
-
-## Zugriff auf Mediendateien und externe Werkzeuge
-
-NC-PoRe abstrahiert die Verwaltung von Medien, ersetzt jedoch nicht automatisch bestehende professionelle Produktionswerkzeuge.
-
-Die zugrunde liegenden Mediendateien bleiben zugänglich.
-
-Ein typischer Workflow kann sein:
-
-```text
-NC-PoRe Production Session
-
-        |
-        |
-    Audio Assets
-
-        |
-        |
--------------------------
-|                       |
-Audacity              Ardour
-
-        |
-        |
-Final Export
-```
-
-Beispielsweise können:
-
-* WAV-Dateien direkt geöffnet werden
-* einzelne Spuren in externe Audio-Editoren übernommen werden
-* fertige Exporte wieder als Assets in die Session zurückgeführt werden
-
-Eine spätere Integration mit externen Werkzeugen ist möglich, aber nicht Bestandteil von V1.
-
----
+Die zugrunde liegenden Mediendaten bleiben zugänglich. Externe Werkzeuge können diese Daten weiterverarbeiten. NC-PoRe ersetzt nicht die vom Benutzer gewählten Produktionswerkzeuge.
 
 ## Storage Provider Prinzip
 
-Die Speicherung wird über klar definierte Schnittstellen abstrahiert.
-
-Dadurch bleiben zukünftige Erweiterungen möglich:
-
-* lokale Speicherung
-* weitere Cloudanbieter
-* WebDAV-basierte Speicher
-* S3-kompatible Speicher
-* weitere zukünftige Provider
-
-Die Benutzer sollen dabei möglichst keinen Unterschied erkennen.
-
----
+Die Speicherung wird über klar definierte Schnittstellen abstrahiert. Dadurch können konkrete Storage-Implementierungen ausgetauscht werden, ohne das fachliche Datenmodell an eine Infrastrukturtechnologie zu koppeln.
 
 ## Grundprinzipien
 
 ### 1. Session First
 
-Die Session ist die zentrale Einheit.
+Die Session ist die zentrale Einheit der Benutzer- und Fachdaten.
 
-Nicht:
+### 2. Assets statt isolierter Dateien
 
-> "Hier ist eine Audiodatei."
+Produktionsdaten werden als Bestandteile einer Session verwaltet, während die zugrunde liegenden Dateien zugänglich bleiben.
 
-Sondern:
+### 3. Speicherort ist technische Umsetzung
 
-> "Hier ist eine Podcast-Produktion mit Teilnehmern, Medien und Produktionsverlauf."
+Der Benutzer arbeitet mit der Produktion; der konkrete Speichermechanismus bleibt eine technische Angelegenheit.
 
----
+### 4. Keine proprietäre Bindung
 
-### 2. Assets statt Dateitypen
-
-NC-PoRe denkt in Produktionsbestandteilen, nicht in einzelnen Dateiformaten.
-
-Ein Asset kann beispielsweise sein:
-
-* Audioaufnahme
-* Videoaufnahme
-* Coverbild
-* Transkript
-* Notizen
-* Exportdatei
-* Metadaten
-
-Neue Asset-Typen sollen später ergänzt werden können.
-
----
-
-### 3. Der Speicherort ist nicht die Benutzerperspektive
-
-Der Benutzer denkt nicht in Speicherorten.
-
-Der Benutzer denkt in Produktionen.
-
-Daher gilt:
-
-> Der Speicherort ist eine technische Entscheidung. Entscheidend ist, dass die Produktion sicher verfügbar, nachvollziehbar und nutzbar bleibt.
-
----
-
-### 4. Keine Abhängigkeit durch Abstraktion
-
-NC-PoRe organisiert Produktionsdaten, sperrt Benutzer jedoch nicht in ein proprietäres Format ein.
-
-Die direkte Nutzung von Mediendateien mit etablierten Werkzeugen bleibt möglich.
-
----
+NC-PoRe organisiert Produktionsdaten, ohne Benutzer an ein proprietäres Datenformat für die weitere Verarbeitung zu binden.
 
 ## Konsequenzen
 
 ### Vorteile
 
 * klare Trennung zwischen Fachmodell und Technologie
-* Erweiterbarkeit für Video und weitere Medien
-* bessere Unterstützung verteilter Produktion
-* zukünftige Provider möglich
-* natürliche Abbildung des Benutzer-Workflows
-* freie Nutzung etablierter Produktionswerkzeuge
+* austauschbare Storage-Implementierungen
+* natürliche Abbildung des Produktions-Workflows
+* Zugriff auf eigene Produktionsdaten bleibt erhalten
 
 ### Nachteile
 
 * zusätzliche Abstraktion
-* höherer anfänglicher Entwicklungsaufwand
-* mehr Architekturdisziplin erforderlich
-
-Diese Nachteile werden bewusst akzeptiert.
-
----
+* höherer Entwicklungsaufwand
+* zusätzliche Architekturdisziplin
 
 ## Nicht-Ziele
 
-Diese Entscheidung bedeutet nicht:
-
-* dass bereits alle Medienformate unterstützt werden müssen
-* dass sofort jede mögliche Cloud integriert wird
-* dass die konkrete Datenbanktechnologie festgelegt wird
-* dass Speicherimplementierungen bereits vollständig definiert werden
-* dass NC-PoRe eigene Audio-Editoren ersetzen muss
-
-Diese Entscheidungen folgen in späteren ADRs.
-
----
+Diese Entscheidung legt keine konkreten zukünftigen Storage-Anbieter, Medienarten oder externen Integrationen fest.
 
 ## Leitgedanke
 
-NC-PoRe speichert nicht einfach Dateien.
-
-NC-PoRe verwaltet Produktionen.
-
-Eine Production Session verbindet Menschen, Medien und Arbeitsabläufe zu einer gemeinsamen Einheit.
-
-Die Benutzer behalten jederzeit Zugriff auf ihre eigenen Produktionsdaten und können bestehende Werkzeuge weiterhin verwenden.
+NC-PoRe speichert nicht einfach Dateien. NC-PoRe verwaltet Produktionen.
 
 ---
 
-# English Version ([Deutsche Version oben](#deutsch))
+<a id="english-version"></a>
+
+# English Version
+
+# ADR-026: Session Data and Storage Architecture
+
+* Status: Accepted
+* Date: 2026-07-23
+* Decision Type: Architecture
+
+---
 
 ## Context
 
-NC-PoRe has been defined as a **Nextcloud Podcast Production Environment**.
-
-The main use case is collaborative podcast production with multiple participants, different devices and future support for different media formats.
-
-A podcast production is not only a collection of individual files.
-
-From the user's perspective, there is a connected production:
-
-* a specific episode
-* a specific conversation
-* specific participants
-* specific recordings
-* a specific production workflow
-
-Therefore, treating audio files as the primary unit is insufficient.
-
-NC-PoRe requires a data model that represents the real production process.
-
----
+A podcast production is more than a collection of individual files. From the user's perspective there is a connected production containing participants, recordings and production data. NC-PoRe therefore requires a data model representing this relationship.
 
 ## Decision
 
-The central domain entity of NC-PoRe is the:
+The central domain entity of NC-PoRe is the **Production Session**.
 
-**Production Session**
+A Production Session contains the relevant information and media belonging to a shared production. Media and files are treated as parts of a session rather than independent primary objects.
 
-A Production Session contains all relevant information and media belonging to one collaborative production.
-
-Media and files are treated as parts of a session, not as independent primary objects.
-
-NC-PoRe manages media as assets while preserving direct access to underlying media files for external production tools.
-
-Users remain owners of their production data and are not restricted by the system.
-
----
+NC-PoRe manages media as assets while preserving access to the underlying media data for external tools. Users remain owners of their production data.
 
 ## Session Model
 
-A Production Session can contain:
-
 ```text
 Production Session
-
 ├── Session Metadata
-│
 ├── Participants
-│
-├── Audio Streams
-│
-├── Video Streams (future)
-│
+├── Media Streams
 ├── Events
-│
 ├── Notes
-│
 ├── Assets
-│
 └── Exports
 ```
 
----
-
 ## Core Model and Storage
 
-NC-PoRe separates:
-
-1. the domain data model
-2. the technical storage implementation
-
-The internal NC-PoRe model defines what a session is.
-
-The actual storage location is a technical implementation detail.
-
-Architecture:
+NC-PoRe separates the domain data model from technical storage.
 
 ```text
 NC-PoRe Core
-
-        |
-        |
+      |
 Session Data Model
-
-        |
-        |
+      |
 Storage Provider Layer
-
-        |
-        |
---------------------------------
-|              |               |
-Nextcloud    Local Storage   Future Providers
+      |
+Storage Provider
 ```
 
----
+The concrete storage location is a technical implementation detail. The domain model must not depend on the internal structure of a particular storage system.
 
 ## Relationship to Nextcloud
 
-Nextcloud is the primary integration platform of version 1.
+Nextcloud is the integration platform of the first version. Its use for storage, synchronization, access and collaboration must not define the NC-PoRe domain model.
 
-Version 1 uses Nextcloud capabilities for:
+## Media Access
 
-* production data storage
-* synchronization
-* access and sharing
-* collaboration
-
-However, the NC-PoRe data model is not defined by the internal structure of Nextcloud.
-
-Nextcloud is a provider.
-
-NC-PoRe owns the domain model.
-
----
-
-## Media Access and External Tools
-
-NC-PoRe abstracts media management but does not automatically replace existing professional production tools.
-
-Underlying media files remain accessible.
-
-A typical workflow can be:
-
-```text
-NC-PoRe Production Session
-
-        |
-        |
-    Audio Assets
-
-        |
-        |
--------------------------
-|                       |
-Audacity              Ardour
-
-        |
-        |
-Final Export
-```
-
-For example:
-
-* WAV files can be opened directly
-* individual tracks can be processed in external audio editors
-* final exports can be returned to the session as assets
-
-Future integration with external tools is possible, but not part of V1.
-
----
+Underlying media data remains accessible. External tools can process that data. NC-PoRe does not replace the production tools chosen by the user.
 
 ## Storage Provider Principle
 
-Storage is abstracted through clearly defined interfaces.
-
-This enables future extensions:
-
-* local storage
-* additional cloud providers
-* WebDAV-based storage
-* S3-compatible storage
-* future providers
-
-Users should ideally not notice these differences.
-
----
+Storage is abstracted through clearly defined interfaces. Concrete storage implementations can therefore be changed without coupling the domain model to infrastructure technology.
 
 ## Principles
 
 ### 1. Session First
 
-The session is the central unit.
+The session is the central unit of user and domain data.
 
-Not:
+### 2. Assets instead of isolated files
 
-> "Here is an audio file."
+Production data is managed as part of a session while the underlying files remain accessible.
 
-But:
+### 3. Storage location is an implementation detail
 
-> "Here is a podcast production with participants, media and production history."
+Users work with the production; the concrete storage mechanism remains a technical concern.
 
----
+### 4. No proprietary lock-in
 
-### 2. Assets instead of file types
-
-NC-PoRe thinks in production elements, not individual file formats.
-
-An asset can be:
-
-* audio recording
-* video recording
-* cover image
-* transcript
-* notes
-* export file
-* metadata
-
-New asset types should be addable later.
-
----
-
-### 3. Storage location is not the user perspective
-
-Users do not think in storage locations.
-
-Users think in productions.
-
-Therefore:
-
-> Storage location is a technical decision. What matters is that the production remains secure, traceable and usable.
-
----
-
-### 4. No Dependency Through Abstraction
-
-NC-PoRe organizes production data without locking users into a proprietary format.
-
-Direct use of media files with established tools remains possible.
-
----
+NC-PoRe organizes production data without locking users into a proprietary format for further processing.
 
 ## Consequences
 
 ### Benefits
 
 * clear separation between domain model and technology
-* extensibility for video and additional media
-* better support for distributed production
-* future providers possible
-* natural representation of user workflows
-* freedom to use established production tools
+* replaceable storage implementations
+* natural representation of the production workflow
+* continued access to users' own production data
 
 ### Costs
 
 * additional abstraction
-* higher initial development effort
-* requires architectural discipline
-
-These costs are consciously accepted.
-
----
+* higher development effort
+* additional architectural discipline
 
 ## Non-Goals
 
-This decision does not mean:
-
-* all media formats must already be supported
-* every possible cloud provider must be integrated immediately
-* the database technology is already decided
-* storage implementations are already fully specified
-* NC-PoRe must replace audio editors
-
-These decisions will follow in later ADRs.
-
----
+This decision does not define specific future storage providers, media types or external integrations.
 
 ## Guiding Principle
 
-NC-PoRe does not simply store files.
-
-NC-PoRe manages productions.
-
-A Production Session connects people, media and workflows into one shared unit.
-
-Users always retain access to their own production data and can continue using established tools.
+NC-PoRe does not simply store files. NC-PoRe manages productions.
