@@ -1,31 +1,20 @@
-# Deutsch ([English version below](#english-version))
-
 # ADR-008: Client Architecture
 
-## Status
-
-Accepted
-
-## Date
-
-2026-07-22
+* Status: Accepted
+* Date: 2026-07-22
+* Decision Type: Architecture
 
 ---
 
-# Kontext
+# Deutsch ([English version below](#english-version))
+
+## Kontext
 
 NC-PoRe benötigt eine zuverlässige lokale Audioaufnahme.
 
-Die Aufnahmequalität darf nicht von einem Browser, einer
-Serververbindung oder externen Diensten abhängig sein.
+Die Aufnahmequalität darf nicht von einer Serververbindung oder einer für Kommunikation optimierten Media-Pipeline abhängen.
 
-Gleichzeitig soll NC-PoRe möglichst einfach zugänglich sein,
-insbesondere für Gäste und gelegentliche Teilnehmer.
-
-Daraus entsteht ein Zielkonflikt:
-
-* maximale technische Kontrolle für professionelle Aufnahmen
-* möglichst einfacher Zugang für Teilnehmer
+Gleichzeitig soll NC-PoRe unterschiedlichen Nutzungssituationen Rechnung tragen, insbesondere professioneller Aufnahme und einfacher Teilnahme.
 
 ---
 
@@ -33,94 +22,63 @@ Daraus entsteht ein Zielkonflikt:
 
 NC-PoRe verwendet eine modulare Client-Architektur.
 
-Die lokale Aufnahme erfolgt durch einen spezialisierten
-Recorder-Client.
+Die lokale Aufnahme erfolgt durch einen spezialisierten Capture-/Recorder-Pfad.
 
-Der Recorder ist für folgende Aufgaben verantwortlich:
+Der Recorder bzw. Capture-Client ist für insbesondere folgende Aufgaben verantwortlich:
 
-* Zugriff auf Audiohardware
+* Zugriff auf Audiohardware bzw. lokale Capture-Quellen
 * lokale Aufnahme
-* Chunk-Verwaltung
+* technische Aufnahmedaten und Chunks
 * Metadaten-Erzeugung
-* lokale Sicherheit
-* Upload-Vorbereitung
+* lokale Verarbeitung und Persistenz im Rahmen der Capture-Architektur
+* Übergabe an den bestehenden Recording-/Artifact-Pfad
 
 Der Server übernimmt keine primäre Audioaufnahme.
+
+Client- und Capture-Varianten dürfen sich hinsichtlich Bedienung und technischer Möglichkeiten unterscheiden. Sie müssen jedoch denselben fachlichen Recording- und Artifact-Grenzen folgen.
 
 ---
 
 # Client-Varianten
 
-NC-PoRe unterstützt perspektivisch unterschiedliche
-Client-Varianten.
+Die Architektur unterstützt unterschiedliche Client-Varianten für unterschiedliche Nutzungssituationen.
 
-## Professional Recorder
+Ein Client für professionelle Aufnahme kann umfangreichere lokale Capture-Fähigkeiten bereitstellen. Ein Client für externe oder gelegentliche Teilnehmer kann die Teilnahme vereinfachen.
 
-Für regelmäßige Podcaster und Produktionsumgebungen.
-
-Eigenschaften:
-
-* maximale Audioqualität
-* erweiterte Einstellungen
-* zuverlässige lokale Speicherung
-* professionelle Workflows
-
----
-
-## Guest Recorder
-
-Für externe Teilnehmer.
-
-Ziel:
-
-* möglichst einfache Teilnahme
-* geringe Einstiegshürde
-* sichere Session-Teilnahme
-
-Der Gast benötigt keine umfangreiche Verwaltung.
+Die konkrete technische Form einer Client-Variante ist nicht Bestandteil dieser ADR.
 
 ---
 
 # Architekturmodell
 
+```text
+                Host / Session Environment
+                         |
+                         |
+                  Session Context
+                         |
+             +-----------+-----------+
+             |                       |
+        Capture Client          Simple Client
+             |                       |
+             +-----------+-----------+
+                         |
+                   Local Capture
+                         |
+                  PoRE Recording
+                         |
+                   Artifact Path
 ```
-                Nextcloud Server
 
-                    |
-                    |
-          Session Management
-                    |
-        +-----------+-----------+
-        |                       |
-        |                       |
- Professional Client      Guest Client
-
-        |                       |
-        +-----------+-----------+
-
-              lokale Aufnahme
-
-                    |
-
-             Upload nach Session-Ende
-```
+Die fachliche Recording-Logik bleibt unabhängig von der konkreten Client-Form.
 
 ---
 
-# Browser-basierte Aufnahme
+# Browser-basierte Teilnahme
 
-Eine reine Browser-Aufnahme wird nicht als
-Primärarchitektur verwendet.
+Eine browserbasierte Teilnahme kann die Einstiegshürde reduzieren.
 
-Gründe:
-
-* eingeschränkte Kontrolle über Hardwarezugriff
-* abhängig vom Browserverhalten
-* schwierigeres Fehlerhandling
-* eingeschränkte Möglichkeiten für professionelle Workflows
-
-Browserbasierte Teilnahme kann jedoch zukünftig als
-vereinfachter Zugang unterstützt werden.
+Die konkrete Browser-Architektur wird durch die dafür zuständigen Architekturentscheidungen definiert. Sie darf die grundlegende Trennung zwischen lokaler Aufnahme, Recording-Modell und Host-Kommunikation nicht aufheben.
 
 ---
 
@@ -128,19 +86,19 @@ vereinfachter Zugang unterstützt werden.
 
 ## Positive Auswirkungen
 
-* professionelle Aufnahmequalität möglich
-* klare Trennung zwischen Aufnahme und Server
-* bessere Erweiterbarkeit
-* geeignet für verschiedene Nutzergruppen
-* unabhängiger von Browserherstellern
-
----
+* professionelle lokale Aufnahme bleibt möglich
+* Aufnahme und Server bleiben klar getrennt
+* unterschiedliche Nutzungssituationen können unterstützt werden
+* Client-Implementierungen bleiben austauschbar
+* der Core bleibt unabhängig von einer konkreten Client-Technologie
 
 ## Negative Auswirkungen
 
-* zusätzliche Softwarekomponente erforderlich
-* Installation kann notwendig sein
-* mehrere Clients müssen gepflegt werden
+* Client- und Capture-Grenzen müssen gepflegt werden
+* lokale Capture-Implementierungen können technisch anspruchsvoll sein
+* unterschiedliche Client-Varianten benötigen eigene Tests
+
+Diese Nachteile werden bewusst akzeptiert.
 
 ---
 
@@ -148,61 +106,35 @@ vereinfachter Zugang unterstützt werden.
 
 ## Ausschließliche Web-App
 
-Verworfen als Hauptlösung.
+Nicht als allgemeine Architekturvorgabe gewählt. Eine reine Web-App darf die Anforderungen an lokale Aufnahmequalität und technische Capture-Kontrolle nicht als selbstverständlich voraussetzen.
 
-Grund:
+## Ausschließlicher spezialisierter Client
 
-Eine Web-App bietet nicht die notwendige Kontrolle für
-professionelle lokale Audioaufnahme.
-
----
-
-## Ausschließlicher Desktop-Client
-
-Nicht ausreichend.
-
-Grund:
-
-Gelegenheitsnutzer und Gäste benötigen einen einfacheren
-Zugang.
+Nicht als allgemeine Architekturvorgabe gewählt. Unterschiedliche Nutzungssituationen können einen einfacheren Teilnahmeweg erfordern.
 
 ---
 
-# Hinweise
+# Beziehung zu bestehender Architektur
 
-Die Client-Architektur unterstützt das Grundprinzip von NC-PoRe:
+Diese ADR definiert die allgemeine Client-Grenze. Konkrete Entscheidungen zu Plattformen, Browsern und Host-Integrationen werden in den jeweils zuständigen ADRs getroffen.
 
-> Professionelle Werkzeuge für diejenigen, die sie benötigen,
-> einfache Teilnahme für diejenigen, die nur beitragen.
+---
+
+# Leitgedanke
+
+> Professionelle Aufnahme dort, wo sie benötigt wird; einfache Teilnahme dort, wo sie genügt — ohne die fachlichen Recording-Grenzen zu vermischen.
 
 ---
 
 # English Version ([Deutsche Version oben](#deutsch))
 
-# ADR-008: Client Architecture
-
-## Status
-
-Accepted
-
-## Date
-
-2026-07-22
-
----
-
-# Context
+## Context
 
 NC-PoRe requires reliable local audio recording.
 
-Recording quality must not depend on a browser, a server connection, or external services.
+Recording quality must not depend on a server connection or on a media pipeline optimized for communication.
 
-At the same time, NC-PoRe should be as easy to access as possible, especially for guests and occasional participants.
-
-This creates a conflict of objectives:
-
-* maximum technical control for professional recordings
-* access for participants should be as simple as possible
+At the same time, NC-PoRe must support different usage situations, in particular professional recording and simple participation.
 
 ---
 
@@ -210,90 +142,63 @@ This creates a conflict of objectives:
 
 NC-PoRe uses a modular client architecture.
 
-Local recording is performed by a specialized recorder client.
+Local recording is performed through a specialized capture/recorder path.
 
-The recorder is responsible for the following tasks:
+The recorder or capture client is responsible in particular for:
 
-* access to audio hardware
+* access to audio hardware or local capture sources
 * local recording
-* chunk management
+* technical recording data and chunks
 * metadata generation
-* local security
-* upload preparation
+* local processing and persistence within the capture architecture
+* handoff to the existing recording/artifact path
 
 The server does not perform the primary audio recording.
+
+Client and capture variants may differ in user experience and technical capabilities. They must nevertheless follow the same domain Recording and Artifact boundaries.
 
 ---
 
 # Client Variants
 
-NC-PoRe is intended to support different client variants.
+The architecture supports different client variants for different usage situations.
 
-## Professional Recorder
+A client for professional recording may provide more extensive local capture capabilities. A client for external or occasional participants may simplify participation.
 
-For regular podcasters and production environments.
-
-Characteristics:
-
-* maximum audio quality
-* advanced settings
-* reliable local storage
-* professional workflows
-
----
-
-## Guest Recorder
-
-For external participants.
-
-Goal:
-
-* participation should be as simple as possible
-* low entry barrier
-* secure session participation
-
-The guest does not need extensive administration capabilities.
+The concrete technical form of a client variant is outside the scope of this ADR.
 
 ---
 
 # Architecture Model
 
+```text
+                Host / Session Environment
+                         |
+                         |
+                  Session Context
+                         |
+             +-----------+-----------+
+             |                       |
+        Capture Client          Simple Client
+             |                       |
+             +-----------+-----------+
+                         |
+                   Local Capture
+                         |
+                  PoRE Recording
+                         |
+                   Artifact Path
 ```
-                Nextcloud Server
 
-                    |
-                    |
-          Session Management
-                    |
-        +-----------+-----------+
-        |                       |
-        |                       |
- Professional Client      Guest Client
-
-        |                       |
-        +-----------+-----------+
-
-              local recording
-
-                    |
-
-             Upload after session end
-```
+Domain Recording logic remains independent from the concrete client form.
 
 ---
 
-# Browser-Based Recording
+# Browser-Based Participation
 
-Pure browser-based recording is not used as the primary architecture.
+Browser-based participation can reduce the entry barrier.
 
-Reasons:
-
-* limited control over hardware access
-* dependent on browser behavior
-* more difficult error handling
-* limited options for professional workflows
-
-Browser-based participation may nevertheless be supported in the future as a simplified access method.
+The concrete browser architecture is defined by the responsible architecture decisions. It must not remove the fundamental separation between local recording, the Recording model and host communication.
 
 ---
 
@@ -301,19 +206,19 @@ Browser-based participation may nevertheless be supported in the future as a sim
 
 ## Positive Effects
 
-* professional recording quality is possible
-* clear separation between recording and server
-* better extensibility
-* suitable for different user groups
-* independent of browser vendors
-
----
+* professional local recording remains possible
+* recording and server remain clearly separated
+* different usage situations can be supported
+* client implementations remain replaceable
+* the Core remains independent from a concrete client technology
 
 ## Negative Effects
 
-* additional software component required
-* installation may be necessary
-* multiple clients must be maintained
+* client and capture boundaries require maintenance
+* local capture implementations may be technically demanding
+* different client variants require their own tests
+
+These disadvantages are consciously accepted.
 
 ---
 
@@ -321,27 +226,20 @@ Browser-based participation may nevertheless be supported in the future as a sim
 
 ## Web App Only
 
-Rejected as the primary solution.
+Not selected as a general architectural rule. A pure web app must not be assumed to satisfy local recording quality and capture-control requirements in all environments.
 
-Reason:
+## Specialized Client Only
 
-A web app does not provide the necessary control for professional local audio recording.
-
----
-
-## Desktop Client Only
-
-Insufficient.
-
-Reason:
-
-Occasional users and guests need simpler access.
+Not selected as a general architectural rule. Different usage situations may require a simpler participation path.
 
 ---
 
-# Notes
+# Relationship to Existing Architecture
 
-The client architecture supports the fundamental principle of NC-PoRe:
+This ADR defines the general client boundary. Concrete decisions about platforms, browsers and host integrations are made in the respective ADRs.
 
-> Professional tools for those who need them,
-> simple participation for those who only contribute.
+---
+
+# Guiding Principle
+
+> Professional recording where it is needed; simple participation where it is sufficient — without mixing the domain Recording boundaries.
