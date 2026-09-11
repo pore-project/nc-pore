@@ -96,6 +96,8 @@ Lokale Aufnahmen bieten:
 * bessere Ausfallsicherheit
 * klare Trennung zwischen Aufnahme und Synchronisation
 
+Entscheidend ist dabei die Verantwortungsgrenze: Die lokale Aufnahme bleibt auch dann ein gültiges technisches Ergebnis, wenn die gemeinsame Session oder der Upload vorübergehend nicht verfügbar ist. Die Session-Koordination ersetzt weder die lokale Aufnahmedatenhaltung noch macht sie eine laufende Aufnahme von der Netzwerkverbindung abhängig.
+
 ---
 
 # Production Session als Koordinator
@@ -113,6 +115,8 @@ Production Session
 ├── Synchronization Metadata
 └── Events
 ```
+
+Die Session koordiniert damit die gemeinsame Produktion, ist aber nicht die technische Capture-Instanz eines einzelnen Clients.
 
 ---
 
@@ -141,6 +145,8 @@ Die konkrete Synchronisationsmethode wird in dafür zuständigen ADRs definiert.
 ADR-029 definiert nur das Architekturprinzip:
 
 > Jede Aufnahme bleibt zunächst lokal gültig und wird anschließend Bestandteil einer gemeinsamen Production Session.
+
+Die technische Übertragung eines Assets darf daher nicht mit der Gültigkeit der lokalen Aufnahme gleichgesetzt werden. Ein Asset kann lokal bereits vollständig vorliegen, obwohl seine Synchronisation noch aussteht.
 
 ---
 
@@ -323,6 +329,8 @@ Local recordings provide:
 * better resilience
 * clear separation between recording and synchronization
 
+The responsibility boundary is important here: the local recording remains a valid technical result even when the shared session or asset upload is temporarily unavailable. Session coordination neither replaces local recording-data persistence nor makes an active recording dependent on network availability.
+
 ---
 
 # Production Session as Coordinator
@@ -340,6 +348,8 @@ Production Session
 ├── Synchronization Metadata
 └── Events
 ```
+
+The session therefore coordinates the shared production, but it is not the technical capture instance of an individual client.
 
 ---
 
@@ -368,6 +378,8 @@ The concrete synchronization method is defined by dedicated architecture decisio
 ADR-029 defines only the architectural principle:
 
 > Each recording remains locally valid first and subsequently becomes part of a shared Production Session.
+
+Technical asset transfer must therefore not be equated with the validity of the local recording. An asset may already be complete locally while synchronization is still pending.
 
 ---
 
