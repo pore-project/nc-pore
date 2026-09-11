@@ -10,17 +10,16 @@
 
 ## Kontext
 
-NC-PoRe wurde als **Nextcloud Podcast Production Environment** definiert.
+NC-PoRe ist eine Umgebung zur kollaborativen Podcast-Produktion.
 
 Die bisherigen Architekturentscheidungen haben folgende Grundlagen geschaffen:
 
-* NC-PoRe ist eine Umgebung zur kollaborativen Podcast-Produktion.
 * Die zentrale fachliche Einheit ist die **Production Session**.
 * Medien werden als Assets innerhalb einer Session betrachtet.
 * Speicher und externe Systeme sollen austauschbar bleiben.
-* Mehrere Clients und Plattformen sollen langfristig unterstützt werden.
+* Clients und Integrationen sollen unabhängig vom Core entwickelt werden können.
 
-Damit NC-PoRe über viele Jahre erweiterbar bleibt, benötigt das Projekt klare Modulgrenzen und eine saubere Trennung von Verantwortlichkeiten.
+Damit NC-PoRe erweiterbar und wartbar bleibt, benötigt das Projekt klare Modulgrenzen und eine saubere Trennung von Verantwortlichkeiten.
 
 ---
 
@@ -47,9 +46,8 @@ Die zentrale Regel lautet:
 
 Der Core soll keine Abhängigkeiten besitzen zu:
 
-* Nextcloud
-* Betriebssystemen
-* mobilen Plattformen
+* konkreten Host-Anwendungen
+* Betriebssystemen oder Plattformimplementierungen
 * Benutzeroberflächen
 * konkreten Speichertechnologien
 * externen Kommunikationssystemen
@@ -60,36 +58,20 @@ Stattdessen werden diese über definierte Schnittstellen angebunden.
 
 ## Architekturübersicht
 
-```text id="5o2k4s"
+```text
                  Clients
-
-      Linux   Windows   macOS
-        |        |        |
-      iOS     Android    Web
-
-                 |
-                 |
-              API Layer
-
-                 |
-                 |
-
-              NC-PoRe Core
-
-                 |
-                 |
-
-        Interfaces / Adapters
-
-                 |
-    --------------------------------
-
-    Storage       Communication
-    Provider      Provider
-
-    Nextcloud     Talk
-    Local         BBB
-    S3            Future Systems
+                    |
+                 API Layer
+                    |
+               NC-PoRe Core
+                    |
+          Interfaces / Adapters
+                    |
+          +---------+---------+
+          |                   |
+     Storage Provider    Host/Integration
+          |                   |
+       Storage            Host System
 ```
 
 ---
@@ -118,7 +100,7 @@ Der Core entscheidet nicht:
 
 oder:
 
-> Welche Oberfläche benutzt der Benutzer?
+> Welche Oberfläche oder technische Integration benutzt der Benutzer?
 
 ---
 
@@ -142,15 +124,6 @@ Der Core soll möglichst stabil bleiben.
 
 Clients stellen die Benutzerinteraktion bereit.
 
-Mögliche Clients:
-
-* Linux Desktop
-* Windows Desktop
-* macOS Desktop
-* iOS
-* Android
-* Web
-
 Clients enthalten keine zentrale Geschäftslogik.
 
 ---
@@ -159,29 +132,15 @@ Clients enthalten keine zentrale Geschäftslogik.
 
 Storage Provider kümmern sich um die technische Speicherung.
 
-Beispiele:
-
-* Nextcloud
-* lokale Speicherung
-* WebDAV
-* S3-kompatible Speicher
-* weitere zukünftige Provider
-
 Der Core kennt nur das Storage Interface.
 
 ---
 
-## Communication Module
+## Integration Module
 
-Kommunikationssysteme werden als Provider angebunden.
+Externe Systeme werden über Integrationen bzw. Adapter angebunden.
 
-Mögliche Beispiele:
-
-* Nextcloud Talk
-* BigBlueButton
-* zukünftige Kommunikationssysteme
-
-Die Produktionslogik bleibt unabhängig vom Kommunikationsweg.
+Die Produktionslogik bleibt unabhängig vom konkreten Integrationsweg.
 
 ---
 
@@ -197,7 +156,7 @@ Die API dient als klare Grenze zwischen:
 * externen Systemen
 * Core-Logik
 
-Dadurch können mehrere Clients dieselbe Basis verwenden.
+Dadurch können unterschiedliche Clients und Integrationen dieselbe fachliche Basis verwenden.
 
 ---
 
@@ -205,20 +164,14 @@ Dadurch können mehrere Clients dieselbe Basis verwenden.
 
 Abhängigkeiten fließen nur nach innen:
 
-```text id="8e1g8w"
-Client
-
-  ↓
-
-API
-
-  ↓
-
-Core
-
-  ↓
-
-Adapter / Provider
+```text
+Client / Integration
+        ↓
+       API
+        ↓
+      Core
+        ↓
+Interfaces / Provider
 ```
 
 Der Core darf keine Infrastrukturdetails kennen.
@@ -229,7 +182,7 @@ Der Core darf keine Infrastrukturdetails kennen.
 
 ## 1. Modularität statt Monolith
 
-Neue Funktionen sollen möglichst durch neue Module ergänzt werden.
+Funktionalität wird über klar abgegrenzte Module organisiert.
 
 Bestehende Kernfunktionen sollen stabil bleiben.
 
@@ -252,23 +205,13 @@ Er enthält nicht:
 * Dateisystemzugriffe
 * Provider-spezifische Logik
 
-Ein stabiler Core ermöglicht langfristige Entwicklung.
-
 ---
 
 ## 3. Erweiterung durch Adapter
 
-Neue Systeme werden über Adapter integriert.
+Externe Systeme werden über Adapter integriert.
 
-Beispiele:
-
-Nicht:
-
-> NC-PoRe wird direkt an BigBlueButton angepasst.
-
-Sondern:
-
-> NC-PoRe erhält einen BigBlueButton-Adapter.
+Die Integrationslogik bleibt dabei außerhalb des Core.
 
 ---
 
@@ -280,9 +223,9 @@ Der Benutzer soll nicht wissen müssen:
 
 * welcher Speicher verwendet wird
 * welche Kommunikationstechnologie aktiv ist
-* welcher Client verwendet wird
+* welche technische Integration die Session bereitstellt
 
-Die Erfahrung bleibt konsistent.
+Die fachliche Erfahrung bleibt konsistent.
 
 ---
 
@@ -290,11 +233,10 @@ Die Erfahrung bleibt konsistent.
 
 ## Vorteile
 
-* langfristige Erweiterbarkeit
-* mehrere Clients möglich
-* Provider austauschbar
-* bessere Testbarkeit
+* klare Modulgrenzen
 * geringere Abhängigkeiten
+* austauschbare Provider und Integrationen
+* bessere Testbarkeit
 * einfachere Wartung
 
 ## Nachteile
@@ -311,12 +253,12 @@ Diese Nachteile werden bewusst akzeptiert.
 
 Diese Entscheidung bedeutet nicht:
 
-* dass alle Module sofort implementiert werden müssen
-* dass jede Plattform direkt unterstützt werden muss
+* dass jede mögliche Client- oder Integrationvariante umgesetzt werden muss
 * dass jede Schnittstelle öffentlich dokumentiert werden muss
 * dass die konkrete Programmiersprache festgelegt wird
+* dass technische Implementierungen des Core ausgeschlossen werden
 
-Diese Entscheidungen folgen in späteren ADRs.
+Konkrete technische Entscheidungen werden separat getroffen, sobald sie erforderlich sind.
 
 ---
 
@@ -324,9 +266,7 @@ Diese Entscheidungen folgen in späteren ADRs.
 
 NC-PoRe soll nicht nur funktionieren.
 
-NC-PoRe soll wachsen können.
-
-Ein stabiler Kern, klare Grenzen und austauschbare Module ermöglichen eine Software, die über Jahre weiterentwickelt werden kann.
+Ein stabiler Kern, klare Grenzen und austauschbare Module bilden die Grundlage für eine wartbare Softwarearchitektur.
 
 ---
 
@@ -334,23 +274,22 @@ Ein stabiler Kern, klare Grenzen und austauschbare Module ermöglichen eine Soft
 
 ## Context
 
-NC-PoRe has been defined as a **Nextcloud Podcast Production Environment**.
+NC-PoRe is an environment for collaborative podcast production.
 
 Previous architecture decisions established:
 
-* NC-PoRe is an environment for collaborative podcast production.
 * The central domain entity is the **Production Session**.
 * Media is managed as assets within sessions.
 * Storage and external systems should remain replaceable.
-* Multiple clients and platforms should be supported in the future.
+* Clients and integrations should be able to evolve independently from the Core.
 
-To keep NC-PoRe maintainable and extensible over many years, clear module boundaries and responsibility separation are required.
+To keep NC-PoRe extensible and maintainable, the project requires clear module boundaries and separation of responsibilities.
 
 ---
 
 ## Decision
 
-NC-PoRe will be built as a modular architecture.
+NC-PoRe is built as a modular architecture.
 
 The architecture separates:
 
@@ -371,14 +310,33 @@ The central rule is:
 
 The Core must not depend on:
 
-* Nextcloud
-* operating systems
-* mobile platforms
+* concrete host applications
+* operating systems or platform implementations
 * user interfaces
-* storage technologies
+* concrete storage technologies
 * external communication systems
 
-These systems connect through defined interfaces.
+These are connected through defined interfaces.
+
+---
+
+## Architecture Overview
+
+```text
+                 Clients
+                    |
+                 API Layer
+                    |
+               NC-PoRe Core
+                    |
+          Interfaces / Adapters
+                    |
+          +---------+---------+
+          |                   |
+     Storage Provider    Host/Integration
+          |                   |
+       Storage            Host System
+```
 
 ---
 
@@ -386,7 +344,7 @@ These systems connect through defined interfaces.
 
 The Core represents the domain truth of NC-PoRe.
 
-It manages:
+It manages, among other things:
 
 * Production Sessions
 * Participants
@@ -406,7 +364,47 @@ The Core does not decide:
 
 or:
 
-> Which user interface is used?
+> Which interface or technical integration is used by the user?
+
+---
+
+# Modules
+
+## Core Module
+
+Responsible for:
+
+* Domain Model
+* Business Logic
+* Session Management
+* Events
+* Interfaces
+
+The Core should remain as stable as possible.
+
+---
+
+## Client Module
+
+Clients provide user interaction.
+
+Clients contain no central business logic.
+
+---
+
+## Storage Module
+
+Storage providers handle technical persistence.
+
+The Core knows only the storage interface.
+
+---
+
+## Integration Module
+
+External systems are connected through integrations or adapters.
+
+Production logic remains independent of the concrete integration path.
 
 ---
 
@@ -414,36 +412,30 @@ or:
 
 NC-PoRe is developed API-oriented.
 
-This does not necessarily mean every API must be publicly exposed.
+This does not necessarily mean that every API must be publicly exposed.
 
 The API provides a clear boundary between:
 
 * user interfaces
 * external systems
-* core logic
+* Core logic
 
-Multiple clients can therefore share the same foundation.
+Different clients and integrations can therefore share the same domain foundation.
 
 ---
 
 # Dependency Rule
 
-Dependencies only point inward:
+Dependencies point inward only:
 
-```text id="y5z7u1"
-Client
-
-  ↓
-
-API
-
-  ↓
-
-Core
-
-  ↓
-
-Adapter / Provider
+```text
+Client / Integration
+        ↓
+       API
+        ↓
+      Core
+        ↓
+Interfaces / Provider
 ```
 
 The Core must not know infrastructure details.
@@ -454,7 +446,7 @@ The Core must not know infrastructure details.
 
 ## 1. Modularity instead of Monolith
 
-New functionality should preferably be added through new modules.
+Functionality is organized through clearly separated modules.
 
 Existing core functionality should remain stable.
 
@@ -462,7 +454,7 @@ Existing core functionality should remain stable.
 
 ## 2. Boring Core
 
-The Core should remain simple and long-lived.
+The Core should remain deliberately simple and long-lived.
 
 It contains:
 
@@ -477,37 +469,27 @@ It does not contain:
 * filesystem access
 * provider-specific logic
 
-A stable Core enables long-term development.
-
 ---
 
 ## 3. Extension through Adapters
 
-New systems are integrated through adapters.
+External systems are integrated through adapters.
 
-Example:
-
-Not:
-
-> NC-PoRe is directly modified for BigBlueButton.
-
-But:
-
-> NC-PoRe receives a BigBlueButton adapter.
+Integration logic remains outside the Core.
 
 ---
 
 ## 4. User Orientation
 
-Technical complexity remains hidden behind clear interfaces.
+Technical complexity remains behind clear interfaces.
 
 Users should not need to know:
 
 * which storage is used
 * which communication technology is active
-* which client is used
+* which technical integration provides the session
 
-The experience remains consistent.
+The domain-level experience remains consistent.
 
 ---
 
@@ -515,11 +497,10 @@ The experience remains consistent.
 
 ## Benefits
 
-* long-term extensibility
-* multiple clients possible
-* replaceable providers
-* better testability
+* clear module boundaries
 * fewer dependencies
+* replaceable providers and integrations
+* better testability
 * easier maintenance
 
 ## Costs
@@ -536,19 +517,17 @@ These costs are consciously accepted.
 
 This decision does not mean:
 
-* all modules must be implemented immediately
-* every platform must be supported immediately
-* every interface must be publicly documented
-* the programming language is already decided
+* that every possible client or integration variant must be implemented
+* that every interface must be publicly documented
+* that a specific programming language is mandated
+* that technical Core implementations are excluded
 
-These decisions will follow in later ADRs.
+Concrete technical decisions are made separately when required.
 
 ---
 
 # Guiding Principle
 
-NC-PoRe should not only work.
+NC-PoRe should not merely work.
 
-NC-PoRe should be able to grow.
-
-A stable core, clear boundaries and replaceable modules enable software that can evolve over many years.
+A stable Core, clear boundaries, and replaceable modules form the foundation of a maintainable software architecture.
