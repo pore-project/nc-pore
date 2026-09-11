@@ -1,36 +1,33 @@
 # NC-PoRe Roadmap
 
-- Version: 1.2
-- Date: 2026-08-14
+- Version: 1.3
+- Date: 2026-09-11
 
 ---
 
-# Deutsch (English version below)
+<a id="deutsch"></a>
 
-## Einleitung
+# Deutsch
 
-Diese Roadmap beschreibt die langfristige Entwicklung von NC-PoRe.
+## Zweck
 
-Sie dient als Orientierung und beschreibt die geplante Richtung des Projekts.  
-Sie ist keine starre Verpflichtung und kann durch technische Erkenntnisse, Nutzeranforderungen oder neue Entwicklungen angepasst werden.
+Diese Roadmap beschreibt den aktuell absehbaren Entwicklungsschwerpunkt von NC-PoRe.
 
-Die zentrale Idee:
-
-> NC-PoRe entwickelt nicht nur einen Recorder. NC-PoRe entwickelt eine offene Plattform für Medien-Sessions.
+Sie ist eine Orientierung, keine starre Verpflichtung. Technische Erkenntnisse, reale Nutzung und Rückmeldungen können die Reihenfolge und Ausgestaltung ändern.
 
 ---
 
-# Entwicklungsprinzip
+## Entwicklungsprinzip
 
 NC-PoRe wird schrittweise entwickelt.
 
-Jede Version soll einen konkreten Nutzen bieten:
+Jeder Entwicklungsschritt soll einen konkreten Nutzen bieten:
 
 - für Anwender
 - für Entwickler
 - für die Community
 
-Neue Funktionen werden nicht nur nach technischer Machbarkeit bewertet, sondern nach ihrem tatsächlichen Mehrwert.
+Neue Funktionen werden nicht allein nach technischer Machbarkeit bewertet, sondern nach ihrem tatsächlichen Nutzen und ihrer Auswirkung auf die Gesamtarchitektur.
 
 Dabei gilt:
 
@@ -38,469 +35,146 @@ Dabei gilt:
 
 ---
 
-# Version 1.x – Die Session-Basis
+# Aktueller Schwerpunkt – V1
 
-## Ziel
+Der aktuelle Schwerpunkt liegt auf einer stabilen, lokalen und nachvollziehbaren Recording-Basis.
 
-Aufbau der kleinsten sinnvollen Version der zukünftigen NC-PoRe-Plattform.
+Dazu gehören insbesondere:
 
-V1 ist kein isolierter Recorder, sondern die Grundlage für verteilte Medien-Sessions.
+- Production Sessions als zentrale fachliche Einheit
+- lokale Audioaufnahme
+- Erhalt der Aufnahmequalität unabhängig von der Kommunikationsverbindung
+- Recording-Lifecycle und Synchronisation
+- Teilnehmer- und Session-Zustände
+- lokale und kontrollierte Persistenz
+- Artifact-Erzeugung und Wiederherstellung
+- definierte Schnittstellen zwischen Core, Clients und Integrationen
+- erste Host-Integration über eine klar abgegrenzte Connector-Architektur
 
----
-
-## Schwerpunkte
-
-- Session-basierte Architektur
-- stabile Audioaufnahme
-- konfigurierbare Aufnahmeparameter mit einem vorgeschlagenen Standardprofil gemäß ADR-002
-- Teilnehmer- und Geräteverwaltung
-- Metadatenverwaltung
-- lokale Speicherung
-- erste Exportmöglichkeiten
-- modulare Architektur
-- klare Provider-Schnittstellen
-- umfangreiche Dokumentation
+Die technische Architektur und ihre verbindlichen Entscheidungen werden in den ADRs dokumentiert.
 
 ---
 
-## Plattformstrategie
+## Entwicklung nach Bedarf
 
-Die Architektur berücksichtigt von Anfang an:
+Weitere Funktionen und Integrationen werden nicht als langfristige Funktionsliste vorab festgeschrieben.
 
-- Linux
-- Windows
-- macOS
-- iOS
-- Android
+Neue Anforderungen werden anhand ihres konkreten Nutzens, ihrer technischen Auswirkungen und ihrer Vereinbarkeit mit den bestehenden Architekturprinzipien bewertet.
 
-Nicht jede Plattform muss sofort denselben Funktionsumfang besitzen.
+Dabei bleiben insbesondere folgende Grundsätze erhalten:
 
-Entscheidend ist:
-
-Die Plattformen sind Teil des Designs und keine spätere Erweiterung.
+- lokale Aufnahmen bleiben unabhängig von der Kommunikationspipeline
+- der Core bleibt fachliche Autorität
+- Integrationen bleiben an klaren Grenzen gekapselt
+- offene Daten und Interoperabilität werden bevorzugt
+- bestehende Architektur wird erweitert, statt unnötig parallel neu aufgebaut zu werden
 
 ---
 
-## Integrationen
+## Community und Erweiterbarkeit
 
-V1 schafft die Grundlagen für:
+NC-PoRe soll Erweiterungen durch andere Entwickler ermöglichen.
 
-- lokale Clients
-- mobile Clients
-- entfernte Teilnehmer
-- zukünftige Conference Provider
+Dafür werden stabile Schnittstellen und klar abgegrenzte Verantwortlichkeiten bevorzugt.
 
-Beispiele:
-
-- Nextcloud Talk
-- BigBlueButton
-- Jitsi
-- weitere Systeme
+Die Roadmap beschreibt bewusst keine vollständige Liste möglicher zukünftiger Erweiterungen. Welche Erweiterungen tatsächlich sinnvoll sind, wird anhand realer Anforderungen und technischer Erkenntnisse entschieden.
 
 ---
 
-# Version 2.x – Kollaborative Sessions
+## Grundsatz
 
-## Ziel
+Die Roadmap beschreibt den derzeitigen Entwicklungsschwerpunkt.
 
-NC-PoRe ermöglicht echte verteilte Zusammenarbeit.
+Die ADRs beschreiben die getroffenen Architekturentscheidungen.
 
----
+Beides wird getrennt betrachtet:
 
-## Schwerpunkte
-
-- vollständige mobile Teilnahme
-- Synchronisation mehrerer Teilnehmer
-- verteilte Aufnahme-Szenarien
-- Integration erster Conference Provider
-- Nextcloud Talk Integration
-- verbesserte Session-Verwaltung
+> Nicht alles, was die Architektur ermöglicht, ist deshalb bereits geplant.
 
 ---
 
-## Beispiel-Szenario
+<a id="english-version"></a>
 
-Eine Session kann bestehen aus:
+# English Version
 
-- Host auf macOS
-- Teilnehmer auf Linux
-- Teilnehmer auf Windows
-- Gast über iOS
-- Gast über Android
+## Purpose
 
-Alle arbeiten gemeinsam an einer Session.
+This roadmap describes the currently foreseeable development focus of NC-PoRe.
+
+It is guidance, not a rigid commitment. Technical findings, real-world use, and feedback may change priorities and implementation details.
 
 ---
 
-# Version 3.x – Offene Plattform
-
-## Ziel
-
-NC-PoRe wird unabhängig von einzelnen Plattformen und Diensten.
-
----
-
-## Schwerpunkte
-
-- weitere Cloud-Anbieter
-- unabhängige Storage Provider
-- WebDAV-Unterstützung
-- offene APIs
-- Plugin-System
-- Community-Erweiterungen
-
----
-
-## Vision
-
-NC-PoRe ist nicht nur ein Nextcloud-Werkzeug.
-
-NC-PoRe ist eine offene Medienplattform.
-
----
-
-# Version 4.x – Erweiterte Medien
-
-## Ziel
-
-Erweiterung von Audio-Sessions zu vollständigen Medien-Sessions.
-
----
-
-## Schwerpunkte
-
-- Videoaufnahme
-- Bildschirmaufnahme
-- kombinierte Audio-/Video-Sessions
-- professionelle Produktionsworkflows
-- erweiterte Exportmöglichkeiten
-
-Die Architektur aus V1 ermöglicht diese Erweiterungen ohne grundlegende Neuentwicklung.
-
----
-
-# Version 5.x – Professionelle Distributed Production
-
-## Ziel
-
-NC-PoRe ermöglicht professionelle verteilte Medienproduktion.
-
----
-
-## Schwerpunkte
-
-- mehrere Recording Nodes
-- intelligente Synchronisation
-- große verteilte Produktionen
-- komplexe Teilnehmerstrukturen
-- professionelle Workflows
-
----
-
-## Beispiel
-
-Eine Produktion mit:
-
-- mehreren Hosts
-- verschiedenen Betriebssystemen
-- mobilen Teilnehmern
-- unterschiedlichen Aufnahmequellen
-
-wird als eine gemeinsame Session verwaltet.
-
----
-
-# Eigenständiges Podcast-Hosting
-
-## Produktidee
-
-Neben NC-PoRe soll langfristig ein eigenständiges Podcast-Hosting-Produkt entstehen.
-
-Das Podcast-Hosting ist kein Bestandteil von NC-PoRe, sondern ein eigenständiges Produkt mit eigener Produktgrenze, eigener Entwicklung und eigenständigem Betrieb.
-
----
-
-## Produktgrenzen
-
-Beide Produkte sollen unabhängig voneinander funktionieren:
-
-- NC-PoRe muss vollständig ohne das Podcast-Hosting betrieben werden können.
-- Das Podcast-Hosting muss vollständig ohne NC-PoRe betrieben werden können.
-- Keines der beiden Produkte setzt die Installation oder Existenz des jeweils anderen voraus.
-- Beide Produkte können unabhängig entwickelt, versioniert und betrieben werden.
-
-NC-PoRe bleibt dabei auf die Produktion und Verarbeitung von Medien-Sessions ausgerichtet.
-
-Das Podcast-Hosting konzentriert sich auf die Bereitstellung und Distribution von Podcast-Inhalten.
-
----
-
-## Zusammenspiel
-
-Zwischen beiden Produkten ist eine **vorgesehene Integration über definierte Schnittstellen** vorgesehen.
-
-Diese Integration soll:
-
-- die Übergabe von Podcast-Inhalten und zugehörigen Metadaten ermöglichen,
-- die jeweiligen Produktgrenzen erhalten,
-- unabhängig von einer gemeinsamen Codebasis funktionieren,
-- auch eine Integration mit anderen Produktions- bzw. Hosting-Systemen ermöglichen.
-
-Die Schnittstellen sollen deshalb fachlich möglichst neutral gestaltet werden.
-
-NC-PoRe soll nicht auf dieses eine Hosting-Produkt festgelegt sein.
-
-Ebenso soll das Podcast-Hosting Inhalte auch aus anderen Produktionssystemen aufnehmen können.
-
-Die konkrete API-, Protokoll- und Integrationsarchitektur wird in einem späteren eigenständigen Architekturvorhaben festgelegt.
-
----
-
-## Roadmap-Einordnung
-
-Das Podcast-Hosting ist ein langfristiges eigenständiges Produktvorhaben.
-
-Es ist **nicht Bestandteil des aktuellen NC-PoRe-Implementierungsumfangs** und soll nicht zu einer technischen Abhängigkeit zwischen den beiden Produkten führen.
-
----
-
-# Langfristige Vision
-
-NC-PoRe soll Menschen ermöglichen, hochwertige Medieninhalte einfach, offen und plattformübergreifend zu erstellen.
-
-Mögliche zukünftige Entwicklungen:
-
-- KI-gestützte Unterstützung
-- automatische Transkription
-- Übersetzungen
-- intelligente Zusammenfassungen
-- Assistenzfunktionen
-- professionelle Produktionsumgebungen
-- Community-basierte Erweiterungen
-
-Technologie bleibt dabei ein Werkzeug.
-
-Menschen und ihre Inhalte stehen im Mittelpunkt.
-
----
-
-# English
-
-## Introduction
-
-This roadmap describes the long-term development direction of NC-PoRe.
-
-It provides guidance and may change due to technical insights, user requirements or new developments.
-
-The central idea:
-
-> NC-PoRe does not only build a recorder. NC-PoRe builds an open platform for media sessions.
-
----
-
-# Development Principle
+## Development Principle
 
 NC-PoRe is developed step by step.
 
-Each version should provide concrete value:
+Each development step should provide concrete value:
 
 - for users
 - for developers
 - for the community
 
-Features are evaluated not only by technical feasibility, but by their actual benefit.
+Features are evaluated not only by technical feasibility, but also by their actual value and their impact on the overall architecture.
 
-The guiding principle:
+The guiding principle is:
 
 > Complexity should be solved inside the system, not transferred to the user.
 
 ---
 
-# Version 1.x – Session Foundation
+# Current Focus – V1
 
-## Goal
+The current focus is a stable, local, and traceable recording foundation.
 
-Building the smallest meaningful version of the future NC-PoRe platform.
+This includes in particular:
 
-V1 is not an isolated recorder, but the foundation for distributed media sessions.
+- Production Sessions as the central domain entity
+- local audio recording
+- preservation of recording quality independently of the communication connection
+- recording lifecycle and synchronization
+- participant and session states
+- local and controlled persistence
+- artifact creation and recovery
+- defined interfaces between Core, clients, and integrations
+- an initial host integration through a clearly separated connector architecture
 
----
-
-## Focus
-
-- session-based architecture
-- stable audio recording
-- configurable recording parameters with a suggested default profile according to ADR-002
-- participant and device management
-- metadata management
-- local storage
-- first export capabilities
-- modular architecture
-- clear provider interfaces
-- extensive documentation
+The technical architecture and its binding decisions are documented in the ADRs.
 
 ---
 
-## Platform Strategy
+## Development Based on Need
 
-The architecture considers from the beginning:
+Further functions and integrations are deliberately not specified as a complete long-term feature list in advance.
 
-- Linux
-- Windows
-- macOS
-- iOS
-- Android
+New requirements are evaluated according to their concrete value, technical impact, and compatibility with the existing architectural principles.
 
-Not every platform needs identical functionality immediately.
+The following principles remain important:
 
-The important principle:
-
-Platforms are part of the design, not later additions.
+- local recordings remain independent from the communication pipeline
+- the Core remains the domain authority
+- integrations remain encapsulated behind clear boundaries
+- open data and interoperability are preferred
+- existing architecture is extended rather than unnecessarily duplicated
 
 ---
 
-# Version 2.x – Collaborative Sessions
+## Community and Extensibility
 
-## Goal
+NC-PoRE is intended to allow extensions by other developers.
 
-NC-PoRe enables real distributed collaboration.
+Stable interfaces and clearly separated responsibilities are therefore preferred.
 
----
-
-## Focus
-
-- full mobile participation
-- synchronization of multiple participants
-- distributed recording scenarios
-- first conference provider integrations
-- Nextcloud Talk integration
-- improved session management
+The roadmap deliberately does not provide a complete list of possible future extensions. Which extensions are actually useful will be decided based on real requirements and technical findings.
 
 ---
 
-# Version 3.x – Open Platform
+## Principle
 
-## Goal
+The roadmap describes the current development focus.
 
-NC-PoRe becomes independent from individual platforms and services.
+The ADRs describe architectural decisions that have actually been made.
 
----
+They are considered separately:
 
-## Focus
-
-- additional cloud providers
-- independent storage providers
-- WebDAV support
-- open APIs
-- plugin system
-- community extensions
-
----
-
-# Version 4.x – Extended Media
-
-## Goal
-
-Expanding audio sessions into complete media sessions.
-
----
-
-## Focus
-
-- video recording
-- screen capture
-- combined audio/video sessions
-- professional production workflows
-- advanced exports
-
----
-
-# Version 5.x – Professional Distributed Production
-
-## Goal
-
-NC-PoRe enables professional distributed media production.
-
----
-
-## Focus
-
-- multiple recording nodes
-- intelligent synchronization
-- large distributed productions
-- complex participant structures
-- professional workflows
-
----
-
-# Independent Podcast Hosting
-
-## Product Idea
-
-In the long term, a separate podcast hosting product shall be developed alongside NC-PoRe.
-
-The podcast hosting product is not part of NC-PoRe, but an independent product with its own product boundary, development and operation.
-
----
-
-## Product Boundaries
-
-Both products shall be usable independently:
-
-- NC-PoRe must operate fully without the podcast hosting product.
-- The podcast hosting product must operate fully without NC-PoRe.
-- Neither product requires the installation or existence of the other.
-- Both products can be developed, versioned and operated independently.
-
-NC-PoRe remains focused on the production and processing of media sessions.
-
-The podcast hosting product focuses on the hosting and distribution of podcast content.
-
----
-
-## Integration
-
-A **planned integration through defined interfaces** shall enable cooperation between the two products.
-
-This integration shall:
-
-- enable the transfer of podcast content and associated metadata,
-- preserve the respective product boundaries,
-- work independently of a shared codebase,
-- also allow integration with other production and hosting systems.
-
-The interfaces should therefore be designed to be as domain-neutral as reasonably possible.
-
-NC-PoRe should not be tied to this particular hosting product.
-
-Likewise, the podcast hosting product should be able to receive content from other production systems.
-
-The concrete API, protocol and integration architecture will be defined in a separate future architecture initiative.
-
----
-
-## Roadmap Position
-
-Podcast hosting is a long-term independent product initiative.
-
-It is **not part of the current NC-PoRe implementation scope** and shall not create a technical dependency between the two products.
-
----
-
-# Long-Term Vision
-
-NC-PoRe enables people to create high-quality media content easily, openly and across platforms.
-
-Possible future developments:
-
-- AI-assisted workflows
-- automatic transcription
-- translations
-- intelligent summaries
-- assistance features
-- professional production environments
-- community-driven extensions
-
-Technology remains a tool.
-
-People and their content remain the focus.
+> Not everything the architecture makes possible is therefore already planned.
