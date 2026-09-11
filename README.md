@@ -83,7 +83,7 @@ Für eine öffentliche V1-Freigabe gelten insbesondere:
 
 Weitere Informationen:
 
-* `docs/architecture/` — Architektur und technische Grundlagen
+* `docs/project/` — Projektziele, MVP und aktuelle Roadmap
 * `docs/implementation/` — Umsetzung und V1-Planung
 * `adr/` — Architecture Decision Records
 
@@ -186,7 +186,7 @@ For a public V1 release, the following principles apply in particular:
 
 Further information:
 
-* `docs/architecture/` — architecture and technical foundations
+* `docs/project/` — project goals, MVP, and current roadmap
 * `docs/implementation/` — implementation and V1 planning
 * `adr/` — Architecture Decision Records
 
