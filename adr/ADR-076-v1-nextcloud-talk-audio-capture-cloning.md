@@ -1,12 +1,8 @@
 # ADR-076: Host-Integrated Local Audio Capture via Connector
 
-## Status
-
-Angenommen
-
-## Datum
-
-2026-08-29
+* Status: Accepted
+* Date: 2026-08-29
+* Decision Type: Architecture
 
 ---
 
@@ -150,6 +146,18 @@ Diese Entscheidungen gehören in die jeweiligen Connector-ADRs und deren Impleme
 
 # English Version
 
+## Status
+
+Accepted
+
+## Date
+
+2026-08-29
+
+## Decision Type
+
+Architecture
+
 ## Context
 
 NC-PoRE V1 requires a local audio capture source from the host application in which the communication takes place. Nextcloud Talk is the first host integration; additional host applications can be connected through their own connectors.
@@ -230,13 +238,27 @@ Host integration therefore does not become a second recording architecture.
 
 ## Signet
 
-The shared recording flow from ADR-068 remains in force. The host starts the flow, eligible clients start local recording, clients report `READY` once recording is active, and the Opening Sync Signet is generated locally after the required clients are ready.
+The shared recording flow from ADR-068 remains in force:
+
+1. The host starts the flow.
+2. Eligible clients start local recording.
+3. Each client reports `READY` once local recording is actually running.
+4. Only after all required participants are `READY` does the host send the digital signal for the Opening Sync Signet.
+5. Each client generates the signet locally in its NC-PoRE recording track.
 
 Signet handling remains part of the generic PoRE recording lifecycle and is not the responsibility of an individual host connector.
 
 ## Validation of the First Host Integration
 
-The first concrete host integration is Nextcloud Talk. On 2026-08-29 the fundamental browser-side clone mechanism was validated under real conditions using Nextcloud Talk, Firefox 154, HTTPS, and a RØDECaster Pro input.
+The first concrete host integration is Nextcloud Talk. On 2026-08-29 the fundamental browser-side clone mechanism was validated under real conditions.
+
+Test environment:
+
+- Nextcloud 34.0.3 as a Docker instance
+- Nextcloud Talk enabled
+- Firefox 154.0
+- HTTPS via Caddy with a local `mkcert` certificate
+- real audio input device: RØDECaster Pro Analog Stereo
 
 The early PoC hook intercepted real Talk `getUserMedia()` calls and successfully created an independent `MediaStreamTrack` clone. A recording made from that clone contained 52.54 seconds of real audio as Ogg/Opus, stereo, 48 kHz, at approximately 130 kbit/s.
 
