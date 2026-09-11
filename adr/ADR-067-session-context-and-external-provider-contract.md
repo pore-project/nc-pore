@@ -1,33 +1,20 @@
-# Deutsch ([English version below](#english-version))
-
 # ADR-067: Session Context and External Provider Contract
 
-## Status
-
-Proposed
-
-## Date
-
-2026-08-20
-
-## Decision Type
-
-Architecture
+* Status: Proposed
+* Date: 2026-08-20
+* Decision Type: Architecture
 
 ---
 
-# Kontext
+# Deutsch ([English version below](#english-version))
+
+## Kontext
 
 NC-PoRe benötigt für eine vollständige Aufnahme einen definierten technischen Kontext: Die Session muss verfügbar sein, Teilnehmer müssen identifizierbar und für die erforderlichen Operationen autorisierbar sein, und die für die Aufnahme benötigten Session- und Teilnahmeinformationen müssen zuverlässig verfügbar sein.
 
 Nextcloud Talk liefert bereits einen großen Teil dieses Kontexts. Talk besitzt eigene Semantik für Conversations, Identitäten, Gäste, registrierte Benutzer, Federation, Zugriffsregeln und den Lebenszyklus von Conversations. NC-PoRe soll diese Semantik nicht nachbauen oder in sein Domain-Modell kopieren.
 
-Gleichzeitig darf die Architektur nicht davon ausgehen, dass jeder zukünftige Integrationsanbieter dieselben Fähigkeiten besitzt. Eine zukünftige Integration, beispielsweise für Dropbox als Storage Provider, könnte einen eigenen Session Provider benötigen oder Teile des erforderlichen Kontexts vollständig selbst bereitstellen.
-
-Damit besteht die Gefahr zweier falscher Extreme:
-
-1. NC-PoRe übernimmt ein konkretes externes Session-Modell und wird davon abhängig.
-2. NC-PoRe versucht, die Fähigkeiten jedes Providers selbst nachzubauen und verliert die Vorteile vorhandener Plattformen.
+Gleichzeitig darf die Architektur nicht voraussetzen, dass jede Integrationsumgebung dieselben Fähigkeiten besitzt.
 
 ---
 
@@ -37,9 +24,7 @@ NC-PoRe definiert einen **Session Context Contract** als klaren Ein-/Ausstiegspu
 
 PoRE definiert dabei **welche Informationen und Fähigkeiten für eine konkrete Operation benötigt werden**. Die jeweilige Integration ist dafür verantwortlich, diesen Context bereitzustellen.
 
-Der Context kann vollständig aus einem externen Provider stammen, aus PoRE selbst stammen oder aus mehreren Quellen zusammengesetzt werden.
-
-Konzeptionell:
+Der Context kann vollständig aus einer externen Umgebung stammen, aus PoRE selbst stammen oder aus mehreren Quellen zusammengesetzt werden.
 
 ```text
                          NC-PoRe
@@ -48,9 +33,9 @@ Konzeptionell:
                             |
           +-----------------+-----------------+
           |                 |                 |
-     Nextcloud Talk     PoRE-native       Other Integration
+     External Host      PoRE-native      Other Integration
           |                 |                 |
-     Talk APIs          PoRE state        own provider(s)
+     host APIs         PoRE state       own context
           |                 |                 |
           +-----------------+-----------------+
                             |
@@ -63,17 +48,17 @@ Der Core und die fachliche `ProductionSession` kennen keine provider-spezifische
 
 # Der Contract
 
-Der konkrete technische Contract wird in einer späteren Implementierungsentscheidung präzisiert. Auf Architekturebene umfasst er mindestens die folgenden fachlichen Informationsbereiche:
+Der konkrete technische Contract wird durch eine dafür zuständige Implementierungsentscheidung präzisiert. Auf Architekturebene umfasst er mindestens:
 
 * **Session Identity** — welche Session bzw. welcher externe Kontext gemeint ist
 * **Session Availability** — ob der Kontext für die angeforderte Operation verfügbar ist
 * **Participant Identity** — wer an der Session teilnimmt bzw. identifizierbar ist
 * **Participation / Authorization Context** — welche Teilnahme- und Berechtigungsinformationen für die Operation erforderlich sind
-* **Provider Capabilities** — welche für die konkrete Operation benötigten Fähigkeiten der Provider bereitstellt
+* **Provider Capabilities** — welche für die konkrete Operation benötigten Fähigkeiten die Integration bereitstellt
 
 Nicht jede Integration muss alle Informationen aus derselben Quelle liefern.
 
-Ein Provider darf zusätzliche Informationen und Fähigkeiten besitzen, ohne dass diese Teil des universellen PoRE-Core-Modells werden.
+Eine Integration darf zusätzliche Informationen und Fähigkeiten besitzen, ohne dass diese Teil des universellen PoRE-Core-Modells werden.
 
 ---
 
@@ -83,17 +68,17 @@ Eine externe Integration muss nicht die fachliche PoRE-Session besitzen.
 
 Eine PoRE-Session kann ohne externen Session Provider existieren. Ebenso kann eine Integration einen externen Session Context an eine PoRE-Session binden.
 
-Beispiel Nextcloud Talk:
+Beispiel externe Integration:
 
 ```text
 ProductionSession
        |
        +-- Session Context
               |
-              +-- provider = Nextcloud Talk
-              +-- external identity = Talk conversation token
-              +-- availability = derived from Talk
-              +-- participation = derived from Talk
+              +-- provider = external host
+              +-- external identity = host context
+              +-- availability = derived from host
+              +-- participation = derived from host
 ```
 
 Beispiel PoRE-native:
@@ -108,18 +93,6 @@ ProductionSession
               +-- participation = PoRE
 ```
 
-Beispiel einer zukünftigen Dropbox-Integration:
-
-```text
-Dropbox Integration
-       |
-       +-- Storage Provider
-       |
-       +-- optional Session Provider
-              |
-              +-- supplies whatever the Session Context Contract requires
-```
-
 Ein Storage Provider ist daher nicht automatisch ein Session Provider.
 
 ---
@@ -128,7 +101,7 @@ Ein Storage Provider ist daher nicht automatisch ein Session Provider.
 
 Der fachliche PoRE-Lifecycle und die externe Session-Verfügbarkeit sind getrennte Zustandsdimensionen.
 
-Beispielsweise kann eine PoRE-Session `Completed` sein, obwohl die zugehörige Talk-Conversation noch existiert. Umgekehrt kann eine PoRE-Session noch aktiv sein, obwohl ihre externe Conversation gelöscht oder anderweitig nicht mehr verfügbar ist.
+Beispielsweise kann eine PoRE-Session `Completed` sein, obwohl der zugehörige externe Kontext noch existiert. Umgekehrt kann eine PoRE-Session noch aktiv sein, obwohl der externe Kontext gelöscht oder anderweitig nicht mehr verfügbar ist.
 
 Daraus folgt:
 
@@ -139,11 +112,11 @@ Provider Session Availability
         => operational usability
 ```
 
-Das Löschen oder Ablaufdatum einer externen Conversation wird nicht automatisch zu einem fachlichen PoRE-Status wie `Completed`.
+Das Löschen oder Ablaufdatum eines externen Kontexts wird nicht automatisch zu einem fachlichen PoRE-Status wie `Completed`.
 
 Die Integration muss stattdessen den Verlust der externen Verfügbarkeit über den Session Context Contract ausdrücken. Die Application Layer entscheidet anschließend, welche PoRE-Operationen noch zulässig sind und welche Reaktion erforderlich ist.
 
-`SessionAvailability` ist daher konzeptionell mehr als ein einfacher Boolean. Der konkrete Statusraum wird providerunabhängig nur insoweit abstrahiert, wie PoRE ihn für seine eigenen Operationen benötigt.
+`SessionAvailability` ist daher konzeptionell mehr als ein einfacher Boolean. Der konkrete Statusraum wird nur insoweit abstrahiert, wie PoRE ihn für seine eigenen Operationen benötigt.
 
 ---
 
@@ -151,9 +124,7 @@ Die Integration muss stattdessen den Verlust der externen Verfügbarkeit über d
 
 Teilnahme ist ein Bestandteil des Session Context, aber externe Teilnehmermodelle werden nicht in das PoRE-Core-Modell kopiert.
 
-Nextcloud Talk darf beispielsweise User, Guests, Public-Link-Teilnehmer, E-Mail-Gäste oder federierte Benutzer unterscheiden. PoRE übernimmt daraus nur die Informationen, die für sein eigenes fachliches `Participation`- und Rollenmodell relevant sind.
-
-Dadurch bleibt die Übersetzung explizit:
+Eine Host-Integration darf beispielsweise unterschiedliche externe Teilnehmerarten unterscheiden. PoRE übernimmt daraus nur die Informationen, die für sein eigenes fachliches `Participation`- und Rollenmodell relevant sind.
 
 ```text
 External participant identity/type
@@ -178,9 +149,9 @@ Capabilities werden nicht als universelles Abbild eines Providers verstanden.
 
 Eine Integration kann wesentlich mehr können als PoRE benötigt. PoRE fragt nur die für die jeweilige Operation relevanten Fähigkeiten ab.
 
-Beispielsweise kann Nextcloud Talk umfangreiche Meeting-, Lobby-, Guest- oder Federation-Funktionen besitzen, ohne dass daraus automatisch entsprechende Core-Abstraktionen entstehen.
+Provider-spezifische Meeting-, Gast-, Federation- oder andere Funktionen werden nicht automatisch zu Core-Abstraktionen.
 
-Ein zukünftiger Provider darf fehlende Fähigkeiten intern durch eigene Komponenten ergänzen. Ein Provider kann beispielsweise einen eigenen Session Provider verwenden, um Informationen bereitzustellen, die die Plattform selbst nicht besitzt.
+Eine Integration darf fehlende Fähigkeiten intern durch eigene Komponenten ergänzen, solange die für PoRE erforderlichen Fähigkeiten über den Session Context Contract bereitgestellt werden.
 
 ---
 
@@ -198,32 +169,33 @@ Die Integration ist dabei eine Adapter- und Context-Grenze, keine neue Domain-Au
 
 ## Positive Auswirkungen
 
-* Nextcloud Talk kann seine vorhandene Session-, Identitäts- und Teilnahme-Semantik liefern, ohne dass PoRE sie nachbauen muss.
-* Der PoRE-Core bleibt unabhängig von Nextcloud und anderen Plattformen.
-* Eine PoRE-native Session bleibt möglich.
-* Ein zukünftiger Provider kann fehlende Fähigkeiten durch eigene Session-Provider oder weitere Komponenten ergänzen.
-* Session-/Teilnahme-Kontext und Storage bleiben getrennte Architekturachsen.
-* Provider-spezifische Features müssen nicht in das universelle Domain-Modell übernommen werden.
-* Die Aufnahme- und Application-Logik kann gegen einen stabilen PoRE-Contract arbeiten.
+* bestehende Host-Semantik kann genutzt werden, ohne dass PoRE sie nachbauen muss
+* der PoRE-Core bleibt unabhängig von konkreten Integrationsumgebungen
+* eine PoRE-native Session bleibt möglich
+* Session-/Teilnahme-Kontext und Storage bleiben getrennte Architekturachsen
+* provider-spezifische Features müssen nicht in das universelle Domain-Modell übernommen werden
+* die Aufnahme- und Application-Logik kann gegen einen stabilen PoRE-Contract arbeiten
 
 ## Negative Auswirkungen
 
-* Der Session Context Contract muss sorgfältig definiert werden, damit er weder zu provider-spezifisch noch zu abstrakt wird.
-* Provider-Capabilities müssen explizit behandelt werden, wenn eine Operation nicht überall verfügbar ist.
-* Die Übersetzung externer Identitäten in PoRE-Teilnehmeridentitäten benötigt klare Semantik.
-* Die Reaktion auf verlorene externe Verfügbarkeit muss auf Application-Ebene definiert werden.
+* der Session Context Contract muss sorgfältig definiert werden
+* Provider-Capabilities müssen explizit behandelt werden, wenn eine Operation nicht verfügbar ist
+* die Übersetzung externer Identitäten in PoRE-Teilnehmeridentitäten benötigt klare Semantik
+* die Reaktion auf verlorene externe Verfügbarkeit muss auf Application-Ebene definiert werden
+
+Diese Nachteile werden bewusst akzeptiert.
 
 ---
 
 # Betrachtete Alternativen
 
-## Nextcloud Talk als Session-Modell für PoRE
+## Eine konkrete Host-Anwendung als Session-Modell für PoRE
 
-Verworfen. Dadurch würde PoRE das Modell eines einzelnen Providers übernehmen und zukünftige Integrationen unnötig erschweren.
+Verworfen. Dadurch würde PoRE das Modell eines einzelnen Providers übernehmen und Integrationen unnötig erschweren.
 
-## Universelles PoRE-Sessionmodell als vollständiger Ersatz für Provider
+## Universelles PoRE-Sessionmodell als vollständiger Ersatz für externe Session-Kontexte
 
-Verworfen. Damit würde PoRE Funktionen nachbauen, die Plattformen wie Nextcloud Talk bereits zuverlässig bereitstellen.
+Verworfen. Damit würde PoRE Funktionen nachbauen, die Integrationsumgebungen bereits bereitstellen können.
 
 ## Storage Provider und Session Provider als eine einzige Abstraktion
 
@@ -247,65 +219,40 @@ Die bestehende `ProductionSession` bleibt eine fachliche Core-Struktur und wird 
 
 ---
 
-# Zukünftige Betrachtungen
+# Nicht durch diese ADR festgelegt
 
-Eine spätere Implementierungs-ADR muss den konkreten Contract definieren, insbesondere:
+Diese ADR legt insbesondere nicht fest:
 
-* welche Context-Daten verpflichtend sind
-* welche Daten optional sind
-* wie externe Identitäten repräsentiert werden
-* welche Availability-Zustände PoRE tatsächlich benötigt
-* wie Capability-Abfragen aussehen
-* wie Session-Erzeugung und Session-Bindung funktionieren
+* welche Context-Daten in einer konkreten Implementierung verpflichtend oder optional sind
+* wie externe Identitäten technisch repräsentiert werden
+* welche Availability-Zustände konkret verwendet werden
+* wie Capability-Abfragen technisch aussehen
+* wie Session-Erzeugung und Session-Bindung technisch funktionieren
 * wie der Verlust eines externen Session Context behandelt wird
-* wie Providerwechsel bzw. neue Bindungen behandelt werden
 
-Erst nach dieser Definition sollte die aktuelle Feasibility-/Client-Schicht auf den neuen Contract umgebaut werden.
+Diese Details werden durch konkrete technische Entscheidungen festgelegt, sobald sie für eine Implementierung erforderlich sind.
 
 ---
 
 # English Version ([Deutsche Version oben](#deutsch))
 
-# ADR-067: Session Context and External Provider Contract
+## Context
 
-## Status
+NC-PoRe requires a defined technical context for a complete recording: the session must be available, participants must be identifiable and authorized for required operations, and the session and participation information needed for recording must be reliably available.
 
-Proposed
+Nextcloud Talk already provides much of this context. Talk has its own semantics for conversations, identities, guests, registered users, federation, access rules and conversation lifecycle. NC-PoRe must not reproduce or copy that semantics into its domain model.
 
-## Date
-
-2026-08-20
-
-## Decision Type
-
-Architecture
-
----
-
-# Context
-
-NC-PoRe needs a defined technical context for a complete recording: the session must be available, participants must be identifiable and authorizable for the required operations, and the session and participation information required by the recording workflow must be reliably available.
-
-Nextcloud Talk already provides much of this context. Talk has its own semantics for conversations, identities, guests, registered users, federation, access rules and conversation lifecycle. NC-PoRe should consume these capabilities rather than rebuild or copy Talk's model into its domain model.
-
-At the same time, the architecture must not assume that every future integration provider has the same capabilities. A future integration, for example Dropbox as a storage provider, may require its own session provider or may provide parts of the required context itself.
-
-This creates two architectural failure modes:
-
-1. NC-PoRe adopts a concrete external session model and becomes dependent on it.
-2. NC-PoRe attempts to rebuild every provider capability itself and loses the benefits of existing platforms.
+At the same time, the architecture must not assume that every integration environment provides the same capabilities.
 
 ---
 
 # Decision
 
-NC-PoRe defines a **Session Context Contract** as the explicit entry/exit boundary between PoRE application logic and an external integration environment.
+NC-PoRe defines a **Session Context Contract** as a clear boundary between PoRE application logic and an external integration environment.
 
-PoRE defines **which information and capabilities are required for a concrete operation**. The integration is responsible for providing that context.
+PoRE defines **which information and capabilities are required for a concrete operation**. The respective integration is responsible for providing that context.
 
-The context may be provided entirely by an external provider, by PoRE itself, or by a combination of multiple sources.
-
-Conceptually:
+The context may come entirely from an external environment, from PoRE itself, or from multiple sources.
 
 ```text
                          NC-PoRe
@@ -314,52 +261,75 @@ Conceptually:
                             |
           +-----------------+-----------------+
           |                 |                 |
-     Nextcloud Talk     PoRE-native       Other Integration
+     External Host      PoRE-native      Other Integration
           |                 |                 |
-     Talk APIs          PoRE state        own provider(s)
+     host APIs         PoRE state       own context
           |                 |                 |
           +-----------------+-----------------+
                             |
                     required PoRE context
 ```
 
-The Core and the domain `ProductionSession` do not know provider-specific session or participant models.
+The Core and the domain `ProductionSession` know no provider-specific session or participant models.
 
 ---
 
 # The Contract
 
-The concrete technical contract will be specified in a later implementation decision. At architecture level it covers at least:
+The concrete technical contract is refined by a dedicated implementation decision. At architecture level it includes at least:
 
-* **Session Identity** — which session or external context is being referenced
-* **Session Availability** — whether that context is available for the requested operation
-* **Participant Identity** — who participates in the session and can be identified
-* **Participation / Authorization Context** — participation and authorization information required for the operation
-* **Provider Capabilities** — capabilities required for the concrete operation
+* **Session Identity** — which session or external context is meant
+* **Session Availability** — whether the context is available for the requested operation
+* **Participant Identity** — who participates in the session or can be identified
+* **Participation / Authorization Context** — which participation and authorization information is required for the operation
+* **Provider Capabilities** — which capabilities required for the operation are provided by the integration
 
-Not every integration has to source all information from the same place.
+Not every integration has to provide all information from the same source.
 
-A provider may expose additional information and capabilities without making them part of the universal PoRE Core model.
+An integration may have additional information and capabilities without making them part of the universal PoRE Core model.
 
 ---
 
-# Provider Does Not Equal Session Owner
+# Provider Is Not the Same as Session Owner
 
-An external integration does not have to own the PoRE domain session.
+An external integration does not have to own the domain PoRE session.
 
 A PoRE session may exist without an external session provider. Conversely, an integration may bind an external session context to a PoRE session.
 
-For example, Nextcloud Talk can provide conversation identity, availability and participation information, while a PoRE-native integration can provide the same context from PoRE state.
+Example external integration:
 
-A future Dropbox integration may contain both a storage provider and, if needed, its own session provider. A storage provider is therefore not automatically a session provider.
+```text
+ProductionSession
+       |
+       +-- Session Context
+              |
+              +-- provider = external host
+              +-- external identity = host context
+              +-- availability = derived from host
+              +-- participation = derived from host
+```
+
+Example PoRE-native:
+
+```text
+ProductionSession
+       |
+       +-- Session Context
+              |
+              +-- provider = PoRE
+              +-- identity/lifecycle = PoRE
+              +-- participation = PoRE
+```
+
+A storage provider is therefore not automatically a session provider.
 
 ---
 
 # Session Lifecycle and Availability
 
-The PoRE domain lifecycle and external session availability are separate state dimensions.
+The domain PoRE lifecycle and external session availability are separate state dimensions.
 
-A PoRE session may be `Completed` while its Talk conversation still exists. Conversely, a PoRE session may still be active while its external conversation has been deleted or is otherwise unavailable.
+For example, a PoRE session may be `Completed` while the associated external context still exists. Conversely, a PoRE session may still be active while the external context has been deleted or is otherwise unavailable.
 
 Therefore:
 
@@ -370,11 +340,11 @@ Provider Session Availability
         => operational usability
 ```
 
-Deletion or expiry of an external conversation does not automatically become a PoRE domain state such as `Completed`.
+Deletion or expiry of an external context does not automatically become a domain PoRE state such as `Completed`.
 
-The integration expresses loss of external availability through the Session Context Contract. The Application Layer decides which PoRE operations remain valid and what reaction is required.
+The integration must express loss of external availability through the Session Context Contract. The Application Layer then decides which PoRE operations remain permitted and what response is required.
 
-`SessionAvailability` is therefore conceptually more than a boolean. The provider-independent state space should be kept only as broad as required by PoRE operations.
+`SessionAvailability` is therefore conceptually more than a boolean. The concrete state space is abstracted only to the extent required by PoRE's own operations.
 
 ---
 
@@ -382,9 +352,7 @@ The integration expresses loss of external availability through the Session Cont
 
 Participation is part of the Session Context, but external participant models are not copied into the PoRE Core model.
 
-Nextcloud Talk may distinguish users, guests, public-link participants, email guests or federated users. PoRE only consumes the information required for its own `Participation` and role model.
-
-The mapping is therefore explicit:
+A host integration may distinguish different external participant types. PoRE adopts only the information relevant to its own domain `Participation` and role model.
 
 ```text
 External participant identity/type
@@ -405,19 +373,19 @@ Provider-specific participant types remain provider-specific.
 
 # Capabilities
 
-Capabilities are not intended to be a universal mirror of a provider.
+Capabilities are not treated as a universal mirror of a provider.
 
-An integration may support significantly more than PoRE needs. PoRE asks only for capabilities relevant to the current operation.
+An integration may support much more than PoRE requires. PoRE queries only the capabilities relevant to the respective operation.
 
-Nextcloud Talk may provide extensive meeting, lobby, guest or federation functionality without those capabilities automatically becoming Core abstractions.
+Provider-specific meeting, guest, federation or other functions do not automatically become Core abstractions.
 
-A future provider may compensate for missing platform capabilities through its own components. For example, an integration may use its own session provider to supply information the platform itself does not provide.
+An integration may provide missing capabilities through its own components, as long as the capabilities required by PoRE are exposed through the Session Context Contract.
 
 ---
 
 # Responsibility Boundary
 
-The architecture follows this principle:
+The architecture therefore follows this principle:
 
 > **PoRE defines what it needs to know and be able to do. The integration decides where and how that context is provided.**
 
@@ -429,40 +397,41 @@ The integration is an adapter and context boundary, not a new domain authority.
 
 ## Positive Effects
 
-* Nextcloud Talk can provide its existing session, identity and participation semantics without PoRE rebuilding them.
-* The PoRE Core remains independent of Nextcloud and other platforms.
-* PoRE-native sessions remain possible.
-* Future providers can supplement missing capabilities through their own session providers or other components.
-* Session/participation context and storage remain separate architectural axes.
-* Provider-specific features do not have to enter the universal domain model.
-* Recording and application logic can operate against a stable PoRE contract.
+* existing host semantics can be used without reproducing them in PoRE
+* PoRE Core remains independent from concrete integration environments
+* a PoRE-native session remains possible
+* session/participation context and storage remain separate architectural axes
+* provider-specific features do not have to become part of the universal domain model
+* recording and application logic can operate against a stable PoRE contract
 
 ## Negative Effects
 
-* The Session Context Contract must be defined carefully to avoid becoming either provider-specific or excessively abstract.
-* Provider capabilities must be handled explicitly when an operation is not universally available.
-* Mapping external identities to PoRE participant identities requires clear semantics.
-* Handling loss of external availability must be defined at application level.
+* the Session Context Contract must be defined carefully
+* provider capabilities must be handled explicitly when an operation is unavailable
+* translation of external identities into PoRE participant identities requires clear semantics
+* the response to lost external availability must be defined at application level
+
+These disadvantages are consciously accepted.
 
 ---
 
 # Alternatives Considered
 
-## Nextcloud Talk as the PoRE Session Model
+## A Concrete Host Application as the PoRE Session Model
 
-Rejected. This would make PoRE adopt one provider's model and unnecessarily complicate future integrations.
+Rejected. This would make PoRE adopt the model of one provider and unnecessarily complicate integrations.
 
-## Universal PoRE Session Model as a Complete Replacement for Providers
+## Universal PoRE Session Model as a Complete Replacement for External Session Contexts
 
-Rejected. This would force PoRE to rebuild functionality that platforms such as Nextcloud Talk already provide reliably.
+Rejected. This would require PoRE to reproduce functions that integration environments may already provide.
 
 ## Storage Provider and Session Provider as One Abstraction
 
-Rejected. Data storage and session/participation context are different responsibilities and may be implemented independently.
+Rejected. Storage and session/participation context are different responsibilities and can be implemented independently.
 
-## Simple `is_valid()` Check for External Sessions
+## Simple `is_valid()` Query for External Sessions
 
-Rejected. External availability can have multiple relevant states. PoRE needs availability semantics, not merely a boolean.
+Rejected. External availability can have several relevant states. PoRE requires an abstract availability semantic rather than a boolean only.
 
 ---
 
@@ -472,22 +441,21 @@ This decision complements ADR-022 and ADR-026 with an explicit provider boundary
 
 It builds on ADR-031 for identity and roles and ADR-062 for browser-based guest participation.
 
-It complements ADR-065 by keeping Storage Providers and Session Context as separate integration axes.
+It complements ADR-065: Storage Provider and Session Context are deliberately separate integration axes.
 
 The existing `ProductionSession` remains a domain Core structure and is not enriched with provider-specific session data.
 
 ---
 
-# Future Considerations
+# Not Defined by This ADR
 
-A later implementation ADR must define the concrete contract, including:
+This ADR does not define in particular:
 
-* mandatory and optional context data
-* representation of external identities
-* availability states actually required by PoRE
-* capability queries
-* session creation and binding semantics
-* handling loss of an external session context
-* handling provider changes and new bindings
+* which context data is mandatory or optional in a concrete implementation
+* how external identities are represented technically
+* which availability states are used concretely
+* how capability queries are implemented technically
+* how session creation and session binding are implemented technically
+* how loss of an external Session Context is handled
 
-Only after that definition should the current feasibility/client layer be migrated to the new contract.
+These details are defined by concrete technical decisions when required for an implementation.
