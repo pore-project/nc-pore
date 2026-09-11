@@ -1,545 +1,151 @@
 # NC-PoRe Technical Foundation
 
-* Version: 1.0
-* Date: 2026-07-24
+## Deutsch ([English version below](#english-version))
+
+Dieses Dokument fasst die technische Grundlage für die Implementierung von NC-PoRe zusammen. Verbindliche Architekturentscheidungen werden ausschließlich über ADRs dokumentiert.
+
+## Technische Grundidee
+
+NC-PoRe verbindet lokale Aufnahme und Verarbeitung mit einer zentralen Umgebung für fachliche Verwaltung und kontrollierte Synchronisation.
+
+Die Aufnahme ist dabei von einer permanenten Netzwerkverbindung unabhängig. Provider- und Host-spezifische Details bleiben an den dafür vorgesehenen Integrationsgrenzen.
+
+## Technische Hauptbereiche
+
+- **Client / Recorder:** lokale Aufnahme, lokale Zustände und lokale Artefaktverarbeitung
+- **Core:** fachliche Modelle, Geschäftsregeln, Zustände und Domain-Operationen
+- **Application:** Anwendungsgrenzen und die Vermittlung zwischen Domäne und Infrastruktur
+- **Infrastructure:** Persistenz, Synchronisation und externe Integrationen
+- **Nextcloud App:** Host-Integration und Bereitstellung der Nextcloud-spezifischen Schnittstellen
+
+## Festgelegte technische Richtungen
+
+Die verbindlichen technischen Richtungen ergeben sich aus den ADRs. Dazu gehören insbesondere:
+
+- lokale Aufnahme als Grundprinzip
+- Trennung von Aufnahme und Kommunikationspipeline
+- Production Session als fachliche Einheit
+- klare Core- und Integrationsgrenzen
+- kontrollierte lokale Persistenz und Recovery
+- getrennte Control- und Media-Synchronisation
+- host-spezifische Connectoren an der Integrationsgrenze
+- offene und nachvollziehbare Datenrepräsentationen
+
+## Aktuelle Implementierungsstruktur
+
+Die Repository-Struktur folgt der tatsächlichen Aufteilung des Projekts, unter anderem:
+
+```text
+nc-pore/
+├── adr/
+├── application/
+├── core/
+├── recorder/
+├── runtime/
+├── infrastructure/
+├── web/
+├── lib/
+├── js/
+├── css/
+├── appinfo/
+├── docs/
+└── tools/
+```
+
+Die genaue Modulstruktur ist durch den Quellcode und die jeweils einschlägigen ADRs bestimmt.
+
+## Entwicklungsprinzipien
+
+Technische Arbeit erfolgt schrittweise und überprüfbar.
+
+- Änderungen werden auf eine klar abgegrenzte Aufgabe zugeschnitten.
+- Vor einer Änderung wird der tatsächliche Mechanismus geprüft.
+- Architekturänderungen werden über ADRs nachvollziehbar dokumentiert.
+- Tests sind Bestandteil der Entwicklung.
+- Unnötige parallele Implementierungen werden vermieden.
+
+## Vertikaler Entwicklungsansatz
+
+Neue Funktionen werden bevorzugt als kleine, vollständige vertikale Schritte umgesetzt. Dabei sollen fachliche Domäne, Anwendungsschnittstelle, technische Infrastruktur und Tests nur soweit erweitert werden, wie es der konkrete Schritt erfordert.
+
+## Grundsatz
+
+NC-PoRe wird nicht durch maximale technische Komplexität definiert.
+
+Technische Qualität entsteht durch klare Grenzen, nachvollziehbare Entscheidungen, verständliche Komponenten und überprüfbare Implementierungen.
 
 ---
 
-# Deutsch ([English version below](#english-version))
+# English Version
 
----
+This document summarizes the technical foundation for implementing NC-PoRe. Binding architectural decisions are documented exclusively through ADRs.
 
-# 1. Zweck dieses Dokuments
+## Technical Concept
 
-Dieses Dokument beschreibt die technische Grundlage,
-die vor Beginn der eigentlichen Implementierung definiert werden soll.
+NC-PoRe combines local recording and processing with a central environment for domain management and controlled synchronization.
 
-Es verbindet die vorhandenen Architekturentscheidungen mit den
-notwendigen technischen Vorbereitungsschritten.
+Recording is independent of a permanent network connection. Provider- and host-specific details remain at their designated integration boundaries.
 
-Dieses Dokument ersetzt keine Architecture Decision Records (ADRs).
+## Main Technical Areas
 
-Technische Entscheidungen mit langfristiger Auswirkung werden weiterhin
-über ADRs dokumentiert.
+- **Client / Recorder:** local recording, local state and local artifact processing
+- **Core:** domain models, business rules, states and domain operations
+- **Application:** application boundaries and coordination between domain and infrastructure
+- **Infrastructure:** persistence, synchronization and external integrations
+- **Nextcloud App:** host integration and Nextcloud-specific interfaces
 
-Ziel dieses Dokuments ist:
+## Established Technical Directions
 
-* technische Orientierung
-* Strukturierung der nächsten Schritte
-* Sichtbarkeit offener Entscheidungen
-* gemeinsame Grundlage für die Implementierungsphase
+Binding technical directions are defined by the ADRs. They include in particular:
 
----
+- local recording as a core principle
+- separation of recording from the communication pipeline
+- Production Session as a domain entity
+- clear Core and integration boundaries
+- controlled local persistence and recovery
+- separation of control and media synchronization
+- host-specific connectors at the integration boundary
+- open and traceable data representations
 
-# 2. Technische Grundidee
+## Current Implementation Structure
 
-NC-PoRe basiert auf einer verteilten Architektur.
+The repository structure follows the actual project decomposition, including:
 
-Die zentrale Idee:
+```text
+nc-pore/
+├── adr/
+├── application/
+├── core/
+├── recorder/
+├── runtime/
+├── infrastructure/
+├── web/
+├── lib/
+├── js/
+├── css/
+├── appinfo/
+├── docs/
+└── tools/
+```
 
-> Aufnahme und Verarbeitung entstehen lokal.
-> Verwaltung und Zusammenarbeit erfolgen über eine zentrale Umgebung.
+The exact module structure is defined by the source tree and the applicable ADRs.
 
-Das System verbindet daher:
+## Development Principles
 
-* lokale Clients
-* zentrale Geschäftslogik
-* selbsthostbare Speicherung
-* kontrollierte Synchronisation
+Technical work proceeds incrementally and with verification.
 
----
+- Changes are scoped to a clearly defined task.
+- The actual mechanism is inspected before making changes.
+- Architectural changes are documented through ADRs.
+- Tests are part of development.
+- Unnecessary parallel implementations are avoided.
 
-# 3. Technische Hauptkomponenten
+## Vertical Development Approach
 
-NC-PoRe wird in folgende technische Bereiche gegliedert:
+New functionality is preferably implemented as small, complete vertical slices. Domain logic, application interfaces, infrastructure and tests are extended only as far as the concrete step requires.
 
----
-
-## 3.1 Client
-
-Der Client ist für lokale Produktionsaufgaben verantwortlich.
-
-Verantwortlichkeiten:
-
-* lokale Audioaufnahme
-* lokale Verarbeitung
-* lokale Zwischenspeicherung
-* Verwaltung lokaler Zustände
-* Synchronisation mit der zentralen Umgebung
-
-Grundprinzip:
-
-Die Aufnahme ist nicht von einer permanenten Netzwerkverbindung abhängig.
-
----
-
-## 3.2 Core
-
-Der Core bildet die zentrale fachliche Autorität.
-
-Verantwortlichkeiten:
-
-* Verwaltung von Production Sessions
-* fachliche Geschäftslogik
-* Verwaltung von Zuständen
-* Rollen und Berechtigungen
-* Validierung von Aktionen
-
-Der Core entscheidet über fachliche Regeln.
-
-Clients stellen Funktionen bereit, sind aber nicht die alleinige Quelle
-für fachliche Wahrheit.
-
----
-
-## 3.3 Storage
-
-Der Storage-Bereich verwaltet dauerhaft gespeicherte Informationen.
-
-Verantwortlichkeiten:
-
-* Audio Assets
-* Produktionsdaten
-* Metadaten
-* Session-bezogene Informationen
-* langfristige Speicherung
-
-Grundprinzip:
-
-Daten bleiben unter Kontrolle der Nutzer.
-
----
-
-## 3.4 Communication Layer
-
-Der Communication Layer verbindet die Systembestandteile.
-
-Verantwortlichkeiten:
-
-* API-Kommunikation
-* Event-basierte Kommunikation
-* Synchronisationsinformationen
-* technische Schnittstellen
-
-Steuerungsinformationen und Mediendaten werden getrennt behandelt.
-
----
-
-# 4. Bereits getroffene technische Richtungen
-
-Folgende technische Richtungen sind bereits durch Architekturentscheidungen festgelegt:
-
-* lokale Aufnahme als Grundprinzip
-* keine Abhängigkeit von permanenter Netzwerkverbindung
-* offene Audioformate
-* getrennte Audiospuren
-* selbsthostbare Infrastruktur
-* Nextcloud-basierte Speicherung
-* API-basierte Kommunikation
-* Event-orientierte Kommunikation
-* Trennung von Control Synchronization und Media Synchronization
-
----
-
-# 5. Technische Prinzipien
-
-Technische Entscheidungen werden nach folgenden Kriterien getroffen:
-
-## Wartbarkeit
-
-Die Lösung soll langfristig verständlich und betreibbar bleiben.
-
-## Offenheit
-
-Standards und offene Schnittstellen werden bevorzugt.
-
-## Einfachheit
-
-Komplexität wird nur eingeführt, wenn sie einen konkreten Nutzen bringt.
-
-## Erweiterbarkeit
-
-Die Architektur soll zukünftige Entwicklungen ermöglichen.
-
-## Nachvollziehbarkeit
-
-Entscheidungen sollen dokumentiert und begründet werden.
-
----
-
-# 6. Offene technische Entscheidungen
-
-Vor Beginn der Implementierung müssen unter anderem folgende Bereiche geklärt werden:
-
-## Programmiersprachen
-
-Zu definieren:
-
-* Client-Technologien
-* Core-Technologie
-* gemeinsame Bibliotheken
-
----
-
-## Frameworks und Laufzeitumgebung
-
-Zu definieren:
-
-* verwendete Frameworks
-* Plattformintegration
-* Entwicklungswerkzeuge
-
----
-
-## Repository-Struktur
-
-Zu definieren:
-
-* Monorepository oder mehrere Repositories
-* Modulstruktur
-* Abhängigkeiten
-* Build-Struktur
-
----
-
-## Datenhaltung
-
-Zu definieren:
-
-* Datenbankstrategie
-* lokale Speicherung
-* zentrale Speicherung
-* Migrationen
-* Backup-Strategie
-
----
-
-## Build und Release
-
-Zu definieren:
-
-* Build-System
-* Paketierung
-* Versionierung
-* Release-Prozess
-
----
-
-## Testing
-
-Zu definieren:
-
-* Teststrategie
-* automatisierte Tests
-* Integrationsprüfungen
-* Qualitätssicherung
-
----
-
-# 7. Erste Implementierungsstrategie
-
-Die Implementierung soll schrittweise erfolgen.
-
-Bevorzugter Ansatz:
-
-## Vertikales MVP
-
-Nicht einzelne technische Schichten isoliert bauen,
-sondern einen kleinen vollständigen Produktionsablauf ermöglichen.
-
-Beispiel:
-
-* Client kann aufnehmen
-* Session kann erstellt werden
-* Daten können gespeichert werden
-* zentrale Verwaltung funktioniert
-
-Danach erfolgt schrittweise Erweiterung.
-
----
-
-# 8. Grundsatz
-
-NC-PoRe wird technisch nicht durch maximale Komplexität definiert.
-
-Die technische Qualität entsteht durch:
-
-* klare Architektur
-* bewusste Entscheidungen
-* verständliche Komponenten
-* saubere Dokumentation
-
-Technik dient dem Produktionsprozess.
-
-Nicht der Produktionsprozess der Technik.
-
----
-
-# English Version ([Deutsche Version oben](#deutsch))
-
----
-
-# 1. Purpose of this Document
-
-This document describes the technical foundation
-that should be defined before the actual implementation begins.
-
-It connects the existing architecture decisions with the
-necessary technical preparation steps.
-
-This document does not replace Architecture Decision Records (ADRs).
-
-Technical decisions with long-term impact continue to be documented
-through ADRs.
-
-The purpose of this document is:
-
-* technical orientation
-* structuring the next steps
-* visibility of open decisions
-* a shared foundation for the implementation phase
-
----
-
-# 2. Technical Concept
-
-NC-PoRe is based on a distributed architecture.
-
-The central idea:
-
-> Recording and processing happen locally.
-> Management and collaboration happen through a central environment.
-
-The system therefore connects:
-
-* local clients
-* central business logic
-* self-hostable storage
-* controlled synchronization
-
----
-
-# 3. Main Technical Components
-
-NC-PoRe is structured into the following technical areas:
-
----
-
-## 3.1 Client
-
-The client is responsible for local production tasks.
-
-Responsibilities:
-
-* local audio recording
-* local processing
-* local temporary storage
-* management of local states
-* synchronization with the central environment
-
-Core principle:
-
-Recording does not depend on a permanent network connection.
-
----
-
-## 3.2 Core
-
-The Core represents the central domain authority.
-
-Responsibilities:
-
-* management of Production Sessions
-* domain business logic
-* state management
-* roles and permissions
-* validation of actions
-
-The Core defines domain rules.
-
-Clients provide functionality but are not the sole source
-of domain truth.
-
----
-
-## 3.3 Storage
-
-The storage area manages permanently stored information.
-
-Responsibilities:
-
-* audio assets
-* production data
-* metadata
-* session-related information
-* long-term storage
-
-Core principle:
-
-Data remains under user control.
-
----
-
-## 3.4 Communication Layer
-
-The Communication Layer connects the system components.
-
-Responsibilities:
-
-* API communication
-* event-based communication
-* synchronization information
-* technical interfaces
-
-Control information and media data are treated separately.
-
----
-
-# 4. Established Technical Directions
-
-The following technical directions have already been established through
-architecture decisions:
-
-* local recording as a core principle
-* no dependency on permanent network connection
-* open audio formats
-* separate audio tracks
-* self-hostable infrastructure
-* Nextcloud-based storage
-* API-based communication
-* event-oriented communication
-* separation of Control Synchronization and Media Synchronization
-
----
-
-# 5. Technical Principles
-
-Technical decisions are evaluated according to the following criteria:
-
-## Maintainability
-
-Solutions should remain understandable and operable long term.
-
-## Openness
-
-Standards and open interfaces are preferred.
-
-## Simplicity
-
-Complexity is introduced only when it provides concrete value.
-
-## Extensibility
-
-The architecture should enable future development.
-
-## Traceability
-
-Decisions should be documented and justified.
-
----
-
-# 6. Open Technical Decisions
-
-Before implementation begins, the following areas need clarification:
-
-## Programming Languages
-
-To be defined:
-
-* client technologies
-* core technology
-* shared libraries
-
----
-
-## Frameworks and Runtime Environment
-
-To be defined:
-
-* frameworks
-* platform integration
-* development tools
-
----
-
-## Repository Structure
-
-To be defined:
-
-* monorepository or multiple repositories
-* module structure
-* dependencies
-* build structure
-
----
-
-## Data Management
-
-To be defined:
-
-* database strategy
-* local storage
-* central storage
-* migrations
-* backup strategy
-
----
-
-## Build and Release
-
-To be defined:
-
-* build system
-* packaging
-* versioning
-* release process
-
----
-
-## Testing
-
-To be defined:
-
-* testing strategy
-* automated tests
-* integration tests
-* quality assurance
-
----
-
-# 7. Initial Implementation Strategy
-
-Implementation should happen incrementally.
-
-Preferred approach:
-
-## Vertical MVP
-
-Instead of building isolated technical layers,
-create a small complete production workflow.
-
-Example:
-
-* client can record
-* session can be created
-* data can be stored
-* central management works
-
-Afterwards, functionality is expanded step by step.
-
----
-
-# 8. Principle
+## Principle
 
 NC-PoRe is not defined by maximum technical complexity.
 
-Technical quality comes from:
-
-* clear architecture
-* conscious decisions
-* understandable components
-* clean documentation
-
-Technology serves the production process.
-
-Not the other way around.
+Technical quality comes from clear boundaries, traceable decisions, understandable components and verifiable implementations.
