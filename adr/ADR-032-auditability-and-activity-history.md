@@ -21,16 +21,7 @@ Die bisherigen Architekturentscheidungen legen fest:
 * Assets werden synchronisiert und gemeinsam verarbeitet.
 * Der Core ist die zentrale Instanz für fachliche Entscheidungen.
 
-Mit mehreren Teilnehmern, mehreren Geräten und mehreren Verarbeitungsschritten entsteht eine neue Anforderung:
-
-> Eine gemeinsame Produktion benötigt ein gemeinsames Gedächtnis.
-
-Menschen müssen nachvollziehen können:
-
-* was passiert ist
-* wann etwas passiert ist
-* wer eine Aktion durchgeführt hat
-* welche Auswirkungen eine Änderung hatte
+Mit mehreren Teilnehmern, Geräten und Verarbeitungsschritten muss nachvollziehbar bleiben, was in einer gemeinsamen Produktion geschehen ist.
 
 ---
 
@@ -53,11 +44,11 @@ Leitprinzip:
 
 # Activity History
 
-Jede relevante Aktion innerhalb einer Production Session kann ein Ereignis erzeugen.
+Relevante Aktionen innerhalb einer Production Session können ein Ereignis erzeugen.
 
 Beispiele:
 
-```text id="z3f7pm"
+```text
 SessionCreated
 
 ParticipantInvited
@@ -77,13 +68,15 @@ MetadataChanged
 ExportCreated
 ```
 
+Die konkrete Auswahl und Semantik der Ereignisse richtet sich nach der jeweiligen fachlichen Funktion.
+
 ---
 
 # Ereignismodell
 
 Ein Aktivitätsereignis enthält mindestens:
 
-```text id="q9j4xb"
+```text
 Activity Event
 
 ├── Event ID
@@ -120,7 +113,7 @@ Eine Session besitzt dadurch ihr eigenes Gedächtnis.
 
 Beispiel:
 
-```text id="5c8yq1"
+```text
 Production Session
 
 ├── Participants
@@ -140,7 +133,7 @@ ADR-032 nutzt diese Informationen.
 
 Ein Ereignis beantwortet:
 
-```text id="7w3mka"
+```text
 Wer?
 
         ↓
@@ -170,14 +163,7 @@ ADR-028 definiert Events als Bestandteil der Architektur.
 
 Activity History nutzt dieses Prinzip.
 
-Interne Aktionen erzeugen Ereignisse, die:
-
-* gespeichert
-* verarbeitet
-* angezeigt
-* analysiert
-
-werden können.
+Interne Aktionen erzeugen Ereignisse, die gespeichert, verarbeitet oder angezeigt werden können.
 
 ---
 
@@ -223,43 +209,23 @@ Sondern:
 
 ---
 
-# Erweiterbarkeit
-
-Die Architektur ermöglicht spätere Funktionen:
-
-* Produktionschronik
-* Änderungsvergleiche
-* Wiederherstellung bestimmter Zustände
-* automatische Zusammenfassungen
-* Analyse von Produktionsabläufen
-
----
-
 # Grundprinzipien
 
 ## 1. Eine Produktion braucht ein Gedächtnis
 
 Gemeinsame Arbeit benötigt nachvollziehbare Geschichte.
 
----
-
 ## 2. Transparenz schafft Vertrauen
 
 Teilnehmer können verstehen, was passiert ist.
-
----
 
 ## 3. Ereignisse sind wichtiger als Momentaufnahmen
 
 Der Zustand allein erklärt nicht immer den Weg dorthin.
 
----
-
 ## 4. Der Mensch bleibt Mittelpunkt
 
-Die Historie unterstützt Zusammenarbeit.
-
-Sie ersetzt keine Kommunikation zwischen Menschen.
+Die Historie unterstützt Zusammenarbeit. Sie ersetzt keine Kommunikation zwischen Menschen.
 
 ---
 
@@ -270,7 +236,7 @@ Sie ersetzt keine Kommunikation zwischen Menschen.
 * bessere Nachvollziehbarkeit
 * einfachere Fehleranalyse
 * mehr Vertrauen bei Zusammenarbeit
-* Grundlage für spätere Automatisierung
+* strukturierte Grundlage für Ereignisverarbeitung
 
 ## Nachteile
 
@@ -289,7 +255,7 @@ Diese Entscheidung bedeutet nicht:
 * dass jede Benutzeraktion protokolliert werden muss
 * dass NC-PoRe ein Überwachungssystem wird
 * dass jede Dateiänderung automatisch versioniert wird
-* dass Compliance-Funktionen bereits in V1 vollständig umgesetzt werden
+* dass ein bestimmtes Compliance-System vorgeschrieben wird
 
 ---
 
@@ -297,9 +263,7 @@ Diese Entscheidung bedeutet nicht:
 
 NC-PoRe unterstützt Menschen dabei, gemeinsam Produktionen zu erstellen.
 
-Eine gute Zusammenarbeit benötigt nicht nur Werkzeuge.
-
-Sie benötigt auch Erinnerung.
+Eine gute Zusammenarbeit benötigt nicht nur Werkzeuge. Sie benötigt auch Erinnerung.
 
 **Gemeinsam produzieren. Gemeinsam verstehen. Gemeinsam nachvollziehen.**
 
@@ -320,16 +284,7 @@ Previous architecture decisions established:
 * Assets synchronized and processed together.
 * The Core as the authority for domain decisions.
 
-With multiple participants, devices and processing steps, a new requirement appears:
-
-> A shared production needs a shared memory.
-
-People need to understand:
-
-* what happened
-* when it happened
-* who performed an action
-* what impact a change had
+With multiple participants, devices and processing steps, the history of a shared production must remain traceable.
 
 ---
 
@@ -337,7 +292,7 @@ People need to understand:
 
 NC-PoRe introduces a traceable activity history for Production Sessions.
 
-The purpose is:
+The activity history serves:
 
 * transparency
 * collaboration
@@ -352,16 +307,20 @@ Guiding principle:
 
 # Activity History
 
-Relevant actions create activity events.
+Relevant actions within a Production Session may create an activity event.
 
 Examples:
 
-```text id="p4m9vx"
+```text
 SessionCreated
 
 ParticipantInvited
 
+ParticipantJoined
+
 RecordingStarted
+
+RecordingFinished
 
 AssetUploaded
 
@@ -372,13 +331,15 @@ MetadataChanged
 ExportCreated
 ```
 
+The concrete selection and semantics of events depend on the respective domain function.
+
 ---
 
 # Event Model
 
-An activity event contains:
+An activity event contains at least:
 
-```text id="r6k1pt"
+```text
 Activity Event
 
 ├── Event ID
@@ -390,24 +351,174 @@ Activity Event
 └── Result
 ```
 
+This makes it possible to determine:
+
+* who acted
+* when the action occurred
+* what was affected
+* what result was produced
+
+---
+
+# Relationship to the Production Session
+
+Activities belong to the domain entity of the production.
+
+Not:
+
+> User history
+
+But:
+
+> Production history
+
+A session therefore has its own memory.
+
+Example:
+
+```text
+Production Session
+
+├── Participants
+├── Assets
+├── Recordings
+├── Exports
+└── Activity History
+```
+
+---
+
+# Relationship to Identity and Roles
+
+ADR-031 defines identity and roles.
+
+ADR-032 uses this information.
+
+An event answers:
+
+```text
+Who?
+
+        ↓
+
+Did what?
+
+        ↓
+
+When?
+
+        ↓
+
+In which session?
+
+        ↓
+
+Changed what?
+```
+
+Without identity, an activity history is not meaningful.
+
+---
+
+# Relationship to the API
+
+ADR-028 defines events as part of the architecture.
+
+Activity History uses this principle.
+
+Internal actions create events that can be stored, processed or displayed.
+
+---
+
+# V1 Strategy
+
+V1 uses a simple and reliable activity history.
+
+Stored information includes:
+
+* timestamp
+* user
+* action
+* affected object
+* result
+
+Not part of V1:
+
+* immutable blockchain-based history
+* complete versioning of all data
+* complex compliance systems
+
+---
+
+# Transparency Instead of Control
+
+NC-PoRe does not use Activity History as a surveillance system.
+
+The goals are:
+
+* shared orientation
+* better collaboration
+* faster troubleshooting
+
+Example:
+
+Not:
+
+> Why did user X change file Y?
+
+But:
+
+> What steps did this production take?
+
+---
+
+# Core Principles
+
+## 1. A Production Needs a Memory
+
+Collaborative work requires a traceable history.
+
+## 2. Transparency Builds Trust
+
+Participants can understand what happened.
+
+## 3. Events Matter More Than Snapshots
+
+State alone does not always explain how it was reached.
+
+## 4. People Remain Central
+
+History supports collaboration. It does not replace communication between people.
+
 ---
 
 # Consequences
 
-Benefits:
+## Advantages
 
 * better traceability
 * easier troubleshooting
-* increased trust
-* foundation for future automation
+* greater trust in collaboration
+* structured basis for event processing
 
-Costs:
+## Disadvantages
 
 * additional storage
-* additional complexity
+* additional system complexity
 * event definitions require care
 
-These costs are consciously accepted.
+These disadvantages are consciously accepted.
+
+---
+
+# Non-Goals
+
+This decision does not mean:
+
+* that every user action must be logged
+* that NC-PoRe becomes a surveillance system
+* that every file change is automatically versioned
+* that a specific compliance system is mandated
 
 ---
 
@@ -415,8 +526,6 @@ These costs are consciously accepted.
 
 NC-PoRe helps people create productions together.
 
-Good collaboration needs not only tools.
-
-It also needs memory.
+Good collaboration needs not only tools. It also needs memory.
 
 **Produce together. Understand together. Trace together.**
