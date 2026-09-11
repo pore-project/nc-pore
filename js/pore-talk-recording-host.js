@@ -30,6 +30,19 @@
 		return body.ocs.data
 	}
 
+	const getTalkParticipants = async token => {
+		const participants = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}/participants`))
+		const participantList = Array.isArray(participants) ? participants : []
+		return participantList
+	}
+
+	const getRecordingParticipantIds = participantList => participantList
+		.filter(participant => participant?.actorType === 'users')
+		.map(participant => participant.actorId)
+		.filter(Boolean)
+
+	const getCurrentRecordingParticipantIds = async token => getRecordingParticipantIds(await getTalkParticipants(token))
+
 	const publishState = snapshot => {
 		if (!snapshot || !coordinatorContext) return
 		const actorId = coordinatorContext.actorId
@@ -75,11 +88,14 @@
 
 	const command = async (sessionId, recordingId, name, options = {}) => {
 		if (name === 'begin') {
-			const production = await productionCommand(sessionId, 'ensure', options)
+			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
+			coordinatorContext.participants = currentParticipantIds
+			const beginOptions = { ...options, participants: currentParticipantIds }
+			const production = await productionCommand(sessionId, 'ensure', beginOptions)
 			if (production?.production_status === 'created') {
-				await productionCommand(sessionId, 'start', options)
+				await productionCommand(sessionId, 'start', beginOptions)
 			}
-			return recordingCommand(sessionId, recordingId, 'begin', options)
+			return recordingCommand(sessionId, recordingId, 'begin', beginOptions)
 		}
 		return recordingCommand(sessionId, recordingId, name, options)
 	}
@@ -95,9 +111,8 @@
 		if (!token || !actorId) return
 
 		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}`))
-		const participants = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}/participants`))
-		const participantList = Array.isArray(participants) ? participants : []
-		const participantIds = participantList.filter(p => p?.actorType === 'users').map(p => p.actorId).filter(Boolean)
+		const participantList = await getTalkParticipants(token)
+		const participantIds = getRecordingParticipantIds(participantList)
 		if (!participantList.some(p => p?.actorType === 'users' && p.actorId === actorId)) return
 
 		const owner = participantList.find(p => p?.actorType === 'users' && p.participantType === 1)
@@ -116,7 +131,7 @@
 			recordingId,
 			participants: participantIds,
 			ownerId,
-			command: (name, artifactId = '') => command(token, recordingId, name, { participants: participantIds, ownerId, artifactId }),
+			command: (name, artifactId = '') => command(token, recordingId, name, { participants: coordinatorContext?.participants || participantIds, ownerId, artifactId }),
 		})
 
 		const state = ensure?.state
