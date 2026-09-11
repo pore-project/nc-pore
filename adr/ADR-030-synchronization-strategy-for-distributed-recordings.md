@@ -43,6 +43,8 @@ Leitprinzip:
 
 > NC-PoRe synchronisiert die Produktion, nicht zwangsläufig den Audiostrom.
 
+Die Trennung ist eine fachliche und technische Verantwortungsgrenze: Der Zustand der gemeinsamen Produktion und die Übertragung der erzeugten Mediendaten dürfen unterschiedliche zeitliche Eigenschaften haben. Das Eintreffen oder Ausbleiben des einen darf nicht automatisch die Gültigkeit des anderen bestimmen.
+
 ---
 
 # Control Synchronization
@@ -58,6 +60,8 @@ Dazu gehören beispielsweise:
 * Session-Zustände ändern sich
 
 Diese Informationen sollen möglichst zeitnah verteilt werden.
+
+Control Synchronization beschreibt dabei den Zustand und die Koordination der gemeinsamen Produktion. Sie ist nicht die technische Übertragung der eigentlichen Audiodaten.
 
 ---
 
@@ -76,6 +80,8 @@ Mediendaten müssen nicht zwingend in Echtzeit übertragen werden.
 Priorität:
 
 > Datenintegrität vor Echtzeitillusion.
+
+Ein lokal vollständig vorliegendes Recording kann daher bereits gültig sein, obwohl sein Asset noch nicht synchronisiert oder zentral verfügbar ist. Umgekehrt darf ein Synchronisations- oder Transferfehler nicht rückwirkend die lokale Aufnahme ungültig machen.
 
 ---
 
@@ -122,6 +128,8 @@ NC-PoRe verfolgt deshalb ein robustes Modell:
 > Jede lokale Aufnahme bleibt zunächst vollständig und unabhängig erhalten.
 
 Erst danach werden Assets Bestandteil einer gemeinsamen Produktion.
+
+Die Synchronisationsarchitektur folgt damit derselben Trennung wie die Aufnahmearchitektur: Capture und lokale Datenhaltung sichern das erzeugte Material; Synchronisation stellt die gemeinsame Verfügbarkeit und Zuordnung her. Diese beiden Verantwortlichkeiten dürfen nicht so gekoppelt werden, dass ein Fehler im Transport die lokale Aufnahme zerstört.
 
 ---
 
@@ -270,6 +278,8 @@ Guiding principle:
 
 > NC-PoRe synchronizes the production, not necessarily the audio stream.
 
+This separation is a domain and technical responsibility boundary: the state of the shared production and the transfer of produced media may have different timing characteristics. The arrival or absence of one must not automatically determine the validity of the other.
+
 ---
 
 # Control Synchronization
@@ -285,6 +295,8 @@ It includes, for example:
 * session state changes
 
 This information should be distributed with appropriate timeliness.
+
+Control Synchronization describes the state and coordination of the shared production. It is not the technical transfer of the actual audio data.
 
 ---
 
@@ -303,6 +315,8 @@ Media data does not have to be transferred in real time.
 Priority:
 
 > Data integrity before real-time illusion.
+
+A locally complete recording may therefore already be valid while its asset has not yet been synchronized or made centrally available. Conversely, a synchronization or transfer failure must not retroactively invalidate the local recording.
 
 ---
 
@@ -349,6 +363,8 @@ NC-PoRe therefore follows a robust model:
 > Each local recording remains complete and independent first.
 
 Only afterwards do assets become part of the shared production.
+
+The synchronization architecture therefore follows the same separation as the recording architecture: capture and local data persistence secure the produced material; synchronization establishes shared availability and association. These responsibilities must not be coupled in a way that allows a transport failure to destroy the local recording.
 
 ---
 
