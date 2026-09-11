@@ -1,7 +1,7 @@
 # NC-PoRe MVP Definition
 
-* Version: 1.0
-* Date: 2026-07-24
+* Version: 1.1
+* Date: 2026-09-11
 
 ---
 
@@ -11,30 +11,21 @@
 
 # 1. Zweck dieses Dokuments
 
-Dieses Dokument beschreibt die erste technische Ausbaustufe
-von NC-PoRe.
+Dieses Dokument beschreibt die erste technische Ausbaustufe von NC-PoRe.
 
-Das MVP (Minimum Viable Product) definiert den kleinsten vollständigen
-Produktionsablauf, der die zentralen Architekturprinzipien von NC-PoRe
-technisch nachweist.
+Das MVP (Minimum Viable Product) definiert einen kleinen, vollständigen Produktionsablauf, der die zentralen Architekturprinzipien von NC-PoRe technisch nachweist.
 
-Das MVP ist kein vollständiges Produkt.
-
-Es ist jedoch auch kein Wegwerf-Prototyp.
-
-Die Implementierung des MVP soll auf den langfristigen Architekturprinzipien
-von NC-PoRe aufbauen.
+Das MVP ist kein vollständiges Produkt und kein Wegwerf-Prototyp. Die Umsetzung baut auf den verbindlichen Architekturentscheidungen des Projekts auf.
 
 ---
 
 # 2. Ziel des MVP
 
-Das MVP soll beweisen, dass der grundlegende Ansatz von NC-PoRe funktioniert:
+Das MVP soll zeigen, dass der grundlegende Ansatz von NC-PoRe funktioniert:
 
-> Lokale Aufnahme ermöglicht professionelle Produktion,
-> ohne die Kontrolle über eigene Daten abzugeben.
+> Lokale Aufnahme ermöglicht professionelle Produktion, ohne die Kontrolle über eigene Daten abzugeben.
 
-Das MVP konzentriert sich deshalb auf den Kernprozess:
+Der Kernprozess ist:
 
 ```text
 Aufnahme
@@ -68,19 +59,19 @@ Das MVP folgt den bestehenden Architekturprinzipien:
 
 ---
 
-# 4. MVP Umfang
+# 4. MVP-Umfang
 
 ## 4.1 Client
 
-Der erste Client muss ermöglichen:
+Der Client muss ermöglichen:
 
 * Erstellung oder Auswahl einer Production Session
 * lokale Audioaufnahme
-* Speicherung lokaler Aufnahmedaten
+* lokale Speicherung von Aufnahmedaten
 * Anzeige grundlegender Sessioninformationen
-* Übertragung von Daten an die zentrale Umgebung
+* kontrollierte Übergabe fertiger Aufnahmen an die zentrale Umgebung
 
-Nicht erforderlich:
+Nicht erforderlich sind insbesondere:
 
 * vollständige professionelle DAW-Funktionen
 * komplexe Audioeffekte
@@ -93,7 +84,7 @@ Nicht erforderlich:
 Das MVP benötigt eine grundlegende Verwaltung von:
 
 * Session
-* Teilnehmern
+* Recording-Teilnehmern
 * Aufnahmen
 * Metadaten
 
@@ -107,8 +98,8 @@ Der Core muss ermöglichen:
 
 * Verwaltung von Sessions
 * Verwaltung grundlegender Zustände
-* Prüfung einfacher Berechtigungen
-* Bereitstellung von Schnittstellen für Clients
+* Prüfung von Berechtigungen
+* Bereitstellung klarer Schnittstellen für Clients
 
 Der Core ist die fachliche Autorität.
 
@@ -118,11 +109,12 @@ Der Core ist die fachliche Autorität.
 
 Das MVP muss ermöglichen:
 
-* Speicherung von Audiodaten
+* lokale und kontrollierte Speicherung von Audiodaten
 * Speicherung von Metadaten
 * Wiederauffindbarkeit von Sessions und Assets
+* nachvollziehbare Integritätsprüfung bei der Übergabe
 
-Die Speicherung muss die Grundidee unterstützen:
+Die Speicherung unterstützt das Grundprinzip:
 
 > Daten bleiben unter Kontrolle der Nutzer.
 
@@ -130,19 +122,19 @@ Die Speicherung muss die Grundidee unterstützen:
 
 ## 4.5 Synchronisation
 
-Das MVP muss einen grundlegenden Synchronisationsablauf zeigen:
+Das MVP muss einen kontrollierten Synchronisationsablauf ermöglichen:
 
-* lokale Daten entstehen unabhängig vom Netzwerk
-* Daten werden kontrolliert übertragen
-* zentrale Umgebung kennt den aktuellen Zustand
+* lokale Daten entstehen unabhängig von der Netzwerkqualität
+* fertige Daten werden kontrolliert übertragen
+* der zentrale Zustand kann nachvollzogen werden
 
-Die vollständige verteilte Synchronisationsarchitektur bleibt zukünftigen Ausbaustufen vorbehalten.
+Die konkrete technische Ausgestaltung der Synchronisation richtet sich nach den dafür getroffenen Architekturentscheidungen.
 
 ---
 
 # 5. Bewusste Nicht-Ziele
 
-Folgende Bereiche gehören nicht zum ersten MVP:
+Folgende Bereiche sind nicht Bestandteil dieses MVP:
 
 ## Vollständige professionelle Produktionsumgebung
 
@@ -155,19 +147,21 @@ Nicht enthalten:
 
 ---
 
-## Maximale Plattformunterstützung
+## Weitere Medien- und Kommunikationsfunktionen
 
 Nicht enthalten:
 
-* sofortige Unterstützung aller Plattformen
-* vollständige mobile Clients
-* perfekte Integration jeder Hardware
+* Videoaufnahme
+* Live-Streaming
+* automatische Veröffentlichung
+
+Diese Punkte sind hier keine Zieldefinition des MVP.
 
 ---
 
-## Vollständige Skalierung
+## Skalierung
 
-Nicht enthalten:
+Nicht Bestandteil der MVP-Definition sind insbesondere:
 
 * große Enterprise-Installationen
 * globale Infrastruktur
@@ -184,19 +178,19 @@ Das MVP ist erfolgreich, wenn:
 * Audiodaten erhalten bleiben
 * Daten kontrolliert übertragen werden können
 * eine zentrale Verwaltung möglich ist
-* Architekturprinzipien sichtbar umgesetzt sind
+* die Architekturprinzipien sichtbar umgesetzt sind
 
 Der Erfolg wird nicht an der Anzahl von Funktionen gemessen.
 
 ---
 
-# 7. Technische Risiken, die das MVP prüfen soll
+# 7. Technische Risiken
 
 Das MVP soll insbesondere folgende Risiken früh sichtbar machen:
 
-* Audioaufnahme über verschiedene Plattformen
-* lokale Speicherung
-* Synchronisation
+* zuverlässige lokale Audioaufnahme
+* lokale Speicherung und Wiederherstellung
+* Synchronisation und kontrollierte Übergabe
 * Datenmodell der Production Session
 * Zusammenspiel zwischen Client und Core
 
@@ -204,19 +198,15 @@ Das MVP soll insbesondere folgende Risiken früh sichtbar machen:
 
 # 8. Grundsatz
 
-Das MVP ist der erste funktionierende Ausschnitt von NC-PoRe.
+Das MVP ist ein klar abgegrenzter funktionierender Ausschnitt von NC-PoRe.
 
 Es soll zeigen:
 
-Die Architektur funktioniert.
+> Die Architektur funktioniert.
 
-Nicht:
+Es definiert nicht die vollständige Produktentwicklung und enthält keine vollständige Liste möglicher späterer Funktionen.
 
-Die gesamte Vision ist bereits umgesetzt.
-
-NC-PoRe wird schrittweise erweitert.
-
-Jeder Schritt soll eine stabile Grundlage für den nächsten schaffen.
+NC-PoRe wird anhand realer Anforderungen und technischer Erkenntnisse weiterentwickelt.
 
 ---
 
@@ -226,30 +216,21 @@ Jeder Schritt soll eine stabile Grundlage für den nächsten schaffen.
 
 # 1. Purpose of this Document
 
-This document describes the first technical implementation stage
-of NC-PoRe.
+This document describes the first technical implementation stage of NC-PoRE.
 
-The MVP (Minimum Viable Product) defines the smallest complete
-production workflow that technically proves the central architectural
-principles of NC-PoRe.
+The MVP (Minimum Viable Product) defines a small, complete production workflow that technically demonstrates the central architectural principles of NC-PoRE.
 
-The MVP is not a complete product.
-
-However, it is also not throw-away prototype code.
-
-The MVP implementation should be based on the long-term architectural
-principles of NC-PoRe.
+The MVP is not a complete product and not throw-away prototype code. Its implementation is based on the project's binding architectural decisions.
 
 ---
 
 # 2. Goal of the MVP
 
-The MVP should prove that the fundamental approach of NC-PoRe works:
+The MVP should demonstrate that the fundamental approach of NC-PoRe works:
 
-> Local recording enables professional production
-> without giving up control over personal data.
+> Local recording enables professional production without giving up control over personal data.
 
-Therefore, the MVP focuses on the core workflow:
+The core workflow is:
 
 ```text
 Recording
@@ -271,10 +252,10 @@ Central Management
 
 # 3. MVP Principles
 
-The MVP follows the existing architecture principles:
+The MVP follows the existing architectural principles:
 
 * Local Recording First
-* Production Session as central domain entity
+* Production Session as the central domain entity
 * separate audio tracks
 * open data formats
 * self-hostable infrastructure
@@ -287,15 +268,15 @@ The MVP follows the existing architecture principles:
 
 ## 4.1 Client
 
-The first client must enable:
+The client must enable:
 
 * creation or selection of a Production Session
 * local audio recording
 * local storage of recording data
 * display of basic session information
-* transfer of data to the central environment
+* controlled handoff of finalized recordings to the central environment
 
-Not required:
+The MVP does not require in particular:
 
 * complete professional DAW functionality
 * complex audio effects
@@ -308,7 +289,7 @@ Not required:
 The MVP requires basic management of:
 
 * session
-* participants
+* recording participants
 * recordings
 * metadata
 
@@ -322,8 +303,8 @@ The Core must enable:
 
 * session management
 * basic state management
-* simple permission checks
-* interfaces for clients
+* permission checks
+* clear interfaces for clients
 
 The Core is the domain authority.
 
@@ -333,11 +314,12 @@ The Core is the domain authority.
 
 The MVP must enable:
 
-* storage of audio data
+* local and controlled storage of audio data
 * storage of metadata
 * retrieval of sessions and assets
+* traceable integrity verification during handoff
 
-Storage must support the core idea:
+Storage supports the core idea:
 
 > Data remains under user control.
 
@@ -345,19 +327,19 @@ Storage must support the core idea:
 
 ## 4.5 Synchronization
 
-The MVP must demonstrate a basic synchronization workflow:
+The MVP must provide a controlled synchronization workflow:
 
-* local data is created independently from the network
-* data is transferred in a controlled manner
-* the central environment knows the current state
+* local data is created independently of network quality
+* finalized data is transferred in a controlled manner
+* central state can be traced
 
-The complete distributed synchronization architecture remains for future stages.
+The concrete technical implementation of synchronization follows the corresponding architectural decisions.
 
 ---
 
 # 5. Explicit Non-Goals
 
-The following areas are not part of the first MVP:
+The following areas are not part of this MVP:
 
 ## Complete Professional Production Environment
 
@@ -370,19 +352,21 @@ Not included:
 
 ---
 
-## Maximum Platform Support
+## Additional Media and Communication Functions
 
 Not included:
 
-* immediate support for all platforms
-* complete mobile clients
-* perfect integration with every hardware device
+* video recording
+* live streaming
+* automatic publishing
+
+These items are not part of the MVP definition.
 
 ---
 
-## Complete Scaling
+## Scaling
 
-Not included:
+The MVP definition does not cover in particular:
 
 * large enterprise installations
 * global infrastructure
@@ -399,19 +383,19 @@ The MVP is successful when:
 * audio data is preserved
 * data can be transferred in a controlled way
 * central management is possible
-* architecture principles are visibly implemented
+* architectural principles are visibly implemented
 
 Success is not measured by the number of features.
 
 ---
 
-# 7. Technical Risks Addressed by the MVP
+# 7. Technical Risks
 
-The MVP should reveal the following risks early:
+The MVP should make the following risks visible early:
 
-* audio recording across platforms
-* local storage
-* synchronization
+* reliable local audio recording
+* local storage and recovery
+* synchronization and controlled handoff
 * Production Session data model
 * interaction between Client and Core
 
@@ -419,16 +403,12 @@ The MVP should reveal the following risks early:
 
 # 8. Principle
 
-The MVP is the first working part of NC-PoRe.
+The MVP is a clearly bounded working part of NC-PoRe.
 
 It should demonstrate:
 
-The architecture works.
+> The architecture works.
 
-Not:
+It does not define the complete product development and does not provide a complete list of possible later features.
 
-The complete vision has already been implemented.
-
-NC-PoRe will be expanded step by step.
-
-Each step should create a stable foundation for the next one.
+NC-PoRe evolves according to real requirements and technical findings.
