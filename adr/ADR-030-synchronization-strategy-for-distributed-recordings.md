@@ -22,14 +22,9 @@ Die bisherigen Architekturentscheidungen legen fest:
 
 ADR-029 hat entschieden, dass NC-PoRe nicht versucht, das Internet wie eine direkte lokale Verbindung zu behandeln.
 
-Stattdessen akzeptiert NC-PoRe die Realität verteilter Systeme:
+Stattdessen akzeptiert NC-PoRe die Realität verteilter Systeme mit unterschiedlichen Latenzen, Verbindungen, temporären Offline-Zuständen und Umgebungen.
 
-* unterschiedliche Latenzen
-* schwankende Verbindungen
-* temporäre Offline-Zustände
-* unterschiedliche Plattformen
-
-Damit entsteht die zentrale Frage:
+Die zentrale Frage lautet:
 
 > Wie werden verteilte Aufnahmen zu einer gemeinsamen Production Session zusammengeführt?
 
@@ -52,9 +47,9 @@ Leitprinzip:
 
 # Control Synchronization
 
-Control Synchronization beschreibt den Zustand und die Steuerung einer Production Session.
+Control Synchronization beschreibt Zustand und Steuerung einer Production Session.
 
-Dazu gehören:
+Dazu gehören beispielsweise:
 
 * Teilnehmer treten bei
 * Aufnahme wird gestartet
@@ -63,20 +58,6 @@ Dazu gehören:
 * Session-Zustände ändern sich
 
 Diese Informationen sollen möglichst zeitnah verteilt werden.
-
-Beispiele:
-
-```text id="9wqk2p"
-SessionCreated
-
-ParticipantJoined
-
-RecordingStarted
-
-MarkerCreated
-
-RecordingFinished
-```
 
 ---
 
@@ -87,11 +68,10 @@ Media Synchronization beschreibt die Übertragung und Zusammenführung von Produ
 Dazu gehören:
 
 * Audio Assets
-* Video Assets (zukünftig)
 * Metadaten
 * Synchronisationsinformationen
 
-Diese Daten müssen nicht zwingend in Echtzeit übertragen werden.
+Mediendaten müssen nicht zwingend in Echtzeit übertragen werden.
 
 Priorität:
 
@@ -101,27 +81,27 @@ Priorität:
 
 # Architektur
 
-```text id="h4x9qp"
+```text
                  Production Session
 
                        |
               Control Synchronization
 
-        ---------------------------------
+        -------------------------------
 
-        Mac Client       Linux Client      Mobile Client
+        Client A         Client B        Client C
 
-             |                |                  |
+            |                |               |
 
-        Local Track      Local Track       Local Track
+        Local Track      Local Track     Local Track
 
-             |                |                  |
+            |                |               |
 
-             -------- Media Synchronization --------
+            -------- Media Synchronization --------
 
                        |
 
-                       ↓
+                       v
 
                 Shared Production Session
 ```
@@ -134,7 +114,7 @@ Eine reine Echtzeit-Audio-Synchronisation über das Internet hätte erhebliche N
 
 * Netzwerkprobleme beeinflussen die Aufnahme
 * Latenzen sind nicht deterministisch
-* mobile Teilnehmer sind besonders betroffen
+* unterschiedliche Netzbedingungen erschweren die Verarbeitung
 * Fehler können zum Verlust von Material führen
 
 NC-PoRe verfolgt deshalb ein robustes Modell:
@@ -151,7 +131,7 @@ Jede Aufnahme benötigt ausreichende Informationen, um später korrekt eingeordn
 
 Beispiel:
 
-```text id="4xj3qb"
+```text
 Recording Asset
 
 ├── Session ID
@@ -167,32 +147,14 @@ Recording Asset
 
 # V1 Strategie
 
-Für die erste Version gilt:
+Für V1 gilt:
 
 * lokale Aufnahme auf jedem Client
 * lokale Speicherung während der Aufnahme
 * Upload nach oder während der Aufnahme
 * Zusammenführung über Session- und Synchronisationsdaten
 
-Nicht Bestandteil von V1:
-
-* perfekte automatische Synchronisation aller Spuren
-* Echtzeit-Netzwerk-Mixing
-* KI-basierte automatische Ausrichtung
-
----
-
-# Erweiterbarkeit
-
-Die Architektur ermöglicht spätere Erweiterungen:
-
-* automatische Wellenformanalyse
-* intelligente Spurausrichtung
-* Video-Synchronisation
-* professionelle Timecode-Unterstützung
-* Live-Monitoring
-
-Diese Funktionen werden nicht verhindert, sondern auf einer stabilen Basis aufgebaut.
+Die konkrete technische Ausgestaltung der Synchronisation wird durch die zuständigen technischen Entscheidungen bestimmt.
 
 ---
 
@@ -200,13 +162,7 @@ Diese Funktionen werden nicht verhindert, sondern auf einer stabilen Basis aufge
 
 NC-PoRe ersetzt keine spezialisierten Produktionswerkzeuge.
 
-Bestehende Werkzeuge wie:
-
-* Ardour
-* Audacity
-* weitere Audio- und Videowerkzeuge
-
-bleiben Bestandteil professioneller Workflows.
+Lokale Assets bleiben für externe Audio- und Produktionswerkzeuge zugänglich.
 
 NC-PoRe organisiert:
 
@@ -215,7 +171,7 @@ NC-PoRe organisiert:
 * Assets
 * Synchronisation
 
-Die kreative Produktion bleibt beim Menschen.
+Die konkrete kreative und technische Arbeit mit externen Werkzeugen bleibt außerhalb dieser ADR.
 
 ---
 
@@ -225,29 +181,17 @@ Die kreative Produktion bleibt beim Menschen.
 
 Eine vollständige Aufnahme ist wichtiger als eine scheinbar perfekte Live-Verbindung.
 
----
-
 ## 2. Kontrollinformationen und Mediendaten sind getrennt
 
-Session-Zustände benötigen schnelle Kommunikation.
-
-Medien benötigen zuverlässige Übertragung.
-
----
+Session-Zustände benötigen zeitnahe Kommunikation. Medien benötigen zuverlässige Übertragung.
 
 ## 3. Verteilte Systeme werden akzeptiert
 
-NC-PoRe arbeitet mit den Eigenschaften des Internets.
-
-Nicht gegen sie.
-
----
+NC-PoRe arbeitet mit den Eigenschaften des Internets, nicht gegen sie.
 
 ## 4. Einfache Nutzung trotz komplexer Technik
 
-Die interne Architektur darf anspruchsvoll sein.
-
-Der Benutzer soll nur eine funktionierende Produktion erleben.
+Die interne Architektur darf anspruchsvoll sein. Der Benutzer soll eine funktionierende Produktion erleben.
 
 ---
 
@@ -257,9 +201,8 @@ Der Benutzer soll nur eine funktionierende Produktion erleben.
 
 * robuste Aufnahmen
 * geringe Abhängigkeit von Netzwerkqualität
-* professionelle Audioqualität
-* gute Erweiterbarkeit
-* kompatible Workflows
+* hohe Audioqualität
+* klare Trennung von Steuerung und Mediendaten
 
 ## Nachteile
 
@@ -275,10 +218,10 @@ Diese Nachteile werden bewusst akzeptiert.
 
 Diese Entscheidung bedeutet nicht:
 
-* dass NC-PoRe sofort eine vollständige Live-Broadcast-Plattform wird
+* dass NC-PoRe eine bestimmte Echtzeitübertragung voraussetzt
 * dass lokale Aufnahmen abgeschafft werden
 * dass professionelle Werkzeuge ersetzt werden
-* dass alle zukünftigen Synchronisationsverfahren bereits festgelegt sind
+* dass eine konkrete Synchronisationsimplementierung hier festgelegt wird
 
 ---
 
@@ -298,24 +241,19 @@ NC-PoRe has been defined as a **Nextcloud Podcast Production Environment**.
 
 Previous architecture decisions established:
 
-* The **Production Session** as the central domain entity.
-* Recording based on the **Local Recording First** principle.
+* The **Production Session** is the central domain entity.
+* Recording follows the **Local Recording First** principle.
 * Each client initially creates local assets.
-* The shared production is created through synchronization and collaboration.
-* The Core remains independent from concrete implementations.
+* Shared production is created through synchronization and collaboration.
+* The Core remains independent from concrete technical implementations.
 
 ADR-029 decided that NC-PoRe does not treat the Internet as a direct local connection.
 
-Instead, NC-PoRe accepts distributed system realities:
-
-* different latencies
-* unstable connections
-* temporary offline states
-* different platforms
+Instead, NC-PoRe accepts distributed-system realities such as different latencies, connection conditions and temporary offline states.
 
 The central question is:
 
-> How are distributed recordings combined into one Production Session?
+> How are distributed recordings combined into a shared Production Session?
 
 ---
 
@@ -336,28 +274,31 @@ Guiding principle:
 
 # Control Synchronization
 
-Control Synchronization manages Production Session state.
+Control Synchronization describes Production Session state and control.
 
-Examples:
+It includes, for example:
 
 * participants joining
 * recording start
 * recording stop
-* markers
+* marker creation
 * session state changes
+
+This information should be distributed with appropriate timeliness.
 
 ---
 
 # Media Synchronization
 
-Media Synchronization manages production data:
+Media Synchronization describes transfer and consolidation of production data.
+
+It includes:
 
 * audio assets
-* future video assets
 * metadata
 * synchronization information
 
-Real-time transfer is not required.
+Media data does not have to be transferred in real time.
 
 Priority:
 
@@ -365,23 +306,149 @@ Priority:
 
 ---
 
+# Architecture
+
+```text
+                 Production Session
+
+                       |
+              Control Synchronization
+
+        -------------------------------
+
+        Client A         Client B        Client C
+
+            |                |               |
+
+        Local Track      Local Track     Local Track
+
+            |                |               |
+
+            -------- Media Synchronization --------
+
+                       |
+
+                       v
+
+                Shared Production Session
+```
+
+---
+
+# Rationale
+
+Pure real-time audio synchronization over the Internet has significant disadvantages:
+
+* network problems affect recording
+* latency is not deterministic
+* varying network conditions complicate processing
+* failures can cause material loss
+
+NC-PoRe therefore follows a robust model:
+
+> Each local recording remains complete and independent first.
+
+Only afterwards do assets become part of the shared production.
+
+---
+
+# Synchronization Data
+
+Each recording requires sufficient information for later correct association and synchronization.
+
+Example:
+
+```text
+Recording Asset
+
+├── Session ID
+├── Participant ID
+├── Start Timestamp
+├── Duration
+├── Sample Rate
+├── Channel Layout
+└── Synchronization Metadata
+```
+
+---
+
+# V1 Strategy
+
+For V1:
+
+* recording is local on each client
+* storage is local during recording
+* upload occurs during or after recording
+* consolidation uses session and synchronization data
+
+The concrete technical synchronization implementation is defined by the relevant technical decisions.
+
+---
+
+# Relationship to Professional Workflows
+
+NC-PoRe does not replace specialized production tools.
+
+Local assets remain accessible to external audio and production tools.
+
+NC-PoRe organizes:
+
+* collaboration
+* sessions
+* assets
+* synchronization
+
+The concrete creative and technical work in external tools is outside the scope of this ADR.
+
+---
+
+# Core Principles
+
+## 1. Data Integrity Before Real-time Illusion
+
+A complete recording is more important than an apparently perfect live connection.
+
+## 2. Control Information and Media Data Are Separate
+
+Session state requires timely communication. Media requires reliable transfer.
+
+## 3. Distributed Systems Are Accepted
+
+NC-PoRe works with the properties of the Internet rather than against them.
+
+## 4. Simple Use Despite Complex Technology
+
+The internal architecture may be complex. Users should experience a working production.
+
+---
+
 # Consequences
 
-Benefits:
+## Advantages
 
-* reliable recordings
+* robust recordings
 * lower dependency on network quality
-* professional audio quality
-* future extensibility
-* compatible workflows
+* high audio quality
+* clear separation of control and media data
 
-Costs:
+## Disadvantages
 
 * synchronization requires additional logic
-* multiple states must be managed
+* multiple data states must be managed
 * local resources are required
 
-These costs are consciously accepted.
+These disadvantages are consciously accepted.
+
+---
+
+# Non-Goals
+
+This decision does not mean:
+
+* that NC-PoRe requires a specific real-time transport
+* that local recording is replaced
+* that professional tools are replaced
+* that a concrete synchronization implementation is defined here
 
 ---
 
