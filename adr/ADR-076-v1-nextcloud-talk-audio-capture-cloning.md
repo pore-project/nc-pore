@@ -16,7 +16,7 @@ Angenommen
 
 ## Kontext
 
-NC-PoRe V1 benötigt für lokale Teilnehmeraufnahmen eine Audio-Capture-Quelle aus der Host-Anwendung, in der die Kommunikation stattfindet. Nextcloud Talk ist der erste Host, für den diese Integration umgesetzt wird; später sollen weitere Host-Anwendungen über eigene Connectoren angebunden werden können.
+NC-PoRe V1 benötigt für lokale Teilnehmeraufnahmen eine Audio-Capture-Quelle aus der Host-Anwendung, in der die Kommunikation stattfindet. Nextcloud Talk ist der erste Host, für den diese Integration umgesetzt wird; weitere Host-Anwendungen können über eigene Connectoren angebunden werden.
 
 NC-PoRe verfügt bereits über einen generischen Recording-Pfad mit Capture-Grenze, Recording-Lifecycle, Artifact-Erzeugung, Persistenz und Synchronisation. Eine Host-Integration soll diesen vorhandenen Weg erweitern und keinen zweiten Recording-Stack erzeugen.
 
@@ -120,7 +120,7 @@ Der frühe PoC-Hook konnte reale Talk-`getUserMedia()`-Aufrufe abfangen und aus 
 
 Dieser Test validiert den technischen Clone-Mechanismus für die erste Host-Integration. Er ist **keine** Festlegung auf die konkrete Talk-Integrationsstelle und kein Nachweis für alle Browser oder alle Geräte.
 
-Die Talk-spezifische Umsetzung ist in der internen ADR-073 beschrieben.
+Die konkreten Talk-Integrationsdetails gehören in die jeweilige Implementierungsdokumentation und werden nicht durch diese allgemeine Connector-ADR festgelegt.
 
 ## Konsequenzen
 
@@ -130,7 +130,7 @@ Die Talk-spezifische Umsetzung ist in der internen ADR-073 beschrieben.
 - Geräte- und Browserabhängigkeiten werden an der Integrationsgrenze gekapselt.
 - Der vorhandene PoRE-Recording-/Artifact-Pfad wird wiederverwendet.
 - Ein Connector kann auf einen von der Host-Anwendung bereits erzeugten Track aufsetzen, ohne die Host-Kommunikation zu übernehmen.
-- Weitere Connectoren können später ergänzt werden, ohne den generischen Recording-Pfad neu zu bauen.
+- Weitere Connectoren können ergänzt werden, ohne den generischen Recording-Pfad neu zu bauen.
 
 ## Abgrenzung
 
@@ -152,7 +152,7 @@ Diese Entscheidungen gehören in die jeweiligen Connector-ADRs und deren Impleme
 
 ## Context
 
-NC-PoRE V1 requires a local audio capture source from the host application in which the communication takes place. Nextcloud Talk is the first host integration; additional host applications should be connectable through their own connectors later.
+NC-PoRE V1 requires a local audio capture source from the host application in which the communication takes place. Nextcloud Talk is the first host integration; additional host applications can be connected through their own connectors.
 
 NC-PoRE already provides a generic recording path with a capture boundary, recording lifecycle, artifact creation, persistence, and synchronization. A host integration must extend this existing path rather than create a second recording stack.
 
@@ -160,7 +160,7 @@ Host applications may use different media and lifecycle models. PoRE Core must t
 
 ## Decision
 
-NC-PoRE integrates host applications through **host-specific connectors**. A connector adapts the host application's local audio capture architecture to the neutral capture boundary of the existing PoRE recording path.
+NC-PoRe integrates host applications through **host-specific connectors**. A connector adapts the host application's local audio capture architecture to the neutral capture boundary of the existing PoRE recording path.
 
 The connector provides PoRE with its own independent audio capture source. The host application retains ownership of its own audio processing and media lifecycle.
 
@@ -195,7 +195,7 @@ A connector must not introduce host-specific lifecycle, artifact, or persistence
 
 ## Device Independence
 
-NC-PoRE is not tied to a specific microphone, audio interface, headset, or `deviceId`.
+NC-PoRe is not tied to a specific microphone, audio interface, headset, or `deviceId`.
 
 Concrete audio hardware and device selection remain the responsibility of the host application and the browser/operating system. A connector must support any audio source that its host integration provides as the appropriate local capture source.
 
@@ -242,7 +242,7 @@ The early PoC hook intercepted real Talk `getUserMedia()` calls and successfully
 
 This validates the technical clone mechanism for the first host integration. It does **not** prescribe the final Talk integration point and does not establish all-browser or all-device compatibility.
 
-The Talk-specific implementation is defined in internal ADR-073.
+Concrete Talk integration details belong to the corresponding implementation documentation and are not defined by this general connector ADR.
 
 ## Consequences
 
