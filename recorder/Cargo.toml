@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 cpal = "0.18.1"
+flacenc = "0.5.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

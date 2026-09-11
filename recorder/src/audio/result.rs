@@ -46,6 +46,59 @@ impl CaptureChunk {
     }
 }
 
+/// Provenance of the local capture source used for one technical track.
+///
+/// The source identifier is intentionally opaque. It may identify a browser
+/// device, an operating-system input, or another local source without making
+/// the capture model depend on a particular host integration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureSourceProvenance {
+    source_id: String,
+    label: Option<String>,
+    started_at_unix_ms: u64,
+    ended_at_unix_ms: Option<u64>,
+}
+
+impl CaptureSourceProvenance {
+    /// Creates provenance for a source starting at the supplied Unix timestamp.
+    pub fn new(source_id: impl Into<String>, started_at_unix_ms: u64) -> Self {
+        Self {
+            source_id: source_id.into(),
+            label: None,
+            started_at_unix_ms,
+            ended_at_unix_ms: None,
+        }
+    }
+
+    /// Adds an optional human-readable source label.
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Marks the end of the source interval.
+    pub fn ended_at(mut self, ended_at_unix_ms: u64) -> Self {
+        self.ended_at_unix_ms = Some(ended_at_unix_ms);
+        self
+    }
+
+    pub fn source_id(&self) -> &str {
+        &self.source_id
+    }
+
+    pub fn label(&self) -> Option<&str> {
+        self.label.as_deref()
+    }
+
+    pub const fn started_at_unix_ms(&self) -> u64 {
+        self.started_at_unix_ms
+    }
+
+    pub const fn ended_at_unix_ms(&self) -> Option<u64> {
+        self.ended_at_unix_ms
+    }
+}
+
 /// Capture Track identity.
 ///
 /// CaptureTrackId represents the technical identity
@@ -74,6 +127,7 @@ impl CaptureTrackId {
 pub struct CaptureTrack {
     pub id: CaptureTrackId,
     configuration: Option<RecordingConfiguration>,
+    source_provenance: Option<CaptureSourceProvenance>,
     chunks: Vec<CaptureChunk>,
 }
 
@@ -83,6 +137,7 @@ impl CaptureTrack {
         Self {
             id: CaptureTrackId::new(id),
             configuration: None,
+            source_provenance: None,
             chunks: Vec::new(),
         }
     }
@@ -95,6 +150,7 @@ impl CaptureTrack {
         Self {
             id: CaptureTrackId::new(id),
             configuration: Some(configuration),
+            source_provenance: None,
             chunks: Vec::new(),
         }
     }
@@ -102,6 +158,16 @@ impl CaptureTrack {
     /// Returns the recording configuration used for this capture track, if known.
     pub const fn configuration(&self) -> Option<RecordingConfiguration> {
         self.configuration
+    }
+
+    /// Attaches local capture-source provenance to this technical track.
+    pub fn set_source_provenance(&mut self, provenance: CaptureSourceProvenance) {
+        self.source_provenance = Some(provenance);
+    }
+
+    /// Returns local capture-source provenance, if known.
+    pub fn source_provenance(&self) -> Option<&CaptureSourceProvenance> {
+        self.source_provenance.as_ref()
     }
 
     /// Adds a technical capture chunk.
@@ -274,6 +340,25 @@ mod tests {
         let track = CaptureTrack::with_configuration("track-host", configuration);
 
         assert_eq!(track.configuration(), Some(configuration));
+    }
+
+    // TEST-39
+    //
+    // Protects the host-neutral capture boundary:
+    // Source provenance remains opaque and preserves the source interval.
+    #[test]
+    fn capture_track_preserves_source_provenance() {
+        let provenance = CaptureSourceProvenance::new("device-1", 1_762_000_000_000)
+            .with_label("Microphone")
+            .ended_at(1_762_000_005_000);
+        let mut track = CaptureTrack::new("track-host");
+        track.set_source_provenance(provenance.clone());
+
+        assert_eq!(track.source_provenance(), Some(&provenance));
+        assert_eq!(provenance.source_id(), "device-1");
+        assert_eq!(provenance.label(), Some("Microphone"));
+        assert_eq!(provenance.started_at_unix_ms(), 1_762_000_000_000);
+        assert_eq!(provenance.ended_at_unix_ms(), Some(1_762_000_005_000));
     }
 
     #[test]
