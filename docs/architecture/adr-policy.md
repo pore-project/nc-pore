@@ -1,5 +1,82 @@
 # ADR Policy
 
+[Deutsche Version](#deutsch) · [English Version](#english-version)
+
+<a id="deutsch"></a>
+
+# ADR-Richtlinie
+
+NC-PoRe Architecture Decision Records folgen einem gemeinsamen Dokumentationsvertrag.
+
+## Sprache und Navigation
+
+Jede ADR ist strikt zweisprachig.
+
+Die deutsche Fassung ist die erste vollständige Fassung, die englische Fassung die zweite vollständige Fassung. Beide Fassungen müssen denselben Entscheidungsinhalt enthalten; keine Sprachfassung ist eine Zusammenfassung der anderen.
+
+Jede Sprachfassung verwendet einen festen Einstiegsanker, damit Leser direkt zur entsprechenden Sprachfassung springen können:
+
+- Deutscher Einstiegsanker: `#deutsch`
+- Englischer Einstiegsanker: `#english-version`
+
+Der Dokumentkopf verlinkt von Deutsch nach Englisch; die englische Fassung verlinkt zurück nach Deutsch.
+
+## Verbindliche ADR-Struktur
+
+Jede ADR muss ausdrücklich enthalten:
+
+1. Kontext
+2. Problemstellung / Fragestellung
+3. Entscheidung
+4. Begründung
+5. Konsequenzen
+
+Zusätzliche Abschnitte wie „Betrachtete Alternativen“, „Geltungsbereich“, „Nicht-Ziele“, „Abhängigkeiten“ oder „Statushinweise“ können bei Bedarf ergänzt werden. Sie ersetzen jedoch keinen der fünf verbindlichen Abschnitte.
+
+## Öffentliche und interne Entscheidungen
+
+Eine ADR kann öffentlich oder intern sein.
+
+Öffentliche ADRs dokumentieren Architekturprinzipien und Entscheidungen, die NC-PoRE als Teil seiner Open-Source-Projektdokumentation offenlegen kann und will.
+
+Interne ADRs dürfen Implementierungsdetails, unveröffentlichte Fähigkeiten, Produktstrategie, kommerzielle Funktionen, Entitlement-Architektur, zukünftige Produktrichtungen oder andere Informationen dokumentieren, deren Veröffentlichung die geplante Produktoberfläche von NC-PoRE unnötig offenlegen würde.
+
+Der Status „intern“ darf niemals dazu führen, dass die ADR selbst weniger sorgfältig dokumentiert wird. Interne ADRs folgen derselben zweisprachigen Struktur und denselben verbindlichen Abschnitten wie öffentliche ADRs.
+
+## Informationsminimierung
+
+Architektonische Offenheit erfordert nicht die Veröffentlichung der vollständigen zukünftigen Produktplanung.
+
+Öffentliche ADRs sollen das dokumentieren, was erforderlich ist, um die veröffentlichte Architektur zu verstehen und ihre Entscheidungen nachvollziehen zu können. Sie sollen keine unveröffentlichten oder kommerziell geplanten Fähigkeiten allein deshalb detailliert aufzählen, weil die Architektur diese grundsätzlich ermöglichen könnte.
+
+Zukünftige Erweiterbarkeit kann als architektonische Eigenschaft beschrieben werden, ohne eine detaillierte Liste zukünftiger Produkte oder kostenpflichtiger Funktionen zu veröffentlichen.
+
+## Kommerziell sensible Architektur
+
+Wenn eine Architekturentscheidung eine zukünftige kommerzielle Fähigkeit unterstützt, soll die öffentliche ADR nur das stabile Architekturprinzip dokumentieren, dessen Veröffentlichung beabsichtigt ist. Produktspezifische Funktionsdetails, Entitlement-Mechanismen, Feature-Pakete, kommerzielle Stufen und unveröffentlichte Roadmap-Details gehören in interne ADRs, sofern nicht bewusst eine Veröffentlichung beschlossen wurde.
+
+## Verhältnis zu Implementierungsdokumenten
+
+ADR-Dateien beantworten:
+
+> Warum wurde eine Entscheidung getroffen?
+
+Implementierungsdokumente beantworten:
+
+> Wie wird die Entscheidung umgesetzt?
+
+Produkt- und Projektdokumente beantworten:
+
+> Was bauen wir, wann und in welcher Version?
+
+Eine zukünftige Fähigkeit soll nicht allein deshalb in einer ADR veröffentlicht werden, weil sie in einem Implementierungsplan oder einer Architekturdiskussion auftaucht.
+
+---
+
+<a id="english-version"></a>
+
+# ADR Policy
+
 NC-PoRe Architecture Decision Records follow a common documentation contract.
 
 ## Language and navigation
@@ -19,13 +96,13 @@ The document header links from German to English, and the English section links 
 
 Every ADR must explicitly contain:
 
-1. Kontext / Context
-2. Problemstellung / Problem Statement
-3. Entscheidung / Decision
-4. Begründung / Rationale
-5. Konsequenzen / Consequences
+1. Context
+2. Problem Statement / Question
+3. Decision
+4. Rationale
+5. Consequences
 
-Additional sections such as Alternatives Considered, Scope, Non-Goals, Dependencies, or Status Notes may be added where useful, but they do not replace the required sections.
+Additional sections such as Alternatives Considered, Scope, Non-Goals, Dependencies, or Status Notes may be added where useful, but they do not replace any of the five required sections.
 
 ## Public versus internal decisions
 
