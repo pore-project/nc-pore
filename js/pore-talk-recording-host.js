@@ -27,10 +27,10 @@
 				...options,
 			})
 		} catch (error) {
-			console.error('[NC-PoRE] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
+			console.error('[NC-PoRe] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
 			throw error
 		}
-		console.debug('[NC-PoRE] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
+		console.debug('[NC-PoRe] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
 		const body = await response.json()
 		if (!response.ok || body?.ocs?.meta?.status !== 'ok') {
 			const error = new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
@@ -154,8 +154,6 @@
 		return recordingCommand(sessionId, recordingId, name, options)
 	}
 
-	// Talk 34 uses /call/<token> (and /room/<token> in other contexts),
-	// while older deployments may expose the token below /apps/spreed.
 	const findToken = () => window.location.pathname.match(/(?:\/apps\/spreed)?\/(?:call|room)\/([^/]+)/)?.[1] || null
 	const getCurrentUserId = () => window.OC?.getCurrentUser?.()?.uid || window.OC?.currentUser?.uid || null
 
@@ -189,9 +187,6 @@
 
 		await productionCommand(token, 'ensure', { participants: participantIds, ownerId })
 		console.debug('[NC-PoRe] Talk bootstrap: production ensured', { token, participantIds, ownerId })
-		const ensure = await recordingCommand(token, recordingId, 'ensure', { participants: participantIds, ownerId })
-		console.debug('[NC-PoRe] Talk bootstrap: recording ensured', { token, recordingId, state: ensure?.state })
-		if (ensure?.state) publishState(ensure.state)
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
 			sessionId: token,
@@ -202,21 +197,20 @@
 		})
 		console.debug('[NC-PoRe] Talk bootstrap: coordinator published', { token, recordingId, ownerId, participantIds })
 
-		const state = ensure?.state
 		window.dispatchEvent(new CustomEvent('pore:recording-ui-context', {
 			detail: {
 				mountElement: window.PoRETalkRecordingUiMount?.getMountElement?.() || null,
 				productionId: token,
 				productionLabel: room?.displayName || room?.name || token,
 				recordingId,
-				role: state?.role || (ownerId === actorId ? 'host' : 'participant'),
-				state: state?.phase || 'preparing',
+				role: ownerId === actorId ? 'host' : 'participant',
+				state: 'preparing',
 				listener: false,
-				confirmed: state?.confirmed === true,
-				ready: state?.participants?.some(participant => participant.id === actorId && participant.ready) === true,
-				readyCount: state?.participants?.filter(participant => participant.ready).length || 0,
-				participantCount: state?.participants?.length || participantIds.length,
-				participants: state?.participants || [],
+				confirmed: false,
+				ready: false,
+				readyCount: 0,
+				participantCount: participantIds.length,
+				participants: participantIds.map(id => ({ id, ready: false })),
 			},
 		}))
 		startLiveParticipantPolling(token)
