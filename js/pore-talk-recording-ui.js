@@ -128,16 +128,11 @@
 		return payload.ocs.data
 	}
 
-	const create = ({
-		role = 'none', state = 'preparing', listener = false, ready = false, confirmed = false,
-		readyCount = 0, participantCount = 0, elapsedSeconds = 0, onStart = null, onStop = null,
-	}) => {
+	const create = initialContext => {
 		ensureStyles()
-		const status = resolveStatus({ state, listener, ready, confirmed })
+
 		const root = document.createElement('section')
 		root.className = 'pore-talk-recording'
-		root.dataset.status = status.tone
-		root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
 
 		const control = document.createElement('div')
 		control.className = 'pore-talk-recording__control'
@@ -160,45 +155,33 @@
 		const panel = document.createElement('div')
 		panel.className = 'pore-talk-recording__panel'
 		panel.hidden = true
-		panel.innerHTML = '<h3 class="pore-talk-recording__panel-title">NC-PoRE</h3>'
+
+		const title = document.createElement('h3')
+		title.className = 'pore-talk-recording__panel-title'
+		title.textContent = 'NC-PoRE'
+		panel.appendChild(title)
 
 		const statusText = document.createElement('p')
 		statusText.className = 'pore-talk-recording__status'
-		statusText.textContent = status.label
 		panel.appendChild(statusText)
 
-		if (role === 'host' && participantCount > 0 && !listener && !confirmed) {
-			const readiness = document.createElement('span')
-			readiness.className = 'pore-talk-recording__readiness'
-			readiness.textContent = `${readyCount} / ${participantCount} bereit`
-			panel.appendChild(readiness)
-		}
+		const readiness = document.createElement('span')
+		readiness.className = 'pore-talk-recording__readiness'
+		panel.appendChild(readiness)
 
-		if (state === 'recording' && !listener) {
-			const elapsed = document.createElement('span')
-			elapsed.className = 'pore-talk-recording__elapsed'
-			elapsed.textContent = formatElapsed(elapsedSeconds)
-			panel.appendChild(elapsed)
-		}
+		const elapsed = document.createElement('span')
+		elapsed.className = 'pore-talk-recording__elapsed'
+		panel.appendChild(elapsed)
 
-		if (role === 'host' && !listener) {
-			if (state === 'preparing' && !ready && onStart) {
-				const start = document.createElement('button')
-				start.type = 'button'
-				start.className = 'pore-talk-recording__button'
-				start.textContent = 'Aufnahme starten'
-				start.addEventListener('click', onStart)
-				panel.appendChild(start)
-			}
-			if (state === 'recording' && onStop) {
-				const stop = document.createElement('button')
-				stop.type = 'button'
-				stop.className = 'pore-talk-recording__button'
-				stop.textContent = 'Aufnahme beenden'
-				stop.addEventListener('click', onStop)
-				panel.appendChild(stop)
-			}
-		}
+		const action = document.createElement('button')
+		action.type = 'button'
+		action.className = 'pore-talk-recording__button'
+		let actionHandler = null
+		action.addEventListener('click', event => {
+			event.stopPropagation()
+			if (typeof actionHandler === 'function') void actionHandler(event)
+		})
+		panel.appendChild(action)
 
 		const settings = document.createElement('div')
 		settings.className = 'pore-talk-recording__settings'
@@ -236,24 +219,80 @@
 				requestAnimationFrame(positionPanel)
 			}
 		}
+
 		toggle.addEventListener('click', event => { event.stopPropagation(); setOpen(panel.hidden) })
-		main.addEventListener('click', () => setOpen(!panel.hidden))
-		document.addEventListener('click', event => { if (!root.contains(event.target)) setOpen(false) }, { capture: true })
-		window.addEventListener('resize', () => { if (!panel.hidden) positionPanel() })
+		main.addEventListener('click', event => { event.stopPropagation(); setOpen(!panel.hidden) })
 
 		control.append(main, toggle)
 		root.appendChild(control)
 		root.appendChild(panel)
+
+		const renderPanel = context => {
+			const {
+				role = 'none', state = 'preparing', listener = false, ready = false, confirmed = false,
+				readyCount = 0, participantCount = 0, elapsedSeconds = 0, onStart = null, onStop = null,
+			} = context || {}
+			const status = resolveStatus({ state, listener, ready, confirmed })
+			root.dataset.status = status.tone
+			root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
+
+			const wasOpen = !panel.hidden
+			statusText.textContent = status.label
+
+			const showReadiness = role === 'host' && participantCount > 0 && !listener && !confirmed
+			readiness.hidden = !showReadiness
+			if (showReadiness) readiness.textContent = `${readyCount} / ${participantCount} bereit`
+
+			const showElapsed = state === 'recording' && !listener
+			elapsed.hidden = !showElapsed
+			if (showElapsed) elapsed.textContent = formatElapsed(elapsedSeconds)
+
+			const canStart = role === 'host' && !listener && state === 'preparing' && !ready && typeof onStart === 'function'
+			const canStop = role === 'host' && !listener && state === 'recording' && typeof onStop === 'function'
+			actionHandler = canStart ? onStart : canStop ? onStop : null
+			action.hidden = !actionHandler
+			if (canStart) action.textContent = 'Aufnahme starten'
+			if (canStop) action.textContent = 'Aufnahme beenden'
+
+			if (wasOpen) setOpen(true)
+		}
+
+		root.__poreUpdate = renderPanel
+		renderPanel(initialContext)
 		return root
 	}
 
 	const mount = context => {
-		const root = context?.mountElement instanceof Element ? context.mountElement : document.querySelector('[data-pore-talk-call-root]')
-		if (!root) return null
-		root.querySelector(':scope > .pore-talk-recording')?.remove()
+		const mountElement = context?.mountElement instanceof Element ? context.mountElement : document.querySelector('[data-pore-talk-call-root]')
+		if (!mountElement) return null
+		const existing = mountElement.querySelector(':scope > .pore-talk-recording')
+		if (existing?.__poreUpdate) {
+			existing.__poreUpdate(context)
+			return existing
+		}
 		const ui = create(context)
-		root.appendChild(ui)
+		mountElement.appendChild(ui)
 		return ui
+	}
+
+	const closeOpenPanels = event => {
+		if (event?.target?.closest?.('.pore-talk-recording')) return
+		document.querySelectorAll('.pore-talk-recording__panel:not([hidden])').forEach(panel => { panel.hidden = true; panel.previousElementSibling?.querySelector('.pore-talk-recording__menu-toggle')?.setAttribute('aria-expanded', 'false') })
+	}
+	const repositionOpenPanels = () => {
+		document.querySelectorAll('.pore-talk-recording__panel:not([hidden])').forEach(panel => {
+			const root = panel.closest('.pore-talk-recording')
+			const toggle = root?.querySelector('.pore-talk-recording__menu-toggle')
+			if (!toggle) return
+			const rect = toggle.getBoundingClientRect()
+			panel.style.left = `${Math.max(12, Math.min(window.innerWidth - 312, rect.right - 300))}px`
+			panel.style.top = `${Math.max(12, rect.top - panel.offsetHeight - 8)}px`
+		})
+	}
+	if (!window.__poreTalkRecordingUiGlobalListeners) {
+		document.addEventListener('click', closeOpenPanels, { capture: true })
+		window.addEventListener('resize', repositionOpenPanels)
+		window.__poreTalkRecordingUiGlobalListeners = true
 	}
 
 	window.PoRETalkRecordingUi = Object.freeze({ STATUS, formatElapsed, resolveStatus, create, mount })

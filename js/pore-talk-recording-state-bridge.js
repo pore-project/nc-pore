@@ -14,12 +14,13 @@
 
 	const normalize = snapshot => {
 		if (!snapshot || typeof snapshot !== 'object') return null
-		const state = REQUIRED_STATES.has(snapshot.state) ? snapshot.state : 'preparing'
+		const stateValue = snapshot.state ?? snapshot.phase
+		const state = REQUIRED_STATES.has(stateValue) ? stateValue : 'preparing'
 		const participants = Array.isArray(snapshot.participants) ? snapshot.participants : []
 		const readyParticipants = participants.filter(participant => participant?.ready === true)
 		return Object.freeze({
-			productionId: snapshot.productionId || null,
-			recordingId: snapshot.recordingId || null,
+			productionId: snapshot.productionId || snapshot.production_id || null,
+			recordingId: snapshot.recordingId || snapshot.recording_id || null,
 			role: snapshot.role || 'none',
 			state,
 			listener: snapshot.role === 'listener' || snapshot.listener === true,
@@ -29,7 +30,7 @@
 			participantCount: Number.isFinite(snapshot.participantCount) ? snapshot.participantCount : participants.length,
 			participants,
 			elapsedSeconds: Number.isFinite(snapshot.elapsedSeconds) ? snapshot.elapsedSeconds : 0,
-			startedAt: snapshot.startedAt || null,
+			startedAt: snapshot.startedAt || snapshot.started_at || null,
 			error: snapshot.error || null,
 		})
 	}
