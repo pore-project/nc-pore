@@ -27,10 +27,10 @@
 				...options,
 			})
 		} catch (error) {
-			console.error('[NC-PoRe] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
+			console.error('[NC-PoRE] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
 			throw error
 		}
-		console.debug('[NC-PoRe] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
+		console.debug('[NC-PoRE] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
 		const body = await response.json()
 		if (!response.ok || body?.ocs?.meta?.status !== 'ok') {
 			const error = new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
@@ -149,6 +149,7 @@
 			if (production?.production_status === 'created') {
 				await productionCommand(sessionId, 'start', beginOptions)
 			}
+			await recordingCommand(sessionId, recordingId, 'ensure', beginOptions)
 			return recordingCommand(sessionId, recordingId, 'begin', beginOptions)
 		}
 		return recordingCommand(sessionId, recordingId, name, options)
@@ -160,19 +161,19 @@
 	const bootstrap = async () => {
 		const token = findToken()
 		const actorId = getCurrentUserId()
-		console.debug('[NC-PoRe] Talk bootstrap: entry', { token, actorId })
+		console.debug('[NC-PoRE] Talk bootstrap: entry', { token, actorId })
 		if (!token || !actorId) {
-			console.warn('[NC-PoRe] Talk bootstrap: missing token or actorId', { token, actorId })
+			console.warn('[NC-PoRE] Talk bootstrap: missing token or actorId', { token, actorId })
 			return
 		}
 
 		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}`))
-		console.debug('[NC-PoRe] Talk bootstrap: room loaded', { token, room })
+		console.debug('[NC-PoRE] Talk bootstrap: room loaded', { token, room })
 		const participantList = await getTalkParticipants(token)
 		const participantIds = getRecordingParticipantIds(participantList)
-		console.debug('[NC-PoRe] Talk bootstrap: participants loaded', { token, actorId, participantList, participantIds })
+		console.debug('[NC-PoRE] Talk bootstrap: participants loaded', { token, actorId, participantList, participantIds })
 		if (!participantList.some(p => p?.actorType === 'users' && p.actorId === actorId)) {
-			console.warn('[NC-PoRe] Talk bootstrap: current actor not found in Talk participant list', { token, actorId, participantList })
+			console.warn('[NC-PoRE] Talk bootstrap: current actor not found in Talk participant list', { token, actorId, participantList })
 			return
 		}
 
