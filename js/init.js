@@ -45,6 +45,12 @@
 	let hostStartInFlight = false
 	let talkUiMountElement = null
 
+	document.addEventListener('click', event => {
+		const action = event.target?.closest?.('.pore-talk-recording__button')
+		if (!action) return
+		console.debug('[NC-PoRe] UI action: click', { action: action.textContent })
+	}, { capture: true })
+
 	const updateAuthoritativeState = snapshot => {
 		if (!snapshot) return
 		authoritativeState = snapshot
@@ -145,8 +151,10 @@
 	}
 
 	const startRequested = async () => {
+		console.debug('[NC-PoRe] startRequested: entered')
 		if (!window.__poreTalkRecordingCoordinator?.command) throw new Error('PoRE recording coordinator is not available')
 		startRequestedByHost = true
+		console.debug('[NC-PoRe] startRequested: before begin')
 		const result = await window.__poreTalkRecordingCoordinator.command('begin')
 		if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
 		try { await startLocalCapture() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
