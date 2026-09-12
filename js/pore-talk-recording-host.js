@@ -108,22 +108,34 @@
 	const bootstrap = async () => {
 		const token = findToken()
 		const actorId = getCurrentUserId()
-		if (!token || !actorId) return
+		console.debug('[NC-PoRe] Talk bootstrap: entry', { token, actorId })
+		if (!token || !actorId) {
+			console.warn('[NC-PoRe] Talk bootstrap: missing token or actorId', { token, actorId })
+			return
+		}
 
 		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}`))
+		console.debug('[NC-PoRe] Talk bootstrap: room loaded', { token, room })
 		const participantList = await getTalkParticipants(token)
 		const participantIds = getRecordingParticipantIds(participantList)
-		if (!participantList.some(p => p?.actorType === 'users' && p.actorId === actorId)) return
+		console.debug('[NC-PoRe] Talk bootstrap: participants loaded', { token, actorId, participantList, participantIds })
+		if (!participantList.some(p => p?.actorType === 'users' && p.actorId === actorId)) {
+			console.warn('[NC-PoRe] Talk bootstrap: current actor not found in Talk participant list', { token, actorId, participantList })
+			return
+		}
 
 		const owner = participantList.find(p => p?.actorType === 'users' && p.participantType === 1)
 		const ownerId = owner?.actorId || actorId
 		const recordingId = `recording-${token}`
 		coordinatorContext = { sessionId: token, recordingId, actorId, ownerId, participants: participantIds }
+		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { token, actorId, ownerId, participantIds })
 
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
 
 		await productionCommand(token, 'ensure', { participants: participantIds, ownerId })
+		console.debug('[NC-PoRe] Talk bootstrap: production ensured', { token, participantIds, ownerId })
 		const ensure = await recordingCommand(token, recordingId, 'ensure', { participants: participantIds, ownerId })
+		console.debug('[NC-PoRe] Talk bootstrap: recording ensured', { token, recordingId, state: ensure?.state })
 		if (ensure?.state) publishState(ensure.state)
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
@@ -133,6 +145,7 @@
 			ownerId,
 			command: (name, artifactId = '') => command(token, recordingId, name, { participants: coordinatorContext?.participants || participantIds, ownerId, artifactId }),
 		})
+		console.debug('[NC-PoRe] Talk bootstrap: coordinator published', { token, recordingId, ownerId, participantIds })
 
 		const state = ensure?.state
 		window.dispatchEvent(new CustomEvent('pore:recording-ui-context', {
