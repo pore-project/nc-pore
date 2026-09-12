@@ -6,6 +6,9 @@
 	const PRODUCTION_API_VERSION = '/ocs/v2.php/apps/pore/v1/productions/command'
 	const TALK_API_VERSION = '/ocs/v2.php/apps/spreed/api/v4'
 	let coordinatorContext = null
+	let liveParticipantPollTimer = null
+	let liveParticipantPollInFlight = false
+	let liveParticipantIds = []
 
 	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
 
@@ -24,10 +27,10 @@
 				...options,
 			})
 		} catch (error) {
-			console.error('[NC-PoRe] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
+			console.error('[NC-PoRE] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
 			throw error
 		}
-		console.debug('[NC-PoRe] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
+		console.debug('[NC-PoRE] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
 		const body = await response.json()
 		if (!response.ok || body?.ocs?.meta?.status !== 'ok') {
 			const error = new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
@@ -50,6 +53,45 @@
 		.filter(Boolean)
 
 	const getCurrentRecordingParticipantIds = async token => getRecordingParticipantIds(await getTalkParticipants(token))
+
+	const stopLiveParticipantPolling = () => {
+		if (liveParticipantPollTimer) {
+			window.clearInterval(liveParticipantPollTimer)
+			liveParticipantPollTimer = null
+		}
+	}
+
+	const refreshLiveParticipantCount = async token => {
+		if (liveParticipantPollInFlight || !coordinatorContext || coordinatorContext.sessionId !== token) return
+		liveParticipantPollInFlight = true
+		try {
+			const participantIds = await getCurrentRecordingParticipantIds(token)
+			const changed = participantIds.length !== liveParticipantIds.length
+				|| participantIds.some((participantId, index) => participantId !== liveParticipantIds[index])
+			liveParticipantIds = participantIds
+			if (changed) {
+				console.debug('[NC-PoRe] Talk participant count refreshed', { token, participantIds })
+				window.dispatchEvent(new CustomEvent('pore:talk-participants-updated', {
+					detail: {
+						conversationId: token,
+						participantCount: participantIds.length,
+						participants: participantIds,
+					},
+				}))
+			}
+		} catch (error) {
+			console.debug('[NC-PoRe] Talk participant count refresh failed', { token, error })
+		} finally {
+			liveParticipantPollInFlight = false
+		}
+	}
+
+	const startLiveParticipantPolling = token => {
+		stopLiveParticipantPolling()
+		liveParticipantIds = coordinatorContext?.participants || []
+		liveParticipantPollTimer = window.setInterval(() => { void refreshLiveParticipantCount(token) }, 3000)
+		void refreshLiveParticipantCount(token)
+	}
 
 	const publishState = snapshot => {
 		if (!snapshot || !coordinatorContext) return
@@ -99,6 +141,7 @@
 
 	const command = async (sessionId, recordingId, name, options = {}) => {
 		if (name === 'begin') {
+			stopLiveParticipantPolling()
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
 			coordinatorContext.participants = currentParticipantIds
 			const beginOptions = { ...options, participants: currentParticipantIds }
@@ -139,6 +182,7 @@
 		const ownerId = owner?.actorId || actorId
 		const recordingId = `recording-${token}`
 		coordinatorContext = { sessionId: token, recordingId, actorId, ownerId, participants: participantIds }
+		liveParticipantIds = participantIds
 		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { token, actorId, ownerId, participantIds })
 
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
@@ -175,6 +219,7 @@
 				participants: state?.participants || [],
 			},
 		}))
+		startLiveParticipantPolling(token)
 	}
 
 	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })
