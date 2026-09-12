@@ -140,7 +140,11 @@
 	}
 
 	const command = async (sessionId, recordingId, name, options = {}) => {
-		if (name === 'production-status') return productionCommand(sessionId, 'ensure', options)
+		if (name === 'snapshot') {
+			const production = await productionCommand(sessionId, 'ensure', options)
+			if (production?.production_status !== 'active') return { production_status: production?.production_status || null, state: null }
+			return recordingCommand(sessionId, recordingId, name, options)
+		}
 		if (name === 'begin') {
 			stopLiveParticipantPolling()
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
