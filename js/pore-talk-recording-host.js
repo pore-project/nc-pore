@@ -10,16 +10,24 @@
 	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
 
 	const requestJson = async (target, options = {}) => {
-		const response = await fetch(target, {
-			credentials: 'same-origin',
-			headers: {
-			Accept: 'application/json',
-			'OCS-APIRequest': 'true',
-			...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
-			...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
-		},
-		...options,
-	})
+		let response
+		try {
+			console.debug('[NC-PoRe] requestJson: before fetch', { target, method: options.method || 'GET' })
+			response = await fetch(target, {
+				credentials: 'same-origin',
+				headers: {
+					Accept: 'application/json',
+					'OCS-APIRequest': 'true',
+					...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
+					...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
+				},
+				...options,
+			})
+		} catch (error) {
+			console.error('[NC-PoRe] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
+			throw error
+		}
+		console.debug('[NC-PoRe] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
 		const body = await response.json()
 		if (!response.ok || body?.ocs?.meta?.status !== 'ok') {
 			const error = new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
