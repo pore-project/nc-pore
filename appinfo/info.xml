@@ -4,7 +4,7 @@
 	<name>NC-PoRE</name>
 	<summary>Professional local podcast recording integration for Nextcloud Talk</summary>
 	<description>NC-PoRE provides local podcast recording, durable recovery and verified delivery of finalized recording artifacts into the user's Nextcloud Files.</description>
-	<version>0.1.0-dev.33</version>
+	<version>0.1.0-dev.34</version>
 	<licence>agpl</licence>
 	<author>NC-PoRE</author>
 	<namespace>PoRe</namespace>
