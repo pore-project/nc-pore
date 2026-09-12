@@ -42,6 +42,7 @@
 	let localCaptureReady = false
 	let openingSignetEmitted = false
 	let coordinationPollTimer = null
+	let coordinationPollInFlight = false
 	let hostStartInFlight = false
 	let talkUiMountElement = null
 
@@ -116,8 +117,10 @@
 	}
 
 	const pollCoordination = async () => {
+		if (coordinationPollInFlight) return
 		const coordinator = window.__poreTalkRecordingCoordinator
 		if (!coordinator?.command) return
+		coordinationPollInFlight = true
 		try {
 			const result = await coordinator.command('snapshot')
 			const snapshot = result?.state ? window.PoRETalkRecordingStateNormalize(result.state) : null
@@ -138,16 +141,18 @@
 				if (coordinationPollTimer) { window.clearInterval(coordinationPollTimer); coordinationPollTimer = null }
 			}
 		} catch (error) {
-			if (error?.code === 'recording_coordination_not_found') return
+			if (error?.code === 'recording_coordination_not_found' || error?.code === 'recording_not_found') return
 			if (authoritativeState?.state !== 'preparing' && authoritativeState?.state !== 'ready' && authoritativeState?.state !== 'recording') return
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		} finally {
+			coordinationPollInFlight = false
 		}
 	}
 
 	const startCoordinationPolling = () => {
 		if (coordinationPollTimer) return
 		void pollCoordination()
-		coordinationPollTimer = window.setInterval(() => { void pollCoordination() }, 500)
+		coordinationPollTimer = window.setInterval(() => { void pollCoordination() }, 3000)
 	}
 
 	const startRequested = async () => {
