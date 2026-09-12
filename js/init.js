@@ -187,6 +187,14 @@
 		Ui.mount(context)
 	}
 
+	window.addEventListener('pore:talk-participants-updated', event => {
+		if (startRequestedByHost) return
+		if (['preparing', 'ready', 'recording', 'completed'].includes(authoritativeState?.state)) return
+		const participantCount = event.detail?.participantCount
+		if (!Number.isInteger(participantCount)) return
+		publish({ participantCount })
+	})
+
 	window.addEventListener('pore:recording-ui-mount', event => {
 		talkUiMountElement = event.detail?.mountElement || null
 		if (context) { context = { ...context, mountElement: talkUiMountElement }; Ui.mount(context) }
