@@ -15,7 +15,7 @@
 	const requestJson = async (target, options = {}) => {
 		let response
 		try {
-			console.debug('[NC-PoRe] requestJson: before fetch', { target, method: options.method || 'GET' })
+			console.debug('[NC-PoRE] requestJson: before fetch', { target, method: options.method || 'GET' })
 			response = await fetch(target, {
 				credentials: 'same-origin',
 				headers: {
@@ -140,6 +140,7 @@
 	}
 
 	const command = async (sessionId, recordingId, name, options = {}) => {
+		if (name === 'production-status') return productionCommand(sessionId, 'ensure', options)
 		if (name === 'begin') {
 			stopLiveParticipantPolling()
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
