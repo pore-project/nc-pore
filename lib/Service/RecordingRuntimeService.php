@@ -52,6 +52,16 @@ final class RecordingRuntimeService {
 			throw new RuntimeException('PoRE runtime session store is not writable.');
 		}
 
+		$lockPath = rtrim($sessionStore, '/') . '/.runtime.lock';
+		$lock = fopen($lockPath, 'c');
+		if ($lock === false) {
+			throw new RuntimeException('Unable to open the PoRE runtime session lock.');
+		}
+		if (!flock($lock, LOCK_EX)) {
+			fclose($lock);
+			throw new RuntimeException('Unable to acquire the PoRE runtime session lock.');
+		}
+
 		$request['protocol_version'] = 1;
 		$request['operation'] = $operation;
 		$payload = json_encode($request, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
@@ -59,6 +69,8 @@ final class RecordingRuntimeService {
 
 		$environment = getenv();
 		if (!is_array($environment)) {
+			flock($lock, LOCK_UN);
+			fclose($lock);
 			throw new RuntimeException('Unable to read the process environment for the PoRE runtime.');
 		}
 		$environment['PORE_SESSION_STORE'] = $sessionStore;
@@ -68,12 +80,14 @@ final class RecordingRuntimeService {
 			1 => ['pipe', 'w'],
 			2 => ['pipe', 'w'],
 		];
-		$process = proc_open([$binary], $descriptors, $pipes, null, $environment);
-		if (!is_resource($process)) {
-			throw new RuntimeException('Unable to start the PoRE runtime.');
-		}
+		$process = null;
 
 		try {
+			$process = proc_open([$binary], $descriptors, $pipes, null, $environment);
+			if (!is_resource($process)) {
+				throw new RuntimeException('Unable to start the PoRE runtime.');
+			}
+
 			if (!fwrite($pipes[0], $frame)) {
 				throw new RuntimeException('Unable to send command to the PoRE runtime.');
 			}
@@ -98,9 +112,12 @@ final class RecordingRuntimeService {
 			}
 			return $decoded;
 		} finally {
+			if (isset($pipes[0]) && is_resource($pipes[0])) fclose($pipes[0]);
 			if (isset($pipes[1]) && is_resource($pipes[1])) fclose($pipes[1]);
 			if (isset($pipes[2]) && is_resource($pipes[2])) fclose($pipes[2]);
-			proc_close($process);
+			if (is_resource($process)) proc_close($process);
+			flock($lock, LOCK_UN);
+			fclose($lock);
 		}
 	}
 
