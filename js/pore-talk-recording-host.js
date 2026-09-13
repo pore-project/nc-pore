@@ -133,8 +133,21 @@
 		})
 		console.debug('[NC-PoRe] Recording command: before request', { sessionId, recordingId, name, participants, ownerId, artifactId })
 		const result = await requestJson(url(API_VERSION), { method: 'POST', body: params })
-		console.debug('[NC-PoRe] Recording command: request returned', { sessionId, recordingId, name, result })
-		publishState(result?.state)
+		const state = result?.state
+		if (state) {
+			const readyParticipants = Array.isArray(state.participants) ? state.participants.filter(participant => participant?.ready).map(participant => participant.id) : []
+			console.debug('[NC-PoRe] Recording command: state summary', {
+				sessionId,
+				recordingId,
+				name,
+				phase: state.phase || null,
+				participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
+				readyCount: readyParticipants.length,
+				readyParticipantIds: readyParticipants,
+				participants: Array.isArray(state.participants) ? state.participants.map(participant => ({ id: participant?.id || null, ready: participant?.ready === true })) : [],
+			})
+		}
+		publishState(state)
 		console.debug('[NC-PoRe] Recording command: state published', { sessionId, recordingId, name })
 		return result
 	}
