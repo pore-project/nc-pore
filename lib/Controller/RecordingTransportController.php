@@ -6,16 +6,21 @@ namespace OCA\PoRe\Controller;
 
 use OCA\PoRe\AppInfo\Application;
 use OCA\PoRe\Service\NextcloudArtifactStorage;
+use OCA\PoRe\Controller\ProductionController;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
+use OCP\IConfig;
 use OCP\IRequest;
+use OCP\IUserSession;
 use RuntimeException;
 
 final class RecordingTransportController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private readonly NextcloudArtifactStorage $artifactStorage,
+		private readonly IUserSession $userSession,
+		private readonly IConfig $config,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -31,6 +36,16 @@ final class RecordingTransportController extends OCSController {
 			}
 
 			$requestId = $this->requiredString($decoded, 'request_id');
+			$user = $this->userSession->getUser();
+			if ($user === null) {
+				throw new RuntimeException('No authenticated Nextcloud user is available.');
+			}
+			$productionId = $this->requiredString($decoded, 'production_id');
+			$targetUserId = trim($this->config->getAppValue(Application::APP_ID, ProductionController::ownerKey($productionId), ''));
+			if ($targetUserId === '') {
+				throw new RuntimeException('No storage target is registered for this production.');
+			}
+
 			$payloadFile = $this->request->getUploadedFile('payload');
 			if (!is_array($payloadFile) || !isset($payloadFile['tmp_name'], $payloadFile['error'])) {
 				throw new RuntimeException('Finalized artifact payload is missing.');
@@ -55,11 +70,13 @@ final class RecordingTransportController extends OCSController {
 			}
 
 			$stored = $this->artifactStorage->storeFinalizedArtifact(
-				$this->requiredString($decoded, 'production_id'),
+				$productionId,
 				$this->requiredString($decoded, 'production_label'),
 				$this->requiredString($decoded, 'recording_id'),
 				$this->requiredString($decoded, 'capture_id'),
 				$this->requiredString($decoded, 'started_at'),
+				(string)($decoded['participant_label'] ?? ''),
+				$targetUserId,
 				$payloadPath,
 				(int)$payloadLength,
 			);
