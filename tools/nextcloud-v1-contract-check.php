@@ -16,12 +16,22 @@ $default = NextcloudArtifactPath::build('', 'prod-123', 'Interview mit Max Muste
 check($default['root'] === 'audio', 'Empty root must use audio as the default.');
 check($default['relative_path'] === 'audio/2026/09/05 - 15:42 Interview mit Max Muster - prod-123/capture-456.wav', 'Default path contract is incorrect.');
 
-$custom = NextcloudArtifactPath::build('Büro\\interviews/', 'prod-123', 'Interview mit Max Muster', 'capture-456', '2026-09-05T15:42:31+02:00');
-check($custom['root'] === 'Büro/interviews', 'Configured root must be normalized as a Files-relative path.');
-check($custom['relative_path'] === 'Büro/interviews/2026/09/05 - 15:42 Interview mit Max Muster - prod-123/capture-456.wav', 'Custom root must be the complete PoRe root.');
+$named = NextcloudArtifactPath::build('', 'prod-123', 'Interview mit Max Muster', 'capture-456', '2026-09-05T15:42:31+02:00', 'Max Muster');
+check($named['filename'] === 'Max Muster.wav', 'Human-readable participant filename is incorrect.');
+check($named['relative_path'] === 'audio/2026/09/05 - 15:42 Interview mit Max Muster - prod-123/Max Muster.wav', 'Named artifact path is incorrect.');
 
-$audioRoot = NextcloudArtifactPath::build('audio', 'prod-123', 'Interview', 'capture-456', '2026-09-05T15:42:31+02:00');
-check($audioRoot['relative_path'] === 'audio/2026/09/05 - 15:42 Interview - prod-123/capture-456.wav', 'A custom audio root must not become audio/audio.');
+$defaultLabel = NextcloudArtifactPath::build('', 'prod-123', 'Interview', 'capture-456', '2026-09-05T15:42:31+02:00', '');
+check($defaultLabel['filename'] === 'capture-456.wav', 'Missing participant label must fall back to capture identity.');
+
+$sanitized = NextcloudArtifactPath::build('', 'prod-123', 'Interview', 'capture-456', '2026-09-05T15:42:31+02:00', 'A/B\\C');
+check($sanitized['filename'] === 'A-B-C.wav', 'Participant filename must sanitize path separators.');
+
+$custom = NextcloudArtifactPath::build('Büro\\interviews/', 'prod-123', 'Interview mit Max Muster', 'capture-456', '2026-09-05T15:42:31+02:00', 'Max Muster');
+check($custom['root'] === 'Büro/interviews', 'Configured root must be normalized as a Files-relative path.');
+check($custom['relative_path'] === 'Büro/interviews/2026/09/05 - 15:42 Interview mit Max Muster - prod-123/Max Muster.wav', 'Custom root must be the complete PoRe root.');
+
+$audioRoot = NextcloudArtifactPath::build('audio', 'prod-123', 'Interview', 'capture-456', '2026-09-05T15:42:31+02:00', 'Host');
+check($audioRoot['relative_path'] === 'audio/2026/09/05 - 15:42 Interview - prod-123/Host.wav', 'A custom audio root must not become audio/audio.');
 
 foreach (['../escape', 'foo/../escape', '/absolute/path', '\\absolute\\path', 'C:/absolute/path', "foo\0bar"] as $invalidRoot) {
 	try {
