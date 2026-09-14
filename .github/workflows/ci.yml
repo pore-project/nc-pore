@@ -31,7 +31,7 @@ jobs:
           fi
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev php-cli
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.97.1
@@ -49,6 +49,9 @@ jobs:
 
       - name: Build V1 runtime
         run: cargo build --release -p pore-runtime
+
+      - name: Nextcloud storage contract checks
+        run: php tools/nextcloud-v1-contract-check.php
 
       - name: Architecture checks
         run: ./tools/architecture-checks/run-all.sh

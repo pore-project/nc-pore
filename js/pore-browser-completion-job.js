@@ -45,6 +45,7 @@
 					recordingSessionId: stored.manifest.recordingSessionId,
 					productionId: stored.manifest.productionId,
 					productionLabel: stored.manifest.productionLabel || stored.manifest.productionTitle || stored.manifest.productionId,
+					participantLabel: stored.manifest.participantLabel || null,
 					recordingId: stored.manifest.recordingId,
 					startedAt: stored.manifest.startedAt || stored.manifest.createdAt || new Date().toISOString(),
 					format: 'audio/wav',
