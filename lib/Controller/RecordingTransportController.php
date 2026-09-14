@@ -48,8 +48,8 @@ final class RecordingTransportController extends OCSController {
 				...$prepared,
 				'error_code' => null,
 			]);
-		} catch (\Throwable $exception) {
-			return $this->rejected($exception);
+		} catch (\Throwable) {
+			return $this->rejected();
 		}
 	}
 
@@ -63,8 +63,8 @@ final class RecordingTransportController extends OCSController {
 				...$receipt,
 				'error_code' => null,
 			]);
-		} catch (\Throwable $exception) {
-			return $this->rejected($exception);
+		} catch (\Throwable) {
+			return $this->rejected();
 		}
 	}
 
@@ -77,8 +77,8 @@ final class RecordingTransportController extends OCSController {
 				'status' => 'closed',
 				'error_code' => null,
 			]);
-		} catch (\Throwable $exception) {
-			return $this->rejected($exception);
+		} catch (\Throwable) {
+			return $this->rejected();
 		}
 	}
 
@@ -87,11 +87,11 @@ final class RecordingTransportController extends OCSController {
 		return $value;
 	}
 
-	private function rejected(\Throwable $exception): DataResponse {
+	private function rejected(): DataResponse {
 		return new DataResponse([
 			'protocol_version' => 2,
 			'status' => 'rejected',
-			'error_code' => $exception->getMessage(),
+			'error_code' => 'nextcloud_transport_failed',
 		], 500);
 	}
 }
