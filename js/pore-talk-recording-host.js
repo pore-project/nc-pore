@@ -15,7 +15,7 @@
 	const requestJson = async (target, options = {}) => {
 		let response
 		try {
-			console.debug('[NC-PoRE] requestJson: before fetch', { target, method: options.method || 'GET' })
+			console.debug('[NC-PoRe] requestJson: before fetch', { target, method: options.method || 'GET' })
 			response = await fetch(target, {
 				credentials: 'same-origin',
 				headers: {
@@ -27,10 +27,10 @@
 				...options,
 			})
 		} catch (error) {
-			console.error('[NC-PoRE] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
+			console.error('[NC-PoRe] requestJson: fetch threw', { target, method: options.method || 'GET', error, name: error?.name, message: error?.message })
 			throw error
 		}
-		console.debug('[NC-PoRE] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
+		console.debug('[NC-PoRe] requestJson: fetch returned', { target, status: response.status, ok: response.ok })
 		const body = await response.json()
 		if (!response.ok || body?.ocs?.meta?.status !== 'ok') {
 			const error = new Error(body?.ocs?.data?.error_code || `PoRE command failed (${response.status})`)
@@ -54,6 +54,25 @@
 
 	const getCurrentRecordingParticipantIds = async token => getRecordingParticipantIds(await getTalkParticipants(token))
 
+	const getParticipantLabel = (participantList, actorId, ownerId) => {
+		const participant = participantList.find(item => item?.actorType === 'users' && item.actorId === actorId)
+		const displayName = String(participant?.displayName || '').trim()
+		if (displayName) return displayName
+		if (actorId === ownerId) return 'Host'
+		const participantIds = getRecordingParticipantIds(participantList)
+			.filter(id => id !== ownerId)
+		const index = participantIds.indexOf(actorId)
+		return `Participant ${index >= 0 ? index + 1 : 1}`
+	}
+
+	const mergeParticipantOrder = participantIds => {
+		if (!coordinatorContext) return participantIds
+		const active = new Set(participantIds)
+		const preserved = coordinatorContext.participants.filter(id => active.has(id))
+		const appended = participantIds.filter(id => !preserved.includes(id))
+		return [...preserved, ...appended]
+	}
+
 	const stopLiveParticipantPolling = () => {
 		if (liveParticipantPollTimer) {
 			window.clearInterval(liveParticipantPollTimer)
@@ -69,6 +88,7 @@
 			const changed = participantIds.length !== liveParticipantIds.length
 				|| participantIds.some((participantId, index) => participantId !== liveParticipantIds[index])
 			liveParticipantIds = participantIds
+			coordinatorContext.participants = mergeParticipantOrder(participantIds)
 			if (changed) {
 				console.debug('[NC-PoRe] Talk participant count refreshed', { token, participantIds })
 				window.dispatchEvent(new CustomEvent('pore:talk-participants-updated', {
@@ -161,8 +181,8 @@
 		if (name === 'begin') {
 			stopLiveParticipantPolling()
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
-			coordinatorContext.participants = currentParticipantIds
-			const beginOptions = { ...options, participants: currentParticipantIds }
+			coordinatorContext.participants = mergeParticipantOrder(currentParticipantIds)
+			const beginOptions = { ...options, participants: coordinatorContext.participants }
 			const production = await productionCommand(sessionId, 'ensure', beginOptions)
 			if (production?.production_status === 'created') {
 				await productionCommand(sessionId, 'start', beginOptions)
@@ -179,19 +199,19 @@
 	const bootstrap = async () => {
 		const token = findToken()
 		const actorId = getCurrentUserId()
-		console.debug('[NC-PoRE] Talk bootstrap: entry', { token, actorId })
+		console.debug('[NC-PoRe] Talk bootstrap: entry', { token, actorId })
 		if (!token || !actorId) {
-			console.warn('[NC-PoRE] Talk bootstrap: missing token or actorId', { token, actorId })
+			console.warn('[NC-PoRe] Talk bootstrap: missing token or actorId', { token, actorId })
 			return
 		}
 
 		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}`))
-		console.debug('[NC-PoRE] Talk bootstrap: room loaded', { token, room })
+		console.debug('[NC-PoRe] Talk bootstrap: room loaded', { token, room })
 		const participantList = await getTalkParticipants(token)
 		const participantIds = getRecordingParticipantIds(participantList)
-		console.debug('[NC-PoRE] Talk bootstrap: participants loaded', { token, actorId, participantList, participantIds })
+		console.debug('[NC-PoRe] Talk bootstrap: participants loaded', { token, actorId, participantList, participantIds })
 		if (!participantList.some(p => p?.actorType === 'users' && p.actorId === actorId)) {
-			console.warn('[NC-PoRE] Talk bootstrap: current actor not found in Talk participant list', { token, actorId, participantList })
+			console.warn('[NC-PoRe] Talk bootstrap: current actor not found in Talk participant list', { token, actorId, participantList })
 			return
 		}
 
@@ -200,7 +220,8 @@
 		const recordingId = `recording-${token}`
 		coordinatorContext = { sessionId: token, recordingId, actorId, ownerId, participants: participantIds }
 		liveParticipantIds = participantIds
-		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { token, actorId, ownerId, participantIds })
+		const participantLabel = getParticipantLabel(participantList, actorId, ownerId)
+		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { token, actorId, ownerId, participantIds, participantLabel })
 
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
 
@@ -222,6 +243,7 @@
 				productionId: token,
 				productionLabel: room?.displayName || room?.name || token,
 				recordingId,
+				participantLabel,
 				role: ownerId === actorId ? 'host' : 'participant',
 				state: 'preparing',
 				listener: false,
