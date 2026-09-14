@@ -18,6 +18,7 @@ final class NextcloudArtifactPath {
 		string $productionLabel,
 		string $captureId,
 		string $startedAt,
+		string $participantLabel = '',
 	): array {
 		$root = self::normalizeRoot($configuredRoot);
 		if ($root === '') {
@@ -37,7 +38,7 @@ final class NextcloudArtifactPath {
 		$year = $timestamp->format('Y');
 		$month = $timestamp->format('m');
 		$leaf = $timestamp->format('d - H:i') . ' ' . $productionLabel . ' - ' . $productionId;
-		$filename = $captureId . '.wav';
+		$filename = self::buildFilename($participantLabel, $captureId);
 
 		return [
 			'relative_path' => implode('/', [$root, $year, $month, $leaf, $filename]),
@@ -72,6 +73,19 @@ final class NextcloudArtifactPath {
 		}
 
 		return $root;
+	}
+
+	private static function buildFilename(string $participantLabel, string $captureId): string {
+		$label = trim($participantLabel);
+		if ($label === '') {
+			$label = $captureId;
+		}
+		$label = preg_replace('/[\\\/\x00-\x1F\x7F]+/u', '-', $label) ?? $captureId;
+		$label = trim(preg_replace('/\s+/u', ' ', $label) ?? $label, " .\t\n\r\0\x0B");
+		if ($label === '') {
+			$label = $captureId;
+		}
+		return $label . '.wav';
 	}
 
 	private static function assertSegment(string $value): void {
