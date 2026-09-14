@@ -23,27 +23,22 @@
 
 			try {
 				let state = await this.completionJob?.getTransportState?.(descriptor.captureId)
-				let prepared = state?.status === 'authorized' ? state : null
 
-				if (!prepared) {
-					prepared = await this.prepare(descriptor)
+				if (!state || state.status === 'prepared' || state.status === 'failed' || state.status === 'pending') {
+					await this.prepare(descriptor)
+					state = await this.completionJob.getTransportState(descriptor.captureId)
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'authorized',
-						transferId: prepared.transfer_id,
-						uploadUrl: prepared.upload_url,
-						uploadUsername: prepared.upload_username,
-						uploadPassword: prepared.upload_password,
-						filename: prepared.filename,
 						authorizedAt: new Date().toISOString(),
 					})
+					state = await this.completionJob.getTransportState(descriptor.captureId)
 				}
 
-				if (prepared.status === 'authorized') {
-					const upload = prepared.transfer_id ? prepared : state
-					if (!upload?.uploadUrl || !upload?.uploadUsername || !upload?.uploadPassword || !upload?.filename) {
+				if (state.status === 'authorized') {
+					if (!state.transferId || !state.uploadUrl || !state.uploadUsername || !state.uploadPassword || !state.filename) {
 						throw new Error('PoRE transport authorization is incomplete')
 					}
-					await this.upload(upload.uploadUrl, upload.uploadUsername, upload.uploadPassword, upload.filename, descriptor.blob)
+					await this.upload(state.uploadUrl, state.uploadUsername, state.uploadPassword, state.filename, descriptor.blob)
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'remote_present',
 						remotePresentAt: new Date().toISOString(),
@@ -53,7 +48,7 @@
 				state = await this.completionJob.getTransportState(descriptor.captureId)
 				if (!state?.transferId) throw new Error('PoRE transport transfer handle is missing')
 
-				if (state.status === 'remote_present' || state.status === 'authorized') {
+				if (state.status === 'remote_present') {
 					const receipt = await this.verify(state.transferId)
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'verified',
@@ -89,9 +84,8 @@
 				return details
 			} catch (error) {
 				await this.completionJob?.updateTransportState?.(descriptor.captureId, {
-					status: 'failed',
-					failedAt: new Date().toISOString(),
-					error: String(error?.message || error),
+					lastErrorAt: new Date().toISOString(),
+					lastError: String(error?.message || error),
 				}).catch(() => {})
 				throw error
 			} finally {
@@ -111,6 +105,15 @@
 			form.set('payload_sha256', descriptor.payloadSha256)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare', form)
 			if (body?.status !== 'prepared') throw new Error(body?.error_code || 'PoRE transport preparation failed')
+			await this.completionJob.updateTransportState(descriptor.captureId, {
+				status: 'prepared',
+				transferId: body.transfer_id,
+				uploadUrl: body.upload_url,
+				uploadUsername: body.upload_username,
+				uploadPassword: body.upload_password,
+				filename: body.filename,
+				preparedAt: new Date().toISOString(),
+			})
 			return body
 		}
 
