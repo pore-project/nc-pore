@@ -90,6 +90,8 @@ This document provides an overview and navigation entry.
 - ADR-072 Host-Integrated Local Audio Capture via Connector
 - ADR-074 Talk Capture Quality
 - ADR-075 Local Capture Independence from Communication Pipeline
+- ADR-082 Browser-to-Application Artifact Transport Boundary — superseded
+- ADR-083 Verified Nextcloud Artifact Transport
 
 ---
 
