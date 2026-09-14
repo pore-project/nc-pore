@@ -10,7 +10,6 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IConfig;
-use OCP\IUserSession;
 use RuntimeException;
 
 final class NextcloudArtifactStorage {
@@ -19,13 +18,12 @@ final class NextcloudArtifactStorage {
 
 	public function __construct(
 		private readonly IRootFolder $rootFolder,
-		private readonly IUserSession $userSession,
 		private readonly IConfig $config,
 	) {
 	}
 
 	/**
-	 * Store the finalized artifact strictly below the authenticated user's Files root.
+	 * Store the finalized artifact strictly below the production owner's Files root.
 	 *
 	 * The configured storage root is a Nextcloud Files-relative path, never a server
 	 * filesystem path. A configured root such as "Büro/interviews" is the complete
@@ -39,12 +37,13 @@ final class NextcloudArtifactStorage {
 		string $recordingId,
 		string $captureId,
 		string $startedAt,
+		string $participantLabel,
+		string $targetUserId,
 		string $payloadPath,
 		int $payloadLength,
 	): array {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			throw new RuntimeException('No authenticated Nextcloud user is available.');
+		if (trim($targetUserId) === '') {
+			throw new RuntimeException('A storage target user is required.');
 		}
 		if (!is_file($payloadPath) || !is_readable($payloadPath)) {
 			throw new RuntimeException('Finalized artifact payload is not readable.');
@@ -61,20 +60,21 @@ final class NextcloudArtifactStorage {
 		}
 
 		$path = NextcloudArtifactPath::build(
-			$this->normalizedConfiguredRoot($user->getUID()),
+			$this->normalizedConfiguredRoot($targetUserId),
 			$productionId,
 			$productionLabel,
 			$captureId,
 			$startedAt,
+			$participantLabel,
 		);
 
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$userFolder = $this->rootFolder->getUserFolder($targetUserId);
 		$folder = $this->ensureConfiguredRoot($userFolder, $path['root']);
 		$folder = $this->ensureFolder($folder, $path['year']);
 		$folder = $this->ensureFolder($folder, $path['month']);
 		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		$file = $this->getOrCreateFile($folder, $path['filename']);
+		$file = $this->getAvailableFile($folder, $path['filename'], $inputHash);
 		$output = $file->fopen('w');
 		if ($output === false) {
 			throw new RuntimeException('Unable to open Nextcloud destination for writing.');
@@ -132,7 +132,7 @@ final class NextcloudArtifactStorage {
 
 		return [
 			'file_id' => $file->getId(),
-			'path' => $path['relative_path'],
+			'path' => str_replace($path['filename'], $file->getName(), $path['relative_path']),
 			'size' => $storedSize,
 			'sha256' => $storedHash,
 		];
@@ -167,15 +167,40 @@ final class NextcloudArtifactStorage {
 		}
 	}
 
-	private function getOrCreateFile(Folder $folder, string $filename): File {
-		try {
-			$node = $folder->get($filename);
-			if (!$node instanceof File) {
-				throw new RuntimeException(sprintf('Nextcloud destination "%s" is not a file.', $filename));
+	private function getAvailableFile(Folder $folder, string $filename, string $expectedHash): File {
+		$extension = '.wav';
+		$stem = str_ends_with($filename, $extension) ? substr($filename, 0, -strlen($extension)) : $filename;
+		$candidate = $filename;
+		$suffix = 1;
+		while (true) {
+			try {
+				$node = $folder->get($candidate);
+				if (!$node instanceof File) {
+					throw new RuntimeException(sprintf('Nextcloud destination "%s" is not a file.', $candidate));
+				}
+				$existingHash = $this->hashFile($node);
+				if (hash_equals($expectedHash, $existingHash)) return $node;
+				$suffix += 1;
+				$candidate = sprintf('%s (%d)%s', $stem, $suffix, $extension);
+			} catch (NotFoundException) {
+				return $folder->newFile($candidate);
 			}
-			return $node;
-		} catch (NotFoundException) {
-			return $folder->newFile($filename);
 		}
+	}
+
+	private function hashFile(File $file): string {
+		$input = $file->fopen('r');
+		if ($input === false) throw new RuntimeException('Unable to read existing Nextcloud artifact.');
+		$context = hash_init('sha256');
+		try {
+			while (!feof($input)) {
+				$chunk = fread($input, self::COPY_CHUNK_SIZE);
+				if ($chunk === false) throw new RuntimeException('Unable to read existing Nextcloud artifact.');
+				if ($chunk !== '') hash_update($context, $chunk);
+			}
+		} finally {
+			fclose($input);
+		}
+		return hash_final($context);
 	}
 }
