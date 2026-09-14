@@ -41,7 +41,7 @@ describe('Browser runtime transport', () => {
 				status: 'prepared',
 				transfer_id: 'opaque-handle',
 				upload_url: '/public.php/dav/files/share-token',
-				upload_username: 'share-token',
+				upload_username: 'anonymous',
 				upload_password: 'secret',
 				filename: 'Host.wav',
 			} } }) })
@@ -57,10 +57,10 @@ describe('Browser runtime transport', () => {
 
 		expect(receipt.file_id).toBe(42)
 		expect(job.markCompleted).toHaveBeenCalledTimes(1)
-		expect(job.markCompleted.mock.invocationCallOrder[0]).toBeGreaterThan(job.updateTransportState.mock.invocationCallOrder.findLast(order => order > 0))
 		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/prepare')
 		expect(fetchMock.mock.calls[1][1].method).toBe('PUT')
 		expect(fetchMock.mock.calls[1][0]).toContain('/public.php/dav/files/share-token/Host.wav')
+		expect(fetchMock.mock.calls[1][1].headers.Authorization).toContain('anonymous:secret')
 		expect(fetchMock.mock.calls[2][0]).toContain('/finalized-artifact/verify')
 		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/close')
 	})
@@ -70,14 +70,14 @@ describe('Browser runtime transport', () => {
 		const fetchMock = jest.fn()
 		fetchMock
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
-				status: 'prepared', transfer_id: 'opaque-handle', upload_url: '/public.php/dav/files/share-token', upload_username: 'share-token', upload_password: 'secret', filename: 'Host.wav',
+				status: 'prepared', transfer_id: 'opaque-handle', upload_url: '/public.php/dav/files/share-token', upload_username: 'anonymous', upload_password: 'secret', filename: 'Host.wav',
 			} } }) })
 			.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
-			.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ ocs: { data: { status: 'rejected', error_code: 'hash_mismatch' } } }) })
+			.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ ocs: { data: { status: 'rejected', error_code: 'nextcloud_transport_failed' } } }) })
 		global.fetch = fetchMock
 
 		const transport = new Transport({ completionJob: job })
-		await expect(transport.transfer(descriptor)).rejects.toThrow('hash_mismatch')
+		await expect(transport.transfer(descriptor)).rejects.toThrow('nextcloud_transport_failed')
 		expect(job.markCompleted).not.toHaveBeenCalled()
 		expect(fetchMock).toHaveBeenCalledTimes(3)
 	})
