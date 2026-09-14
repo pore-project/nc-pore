@@ -85,7 +85,8 @@ final class NextcloudArtifactPath {
 		if ($label === '') {
 			$label = $fallback;
 		}
-		$label = preg_replace('/[\\\/\x00-\x1F\x7F]+/u', '-', $label) ?? $fallback;
+		$label = str_replace(['/', '\\'], '-', $label);
+		$label = preg_replace('/[\x00-\x1F\x7F]+/u', '-', $label) ?? $fallback;
 		$label = trim(preg_replace('/\s+/u', ' ', $label) ?? $label, " .\t\n\r\0\x0B");
 		return $label !== '' ? $label : $fallback;
 	}
