@@ -114,7 +114,7 @@ final class NextcloudArtifactConnector {
 		return [
 			'transfer_id' => $handle,
 			'upload_url' => '/public.php/dav/files/' . rawurlencode($share->getToken()),
-			'upload_username' => $share->getToken(),
+			'upload_username' => 'anonymous',
 			'upload_password' => $password,
 			'filename' => $path['filename'],
 			'size' => $size,
