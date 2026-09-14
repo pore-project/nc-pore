@@ -24,9 +24,12 @@
 			try {
 				let state = await this.completionJob?.getTransportState?.(descriptor.captureId)
 
-				if (!state || state.status === 'prepared' || state.status === 'failed' || state.status === 'pending') {
+				if (!state || state.status === 'failed' || state.status === 'pending' || (state.status === 'prepared' && !state.transferId)) {
 					await this.prepare(descriptor)
 					state = await this.completionJob.getTransportState(descriptor.captureId)
+				}
+
+				if (state.status === 'prepared') {
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'authorized',
 						authorizedAt: new Date().toISOString(),
