@@ -15,6 +15,7 @@ use OCP\IUserSession;
 
 final class ProductionController extends OCSController {
 	private const OWNER_PREFIX = 'production_owner_';
+	private const OWNER_HASH_LENGTH = 47;
 
 	public function __construct(
 		IRequest $request,
@@ -72,7 +73,7 @@ final class ProductionController extends OCSController {
 	}
 
 	public static function ownerKey(string $sessionId): string {
-		return self::OWNER_PREFIX . hash('sha256', $sessionId);
+		return self::OWNER_PREFIX . substr(hash('sha256', $sessionId), 0, self::OWNER_HASH_LENGTH);
 	}
 
 	private function rejected(string $errorCode, int $status, string $requestId): DataResponse {
