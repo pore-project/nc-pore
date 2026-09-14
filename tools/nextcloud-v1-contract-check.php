@@ -26,6 +26,9 @@ check($defaultLabel['filename'] === 'capture-456.wav', 'Missing participant labe
 $sanitized = NextcloudArtifactPath::build('', 'prod-123', 'Interview', 'capture-456', '2026-09-05T15:42:31+02:00', 'A/B\\C');
 check($sanitized['filename'] === 'A-B-C.wav', 'Participant filename must sanitize path separators.');
 
+$productionLabel = NextcloudArtifactPath::build('', 'prod-123', 'Interview / Max', 'capture-456', '2026-09-05T15:42:31+02:00', 'Host');
+check($productionLabel['leaf'] === '05 - 15:42 Interview - Max - prod-123', 'Production display label must be normalized to one Files path segment.');
+
 $custom = NextcloudArtifactPath::build('Büro\\interviews/', 'prod-123', 'Interview mit Max Muster', 'capture-456', '2026-09-05T15:42:31+02:00', 'Max Muster');
 check($custom['root'] === 'Büro/interviews', 'Configured root must be normalized as a Files-relative path.');
 check($custom['relative_path'] === 'Büro/interviews/2026/09/05 - 15:42 Interview mit Max Muster - prod-123/Max Muster.wav', 'Custom root must be the complete PoRe root.');
@@ -47,10 +50,10 @@ foreach (['../escape', 'foo/../escape', '/absolute/path', '\\absolute\\path', 'C
 	}
 }
 
-foreach ([['prod/evil', 'Production'], ['prod', 'Label/evil'], ['prod', 'Label', 'capture/evil']] as $case) {
+foreach ([['prod/evil', 'Production', 'capture'], ['prod', 'Label', 'capture/evil']] as $case) {
 	$productionId = $case[0];
 	$productionLabel = $case[1];
-	$captureId = $case[2] ?? 'capture';
+	$captureId = $case[2];
 	try {
 		NextcloudArtifactPath::build('', $productionId, $productionLabel, $captureId, '2026-09-05T15:42:31+02:00');
 		throw new RuntimeException('Invalid artifact identity was accepted.');
