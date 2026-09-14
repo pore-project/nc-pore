@@ -30,6 +30,7 @@
 				recording_session_id: descriptor.recordingSessionId,
 				production_id: descriptor.productionId,
 				production_label: descriptor.productionLabel || descriptor.productionId,
+				participant_label: descriptor.participantLabel || null,
 				recording_id: descriptor.recordingId,
 				started_at: descriptor.startedAt,
 				track_id: descriptor.trackId || 'browser-track',
@@ -43,7 +44,7 @@
 			try {
 				const form = new FormData()
 				form.append('metadata', JSON.stringify(metadata))
-				form.append('payload', descriptor.blob, `${descriptor.captureId}.wav`)
+				form.append('payload', descriptor.blob, `${descriptor.participantLabel || descriptor.captureId}.wav`)
 
 				const url = window.OC?.generateUrl
 					? window.OC.generateUrl('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact')
