@@ -1,5 +1,5 @@
 /*
- * NC-PoRE — Talk recording UI bootstrap.
+ * NC-PoRe — Talk recording UI bootstrap.
  *
  * Talk supplies the mount point, role/context and microphone selection events.
  * PoRE owns the actual local microphone capture and recording path.
@@ -88,6 +88,7 @@
 				productionId,
 				recordingId: authoritativeState.recordingId,
 				productionLabel: context?.productionLabel || context?.title || productionId,
+				participantLabel: context?.participantLabel || null,
 				deviceId: microphone.deviceId,
 			})
 			localCaptureReady = true
