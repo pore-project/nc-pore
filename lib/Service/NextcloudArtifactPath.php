@@ -26,8 +26,8 @@ final class NextcloudArtifactPath {
 		}
 
 		self::assertSegment($productionId);
-		self::assertSegment($productionLabel);
 		self::assertSegment($captureId);
+		$productionLabel = self::normalizeHumanLabel($productionLabel, $productionId);
 
 		try {
 			$timestamp = new \DateTimeImmutable($startedAt);
@@ -76,16 +76,18 @@ final class NextcloudArtifactPath {
 	}
 
 	private static function buildFilename(string $participantLabel, string $captureId): string {
-		$label = trim($participantLabel);
-		if ($label === '') {
-			$label = $captureId;
-		}
-		$label = preg_replace('/[\\\/\x00-\x1F\x7F]+/u', '-', $label) ?? $captureId;
-		$label = trim(preg_replace('/\s+/u', ' ', $label) ?? $label, " .\t\n\r\0\x0B");
-		if ($label === '') {
-			$label = $captureId;
-		}
+		$label = self::normalizeHumanLabel($participantLabel, $captureId);
 		return $label . '.wav';
+	}
+
+	private static function normalizeHumanLabel(string $label, string $fallback): string {
+		$label = trim($label);
+		if ($label === '') {
+			$label = $fallback;
+		}
+		$label = preg_replace('/[\\\/\x00-\x1F\x7F]+/u', '-', $label) ?? $fallback;
+		$label = trim(preg_replace('/\s+/u', ' ', $label) ?? $label, " .\t\n\r\0\x0B");
+		return $label !== '' ? $label : $fallback;
 	}
 
 	private static function assertSegment(string $value): void {
