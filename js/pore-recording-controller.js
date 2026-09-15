@@ -63,7 +63,7 @@
 	}
 
 	class PoREBrowserRecordingController {
-		constructor({ recorderFactory = () => new window.PoREBrowserPcmRecorder() } = {}) {
+		constructor({ recorderFactory = options => new window.PoREBrowserPcmRecorder(options) } = {}) {
 			this.recorderFactory = recorderFactory
 			this.recorder = null
 			this.state = 'idle'
@@ -77,8 +77,16 @@
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
 
+		_createRecorder() {
+			return this.recorderFactory({
+				onPersistenceSafetyStop: detail => {
+					window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'persistence-safety-stop', persistence: detail } }))
+				},
+			})
+		}
+
 		async primeAudioContext() {
-			if (!this.recorder) this.recorder = this.recorderFactory()
+			if (!this.recorder) this.recorder = this._createRecorder()
 			if (typeof this.recorder.primeAudioContext !== 'function') throw new Error('PoRE PCM recorder cannot prime Web Audio')
 			await this.recorder.primeAudioContext()
 		}
@@ -87,7 +95,7 @@
 			if (this.isRecording()) throw new Error('PoRE recording is already active')
 			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
 			if (track.readyState !== 'live') throw new Error('PoRE cannot start from an ended audio track')
-			if (!this.recorder) this.recorder = this.recorderFactory()
+			if (!this.recorder) this.recorder = this._createRecorder()
 			this.sourceChanges = []
 			this.sequence += 1
 			this.captureId = sourceMetadata.captureId || technicalId('browser-capture')
