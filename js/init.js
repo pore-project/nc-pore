@@ -112,9 +112,9 @@
 
 	const emitOpeningSignet = () => {
 		if (openingSignetEmitted || !recorder.isRecording()) return
-		openingSignetEmitted = true
 		if (typeof recorder.markOpeningSignet === 'function') recorder.markOpeningSignet()
 		else window.dispatchEvent(new CustomEvent('pore:recording-opening-signet'))
+		openingSignetEmitted = true
 	}
 
 	const pollCoordination = async () => {
