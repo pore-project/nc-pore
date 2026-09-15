@@ -1,4 +1,4 @@
-/* NC-PoRE — browser PCM preservation capture. */
+/* NC-PoRe — browser PCM preservation capture. */
 (() => {
 	'use strict'
 
@@ -89,9 +89,9 @@
 			try {
 				this.worklet?.disconnect(); this.source?.disconnect(); if (this.context?.state !== 'closed') await this.context?.close(); this._queuePersistenceChunk(); await this.persistenceChain
 				const stored = await this.persistenceStore.getCapture(this.captureId); if (!stored || !stored.chunks.length) throw new Error('PoRE durable capture contains no persisted audio chunks')
-				const pcm = new Blob(stored.chunks, { type: 'application/octet-stream' }); const blob = new Blob([createWavHeader(pcm.size, this.sampleRate, this.channels), pcm], { type: 'audio/wav' })
-				const artifact = { kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: blob.size, sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, recordingId: this.recordingId, startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, sampleRate: this.sampleRate, channels: this.channels, participantLabel: this.participantLabel, openingSignet: this.openingSignet, blob, source: { productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, captureId: this.captureId, recordingSessionId: this.recordingSessionId, participantLabel: this.participantLabel, trackId: this.stream?.getAudioTracks?.()[0]?.id || null, startedAt: this.startedAt, openingSignet: this.openingSignet } }
-				await this.persistenceStore.finalizeCapture(this.captureId, { stoppedAt: this.stoppedAt, stopReason: reason, size: blob.size, chunkCount: stored.chunks.length, openingSignet: this.openingSignet })
+				const pcmSize = stored.chunks.reduce((total, chunk) => total + chunk.size, 0)
+				const artifact = { kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: 44 + pcmSize, sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, recordingId: this.recordingId, startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, sampleRate: this.sampleRate, channels: this.channels, participantLabel: this.participantLabel, openingSignet: this.openingSignet, source: { productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, captureId: this.captureId, recordingSessionId: this.recordingSessionId, participantLabel: this.participantLabel, trackId: this.stream?.getAudioTracks?.()[0]?.id || null, startedAt: this.startedAt, openingSignet: this.openingSignet } }
+				await this.persistenceStore.finalizeCapture(this.captureId, { stoppedAt: this.stoppedAt, stopReason: reason, size: artifact.size, chunkCount: stored.chunks.length, openingSignet: this.openingSignet })
 				await this._cleanup(); this.state = 'idle'; window.dispatchEvent(new CustomEvent('pore:recording-finalized', { detail: artifact })); return artifact
 			} catch (error) { this.state = 'error'; await this._cleanup(); window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } })); throw error }
 		}
@@ -101,7 +101,6 @@
 
 	function technicalId(prefix) { if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`; return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 	function float32ToPcm24(samples) { const output = new Uint8Array(samples.length * 3); for (let i = 0; i < samples.length; i += 1) { const value = Math.max(-1, Math.min(1, samples[i])); const integer = Math.round(value * (value < 0 ? 8388608 : 8388607)); const offset = i * 3; output[offset] = integer & 0xff; output[offset + 1] = (integer >> 8) & 0xff; output[offset + 2] = (integer >> 16) & 0xff } return output }
-	function createWavHeader(dataLength, sampleRate, channels) { const header = new ArrayBuffer(44); const view = new DataView(header); const write = (offset, text) => [...text].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0))); write(0, 'RIFF'); view.setUint32(4, 36 + dataLength, true); write(8, 'WAVE'); write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true); view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * channels * 3, true); view.setUint16(32, channels * 3, true); view.setUint16(34, 24, true); write(36, 'data'); view.setUint32(40, dataLength, true); return header }
 
 	window.PoREBrowserPcmRecorder = PoREBrowserPcmRecorder
 })()
