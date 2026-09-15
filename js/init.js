@@ -251,6 +251,15 @@
 
 	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
 
+	const stopLocalCapture = async reason => {
+		try {
+			return await recorder.stop(reason)
+		} finally {
+			localCapture.stop()
+			localCaptureReady = false
+		}
+	}
+
 	window.addEventListener('pore:recording-ui-stop-local', async event => {
 		try {
 			await stopLocalCapture(event.detail?.reason || 'host')
@@ -258,12 +267,6 @@
 			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
 		} catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 	})
-
-	const stopLocalCapture = async reason => {
-		const artifact = await recorder.stop(reason)
-		localCapture.stop()
-		return artifact
-	}
 
 	const announceRecoveryCandidates = async () => {
 		if (!persistenceStore) return
