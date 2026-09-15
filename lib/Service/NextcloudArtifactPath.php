@@ -18,6 +18,7 @@ final class NextcloudArtifactPath {
 		string $productionLabel,
 		string $captureId,
 		string $startedAt,
+		string $participantLabel = '',
 	): array {
 		$root = self::normalizeRoot($configuredRoot);
 		if ($root === '') {
@@ -25,8 +26,8 @@ final class NextcloudArtifactPath {
 		}
 
 		self::assertSegment($productionId);
-		self::assertSegment($productionLabel);
 		self::assertSegment($captureId);
+		$productionLabel = self::normalizeHumanLabel($productionLabel, $productionId);
 
 		try {
 			$timestamp = new \DateTimeImmutable($startedAt);
@@ -37,7 +38,7 @@ final class NextcloudArtifactPath {
 		$year = $timestamp->format('Y');
 		$month = $timestamp->format('m');
 		$leaf = $timestamp->format('d - H:i') . ' ' . $productionLabel . ' - ' . $productionId;
-		$filename = $captureId . '.wav';
+		$filename = self::buildFilename($participantLabel, $captureId);
 
 		return [
 			'relative_path' => implode('/', [$root, $year, $month, $leaf, $filename]),
@@ -72,6 +73,22 @@ final class NextcloudArtifactPath {
 		}
 
 		return $root;
+	}
+
+	private static function buildFilename(string $participantLabel, string $captureId): string {
+		$label = self::normalizeHumanLabel($participantLabel, $captureId);
+		return $label . '.wav';
+	}
+
+	private static function normalizeHumanLabel(string $label, string $fallback): string {
+		$label = trim($label);
+		if ($label === '') {
+			$label = $fallback;
+		}
+		$label = str_replace(['/', '\\'], '-', $label);
+		$label = preg_replace('/[\x00-\x1F\x7F]+/u', '-', $label) ?? $fallback;
+		$label = trim(preg_replace('/\s+/u', ' ', $label) ?? $label, " .\t\n\r\0\x0B");
+		return $label !== '' ? $label : $fallback;
 	}
 
 	private static function assertSegment(string $value): void {

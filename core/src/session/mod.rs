@@ -198,7 +198,6 @@ impl ProductionSession {
         actor: &ParticipantId,
         recording_id: &RecordingId,
     ) -> Result<(), ProductionSessionError> {
-        self.authorize(actor, ProductionAction::ManageRecordings)?;
         if self.status == ProductionStatus::Completed {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
@@ -207,8 +206,10 @@ impl ProductionSession {
             .iter()
             .any(|recording| recording.id() == recording_id)
         {
+            self.authorize(actor, ProductionAction::ParticipateInRecording)?;
             return Ok(());
         }
+        self.authorize(actor, ProductionAction::ManageRecordings)?;
         self.add_recording_by(actor, Recording::new(recording_id.value()))
     }
 
@@ -451,5 +452,47 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn participant_can_ensure_an_existing_recording_without_mutating_it() {
+        let (mut session, owner) = active_session();
+        let participant = ParticipantId::new("participant-1");
+        let recording_id = RecordingId::new("recording-1");
+
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(participant.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+
+        let activity_count = session.activities().len();
+        session
+            .ensure_recording_by(&participant, &recording_id)
+            .unwrap();
+
+        assert_eq!(session.recordings().len(), 1);
+        assert_eq!(session.activities().len(), activity_count);
+    }
+
+    #[test]
+    fn participant_cannot_ensure_a_missing_recording() {
+        let (mut session, owner) = active_session();
+        let participant = ParticipantId::new("participant-1");
+        let recording_id = RecordingId::new("recording-1");
+
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(participant.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        let result = session.ensure_recording_by(&participant, &recording_id);
+
+        assert_eq!(result, Err(ProductionSessionError::Unauthorized));
+        assert!(session.recordings().is_empty());
     }
 }

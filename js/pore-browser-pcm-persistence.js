@@ -56,21 +56,47 @@
 			const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'application/octet-stream' })
 			const sha256 = await this._sha256(blob)
 			const db = await this._database()
-			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE], 'readwrite', transaction => {
-				transaction.objectStore(CHUNK_STORE).put({ captureId, index, payload: blob, size: blob.size, sha256 })
-				const manifestRequest = transaction.objectStore(MANIFEST_STORE).get(captureId)
-				manifestRequest.onsuccess = () => {
-					const manifest = manifestRequest.result
-					if (!manifest) throw new Error(`PoRE capture manifest not found: ${captureId}`)
+			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const chunkStore = transaction.objectStore(CHUNK_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				const existingChunkRequest = chunkStore.get([captureId, index])
+				let manifest = null
+				let existingChunk = null
+				let manifestLoaded = false
+				let chunkLoaded = false
+
+				const finish = () => {
+					if (!manifestLoaded || !chunkLoaded) return
+					if (!manifest) {
+						abort(new Error(`PoRE capture manifest not found: ${captureId}`))
+						return
+					}
+					const lastChunkIndex = Number.isInteger(manifest.lastChunkIndex) ? manifest.lastChunkIndex : -1
+					if (index > lastChunkIndex + 1) {
+						abort(new Error(`PoRE capture chunk gap detected: ${captureId}/${index}`))
+						return
+					}
+					if (existingChunk) {
+						if (existingChunk.size !== blob.size || existingChunk.sha256 !== sha256) {
+							abort(new Error(`PoRE capture chunk conflict: ${captureId}/${index}`))
+							return
+						}
+					} else {
+						chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
+					}
 					const chunks = Array.isArray(manifest.chunks) ? manifest.chunks.filter(chunk => chunk.index !== index) : []
 					chunks.push({ index, size: blob.size, sha256 })
 					chunks.sort((a, b) => a.index - b.index)
 					manifest.chunks = chunks
 					manifest.chunkCount = chunks.length
-					manifest.lastChunkIndex = Math.max(manifest.lastChunkIndex ?? -1, index)
+					manifest.lastChunkIndex = Math.max(lastChunkIndex, index)
 					manifest.updatedAt = new Date().toISOString()
-					transaction.objectStore(MANIFEST_STORE).put(manifest)
+					manifestStore.put(manifest)
 				}
+
+				manifestRequest.onsuccess = () => { manifest = manifestRequest.result; manifestLoaded = true; finish() }
+				existingChunkRequest.onsuccess = () => { existingChunk = existingChunkRequest.result; chunkLoaded = true; finish() }
 			})
 		}
 
@@ -88,9 +114,15 @@
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
 			if (!manifest) return null
 			const chunks = await this._getChunks(db, captureId)
+			const expectedIndexes = Array.from({ length: Math.max(0, manifest.lastChunkIndex + 1) }, (_, index) => index)
+			const actualIndexes = chunks.map(chunk => chunk.index)
+			if (actualIndexes.length !== expectedIndexes.length || actualIndexes.some((index, position) => index !== expectedIndexes[position])) {
+				throw new Error(`PoRE capture chunk continuity check failed: ${captureId}`)
+			}
+			if (manifest.chunkCount !== chunks.length) throw new Error(`PoRE capture chunk count check failed: ${captureId}`)
 			for (const chunk of chunks) {
 				const expected = manifest.chunks?.find(entry => entry.index === chunk.index)?.sha256
-				if (expected && expected !== chunk.sha256) throw new Error(`PoRE capture chunk integrity check failed: ${captureId}/${chunk.index}`)
+				if (expected !== chunk.sha256) throw new Error(`PoRE capture chunk integrity check failed: ${captureId}/${chunk.index}`)
 				const actual = await this._sha256(chunk.payload)
 				if (actual !== chunk.sha256) throw new Error(`PoRE capture chunk payload integrity check failed: ${captureId}/${chunk.index}`)
 			}
@@ -142,10 +174,12 @@
 		_transaction(db, stores, mode, configure) {
 			return new Promise((resolve, reject) => {
 				const transaction = db.transaction(stores, mode)
-				configure(transaction)
+				let abortError = null
+				const abort = error => { abortError = error; transaction.abort() }
+				configure(transaction, abort)
 				transaction.oncomplete = () => resolve()
-				transaction.onerror = () => reject(transaction.error || new Error('PoRE IndexedDB transaction failed'))
-				transaction.onabort = () => reject(transaction.error || new Error('PoRE IndexedDB transaction aborted'))
+				transaction.onerror = () => reject(abortError || transaction.error || new Error('PoRE IndexedDB transaction failed'))
+				transaction.onabort = () => reject(abortError || transaction.error || new Error('PoRE IndexedDB transaction aborted'))
 			})
 		}
 	}

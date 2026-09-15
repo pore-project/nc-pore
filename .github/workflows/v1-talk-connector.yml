@@ -38,7 +38,7 @@ jobs:
           php -l lib/Controller/RecordingTransportController.php
           php -l lib/Controller/SettingsController.php
           php -l lib/Service/NextcloudArtifactPath.php
-          php -l lib/Service/NextcloudArtifactStorage.php
+          php -l lib/Service/NextcloudArtifactConnector.php
           php -l tools/nextcloud-v1-contract-check.php
       - name: Run Nextcloud V1 path contract checks
         run: php tools/nextcloud-v1-contract-check.php

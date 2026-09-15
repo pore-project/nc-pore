@@ -88,7 +88,7 @@ describe('Browser recording controller', () => {
 			start: jest.fn().mockResolvedValue(undefined),
 			stop: jest.fn().mockResolvedValue({
 				kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: 12,
-				sampleRate: 48000, channels: 1, blob: new Blob(['payload'], { type: 'audio/wav' }),
+				sampleRate: 48000, channels: 1,
 			}),
 		}
 		const controller = new Controller({ recorderFactory: () => recorder })
@@ -106,7 +106,7 @@ describe('Browser recording controller', () => {
 		expect(handoff.recordingId).toBe('recording-17')
 		expect(handoff.captureId).toBe('capture-17')
 		expect(handoff.recordingSessionId).toBe('recorder-session-17')
-		expect(handoff.blob).toBe(artifact.blob)
+		expect(handoff.blob).toBeUndefined()
 		expect(handoff.format).toBe('audio/wav')
 		expect(handoff.encoding).toBe('pcm_s24le')
 	})
