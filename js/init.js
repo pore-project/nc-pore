@@ -265,7 +265,15 @@
 			await stopLocalCapture(event.detail?.reason || 'host')
 			const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
 			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-		} catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+			try {
+				const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
+				if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			} catch (coordinationError) {
+				window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error: coordinationError } }))
+			}
+		}
 	})
 
 	const announceRecoveryCandidates = async () => {
