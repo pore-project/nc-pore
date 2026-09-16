@@ -83,14 +83,19 @@
 		localCaptureStartInFlight = true
 		try {
 			const track = await localCapture.open(microphone.deviceId)
-			await recorder.start(track, {
-				...(context?.sourceMetadata || {}),
-				productionId,
-				recordingId: authoritativeState.recordingId,
-				productionLabel: context?.productionLabel || context?.title || productionId,
-				participantLabel: context?.participantLabel || null,
-				deviceId: microphone.deviceId,
-			})
+			try {
+				await recorder.start(track, {
+					...(context?.sourceMetadata || {}),
+					productionId,
+					recordingId: authoritativeState.recordingId,
+					productionLabel: context?.productionLabel || context?.title || productionId,
+					participantLabel: context?.participantLabel || null,
+					deviceId: microphone.deviceId,
+				})
+			} catch (error) {
+				localCapture.stop()
+				throw error
+			}
 			localCaptureReady = true
 			window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 			if (signalReady) {
@@ -102,12 +107,20 @@
 		}
 	}
 
-	const restartLocalCaptureForMicrophone = async deviceId => {
+	const switchLocalCaptureForMicrophone = async deviceId => {
 		if (!deviceId || !startRequestedByHost || authoritativeState?.role === 'listener') return
 		if (!recorder.isRecording()) return
-		await recorder.stop('microphone-change')
-		localCaptureReady = false
-		await startLocalCapture({ signalReady: false })
+		const previousTrack = localCapture.getCurrentTrack?.()
+		const nextTrack = await localCapture.replace(deviceId)
+		if (!nextTrack || nextTrack === previousTrack) return
+		try {
+			await recorder.replaceTrack(nextTrack)
+			if (recorder.isRecording()) recorder.noteSourceChange(previousTrack, nextTrack, new Date().toISOString(), { from: { deviceId: previousTrack?.getSettings?.()?.deviceId || null }, to: { deviceId } })
+		} catch (error) {
+			localCapture.stop()
+			localCaptureReady = false
+			throw error
+		}
 	}
 
 	const emitOpeningSignet = () => {
@@ -217,7 +230,7 @@
 		const deviceId = event.detail?.deviceId || null
 		if (!deviceId) return
 		if (event.detail?.previousDeviceId && event.detail.previousDeviceId !== deviceId && recorder.isRecording()) {
-			void restartLocalCaptureForMicrophone(deviceId).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
+			void switchLocalCaptureForMicrophone(deviceId).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 		}
 		publish({ localCaptureAvailable: true, localCaptureDeviceId: deviceId })
 	})
