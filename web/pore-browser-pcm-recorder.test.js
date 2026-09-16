@@ -68,5 +68,10 @@ describe('Browser PCM recorder persistence recovery', () => {
 		expect(recorder.getState()).toBe('recording')
 		expect(safetyStop).toHaveBeenCalledTimes(1)
 		expect(safetyStop.mock.calls[0][0].pendingBytes).toBe(6)
+
+		recorder._acceptSamples(new Float32Array([0]))
+		expect(recorder.capturedSamples).toBe(2)
+		expect(recorder.pendingBytes).toBe(0)
+		expect(recorder.persistenceQueue).toHaveLength(2)
 	})
 })
