@@ -51,6 +51,20 @@
 			} catch (error) { this.state = 'error'; await this._cleanup(); throw error }
 		}
 
+		async replaceTrack(track) {
+			if (!this.isRecording()) throw new Error('PoRE cannot replace the microphone outside an active local capture')
+			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
+			if (track.readyState !== 'live') throw new Error('PoRE cannot replace the microphone with an ended audio track')
+			if (!this.context || this.context.state === 'closed' || !this.worklet) throw new Error('PoRE audio capture graph is not available')
+			const nextStream = new MediaStream([track])
+			const nextSource = this.context.createMediaStreamSource(nextStream)
+			nextSource.connect(this.worklet)
+			this.source?.disconnect()
+			this.stream = nextStream
+			this.source = nextSource
+			return track
+		}
+
 		markOpeningSignet(at = new Date().toISOString()) {
 			if (!this.isRecording()) throw new Error('PoRE opening signet requires an active local capture')
 			if (this.openingSignet) return this.openingSignet
@@ -62,6 +76,7 @@
 		}
 
 		_acceptSamples(samples) {
+			if (this.persistenceSafetyStopEmitted) return
 			if (this.openingTestTonePending) {
 				const sampleOffset = this.capturedSamples
 				const toneSamples = Math.round(this.sampleRate * OPENING_TEST_TONE_MS / 1000)
