@@ -112,6 +112,12 @@
 			}
 		}
 
+		async replaceTrack(track) {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE microphone replacement requires an active local recording')
+			if (typeof this.recorder.replaceTrack !== 'function') throw new Error('PoRE PCM recorder cannot replace the active microphone')
+			return this.recorder.replaceTrack(track)
+		}
+
 		markOpeningSignet(at = new Date().toISOString()) {
 			if (!this.recorder || !this.isRecording()) throw new Error('PoRE opening signet requires an active local capture')
 			return this.recorder.markOpeningSignet(at)
