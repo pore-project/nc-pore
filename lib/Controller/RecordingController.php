@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace OCA\PoRe\Controller;
 
 use OCA\PoRe\AppInfo\Application;
+use OCA\PoRe\BackgroundJob\CheckProductionArtifactTimeoutJob;
 use OCA\PoRe\Service\RecordingRuntimeService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
+use OCP\BackgroundJob\IJobList;
 use OCP\IRequest;
 use OCP\IUserSession;
 use RuntimeException;
@@ -18,6 +20,7 @@ final class RecordingController extends OCSController {
 		IRequest $request,
 		private readonly RecordingRuntimeService $runtime,
 		private readonly IUserSession $userSession,
+		private readonly IJobList $jobList,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -76,6 +79,15 @@ final class RecordingController extends OCSController {
 		}
 
 		$status = ($response['status'] ?? null) === 'ok' ? 200 : 409;
+
+		if ($command === 'stop' && $status === 200) {
+			$this->jobList->scheduleAfter(
+				CheckProductionArtifactTimeoutJob::class,
+				['production_id' => $sessionId],
+				24 * 60 * 60,
+			);
+		}
+
 		return new DataResponse($response, $status);
 	}
 
