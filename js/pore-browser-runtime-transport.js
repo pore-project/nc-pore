@@ -33,23 +33,42 @@
 					state = await this.completionJob.getTransportState(descriptor.captureId)
 				}
 
-				if (state.status === 'prepared') {
-					await this.completionJob.updateTransportState(descriptor.captureId, {
-						status: 'authorized',
-						authorizedAt: new Date().toISOString(),
-					})
+				let uploadCollisionRetries = 0
+				while (true) {
 					state = await this.completionJob.getTransportState(descriptor.captureId)
-				}
+					if (state.status === 'prepared') {
+						await this.completionJob.updateTransportState(descriptor.captureId, {
+							status: 'authorized',
+							authorizedAt: new Date().toISOString(),
+						})
+						state = await this.completionJob.getTransportState(descriptor.captureId)
+					}
 
-				if (state.status === 'authorized') {
+					if (state.status !== 'authorized') break
+					if (state.uploadRequired === false) {
+						await this.completionJob.updateTransportState(descriptor.captureId, {
+							status: 'remote_present',
+							remotePresentAt: new Date().toISOString(),
+						})
+						break
+					}
 					if (!state.transferId || !state.uploadUrl || !state.uploadUsername || !state.uploadPassword || !state.filename) {
 						throw new Error('PoRE transport authorization is incomplete')
 					}
-					await this.upload(state.uploadUrl, state.uploadUsername, state.uploadPassword, state.filename, descriptor.blob)
+					try {
+						await this.upload(state.uploadUrl, state.uploadUsername, state.uploadPassword, state.filename, descriptor.blob)
+					} catch (error) {
+						if (!this.isUploadCollision(error) || uploadCollisionRetries >= 4) throw error
+						uploadCollisionRetries += 1
+						await this.close(state.transferId).catch(() => {})
+						await this.prepare(descriptor)
+						continue
+					}
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'remote_present',
 						remotePresentAt: new Date().toISOString(),
 					})
+					break
 				}
 
 				state = await this.completionJob.getTransportState(descriptor.captureId)
@@ -119,6 +138,7 @@
 				uploadUsername: body.upload_username,
 				uploadPassword: body.upload_password,
 				filename: body.filename,
+				uploadRequired: body.upload_required !== false,
 				preparedAt: new Date().toISOString(),
 			})
 			return body
@@ -148,11 +168,20 @@
 					Accept: '*/*',
 					'X-Requested-With': 'XMLHttpRequest',
 					Authorization: `Basic ${btoa(`${username}:${password}`)}`,
+					'If-None-Match': '*',
 				},
 				credentials: 'same-origin',
 				body: blob,
 			})
-			if (!response.ok) throw new Error(`PoRE Nextcloud upload failed (${response.status})`)
+			if (!response.ok) {
+				const error = new Error(`PoRE Nextcloud upload failed (${response.status})`)
+				error.status = response.status
+				throw error
+			}
+		}
+
+		isUploadCollision(error) {
+			return [403, 409, 412].includes(error?.status)
 		}
 
 		async control(path, form) {
