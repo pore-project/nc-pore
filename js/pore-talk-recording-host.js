@@ -123,7 +123,9 @@
 			state: snapshot.phase,
 			confirmed: snapshot.confirmed,
 			ready: snapshot.participants?.some(participant => participant.id === actorId && participant.ready) === true,
+			openingConfirmed: snapshot.participants?.some(participant => participant.id === actorId && participant.opening_confirmed) === true,
 			readyCount: snapshot.participants?.filter(participant => participant.ready).length || 0,
+			openingConfirmedCount: snapshot.participants?.filter(participant => participant.opening_confirmed).length || 0,
 			participantCount: snapshot.participants?.length || coordinatorContext.participants.length,
 			participants: snapshot.participants || [],
 			artifactId: snapshot.artifact_id || null,
@@ -178,7 +180,11 @@
 			if (!['active', 'completed'].includes(production?.production_status)) {
 				return { production_status: production?.production_status || null, state: null }
 			}
-			return recordingCommand(sessionId, recordingId, name, options)
+			const recording = await recordingCommand(sessionId, recordingId, name, options)
+			return { ...recording, production_status: production.production_status }
+		}
+		if (name === 'force_close') {
+			return productionCommand(sessionId, 'force_close', options)
 		}
 		if (name === 'begin') {
 			stopLiveParticipantPolling()
