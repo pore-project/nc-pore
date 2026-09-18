@@ -39,7 +39,7 @@ final class ProductionController extends OCSController {
 			return $this->rejected('unauthorized', 401, $requestId);
 		}
 
-		if (!in_array($command, ['ensure', 'start'], true)) {
+		if (!in_array($command, ['ensure', 'start', 'force_close'], true)) {
 			return $this->rejected('unsupported_command', 400, $requestId);
 		}
 
@@ -49,7 +49,11 @@ final class ProductionController extends OCSController {
 		}
 
 		$requestId = $requestId !== '' ? $requestId : bin2hex(random_bytes(16));
-		$runtimeCommand = $command === 'ensure' ? ['Ensure' => null] : ['Start' => null];
+		$runtimeCommand = match ($command) {
+    'ensure' => ['Ensure' => null],
+    'start' => ['Start' => null],
+    'force_close' => ['ForceClose' => null],
+};
 
 		try {
 			$response = $this->runtime->command([
@@ -83,6 +87,7 @@ final class ProductionController extends OCSController {
 			'status' => 'rejected',
 			'production_status' => null,
 			'participants' => [],
+			'completion_reason' => null,
 			'error_code' => $errorCode,
 		], $status);
 	}
