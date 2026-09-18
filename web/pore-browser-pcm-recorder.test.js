@@ -25,6 +25,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 		recorder.captureId = 'capture-1'
 		recorder.recordingSessionId = 'session-1'
 		recorder.sampleRate = 48000
+		recorder.persistenceStore = store
 
 		recorder._acceptSamples(new Float32Array([0]))
 		await Promise.resolve()
