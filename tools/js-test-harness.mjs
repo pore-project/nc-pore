@@ -16,6 +16,7 @@ class Element {
 		this.attributes = new Map()
 		this.textContent = ''
 		this.className = ''
+		this.dataset = {}
 		this._innerHTML = ''
 	}
 	set innerHTML(value) {
