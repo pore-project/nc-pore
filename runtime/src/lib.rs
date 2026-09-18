@@ -62,6 +62,7 @@ pub enum RecordingCommand {
     EnsureRecording,
     Begin { participants: Vec<String> },
     MarkReady,
+    ConfirmOpening,
     Start,
     RequestStop,
     AcknowledgeStop,
@@ -92,6 +93,7 @@ pub struct RecordingStateDto {
 pub struct RecordingParticipantDto {
     pub id: String,
     pub ready: bool,
+    pub opening_confirmed: bool,
     pub artifact_id: Option<String>,
 }
 
@@ -119,6 +121,7 @@ impl From<ClientRecordingState> for RecordingStateDto {
                 .map(|participant| RecordingParticipantDto {
                     id: participant.id,
                     ready: participant.ready,
+                    opening_confirmed: participant.opening_confirmed,
                     artifact_id: participant.artifact_id,
                 })
                 .collect(),
@@ -209,6 +212,7 @@ pub fn handle_recording_command<R: ProductionSessionRepository>(
             .begin(participants.iter().cloned().map(ParticipantId::new))
             .map(Some),
         RecordingCommand::MarkReady => coordinator.mark_ready().map(Some),
+        RecordingCommand::ConfirmOpening => coordinator.confirm_opening().map(Some),
         RecordingCommand::Start => coordinator.start().map(Some),
         RecordingCommand::RequestStop => coordinator.request_stop().map(Some),
         RecordingCommand::AcknowledgeStop => coordinator.acknowledge_stop().map(Some),
