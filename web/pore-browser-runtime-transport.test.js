@@ -60,7 +60,7 @@ describe('Browser runtime transport', () => {
 		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/prepare')
 		expect(fetchMock.mock.calls[1][1].method).toBe('PUT')
 		expect(fetchMock.mock.calls[1][0]).toContain('/public.php/dav/files/share-token/Host.wav')
-		expect(fetchMock.mock.calls[1][1].headers.Authorization).toContain('anonymous:secret')
+		expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe(`Basic ${btoa('anonymous:secret')}`)
 		expect(fetchMock.mock.calls[1][1].headers['If-None-Match']).toBe('*')
 		expect(fetchMock.mock.calls[2][0]).toContain('/finalized-artifact/verify')
 		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/close')
@@ -115,7 +115,7 @@ describe('Browser runtime transport', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(7)
 		expect(fetchMock.mock.calls[1][1].headers['If-None-Match']).toBe('*')
 		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/prepare')
-		expect(fetchMock.mock.calls[4][0]).toContain('/second-token/Host%20%282%29.wav')
+		expect(fetchMock.mock.calls[4][0]).toContain('/second-token/Host%20%28%32%29.wav')
 	})
 
 	it('returns the stored receipt without repeating work after completion', async () => {
