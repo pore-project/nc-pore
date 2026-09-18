@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/v1-nextcloud-runtime-adapter
+      - fix-v1-final
   pull_request:
 
 jobs:
@@ -20,6 +21,7 @@ jobs:
           node --check js/pore-browser-completion-job.js
           node --check js/pore-browser-pcm-persistence.js
           node --check js/pore-browser-pcm-recorder.js
+          node --check js/pore-browser-pcm-worklet.js
           node --check js/pore-browser-runtime-transport.js
           node --check js/pore-recording-controller.js
           node --check js/pore-talk-audio-connector.js
