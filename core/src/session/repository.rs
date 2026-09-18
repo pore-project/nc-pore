@@ -11,9 +11,7 @@ use crate::identity::ProductionId;
 use crate::participation::Participation;
 use crate::recording::{Recording, RecordingCoordination};
 
-use super::{
-    ProductionCompletionReason, ProductionSession, ProductionStatus,
-};
+use super::{ProductionCompletionReason, ProductionSession, ProductionStatus};
 
 /// Domain-facing repository contract for Production Sessions.
 ///
