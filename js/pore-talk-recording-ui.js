@@ -229,8 +229,9 @@
 
 		const renderPanel = context => {
 			const {
-				role = 'none', state = 'preparing', listener = false, ready = false, confirmed = false,
-				readyCount = 0, participantCount = 0, elapsedSeconds = 0, onStart = null, onStop = null,
+				role = 'none', state = 'preparing', listener = false, ready = false, openingConfirmed = false, confirmed = false,
+				readyCount = 0, openingConfirmedCount = 0, participantCount = 0, elapsedSeconds = 0,
+				productionStatus = null, onStart = null, onStop = null, onForceClose = null,
 			} = context || {}
 			const status = resolveStatus({ state, listener, ready, confirmed })
 			root.dataset.status = status.tone
