@@ -1,28 +1,16 @@
-# ADR-085: Production Completion, Exceptional Closure and Late Artifact Delivery
+# ADR-085 Production Completion, Exceptional Closure and Late Artifact Delivery
 
-## Status
-
-Accepted
-
-## Date
-
-2026-09-18
-
-## Decision Type
-
-Architecture
-
-## Related
-
-- ADR-065 — Storage Provider and Retention Policy Boundaries
-- ADR-083 — Verified Nextcloud Artifact Transport
-- ADR-084 — Recording Artifact Aggregation and Completion Semantics
+* Status: Accepted
+* Date: 2026-09-18
+* Decision Type: Architecture
 
 ---
 
-# Deutsch
+# Deutsch ([English version below](#english-version))
 
-## Kontext
+---
+
+# Kontext
 
 PoRE muss zwischen dem fachlichen Ende einer Production und der technischen Fertigstellung einzelner Recording-Artefakte unterscheiden.
 
@@ -38,9 +26,9 @@ Die folgenden Fälle müssen deshalb gleichzeitig möglich sein:
 4. ein fehlendes Artefakt wird erst deutlich später geliefert;
 5. die spätere Lieferung vervollständigt das Recording, ohne die bereits geschlossene Production wieder zu öffnen.
 
-## Entscheidung
+# Entscheidung
 
-### 1. Production.Completed ist fachliche Schließung, keine Daten-Ablauffrist
+# Production.Completed ist fachliche Schließung, keine Daten-Ablauffrist
 
 `core.Production.Completed` bedeutet:
 
@@ -52,7 +40,7 @@ Es bedeutet **nicht**:
 
 Die Production-Schließung ist insbesondere **keine Retention Policy und keine Ablaufzeit für Artefakte**. Retention und tatsächliche Datenlöschung bleiben getrennte Storage-/Betriebsentscheidungen gemäß ADR-065.
 
-### 2. Eine Production kann auf drei Arten geschlossen werden
+# Wege zum Production-Abschluss
 
 Eine Production wird fachlich abgeschlossen, wenn einer der folgenden Fälle eintritt:
 
@@ -64,7 +52,7 @@ Für V1 gilt als fachlicher Default eine Wartefrist von **24 Stunden**. Diese Fr
 
 Die Wartefrist wird anhand ausstehender Artefakte bewertet. Für ein ausstehendes Artefakt beginnt die maßgebliche Frist mit dem fachlichen Stop des zugehörigen Recordings.
 
-### 3. Die Entscheidung über Production.Completed liegt beim Core
+# Autorität des Core
 
 Der Core ist die fachliche Autorität für `core.Production.Completed`.
 
@@ -78,7 +66,7 @@ Insbesondere darf die technische Feststellung
 
 nicht außerhalb des Core zu einer eigenständigen Production-State-Transition führen.
 
-### 4. Automatischer Abschluss bei vollständigen Recordings
+# Automatischer Abschluss
 
 Sind alle relevanten Recordings vollständig abgeschlossen, kann der Core die Production ohne weitere Wartefrist fachlich schließen.
 
@@ -94,7 +82,7 @@ core.Recording.Completed
 core.Production.Completed
 ```
 
-### 5. Timeout beendet das Warten, nicht die Nachlieferbarkeit
+# Timeout
 
 Erreicht ein ausstehendes Artefakt seine 24-Stunden-Wartefrist, darf die Production fachlich abgeschlossen werden, obwohl das zugehörige Recording noch nicht `Completed` ist.
 
@@ -116,7 +104,7 @@ und nicht:
 "Dieses Artefakt ist jetzt ungültig."
 ```
 
-### 6. Host Force-Close
+# Host Force-Close
 
 Der Host darf die Production vor Ablauf der Wartefrist manuell schließen, wenn er weiß, dass eine weitere Wartezeit fachlich nicht sinnvoll ist.
 
@@ -128,7 +116,7 @@ Force-Close hat dieselbe wichtige Grenze wie der Timeout:
 - es widerruft nicht die stabile Artefaktidentität;
 - es verhindert keine spätere Übertragung.
 
-### 7. Late Artifact Completion ist ausdrücklich zulässig
+# Late Artifact Delivery
 
 Ein bereits entstandenes, lokal sicher erhaltenes und noch nicht remote bestätigtes Artefakt bleibt auch nach `core.Production.Completed` zur Nachlieferung berechtigt.
 
@@ -165,7 +153,7 @@ bewirken.
 
 **Late Artifact Completion öffnet die Production nicht erneut.**
 
-### 8. Temporäre Transport-Autorisierung ist kein Artefaktablauf
+# Erneute Transportvorbereitung
 
 Ein für den Upload verwendeter Transport-Handle, Share, Token, URL oder eine andere temporäre Berechtigung darf ablaufen.
 
@@ -189,7 +177,7 @@ stable artifact identity
 
 Die stabile Artefaktidentität bleibt dabei unverändert.
 
-### 9. Konkretes Extrembeispiel
+# Extremfall: sehr späte Rückkehr
 
 Ein Teilnehmer kann seine Aufnahme lokal vollständig abgeschlossen haben, kurz danach aber für sehr lange Zeit unerreichbar sein.
 
@@ -199,7 +187,7 @@ Das Architekturziel ist damit nicht "24 Stunden Aufbewahrung", sondern:
 
 > **24 Stunden maximale fachliche Wartezeit für die Production – ohne Ablauf der Nachlieferbarkeit eines bereits entstandenen Artefakts.**
 
-### 10. Completion-Grund wird fachlich unterschieden
+# Completion Reason
 
 Die Ursache der Production-Schließung ist Teil der fachlichen Historie.
 
@@ -214,7 +202,7 @@ core.ProductionCompletionReason
 
 Die konkrete Persistenz- und Auditdarstellung bleibt eine Implementierungsentscheidung, darf diese fachliche Unterscheidung aber nicht verlieren.
 
-## Konsequenzen
+# Consequences
 
 - Production-Abschluss und Artifact-Abschluss sind unabhängig modellierbar.
 - Ein Timeout kann die Production schließen, ohne ein fehlendes Artefakt zu verwerfen.
@@ -224,7 +212,7 @@ Die konkrete Persistenz- und Auditdarstellung bleibt eine Implementierungsentsch
 - Transport-Autorisierungen dürfen kurzlebig sein; die Artefaktidentität ist es nicht.
 - Storage-Retention und fachliche Production-Schließung bleiben sauber getrennt.
 
-## Nicht durch diese ADR entschieden
+# Future Considerations
 
 Diese ADR legt nicht fest:
 
@@ -237,9 +225,11 @@ Diese ADR legt nicht fest:
 
 ---
 
-# English Version
+# English Version ([Deutsche Version oben](#deutsch))
 
-## Context
+---
+
+# Context
 
 PoRE must distinguish fachlich closing a Production from technical completion of individual Recording Artifacts.
 
@@ -247,7 +237,7 @@ After Recording Stop, some participants may have fully preserved and uploaded th
 
 At the same time, closing the Production must never invalidate an already created Recording Artifact.
 
-## Decision
+# Decision
 
 `core.Production.Completed` means fachliche production closure, not proof that all artifacts have already arrived.
 
@@ -280,10 +270,10 @@ core.ProductionCompletionReason
     | HostForced
 ```
 
-## Consequences
+# Consequences
 
 Production closure, Recording completion and Artifact completion remain separate lifecycle concerns. A production may be closed while an artifact is still pending, and a late artifact may complete the Recording without reopening the Production.
 
-## Not Decided by this ADR
+# Future Considerations
 
 This ADR does not define the scheduler, Force-Close API, concrete permission action, persistence structure for completion reasons, storage retention, or a technical maximum lifetime for browser-local storage.
