@@ -359,7 +359,8 @@ where
         })
     }
 
-    pub fn complete(
+    /// Explicit Host/Producer Force-Close of the Production.
+    pub fn force_close(
         &mut self,
         session_id: &str,
         actor: &str,
@@ -379,6 +380,38 @@ where
             }
             crate::session::CompleteProductionSessionError::Session(error) => error.into(),
         })
+    }
+
+    /// Legacy name retained as a Force-Close alias.
+    pub fn complete(
+        &mut self,
+        session_id: &str,
+        actor: &str,
+    ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
+        self.force_close(session_id, actor)
+    }
+
+    pub fn check_timeout(
+        &mut self,
+        session_id: &str,
+        now: std::time::SystemTime,
+    ) -> Result<Option<ClientProductionSession>, ClientSessionError<R::Error>> {
+        check_production_timeout(
+            self.repository,
+            &ProductionId::new(session_id),
+            now,
+            DEFAULT_ARTIFACT_COMPLETION_TIMEOUT,
+        )
+        .map_err(|error| match error {
+            crate::session::CheckProductionTimeoutError::SessionNotFound => {
+                ClientSessionError::SessionNotFound
+            }
+            crate::session::CheckProductionTimeoutError::Repository(error) => {
+                ClientSessionError::Repository(error)
+            }
+            crate::session::CheckProductionTimeoutError::Session(error) => error.into(),
+        })
+        .map(|session| session.map(|value| ClientProductionSession::from(&value)))
     }
 }
 
