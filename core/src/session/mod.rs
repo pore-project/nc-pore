@@ -621,10 +621,7 @@ mod tests {
         let recording = &session.recordings()[0];
         assert_eq!(recording.status(), RecordingStatus::Stopped);
         assert_eq!(
-            recording
-                .artifact_for_participant(&owner)
-                .unwrap()
-                .value(),
+            recording.artifact_for_participant(&owner).unwrap().value(),
             "alice-artifact"
         );
         assert_eq!(session.status(), ProductionStatus::Active);
