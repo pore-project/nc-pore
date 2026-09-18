@@ -123,7 +123,7 @@ describe('Nextcloud Talk microphone observer', () => {
 			dispatchEvent: event => events.push(event),
 		})
 
-		expect(connector.getCurrentMicrophone().deviceId).toBeUndefined()
+		expect(connector.getCurrentMicrophone()).toBeNull()
 		expect(connector.attachToTalk()).toBe(true)
 		expect(connector.getCurrentMicrophone().deviceId).toBe('device-a')
 		expect(events.some(event => event.type === 'pore:talk-production-identity')).toBe(false)
