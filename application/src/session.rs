@@ -115,6 +115,45 @@ where
     Ok(session)
 }
 
+pub const DEFAULT_ARTIFACT_COMPLETION_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(24 * 60 * 60);
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum CheckProductionTimeoutError<E> {
+    SessionNotFound,
+    Repository(E),
+    Session(ProductionSessionError),
+}
+
+pub fn check_production_timeout<R>(
+    repository: &mut R,
+    id: &ProductionId,
+    now: std::time::SystemTime,
+    timeout: std::time::Duration,
+) -> Result<Option<ProductionSession>, CheckProductionTimeoutError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    let mut session = repository
+        .get(id)
+        .map_err(CheckProductionTimeoutError::Repository)?
+        .ok_or(CheckProductionTimeoutError::SessionNotFound)?;
+
+    let changed = session
+        .complete_due_to_artifact_timeout(now, timeout)
+        .map_err(CheckProductionTimeoutError::Session)?;
+
+    if !changed {
+        return Ok(None);
+    }
+
+    repository
+        .update(&session)
+        .map_err(CheckProductionTimeoutError::Repository)?;
+
+    Ok(Some(session))
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum AddParticipationToProductionSessionError<E> {
     SessionNotFound,
