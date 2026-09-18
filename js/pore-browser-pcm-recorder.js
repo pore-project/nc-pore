@@ -163,7 +163,8 @@
 		async _drainPersistenceQueue() {
 			if (this.persistenceDrainPromise) {
 				await this.persistenceDrainPromise
-				if (!this.persistenceQueue.length || this.persistenceRetryTimer) return
+				if (this.persistenceQueue.length && !this.persistenceRetryTimer) return this._drainPersistenceQueue()
+				return
 			}
 			if (!this.persistenceQueue.length || this.persistenceRetryTimer) return
 			this.persistenceDrainPromise = (async () => {
