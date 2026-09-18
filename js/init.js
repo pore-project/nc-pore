@@ -275,17 +275,14 @@
 
 	window.addEventListener('pore:recording-ui-stop-local', async event => {
 		try {
-			await stopLocalCapture(event.detail?.reason || 'host')
+			// ADR-071i: persist the fachliche recording stop in Core first.
+			// Only then may technical capture be ended; recorder.stop() emits
+			// the Closing Signet while capture is still active.
 			const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
 			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			await stopLocalCapture(event.detail?.reason || 'host')
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
-			try {
-				const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
-				if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-			} catch (coordinationError) {
-				window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error: coordinationError } }))
-			}
 		}
 	})
 
