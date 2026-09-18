@@ -510,9 +510,9 @@ impl PersistedProductionSession {
                         }
                         UNIX_EPOCH
                             .checked_add(Duration::new(seconds as u64, nanos as u32))
-                            .ok_or(
-                                FileProductionSessionRepositoryError::InvalidTimestamp(value),
-                            )
+                            .ok_or(FileProductionSessionRepositoryError::InvalidTimestamp(
+                                value,
+                            ))
                     })
                     .transpose()?;
 
