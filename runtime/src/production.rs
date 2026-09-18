@@ -69,14 +69,7 @@ pub fn handle_production_command<R: ProductionSessionRepository>(
             repository,
             &request.session_id,
             std::time::SystemTime::now(),
-        )
-        .map(|session| {
-            session.unwrap_or_else(|| {
-                nc_pore_application::client::ClientSessionService::new(repository)
-                    .get(&request.session_id)
-                    .expect("timeout check should only fail before this mapping")
-            })
-        }),
+        ),
     };
 
     match result {
