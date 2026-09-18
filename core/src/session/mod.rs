@@ -366,7 +366,10 @@ impl ProductionSession {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
         if let Some(coordination) = self.recording_coordination.as_ref() {
-            if coordination.recording_id() != recording_id || !coordination.is_ready() {
+            if coordination.recording_id() != recording_id
+                || !coordination.is_ready()
+                || !coordination.all_opening_confirmed()
+            {
                 return Err(ProductionSessionError::InvalidStateTransition);
             }
         }
@@ -526,6 +529,52 @@ mod tests {
             .unwrap();
         session.start_by(&owner).unwrap();
         (session, owner)
+    }
+
+    #[test]
+    fn recording_start_requires_opening_confirmation() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+        let recording_id = RecordingId::new("recording-1");
+        session
+            .add_recording_by(&owner, Recording::new(recording_id.value()))
+            .unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+
+        assert_eq!(
+            session.start_recording_by(&owner, &recording_id),
+            Err(ProductionSessionError::InvalidStateTransition)
+        );
+
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        assert_eq!(
+            session.start_recording_by(&owner, &recording_id),
+            Err(ProductionSessionError::InvalidStateTransition)
+        );
+
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
+            .unwrap();
+        assert_eq!(
+            session.start_recording_by(&owner, &recording_id),
+            Ok(())
+        );
     }
 
     #[test]
