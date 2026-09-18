@@ -271,10 +271,13 @@ mod tests {
 
         assert_eq!(
             recording.status(),
-            nc_pore_core::recording::RecordingStatus::Completed
+            nc_pore_core::recording::RecordingStatus::Stopped
         );
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording
+                .artifact_for_participant(&actor)
+                .unwrap()
+                .value(),
             artifact.id.value()
         );
         assert_eq!(artifact.production_id(), Some("production-001"));
@@ -372,10 +375,13 @@ mod tests {
 
         assert_eq!(
             recording.status(),
-            nc_pore_core::recording::RecordingStatus::Completed
+            nc_pore_core::recording::RecordingStatus::Stopped
         );
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording
+                .artifact_for_participant(&actor)
+                .unwrap()
+                .value(),
             artifact.id.value()
         );
         assert_eq!(artifact.production_id(), Some("production-001"));
