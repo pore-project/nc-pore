@@ -26,7 +26,7 @@ jobs:
           node --check js/pore-talk-recording-ui.js
           node --check js/pore-talk-settings.js
       - name: Run browser JavaScript tests
-        run: node --experimental-default-type=module tools/js-test-harness.mjs
+        run: node --experimental-default-type=module --input-type=module -e 'Object.defineProperty(globalThis, "navigator", { value: { mediaDevices: {} }, configurable: true, writable: true }); await import("./tools/js-test-harness.mjs")'
 
   php:
     runs-on: ubuntu-latest
@@ -49,8 +49,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install audio development dependency
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
