@@ -18,7 +18,10 @@ class Element {
 		this.className = ''
 		this.dataset = {}
 		this._innerHTML = ''
+		this._textContent = ''
 	}
+	get textContent() { return this._textContent + this.children.map(child => child.textContent || '').join('') }
+	set textContent(value) { this._textContent = String(value) }
 	set innerHTML(value) {
 		this._innerHTML = String(value)
 		this.children = []
