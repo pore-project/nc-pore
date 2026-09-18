@@ -7,29 +7,48 @@ describe('Talk recording state bridge', () => {
 
 	it('normalizes authoritative Core identity and state without creating a second state machine', () => {
 		const bridge = new Bridge({ dispatchEvent: jest.fn() })
-		const snapshot = bridge.publish({ productionId: 'production-42', recordingId: 'recording-17', role: 'host', state: 'recording', readyCount: 2, participantCount: 2, startedAt: '2026-09-04T10:00:00Z' })
+		const snapshot = bridge.publish({
+			productionId: 'production-42',
+		recordingId: 'recording-17',
+			role: 'host',
+			state: 'recording',
+			readyCount: 2,
+			participantCount: 2,
+			startedAt: '2026-09-04T10:00:00Z',
+		})
 		expect(snapshot.productionId).toBe('production-42')
 		expect(snapshot.recordingId).toBe('recording-17')
 		expect(snapshot.role).toBe('host')
 		expect(snapshot.state).toBe('recording')
 		expect(snapshot.readyCount).toBe(2)
-	expect(snapshot.participantCount).toBe(2)
+		expect(snapshot.participantCount).toBe(2)
 		expect(bridge.getSnapshot()).toBe(snapshot)
 	})
 
 	it('derives readiness from participant state when aggregate counts are absent', () => {
-		const snapshot = window.PoRETalkRecordingStateNormalize({ role: 'participant', state: 'ready', participants: [{ ready: true }, { ready: false }] })
+		const snapshot = window.PoRETalkRecordingStateNormalize({
+			role: 'participant',
+			state: 'ready',
+			participants: [{ ready: true }, { ready: false }],
+		})
 		expect(snapshot.readyCount).toBe(1)
 		expect(snapshot.participantCount).toBe(2)
 	})
 
 	it('accepts the Core runtime phase field used by command snapshots', () => {
-		const snapshot = window.PoRETalkRecordingStateNormalize({ role: 'host', phase: 'ready', participants: [{ ready: true }] })
+		const snapshot = window.PoRETalkRecordingStateNormalize({
+			role: 'host',
+			phase: 'ready',
+			participants: [{ ready: true }],
+		})
 		expect(snapshot.state).toBe('ready')
 	})
 
 	it('keeps listener semantics separate from recording state', () => {
-		const snapshot = window.PoRETalkRecordingStateNormalize({ role: 'listener', state: 'recording' })
+		const snapshot = window.PoRETalkRecordingStateNormalize({
+			role: 'listener',
+			state: 'recording',
+		})
 		expect(snapshot.listener).toBe(true)
 		expect(snapshot.state).toBe('recording')
 	})
@@ -59,8 +78,12 @@ describe('PoRE local audio capture', () => {
 describe('Talk microphone observer', () => {
 	it('reports microphone identity changes without cloning or forwarding the Talk track', () => {
 		const events = []
-		const observer = new window.PoRETalkAudioCaptureConnector({ dispatchEvent: event => events.push(event) })
+		const observer = new window.PoRETalkAudioCaptureConnector({
+			dispatchEvent: event => events.push(event),
+		})
 		const listeners = new Map()
+		const talkTrack = { id: 'talk-track-1', getSettings: () => ({ deviceId: 'mic-1' }) }
+		const replacementTrack = { id: 'talk-track-2', getSettings: () => ({ deviceId: 'mic-2' }) }
 		const source = {
 			connectTrackSink: jest.fn((input, sink) => sink.connectTrackSource(input, source, 'audio')),
 			disconnectTrackSink: jest.fn((input, sink) => sink.disconnectTrackSource(input, source, 'audio')),
@@ -69,15 +92,13 @@ describe('Talk microphone observer', () => {
 			off: jest.fn((event, handler) => {
 				if (listeners.get(event) === handler) listeners.delete(event)
 			}),
-			emitTrack: nextTrack => {
-				source.getOutputTrack.mockReturnValue(nextTrack)
-				listeners.get('outputTrackSet')?.(source, 'audio', nextTrack)
-			},
 		}
-		const talkTrack = { id: 'talk-track-1', getSettings: () => ({ deviceId: 'mic-1' }) }
-		const replacementTrack = { id: 'talk-track-2', getSettings: () => ({ deviceId: 'mic-2' }) }
-		source.getOutputTrack.mockReturnValue(talkTrack)
 		window.OCA = { Talk: { SimpleWebRTC: { webrtc: { _mediaDevicesSource: source } } } }
+
+		source.emitTrack = nextTrack => {
+			source.getOutputTrack.mockReturnValue(nextTrack)
+			listeners.get('outputTrackSet')?.(source, 'audio', nextTrack)
+		}
 
 		expect(observer.attachToTalk()).toBe(true)
 		source.emitTrack(replacementTrack)
@@ -88,6 +109,9 @@ describe('Talk microphone observer', () => {
 		expect(events[1].detail.deviceId).toBe('mic-2')
 		expect(talkTrack.stop).toBeUndefined()
 		expect(replacementTrack.stop).toBeUndefined()
+		expect(talkTrack.clone).toBeUndefined()
+		expect(replacementTrack.clone).toBeUndefined()
+
 		observer.dispose()
 		delete window.OCA
 	})
