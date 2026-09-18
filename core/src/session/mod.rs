@@ -496,7 +496,9 @@ mod tests {
         session
             .mark_recording_ready_by(&owner, &recording_id)
             .unwrap();
-        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
         session.stop_recording_by(&owner, &recording_id).unwrap();
 
@@ -554,7 +556,9 @@ mod tests {
         session
             .mark_recording_ready_by(&owner, &recording_id)
             .unwrap();
-        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
         session.stop_recording_by(&owner, &recording_id).unwrap();
 
@@ -608,7 +612,9 @@ mod tests {
         session
             .mark_recording_ready_by(&owner, &recording_id)
             .unwrap();
-        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
 
         let stopped_at = std::time::UNIX_EPOCH + Duration::from_secs(100);
