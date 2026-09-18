@@ -121,17 +121,18 @@ namespace {
 
 	$root=new FakeRootFolder(); $leaf=$root->targetFolder(); $leaf->add('Host.wav',new File(17,'same'));
 	$shares=new FakeShareManager(); $c=connector($root,$shares);
-	$prepared=$c->prepare('prod-1','Interview','recording-1','capture-1','2026-09-05T15:42:31+02:00','Host',4,hash('sha256','same'));
+	$prepared=$c->prepare('prod-1','Interview','recording-1','capture-1','2026-09-05T15:42:31+02:00','Host',4,hash('sha256','same'),'actor-1');
 	check($prepared['filename']==='Host.wav','Identical artifact must retain the original filename.');
 	check($prepared['upload_required']===false,'Identical artifact must not require an upload.');
 	check($shares->created===0,'Identical artifact must not create a temporary upload share.');
-	$receipt=$c->verify($prepared['transfer_id']);
+	try { $c->verify($prepared['transfer_id'],'actor-2'); throw new \RuntimeException('Transport handle actor binding must reject another user.'); } catch (\RuntimeException $error) { check($error->getMessage()==='Transport handle is not authorized for this user.','Unexpected actor-binding error.'); }
+	$receipt=$c->verify($prepared['transfer_id'],'actor-1');
 	check($receipt['file_id']===17,'Identical artifact verification must resolve the existing file.');
 	check($receipt['sha256']===hash('sha256','same'),'Identical artifact verification must preserve the exact hash.');
 	$c->close($prepared['transfer_id']);
 
 	$leaf->add('Host (2).wav',new File(18,'occupied'));
-	$prepared=$c->prepare('prod-1','Interview','recording-2','capture-2','2026-09-05T15:42:31+02:00','Host',7,hash('sha256','payload'));
+	$prepared=$c->prepare('prod-1','Interview','recording-2','capture-2','2026-09-05T15:42:31+02:00','Host',7,hash('sha256','payload'),'actor-1');
 	check($prepared['filename']==='Host (3).wav','Differing content must select the first free numeric suffix.');
 	check($prepared['upload_required']===true,'Differing content must require an upload.');
 	check($shares->created===1,'Differing content must create exactly one upload share.');
