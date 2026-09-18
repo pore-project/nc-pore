@@ -118,6 +118,7 @@
 		const actorId = coordinatorContext.actorId
 		window.__poreTalkRecordingStateBridge?.publish({
 			productionId: coordinatorContext.sessionId,
+			productionStatus: snapshot.production_status || snapshot.productionStatus || null,
 			recordingId: snapshot.recording_id,
 			role: snapshot.role,
 			state: snapshot.phase,
@@ -181,6 +182,10 @@
 				return { production_status: production?.production_status || null, state: null }
 			}
 			const recording = await recordingCommand(sessionId, recordingId, name, options)
+			if (recording?.state) {
+				recording.state = { ...recording.state, production_status: production.production_status }
+				publishState(recording.state)
+			}
 			return { ...recording, production_status: production.production_status }
 		}
 		if (name === 'force_close') {
