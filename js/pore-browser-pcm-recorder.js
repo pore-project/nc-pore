@@ -161,9 +161,11 @@
 		}
 
 		async _drainPersistenceQueue() {
-			if (this.persistenceDrainPromise) return this.persistenceDrainPromise
-			if (!this.persistenceQueue.length) return
-			if (this.persistenceRetryTimer) return
+			if (this.persistenceDrainPromise) {
+				await this.persistenceDrainPromise
+				if (!this.persistenceQueue.length || this.persistenceRetryTimer) return
+			}
+			if (!this.persistenceQueue.length || this.persistenceRetryTimer) return
 			this.persistenceDrainPromise = (async () => {
 				while (this.persistenceQueue.length) {
 					const entry = this.persistenceQueue[0]
