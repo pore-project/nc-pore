@@ -5,16 +5,24 @@ use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
 use crate::recording::{
-    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError, RecordingId,
-    RecordingLifecycleError,
+    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError,
+    RecordingId, RecordingLifecycleError, RecordingStatus,
 };
 use crate::role::ProductionAction;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
     Created,
     Active,
     Completed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProductionCompletionReason {
+    AllRecordingsCompleted,
+    ArtifactCompletionTimeout,
+    HostForced,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +47,7 @@ pub struct ProductionSession {
     recordings: Vec<Recording>,
     recording_coordination: Option<RecordingCoordination>,
     activities: Vec<ActivityEvent>,
+    completion_reason: Option<ProductionCompletionReason>,
 }
 
 impl ProductionSession {
@@ -61,6 +70,7 @@ impl ProductionSession {
             recordings: Vec::new(),
             recording_coordination: None,
             activities: vec![activity],
+            completion_reason: None,
         }
     }
 
@@ -106,6 +116,10 @@ impl ProductionSession {
         self.status
     }
 
+    pub fn completion_reason(&self) -> Option<ProductionCompletionReason> {
+        self.completion_reason
+    }
+
     pub fn participations(&self) -> &[Participation] {
         &self.participations
     }
@@ -134,9 +148,61 @@ impl ProductionSession {
         if !self.has_owner() {
             return Err(ProductionSessionError::MissingOwner);
         }
-        self.status = ProductionStatus::Completed;
-        self.push_activity(Some(actor.clone()), ActivityType::SessionCompleted, None);
+        if self
+            .recordings
+            .iter()
+            .any(|recording| recording.status() == RecordingStatus::Recording)
+        {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        self.close_production(ProductionCompletionReason::HostForced, Some(actor.clone()));
         Ok(())
+    }
+
+    pub fn complete_due_to_artifact_timeout(
+        &mut self,
+        now: SystemTime,
+        timeout: Duration,
+    ) -> Result<bool, ProductionSessionError> {
+        if self.status != ProductionStatus::Active {
+            return Ok(false);
+        }
+
+        if self
+            .recordings
+            .iter()
+            .any(|recording| recording.should_timeout(now, timeout))
+        {
+            self.close_production(ProductionCompletionReason::ArtifactCompletionTimeout, None);
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    fn close_production(
+        &mut self,
+        reason: ProductionCompletionReason,
+        actor: Option<ParticipantId>,
+    ) {
+        self.status = ProductionStatus::Completed;
+        self.completion_reason = Some(reason);
+        self.push_activity(
+            actor,
+            ActivityType::SessionCompleted,
+            Some(
+                match reason {
+                    ProductionCompletionReason::AllRecordingsCompleted => {
+                        "all_recordings_completed"
+                    }
+                    ProductionCompletionReason::ArtifactCompletionTimeout => {
+                        "artifact_completion_timeout"
+                    }
+                    ProductionCompletionReason::HostForced => "host_forced",
+                }
+                .to_owned(),
+            ),
+        );
     }
 
     pub fn add_participation_by(
@@ -236,6 +302,15 @@ impl ProductionSession {
                 })
                 .ok_or(ProductionSessionError::Unauthorized)?;
         }
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+        recording
+            .set_expected_participants(participants.clone())
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+
         let mut coordination = RecordingCoordination::new(recording_id.clone(), participants)
             .map_err(ProductionSessionError::RecordingCoordination)?;
         coordination
@@ -303,7 +378,6 @@ impl ProductionSession {
         recording
             .start()
             .map_err(ProductionSessionError::RecordingLifecycle)?;
-        recording.assign_participant(actor.clone());
         self.push_activity(
             Some(actor.clone()),
             ActivityType::RecordingStarted,
@@ -363,23 +437,57 @@ impl ProductionSession {
         recording_id: &RecordingId,
         artifact_id: RecordingArtifactId,
     ) -> Result<(), ProductionSessionError> {
-        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
-        if self.status != ProductionStatus::Active {
+        self.authorize(actor, ProductionAction::CompleteRecordingArtifact)?;
+        if self.status == ProductionStatus::Created {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
-        let recording = self
-            .recordings
-            .iter_mut()
-            .find(|recording| recording.id() == recording_id)
-            .ok_or(ProductionSessionError::RecordingNotFound)?;
-        recording
-            .complete(artifact_id)
-            .map_err(ProductionSessionError::RecordingLifecycle)?;
-        self.push_activity(
-            Some(actor.clone()),
-            ActivityType::RecordingCompleted,
-            Some(recording_id.value().to_owned()),
-        );
+
+        let (changed, recording_completed) = {
+            let recording = self
+                .recordings
+                .iter_mut()
+                .find(|recording| recording.id() == recording_id)
+                .ok_or(ProductionSessionError::RecordingNotFound)?;
+            let was_completed = recording.status() == RecordingStatus::Completed;
+            let changed = recording
+                .complete_for_participant(actor, artifact_id)
+                .map_err(ProductionSessionError::RecordingLifecycle)?;
+            (
+                changed,
+                !was_completed && recording.status() == RecordingStatus::Completed,
+            )
+        };
+
+        if changed {
+            self.push_activity(
+                Some(actor.clone()),
+                ActivityType::RecordingArtifactCompleted,
+                Some(recording_id.value().to_owned()),
+            );
+        }
+
+        if recording_completed {
+            self.push_activity(
+                Some(actor.clone()),
+                ActivityType::RecordingCompleted,
+                Some(recording_id.value().to_owned()),
+            );
+        }
+
+        if self.status == ProductionStatus::Active
+            && recording_completed
+            && !self.recordings.is_empty()
+            && self
+                .recordings
+                .iter()
+                .all(|recording| recording.status() == RecordingStatus::Completed)
+        {
+            self.close_production(
+                ProductionCompletionReason::AllRecordingsCompleted,
+                Some(actor.clone()),
+            );
+        }
+
         Ok(())
     }
 
