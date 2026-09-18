@@ -57,6 +57,12 @@ fn completed_session() -> ProductionSession {
     session
         .mark_recording_ready_by(&participant, &recording_id)
         .unwrap();
+    session
+        .confirm_recording_opening_by(&owner, &recording_id)
+        .unwrap();
+    session
+        .confirm_recording_opening_by(&participant, &recording_id)
+        .unwrap();
     session.start_recording_by(&owner, &recording_id).unwrap();
     session.stop_recording_by(&owner, &recording_id).unwrap();
     session
