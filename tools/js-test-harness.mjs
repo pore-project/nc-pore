@@ -35,6 +35,7 @@ class Element {
 	}
 	get innerHTML() { return this._innerHTML }
 	appendChild(child) { this.children.push(child); child.parentNode = this; return child }
+	append(...children) { children.forEach(child => this.appendChild(child)); }
 	removeChild(child) { const i = this.children.indexOf(child); if (i >= 0) this.children.splice(i, 1); child.parentNode = null; return child }
 	setAttribute(name, value) { this.attributes.set(name, String(value)); if (name === 'class') this.className = String(value); this[name] = String(value) }
 	getAttribute(name) { return this.attributes.get(name) ?? null }
