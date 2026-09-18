@@ -82,6 +82,16 @@
 			return this.openingSignet
 		}
 
+		markClosingSignet(at = new Date().toISOString()) {
+			if (!this.isRecording()) throw new Error('PoRE closing signet requires an active local capture')
+			if (this.closingSignet) return this.closingSignet
+			this.closingTestTonePending = true
+			this.closingTestToneSamplesWritten = 0
+			this.closingSignet = { kind: 'closing-test-tone', occurredAt: at, elapsedMs: null, sampleOffset: null, toneHz: 800, toneDurationMs: OPENING_TEST_TONE_MS }
+			window.dispatchEvent(new CustomEvent('pore:recording-closing-signet', { detail: { sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, ...this.closingSignet } }))
+			return this.closingSignet
+		}
+
 		_acceptSamples(samples) {
 			if (this.persistenceSafetyStopEmitted) return
 			if (this.openingTestTonePending) {
@@ -197,8 +207,8 @@
 				const stored = await this.persistenceStore.getCapture(this.captureId)
 				if (!stored || !stored.chunks.length) throw new Error('PoRE durable capture contains no persisted audio chunks')
 				const pcmSize = stored.chunks.reduce((total, chunk) => total + chunk.size, 0)
-				const artifact = { kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: 44 + pcmSize, sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, recordingId: this.recordingId, startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, sampleRate: this.sampleRate, channels: this.channels, participantLabel: this.participantLabel, openingSignet: this.openingSignet, source: { productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, captureId: this.captureId, recordingSessionId: this.recordingSessionId, participantLabel: this.participantLabel, trackId: this.stream?.getAudioTracks?.()[0]?.id || null, startedAt: this.startedAt, openingSignet: this.openingSignet } }
-				await this.persistenceStore.finalizeCapture(this.captureId, { stoppedAt: this.stoppedAt, stopReason: reason, size: artifact.size, chunkCount: stored.chunks.length, openingSignet: this.openingSignet })
+				const artifact = { kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: 44 + pcmSize, sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, recordingId: this.recordingId, startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, sampleRate: this.sampleRate, channels: this.channels, participantLabel: this.participantLabel, openingSignet: this.openingSignet, closingSignet: this.closingSignet, source: { productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, captureId: this.captureId, recordingSessionId: this.recordingSessionId, participantLabel: this.participantLabel, trackId: this.stream?.getAudioTracks?.()[0]?.id || null, startedAt: this.startedAt, openingSignet: this.openingSignet, closingSignet: this.closingSignet } }
+				await this.persistenceStore.finalizeCapture(this.captureId, { stoppedAt: this.stoppedAt, stopReason: reason, size: artifact.size, chunkCount: stored.chunks.length, openingSignet: this.openingSignet, closingSignet: this.closingSignet })
 				await this._cleanup(); this.state = 'idle'; this.persistenceState = 'idle'; window.dispatchEvent(new CustomEvent('pore:recording-finalized', { detail: artifact })); return artifact
 			} catch (error) { this.state = 'error'; await this._cleanup(); window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } })); throw error }
 		}
