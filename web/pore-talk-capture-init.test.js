@@ -1,11 +1,10 @@
 import '../js/pore-talk-audio-connector.js'
 
-describe('Nextcloud Talk audio connector', () => {
+describe('Nextcloud Talk microphone observer', () => {
 	const Connector = window.PoRETalkAudioCaptureConnector
-	const eventName = window.PoRETalkAudioTrackEvent
-	const productionIdentityEventName = 'pore:talk-production-identity'
+	const eventName = window.PoRETalkMicrophoneEvent
 
-	const createTrack = ({ id, deviceId = id, stop = jest.fn() }) => ({
+	const createTrack = ({ id, deviceId, stop = jest.fn() }) => ({
 		id,
 		kind: 'audio',
 		label: `Microphone ${id}`,
@@ -14,35 +13,34 @@ describe('Nextcloud Talk audio connector', () => {
 		stop,
 	})
 
-	const createStream = track => ({
-		getAudioTracks: jest.fn(() => [track]),
-		getTracks: jest.fn(() => [track]),
-	})
-
-	const createTrackEnabler = track => {
+	const createSource = track => {
 		const listeners = new Map()
-		const enabler = {
-			connectTrackSink: jest.fn((inputTrackId, sink) => sink.connectTrackSource(inputTrackId, enabler, 'default')),
-			disconnectTrackSink: jest.fn((inputTrackId, sink) => sink.disconnectTrackSource(inputTrackId, enabler, 'default')),
+		const source = {
+			connectTrackSink: jest.fn((inputTrackId, sink) => {
+				sink.connectTrackSource(inputTrackId, source, 'audio')
+			}),
+			disconnectTrackSink: jest.fn((inputTrackId, sink) => {
+				sink.disconnectTrackSource(inputTrackId, source, 'audio')
+			}),
 			getOutputTrack: jest.fn(() => track),
 			on: jest.fn((event, handler) => listeners.set(event, handler)),
 			off: jest.fn((event, handler) => {
 				if (listeners.get(event) === handler) listeners.delete(event)
 			}),
 			emitTrack: nextTrack => {
-				enabler.getOutputTrack.mockReturnValue(nextTrack)
-				listeners.get('outputTrackSet')?.(enabler, 'default', nextTrack)
+				source.getOutputTrack.mockReturnValue(nextTrack)
+				listeners.get('outputTrackSet')?.(source, 'audio', nextTrack)
 			},
 		}
-		return enabler
+		return source
 	}
 
-	const installTalk = (trackEnabler, conversationId = null) => {
+	const installTalk = (source, conversationId = null) => {
 		window.OCA = {
 			Talk: {
 				SimpleWebRTC: {
 					webrtc: {
-						_audioTrackEnabler: trackEnabler,
+						_mediaDevicesSource: source,
 						signaling: { currentRoomToken: conversationId },
 					},
 				},
@@ -50,143 +48,84 @@ describe('Nextcloud Talk audio connector', () => {
 		}
 	}
 
-	beforeEach(() => { window.OCA = undefined })
+	beforeEach(() => {
+		window.OCA = undefined
+	})
 
-	it('opens an independent capture for the selected microphone', async () => {
-		const talk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
-		const capture = createTrack({ id: 'pore-a', deviceId: 'device-a' })
-		const getUserMedia = jest.fn(async constraints => {
-			expect(constraints).toEqual({ audio: {
-				echoCancellation: false,
-				noiseSuppression: false,
-				autoGainControl: false,
-				deviceId: { exact: 'device-a' },
-			} })
-			return createStream(capture)
-		})
-		const enabler = createTrackEnabler(talk)
+	it('observes the current Talk microphone without owning the Talk track', () => {
+		const talkTrack = createTrack({ id: 'talk-a', deviceId: 'device-a' })
+		const source = createSource(talkTrack)
 		const events = []
-		installTalk(enabler)
-		const connector = new Connector({ dispatchEvent: event => events.push(event), getUserMedia })
+		installTalk(source)
+
+		const connector = new Connector({
+			dispatchEvent: event => events.push(event),
+		})
 
 		expect(connector.attachToTalk()).toBe(true)
-		await Promise.resolve()
-
-		expect(getUserMedia).toHaveBeenCalledTimes(1)
-		expect(talk.stop).not.toHaveBeenCalled()
-		expect(connector.getCurrentSourceTrack()).toBe(talk)
-		expect(connector.getCurrentCaptureTrack()).toBe(capture)
+		expect(connector.getCurrentMicrophone().deviceId).toBe('device-a')
 		expect(events).toHaveLength(1)
 		expect(events[0].type).toBe(eventName)
-		expect(events[0].detail.track).toBe(capture)
-		expect(events[0].detail.sourceTrack).toBe(talk)
+		expect(events[0].detail.previousDeviceId).toBeNull()
+		expect(events[0].detail.deviceId).toBe('device-a')
+		expect(talkTrack.stop).not.toHaveBeenCalled()
+		expect(talkTrack.clone).toBeUndefined()
 	})
 
-	it('publishes the current Talk conversation as the provider-native production identity', () => {
-		const talk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
-		const enabler = createTrackEnabler(talk)
+	it('reports microphone changes and keeps both Talk tracks untouched', () => {
+		const firstTrack = createTrack({ id: 'talk-a', deviceId: 'device-a' })
+		const secondTrack = createTrack({ id: 'talk-b', deviceId: 'device-b' })
+		const source = createSource(firstTrack)
 		const events = []
-		installTalk(enabler, 'conversation-42')
-		const connector = new Connector({ dispatchEvent: event => events.push(event), getUserMedia: jest.fn() })
+		installTalk(source)
 
-		expect(connector.getCurrentConversationId()).toBe('conversation-42')
-		expect(connector.attachToTalk()).toBe(true)
-
-		const identityEvents = events.filter(event => event.type === productionIdentityEventName)
-		expect(identityEvents).toHaveLength(1)
-		expect(identityEvents[0].detail).toEqual({
-			provider: 'Talk',
-			conversationId: 'conversation-42',
+		const connector = new Connector({
+			dispatchEvent: event => events.push(event),
 		})
+
+		expect(connector.attachToTalk()).toBe(true)
+		source.emitTrack(secondTrack)
+
+		expect(connector.getCurrentMicrophone()).toEqual(expect.objectContaining({
+			deviceId: 'device-b',
+		}))
+		expect(events).toHaveLength(2)
+		expect(events[1].detail.previousDeviceId).toBe('device-a')
+		expect(events[1].detail.deviceId).toBe('device-b')
+		expect(events[1].detail.changed).toBe(true)
+		expect(firstTrack.stop).not.toHaveBeenCalled()
+		expect(secondTrack.stop).not.toHaveBeenCalled()
 	})
 
-	it('does not publish a production identity when Talk has no joined conversation', () => {
-		const talk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
-		const enabler = createTrackEnabler(talk)
+	it('does not emit duplicate selection events for the same microphone', () => {
+		const talkTrack = createTrack({ id: 'talk-a', deviceId: 'device-a' })
+		const source = createSource(talkTrack)
 		const events = []
-		installTalk(enabler)
-		const connector = new Connector({ dispatchEvent: event => events.push(event), getUserMedia: jest.fn() })
+		installTalk(source)
 
-		connector.attachToTalk()
+		const connector = new Connector({
+			dispatchEvent: event => events.push(event),
+		})
 
-		expect(events.filter(event => event.type === productionIdentityEventName)).toHaveLength(0)
+		expect(connector.attachToTalk()).toBe(true)
+		source.emitTrack(talkTrack)
+
+		expect(events).toHaveLength(1)
 	})
 
-	it('does not open a second capture when the selected device is unchanged', async () => {
-		const talk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
-		const capture = createTrack({ id: 'pore-a', deviceId: 'device-a' })
-		const getUserMedia = jest.fn(async () => createStream(capture))
-		const enabler = createTrackEnabler(talk)
-		installTalk(enabler)
-		const connector = new Connector({ dispatchEvent: jest.fn(), getUserMedia })
+	it('publishes the provider-native Talk conversation identity', () => {
+		const talkTrack = createTrack({ id: 'talk-a', deviceId: 'device-a' })
+		const source = createSource(talkTrack)
+		const events = []
+		installTalk(source, 'conversation-42')
 
-		connector.attachToTalk()
-		enabler.emitTrack(talk)
-		await Promise.resolve()
+		const connector = new Connector({
+			dispatchEvent: event => events.push(event),
+		})
 
-		expect(getUserMedia).toHaveBeenCalledTimes(1)
-	})
-
-	it('reopens independent capture when Talk selects another microphone', async () => {
-		const firstTalk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
-		const secondTalk = createTrack({ id: 'talk-b', deviceId: 'device-b' })
-		const firstCapture = createTrack({ id: 'pore-a', deviceId: 'device-a' })
-		const secondCapture = createTrack({ id: 'pore-b', deviceId: 'device-b' })
-		const getUserMedia = jest.fn()
-			.mockResolvedValueOnce(createStream(firstCapture))
-			.mockResolvedValueOnce(createStream(secondCapture))
-		const enabler = createTrackEnabler(firstTalk)
-		installTalk(enabler)
-		const connector = new Connector({ dispatchEvent: jest.fn(), getUserMedia })
-
-		connector.attachToTalk()
-		await Promise.resolve()
-		enabler.emitTrack(secondTalk)
-		await Promise.resolve()
-
-		expect(getUserMedia).toHaveBeenCalledTimes(2)
-		expect(getUserMedia.mock.calls[1][0].audio.deviceId).toEqual({ exact: 'device-b' })
-		expect(firstCapture.stop).toHaveBeenCalledTimes(1)
-		expect(connector.getCurrentCaptureTrack()).toBe(secondCapture)
-	})
-
-	it('discards a stale capture result after a microphone replacement', async () => {
-		const firstTalk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
-		const secondTalk = createTrack({ id: 'talk-b', deviceId: 'device-b' })
-		const staleCapture = createTrack({ id: 'pore-a', deviceId: 'device-a' })
-		const currentCapture = createTrack({ id: 'pore-b', deviceId: 'device-b' })
-		let resolveFirst
-		const firstPromise = new Promise(resolve => { resolveFirst = resolve })
-		const getUserMedia = jest.fn()
-			.mockReturnValueOnce(firstPromise)
-			.mockResolvedValueOnce(createStream(currentCapture))
-		const enabler = createTrackEnabler(firstTalk)
-		installTalk(enabler)
-		const connector = new Connector({ dispatchEvent: jest.fn(), getUserMedia })
-
-		connector.attachToTalk()
-		enabler.emitTrack(secondTalk)
-		await Promise.resolve()
-		resolveFirst(createStream(staleCapture))
-		await Promise.resolve()
-
-		expect(staleCapture.stop).toHaveBeenCalledTimes(1)
-		expect(connector.getCurrentCaptureTrack()).toBe(currentCapture)
-	})
-
-	it('stops only PoRE-owned capture on detach', async () => {
-		const talk = createTrack({ id: 'talk-a', deviceId: 'device-a' })
-		const capture = createTrack({ id: 'pore-a', deviceId: 'device-a' })
-		const getUserMedia = jest.fn(async () => createStream(capture))
-		const enabler = createTrackEnabler(talk)
-		installTalk(enabler)
-		const connector = new Connector({ dispatchEvent: jest.fn(), getUserMedia })
-
-		connector.attachToTalk()
-		await Promise.resolve()
-		connector.detachFromTalk()
-
-		expect(capture.stop).toHaveBeenCalledTimes(1)
-		expect(talk.stop).not.toHaveBeenCalled()
+		expect(connector.getCurrentMicrophone().deviceId).toBeUndefined()
+		expect(connector.attachToTalk()).toBe(true)
+		expect(connector.getCurrentMicrophone().deviceId).toBe('device-a')
+		expect(events.some(event => event.type === 'pore:talk-production-identity')).toBe(false)
 	})
 })
