@@ -417,11 +417,25 @@ impl PersistedProductionSession {
                 .iter()
                 .map(|recording| PersistedRecording {
                     id: recording.id().value().to_owned(),
-                    participant_id: recording
-                        .participant_id()
-                        .map(|participant| participant.value().to_owned()),
+                    participant_id: None,
                     status: recording.status().into(),
-                    artifact_id: recording.artifact_id().map(|id| id.value().to_owned()),
+                    artifact_id: None,
+                    artifact_slots: Some(
+                        recording
+                            .artifact_slots()
+                            .iter()
+                            .map(|slot| PersistedRecordingArtifactSlot {
+                                participant_id: slot.participant_id().value().to_owned(),
+                                artifact_id: slot.artifact_id().map(|id| id.value().to_owned()),
+                            })
+                            .collect(),
+                    ),
+                    stopped_at_nanos: recording.stopped_at().map(|timestamp| {
+                        timestamp
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos()
+                    }),
                 })
                 .collect(),
             recording_coordination: session
@@ -447,6 +461,7 @@ impl PersistedProductionSession {
                     result: activity.result.into(),
                 })
                 .collect(),
+            completion_reason: session.completion_reason().map(Into::into),
         }
     }
 
@@ -471,14 +486,49 @@ impl PersistedProductionSession {
             .recordings
             .into_iter()
             .map(|recording| {
-                Recording::reconstitute(
-                    RecordingId::new(recording.id),
-                    recording.participant_id.map(ParticipantId::new),
-                    recording.status.into(),
-                    recording.artifact_id.map(RecordingArtifactId::new),
-                )
+                let artifact_slots = recording.artifact_slots.map(|slots| {
+                    slots
+                        .into_iter()
+                        .map(|slot| {
+                            nc_pore_core::recording::RecordingArtifactSlot::reconstitute(
+                                ParticipantId::new(slot.participant_id),
+                                slot.artifact_id.map(RecordingArtifactId::new),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                });
+
+                let stopped_at = recording
+                    .stopped_at_nanos
+                    .map(|value| {
+                        let seconds = value / 1_000_000_000;
+                        let nanos = value % 1_000_000_000;
+                        if seconds > u64::MAX as u128 {
+                            return Err(FileProductionSessionRepositoryError::InvalidTimestamp(value));
+                        }
+                        UNIX_EPOCH
+                            .checked_add(Duration::new(seconds as u64, nanos as u32))
+                            .ok_or(FileProductionSessionRepositoryError::InvalidTimestamp(value))
+                    })
+                    .transpose()?;
+
+                if let Some(artifact_slots) = artifact_slots {
+                    Ok(Recording::reconstitute_with_artifact_slots(
+                        RecordingId::new(recording.id),
+                        artifact_slots,
+                        recording.status.into(),
+                        stopped_at,
+                    ))
+                } else {
+                    Ok(Recording::reconstitute(
+                        RecordingId::new(recording.id),
+                        recording.participant_id.map(ParticipantId::new),
+                        recording.status.into(),
+                        recording.artifact_id.map(RecordingArtifactId::new),
+                    ))
+                }
             })
-            .collect();
+            .collect::<Result<Vec<_>, FileProductionSessionRepositoryError>>()?;
 
         let mut activities = Vec::with_capacity(self.activities.len());
         for activity in self.activities {
@@ -513,6 +563,7 @@ impl PersistedProductionSession {
                 recordings,
                 recording_coordination,
                 activities,
+                self.completion_reason.map(Into::into),
             ),
         )
     }
