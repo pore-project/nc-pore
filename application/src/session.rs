@@ -130,7 +130,7 @@ pub fn check_production_timeout<R>(
     id: &ProductionId,
     now: std::time::SystemTime,
     timeout: std::time::Duration,
-) -> Result<Option<ProductionSession>, CheckProductionTimeoutError<R::Error>>
+) -> Result<ProductionSession, CheckProductionTimeoutError<R::Error>>
 where
     R: ProductionSessionRepository,
 {
@@ -143,15 +143,13 @@ where
         .complete_due_to_artifact_timeout(now, timeout)
         .map_err(CheckProductionTimeoutError::Session)?;
 
-    if !changed {
-        return Ok(None);
+    if changed {
+        repository
+            .update(&session)
+            .map_err(CheckProductionTimeoutError::Repository)?;
     }
 
-    repository
-        .update(&session)
-        .map_err(CheckProductionTimeoutError::Repository)?;
-
-    Ok(Some(session))
+    Ok(session)
 }
 
 #[derive(Debug, PartialEq, Eq)]
