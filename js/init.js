@@ -61,13 +61,16 @@
 		if (!context) return
 		publish({
 			productionId: snapshot.productionId || productionId,
+			productionStatus: snapshot.productionStatus || null,
 			recordingId: snapshot.recordingId,
 			role: snapshot.role,
 			state: snapshot.state,
 			listener: snapshot.listener,
 			confirmed: snapshot.confirmed,
 			ready: snapshot.ready,
+			openingConfirmed: snapshot.openingConfirmed,
 			readyCount: snapshot.readyCount,
+			openingConfirmedCount: snapshot.openingConfirmedCount,
 			participantCount: snapshot.participantCount,
 			participants: snapshot.participants,
 			elapsedSeconds: snapshot.elapsedSeconds,
@@ -249,7 +252,7 @@
 	const publish = patch => {
 		if (!context) return
 		const nextContext = { ...context, ...patch, ...(talkUiMountElement ? { mountElement: talkUiMountElement } : {}) }
-		const uiStateFields = ['productionId', 'recordingId', 'role', 'state', 'listener', 'confirmed', 'ready', 'readyCount', 'participantCount', 'elapsedSeconds', 'startedAt']
+		const uiStateFields = ['productionId', 'productionStatus', 'recordingId', 'role', 'state', 'listener', 'confirmed', 'ready', 'openingConfirmed', 'readyCount', 'openingConfirmedCount', 'participantCount', 'elapsedSeconds', 'startedAt']
 		const currentKey = JSON.stringify(uiStateFields.map(field => context[field] ?? null))
 		const nextKey = JSON.stringify(uiStateFields.map(field => nextContext[field] ?? null))
 		context = nextContext
