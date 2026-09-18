@@ -72,7 +72,7 @@
 
 		detachFromTalk() { this._detachFromTalk() }
 
-		getCurrentMicrophone() { return this._current || { deviceId: null, settings: {} } }
+		getCurrentMicrophone() { return this._current }
 
 		dispose() { this._detachFromTalk(); this._current = null }
 
