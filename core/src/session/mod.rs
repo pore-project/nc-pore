@@ -478,6 +478,179 @@ mod tests {
     }
 
     #[test]
+    fn participant_artifacts_complete_recording_independently() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("bob");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        let recording_id = RecordingId::new("recording-1");
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        session
+            .complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("alice-artifact"),
+            )
+            .unwrap();
+
+        let recording = &session.recordings()[0];
+        assert_eq!(recording.status(), RecordingStatus::Stopped);
+        assert_eq!(
+            recording
+                .artifact_for_participant(&owner)
+                .unwrap()
+                .value(),
+            "alice-artifact"
+        );
+        assert_eq!(session.status(), ProductionStatus::Active);
+
+        session
+            .complete_recording_by(
+                &bob,
+                &recording_id,
+                RecordingArtifactId::new("bob-artifact"),
+            )
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Completed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::AllRecordingsCompleted)
+        );
+    }
+
+    #[test]
+    fn late_artifact_completion_does_not_reopen_completed_production() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("bob");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        let recording_id = RecordingId::new("recording-1");
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        session
+            .complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("alice-artifact"),
+            )
+            .unwrap();
+        session.complete_by(&owner).unwrap();
+
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::HostForced)
+        );
+
+        session
+            .complete_recording_by(
+                &bob,
+                &recording_id,
+                RecordingArtifactId::new("bob-artifact"),
+            )
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Completed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::HostForced)
+        );
+    }
+
+    #[test]
+    fn timeout_closes_production_without_invalidating_pending_artifact() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("bob");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        let recording_id = RecordingId::new("recording-1");
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session.mark_recording_ready_by(&bob, &recording_id).unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+
+        let stopped_at = std::time::UNIX_EPOCH + Duration::from_secs(100);
+        {
+            let recording = session
+                .recordings
+                .iter_mut()
+                .find(|recording| recording.id() == &recording_id)
+                .unwrap();
+            recording.stop_at(stopped_at).unwrap();
+        }
+
+        session
+            .complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("alice-artifact"),
+            )
+            .unwrap();
+
+        let changed = session
+            .complete_due_to_artifact_timeout(
+                stopped_at + Duration::from_secs(24 * 60 * 60),
+                Duration::from_secs(24 * 60 * 60),
+            )
+            .unwrap();
+
+        assert!(changed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::ArtifactCompletionTimeout)
+        );
+        assert!(session.recordings()[0].has_pending_artifacts());
+
+        session
+            .complete_recording_by(
+                &bob,
+                &recording_id,
+                RecordingArtifactId::new("bob-artifact"),
+            )
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Completed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
+    }
+
+    #[test]
     fn participant_cannot_ensure_a_missing_recording() {
         let (mut session, owner) = active_session();
         let participant = ParticipantId::new("participant-1");
