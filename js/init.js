@@ -347,7 +347,21 @@
 		localStopInFlight = true
 		try {
 			if (reason === 'persistence-safety-stop') {
+				let coreStopped = false
+				try {
+					const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
+					if (result?.state) {
+						coreStopped = true
+						updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+					}
+				} catch (error) {
+					console.warn('[NC-PoRe] Core stop unavailable during persistence safety stop', error)
+				}
 				await stopLocalCapture(reason, { closingSignet: false })
+				if (coreStopped) {
+					const acknowledged = await window.__poreTalkRecordingCoordinator?.command?.('acknowledge_stop')
+					if (acknowledged?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(acknowledged.state))
+				}
 				return
 			}
 
