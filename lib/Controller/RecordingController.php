@@ -40,7 +40,7 @@ final class RecordingController extends OCSController {
 			return $this->rejected('unauthorized', 401, $requestId);
 		}
 
-		$allowed = ['ensure', 'begin', 'ready', 'start', 'stop', 'acknowledge_stop', 'complete', 'snapshot'];
+		$allowed = ['ensure', 'begin', 'ready', 'confirm_opening', 'start', 'stop', 'acknowledge_stop', 'complete', 'snapshot'];
 		if (!in_array($command, $allowed, true)) {
 			return $this->rejected('unsupported_command', 400, $requestId);
 		}
@@ -63,6 +63,7 @@ final class RecordingController extends OCSController {
 					$runtimeCommand = match ($command) {
 						'begin' => ['Begin' => ['participants' => array_values($participantIds)]],
 						'ready' => ['MarkReady' => null],
+						'confirm_opening' => ['ConfirmOpening' => null],
 						'start' => ['Start' => null],
 						'stop' => ['RequestStop' => null],
 						'acknowledge_stop' => ['AcknowledgeStop' => null],
