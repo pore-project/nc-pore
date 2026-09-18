@@ -1,6 +1,7 @@
 use crate::session::{
-    add_participation_to_production_session, complete_production_session,
-    create_production_session, get_production_session, start_production_session,
+    add_participation_to_production_session, check_production_timeout,
+    complete_production_session, create_production_session, get_production_session,
+    start_production_session, DEFAULT_ARTIFACT_COMPLETION_TIMEOUT,
 };
 use crate::session_context::{SessionContext, SessionContextProvider};
 use nc_pore_core::identity::ProductionId;
@@ -84,16 +85,46 @@ pub struct ClientParticipant {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientRecordingArtifactSlot {
+    pub participant_id: String,
+    pub artifact_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientRecording {
     pub id: String,
     pub status: ClientRecordingStatus,
-    pub artifact_id: Option<String>,
+    pub artifact_slots: Vec<ClientRecordingArtifactSlot>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientProductionCompletionReason {
+    AllRecordingsCompleted,
+    ArtifactCompletionTimeout,
+    HostForced,
+}
+
+impl From<nc_pore_core::session::ProductionCompletionReason>
+    for ClientProductionCompletionReason
+{
+    fn from(reason: nc_pore_core::session::ProductionCompletionReason) -> Self {
+        match reason {
+            nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted => {
+                Self::AllRecordingsCompleted
+            }
+            nc_pore_core::session::ProductionCompletionReason::ArtifactCompletionTimeout => {
+                Self::ArtifactCompletionTimeout
+            }
+            nc_pore_core::session::ProductionCompletionReason::HostForced => Self::HostForced,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientProductionSession {
     pub id: String,
     pub status: ClientProductionStatus,
+    pub completion_reason: Option<ClientProductionCompletionReason>,
     pub participants: Vec<ClientParticipant>,
     pub recordings: Vec<ClientRecording>,
 }
@@ -103,6 +134,7 @@ impl From<&ProductionSession> for ClientProductionSession {
         Self {
             id: session.id.value().to_owned(),
             status: session.status().into(),
+            completion_reason: session.completion_reason().map(Into::into),
             participants: session
                 .participations()
                 .iter()
@@ -122,9 +154,16 @@ impl From<&ProductionSession> for ClientProductionSession {
                 .map(|recording| ClientRecording {
                     id: recording.id().value().to_owned(),
                     status: recording.status().into(),
-                    artifact_id: recording
-                        .artifact_id()
-                        .map(|artifact_id| artifact_id.value().to_owned()),
+                    artifact_slots: recording
+                        .artifact_slots()
+                        .iter()
+                        .map(|slot| ClientRecordingArtifactSlot {
+                            participant_id: slot.participant_id().value().to_owned(),
+                            artifact_id: slot
+                                .artifact_id()
+                                .map(|artifact_id| artifact_id.value().to_owned()),
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
