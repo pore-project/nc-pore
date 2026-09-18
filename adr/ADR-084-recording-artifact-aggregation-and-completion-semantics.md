@@ -46,7 +46,7 @@ core.Recording
    +-- participant D -> artifact.ArtifactId
 ```
 
-Die stabile Artefaktidentität bleibt `artifact.ArtifactId`. Ein erneuter Uploadversuch erzeugt keine neue fachliche Artektidentität.
+Die stabile Artefaktidentität bleibt `artifact.ArtifactId`. Ein erneuter Uploadversuch erzeugt keine neue fachliche Artefaktidentität.
 
 ### 2. Erwartete Teilnehmer werden für das Recording festgelegt
 
