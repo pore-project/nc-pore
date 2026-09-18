@@ -1,5 +1,7 @@
 use nc_pore_application::client::{ClientProductionStatus, ClientSessionError};
-use nc_pore_application::production_coordinator::{ensure_production, start_production};
+use nc_pore_application::production_coordinator::{
+    check_production_timeout, ensure_production, force_close_production, start_production,
+};
 use nc_pore_core::session::repository::ProductionSessionRepository;
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +25,8 @@ pub struct ProductionCommandRequest {
 pub enum ProductionCommand {
     Ensure,
     Start,
+    ForceClose,
+    CheckTimeout,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -31,6 +35,7 @@ pub struct ProductionCommandResponse {
     pub request_id: String,
     pub status: String,
     pub production_status: Option<String>,
+    pub completion_reason: Option<String>,
     pub participants: Vec<String>,
     pub error_code: Option<String>,
 }
@@ -57,6 +62,21 @@ pub fn handle_production_command<R: ProductionSessionRepository>(
         ProductionCommand::Start => {
             start_production(repository, &request.session_id, &request.actor_id)
         }
+        ProductionCommand::ForceClose => {
+            force_close_production(repository, &request.session_id, &request.actor_id)
+        }
+        ProductionCommand::CheckTimeout => check_production_timeout(
+            repository,
+            &request.session_id,
+            std::time::SystemTime::now(),
+        )
+        .map(|session| {
+            session.unwrap_or_else(|| {
+                nc_pore_application::client::ClientSessionService::new(repository)
+                    .get(&request.session_id)
+                    .expect("timeout check should only fail before this mapping")
+            })
+        }),
     };
 
     match result {
@@ -72,6 +92,17 @@ pub fn handle_production_command<R: ProductionSessionRepository>(
                 }
                 .to_owned(),
             ),
+            completion_reason: session.completion_reason.map(|reason| match reason {
+                nc_pore_application::client::ClientProductionCompletionReason::AllRecordingsCompleted => {
+                    "all_recordings_completed"
+                }
+                nc_pore_application::client::ClientProductionCompletionReason::ArtifactCompletionTimeout => {
+                    "artifact_completion_timeout"
+                }
+                nc_pore_application::client::ClientProductionCompletionReason::HostForced => {
+                    "host_forced"
+                }
+            }.to_owned()),
             participants: session
                 .participants
                 .into_iter()
@@ -92,6 +123,7 @@ fn production_error(
         request_id: request.request_id.clone(),
         status: "rejected".to_owned(),
         production_status: None,
+        completion_reason: None,
         participants: Vec::new(),
         error_code: Some(error_code.to_owned()),
     }
