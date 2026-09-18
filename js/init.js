@@ -125,10 +125,14 @@
 		}
 	}
 
-	const emitOpeningSignet = () => {
+	const emitOpeningSignet = async () => {
 		if (openingSignetEmitted || !recorder.isRecording()) return
-		if (typeof recorder.markOpeningSignet === 'function') recorder.markOpeningSignet()
-		else window.dispatchEvent(new CustomEvent('pore:recording-opening-signet'))
+		if (typeof recorder.markOpeningSignet === 'function') {
+			recorder.markOpeningSignet()
+			if (typeof recorder.waitForOpeningSignet === 'function') await recorder.waitForOpeningSignet()
+		} else {
+			window.dispatchEvent(new CustomEvent('pore:recording-opening-signet'))
+		}
 		openingSignetEmitted = true
 	}
 
@@ -161,7 +165,7 @@
 				if (me?.ready && !me.opening_confirmed && !openingSignetRequestInFlight && recorder.isRecording()) {
 					openingSignetRequestInFlight = true
 					try {
-						emitOpeningSignet()
+						await emitOpeningSignet()
 						const confirmed = await coordinator.command('confirm_opening')
 						if (confirmed?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(confirmed.state))
 					} finally {
