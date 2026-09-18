@@ -167,6 +167,7 @@ enum PersistedActivityType {
     RecordingAdded,
     RecordingStarted,
     RecordingStopped,
+    RecordingArtifactCompleted,
     RecordingCompleted,
 }
 
@@ -174,6 +175,38 @@ enum PersistedActivityType {
 enum PersistedActivityResult {
     Success,
     Rejected,
+}
+
+impl From<nc_pore_core::session::ProductionCompletionReason>
+    for PersistedProductionCompletionReason
+{
+    fn from(reason: nc_pore_core::session::ProductionCompletionReason) -> Self {
+        match reason {
+            nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted => {
+                Self::AllRecordingsCompleted
+            }
+            nc_pore_core::session::ProductionCompletionReason::ArtifactCompletionTimeout => {
+                Self::ArtifactCompletionTimeout
+            }
+            nc_pore_core::session::ProductionCompletionReason::HostForced => Self::HostForced,
+        }
+    }
+}
+
+impl From<PersistedProductionCompletionReason>
+    for nc_pore_core::session::ProductionCompletionReason
+{
+    fn from(reason: PersistedProductionCompletionReason) -> Self {
+        match reason {
+            PersistedProductionCompletionReason::AllRecordingsCompleted => {
+                Self::AllRecordingsCompleted
+            }
+            PersistedProductionCompletionReason::ArtifactCompletionTimeout => {
+                Self::ArtifactCompletionTimeout
+            }
+            PersistedProductionCompletionReason::HostForced => Self::HostForced,
+        }
+    }
 }
 
 impl From<ProductionStatus> for PersistedProductionStatus {
