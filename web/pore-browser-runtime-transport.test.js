@@ -61,8 +61,61 @@ describe('Browser runtime transport', () => {
 		expect(fetchMock.mock.calls[1][1].method).toBe('PUT')
 		expect(fetchMock.mock.calls[1][0]).toContain('/public.php/dav/files/share-token/Host.wav')
 		expect(fetchMock.mock.calls[1][1].headers.Authorization).toContain('anonymous:secret')
+		expect(fetchMock.mock.calls[1][1].headers['If-None-Match']).toBe('*')
 		expect(fetchMock.mock.calls[2][0]).toContain('/finalized-artifact/verify')
 		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/close')
+	})
+
+	it('reuses an existing identical artifact without uploading', async () => {
+		const job = completionJob()
+		const fetchMock = jest.fn()
+		fetchMock
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'prepared', transfer_id: 'existing-handle', upload_url: '', upload_username: '', upload_password: '', filename: 'Host.wav', upload_required: false,
+			} } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'verified', artifact_id: 'capture-1', file_id: 17, path: 'audio/2026/09/.../Host.wav', size: 44, sha256: 'a'.repeat(64),
+			} } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: { status: 'closed' } } }) })
+		global.fetch = fetchMock
+
+		const transport = new Transport({ completionJob: job })
+		const receipt = await transport.transfer(descriptor)
+
+		expect(receipt.file_id).toBe(17)
+		expect(fetchMock).toHaveBeenCalledTimes(3)
+		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/prepare')
+		expect(fetchMock.mock.calls[1][0]).toContain('/finalized-artifact/verify')
+		expect(fetchMock.mock.calls[2][0]).toContain('/finalized-artifact/close')
+	})
+
+	it('reprepares after a concurrent upload collision instead of overwriting', async () => {
+		const job = completionJob()
+		const fetchMock = jest.fn()
+		fetchMock
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'prepared', transfer_id: 'first-handle', upload_url: '/public.php/dav/files/first-token', upload_username: 'anonymous', upload_password: 'secret-1', filename: 'Host.wav', upload_required: true,
+			} } }) })
+			.mockResolvedValueOnce({ ok: false, status: 412, json: async () => ({}) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: { status: 'closed' } } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'prepared', transfer_id: 'second-handle', upload_url: '/public.php/dav/files/second-token', upload_username: 'anonymous', upload_password: 'secret-2', filename: 'Host (2).wav', upload_required: true,
+			} } }) })
+			.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'verified', artifact_id: 'capture-1', file_id: 43, path: 'audio/2026/09/.../Host (2).wav', size: 44, sha256: 'a'.repeat(64),
+			} } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: { status: 'closed' } } }) })
+		global.fetch = fetchMock
+
+		const transport = new Transport({ completionJob: job })
+		const receipt = await transport.transfer(descriptor)
+
+		expect(receipt.file_id).toBe(43)
+		expect(fetchMock).toHaveBeenCalledTimes(7)
+		expect(fetchMock.mock.calls[1][1].headers['If-None-Match']).toBe('*')
+		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/prepare')
+		expect(fetchMock.mock.calls[4][0]).toContain('/second-token/Host%20%282%29.wav')
 	})
 
 	it('returns the stored receipt without repeating work after completion', async () => {
