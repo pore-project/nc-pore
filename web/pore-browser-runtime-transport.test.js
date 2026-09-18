@@ -115,7 +115,7 @@ describe('Browser runtime transport', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(7)
 		expect(fetchMock.mock.calls[1][1].headers['If-None-Match']).toBe('*')
 		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/prepare')
-		expect(fetchMock.mock.calls[4][0]).toContain('/second-token/Host%20%28%32%29.wav')
+		expect(fetchMock.mock.calls[4][0]).toContain('/second-token/Host%20(2).wav')
 	})
 
 	it('returns the stored receipt without repeating work after completion', async () => {
