@@ -160,14 +160,10 @@
 			void this._drainPersistenceQueue()
 		}
 
-		async _drainPersistenceQueue({ force = false } = {}) {
-			const inFlight = this.persistenceDrainPromise
-			if (inFlight) {
-				await inFlight
-				if (this.persistenceDrainPromise === inFlight) this.persistenceDrainPromise = null
-			}
+		async _drainPersistenceQueue() {
+			if (this.persistenceDrainPromise) return this.persistenceDrainPromise
 			if (!this.persistenceQueue.length) return
-			if (this.persistenceRetryTimer && !force) return
+			if (this.persistenceRetryTimer) return
 			this.persistenceDrainPromise = (async () => {
 				while (this.persistenceQueue.length) {
 					const entry = this.persistenceQueue[0]
