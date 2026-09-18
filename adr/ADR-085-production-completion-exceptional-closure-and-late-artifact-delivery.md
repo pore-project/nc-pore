@@ -202,6 +202,10 @@ core.ProductionCompletionReason
 
 Die konkrete Persistenz- und Auditdarstellung bleibt eine Implementierungsentscheidung, darf diese fachliche Unterscheidung aber nicht verlieren.
 
+# Begründung
+
+Production Completion muss unabhängig von der technischen Fertigstellung einzelner Artifacts funktionieren. Dadurch kann PoRE eine Production zuverlässig schließen und zugleich bereits erzeugte Daten auch nach der Schließung weiter zustellen.
+
 # Consequences
 
 - Production-Abschluss und Artifact-Abschluss sind unabhängig modellierbar.
@@ -211,6 +215,30 @@ Die konkrete Persistenz- und Auditdarstellung bleibt eine Implementierungsentsch
 - Die Production wird durch späte Uploads niemals wieder geöffnet.
 - Transport-Autorisierungen dürfen kurzlebig sein; die Artefaktidentität ist es nicht.
 - Storage-Retention und fachliche Production-Schließung bleiben sauber getrennt.
+
+# Alternatives Considered
+
+## Production bleibt offen, bis alle Artifacts geliefert wurden
+
+Verworfen. Ein fehlender Teilnehmer darf eine fachliche Production nicht unbegrenzt blockieren.
+
+## Timeout invalidiert ausstehende Artifacts
+
+Verworfen. Production Completion ist keine Artifact-Retention- oder Löschentscheidung.
+
+## Force-Close löscht offene Artifact-Slots
+
+Verworfen. Ein bereits entstandenes Artifact bleibt fachlich relevant und soll auch nach dem manuellen Production-Abschluss nachgeliefert werden können.
+
+## Späte Lieferung öffnet die Production erneut
+
+Verworfen. Die Production ist eine fachlich abgeschlossene Einheit. Late Artifact Delivery verändert ihren Zustand nicht rückwirkend.
+
+# Relationship to Existing Architecture
+
+Diese ADR konkretisiert ADR-071i und ADR-072i sowie die Artifact-Aggregationssemantik aus ADR-084.
+
+Die verifizierte Transportsemantik bleibt in ADR-083 und die provider-neutrale Connector-Grenze in ADR-079i geregelt. ADR-065 bleibt für Storage-Retention und tatsächliche Löschung maßgeblich.
 
 # Future Considerations
 
@@ -222,6 +250,10 @@ Diese ADR legt nicht fest:
 - die konkrete Datenbankstruktur für Completion Reasons;
 - eine universelle Storage-Retention;
 - eine technische maximale Lebensdauer des lokalen Browser-Speichers.
+
+# Status
+
+Die Entscheidung gilt als angenommen.
 
 ---
 
@@ -270,10 +302,42 @@ core.ProductionCompletionReason
     | HostForced
 ```
 
+# Rationale
+
+Production completion must be independent of technical completion of individual Artifacts. This lets PoRE close a Production reliably while preserving the ability to deliver already created data later.
+
 # Consequences
 
 Production closure, Recording completion and Artifact completion remain separate lifecycle concerns. A production may be closed while an artifact is still pending, and a late artifact may complete the Recording without reopening the Production.
 
+# Alternatives Considered
+
+## Keep Production Open Until All Artifacts Arrive
+
+Rejected. A missing participant must not block a fachlich Production indefinitely.
+
+## Invalidate Outstanding Artifacts on Timeout
+
+Rejected. Production completion is not an Artifact retention or deletion decision.
+
+## Delete Open Artifact Slots on Force-Close
+
+Rejected. An already created Artifact remains fachlich relevant and must remain deliverable after manual Production closure.
+
+## Reopen the Production for Late Delivery
+
+Rejected. The Production is a fachlich closed unit. Late Artifact Delivery does not change its state retroactively.
+
+# Relationship to Existing Architecture
+
+This ADR concretizes ADR-071i and ADR-072i together with the Artifact aggregation semantics of ADR-084.
+
+Verified transport remains governed by ADR-083 and the provider-neutral connector boundary by ADR-079i. ADR-065 remains authoritative for storage retention and actual deletion.
+
 # Future Considerations
 
 This ADR does not define the scheduler, Force-Close API, concrete permission action, persistence structure for completion reasons, storage retention, or a technical maximum lifetime for browser-local storage.
+
+# Status
+
+This decision is accepted.
