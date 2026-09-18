@@ -92,6 +92,7 @@ pub struct RecordingStateDto {
 pub struct RecordingParticipantDto {
     pub id: String,
     pub ready: bool,
+    pub artifact_id: Option<String>,
 }
 
 impl From<ClientRecordingState> for RecordingStateDto {
@@ -118,6 +119,7 @@ impl From<ClientRecordingState> for RecordingStateDto {
                 .map(|participant| RecordingParticipantDto {
                     id: participant.id,
                     ready: participant.ready,
+                    artifact_id: participant.artifact_id,
                 })
                 .collect(),
             confirmed: state.confirmed,
