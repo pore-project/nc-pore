@@ -93,7 +93,7 @@ pub fn check_production_timeout<R>(
     repository: &mut R,
     production_id: &str,
     now: std::time::SystemTime,
-) -> Result<Option<ClientProductionSession>, ClientSessionError<R::Error>>
+) -> Result<ClientProductionSession, ClientSessionError<R::Error>>
 where
     R: ProductionSessionRepository,
 {
