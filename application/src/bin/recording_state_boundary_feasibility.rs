@@ -269,6 +269,7 @@ mod tests {
             participants: vec![ClientRecordingParticipant {
                 id: "guest-1".to_owned(),
                 ready: true,
+                artifact_id: None,
             }],
             confirmed: false,
             artifact_id: None,
