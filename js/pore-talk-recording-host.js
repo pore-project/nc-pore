@@ -175,7 +175,9 @@
 	const command = async (sessionId, recordingId, name, options = {}) => {
 		if (name === 'snapshot') {
 			const production = await productionCommand(sessionId, 'ensure', options)
-			if (production?.production_status !== 'active') return { production_status: production?.production_status || null, state: null }
+			if (!['active', 'completed'].includes(production?.production_status)) {
+				return { production_status: production?.production_status || null, state: null }
+			}
 			return recordingCommand(sessionId, recordingId, name, options)
 		}
 		if (name === 'begin') {
