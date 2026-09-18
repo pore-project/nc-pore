@@ -105,6 +105,8 @@ The existing `NextcloudArtifactPath` contract remains authoritative for the fina
 
 The browser receives only the bounded upload authorization and the final filename. It does not construct or own the authoritative Nextcloud storage path.
 
+The PoRE application authorizes prepare against the authenticated Nextcloud user and the authoritative recording state. Only a recording host or participant may prepare transport. The transport handle is additionally bound to the authenticated user that prepared it; verify and close reject use by another user. Provider mechanics remain inside the Nextcloud connector.
+
 ## Collision and concurrency rule
 
 Preparation treats the path and filename as a content-addressed target candidate:
