@@ -25,6 +25,8 @@ jobs:
           node --check js/pore-talk-audio-connector.js
           node --check js/pore-talk-recording-ui.js
           node --check js/pore-talk-settings.js
+      - name: Run browser JavaScript tests
+        run: node --experimental-default-type=module tools/js-test-harness.mjs
 
   php:
     runs-on: ubuntu-latest
