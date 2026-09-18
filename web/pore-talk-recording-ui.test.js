@@ -1,4 +1,4 @@
-import './pore-talk-recording-ui.js'
+import '../js/pore-talk-recording-ui.js'
 
 describe('Talk recording UI', () => {
 	const Ui = window.PoRETalkRecordingUi
