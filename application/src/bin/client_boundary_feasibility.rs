@@ -276,15 +276,27 @@ fn session_json(session: &ClientProductionSession) -> String {
         .recordings
         .iter()
         .map(|recording| {
-            let artifact_id = recording
-                .artifact_id
-                .as_ref()
-                .map(|id| format!("\"{}\"", json_escape(id)))
-                .unwrap_or_else(|| "null".to_owned());
+            let artifact_slots = recording
+                .artifact_slots
+                .iter()
+                .map(|slot| {
+                    let artifact_id = slot
+                        .artifact_id
+                        .as_ref()
+                        .map(|id| format!("\"{}\"", json_escape(id)))
+                        .unwrap_or_else(|| "null".to_owned());
+                    format!(
+                        "{{\"participant_id\":\"{}\",\"artifact_id\":{artifact_id}}}",
+                        json_escape(&slot.participant_id),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
             format!(
-                "{{\"id\":\"{}\",\"status\":\"{}\",\"artifact_id\":{artifact_id}}}",
+                "{{\"id\":\"{}\",\"status\":\"{}\",\"artifact_slots\":[{}]}}",
                 json_escape(&recording.id),
                 format!("{:?}", recording.status),
+                artifact_slots,
             )
         })
         .collect::<Vec<_>>()
