@@ -395,7 +395,7 @@ where
         &mut self,
         session_id: &str,
         now: std::time::SystemTime,
-    ) -> Result<Option<ClientProductionSession>, ClientSessionError<R::Error>> {
+    ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
         check_production_timeout(
             self.repository,
             &ProductionId::new(session_id),
@@ -411,7 +411,7 @@ where
             }
             crate::session::CheckProductionTimeoutError::Session(error) => error.into(),
         })
-        .map(|session| session.map(|value| ClientProductionSession::from(&value)))
+        .map(|session| ClientProductionSession::from(&session))
     }
 }
 
