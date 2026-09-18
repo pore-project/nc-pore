@@ -16,7 +16,24 @@ class Element {
 		this.attributes = new Map()
 		this.textContent = ''
 		this.className = ''
+		this._innerHTML = ''
 	}
+	set innerHTML(value) {
+		this._innerHTML = String(value)
+		this.children = []
+		if (this._innerHTML.includes('pore-talk-storage-root')) {
+			const label = new Element('label')
+			label.setAttribute('for', 'pore-talk-storage-root')
+			this.appendChild(label)
+			const input = new Element('input')
+			input.setAttribute('id', 'pore-talk-storage-root')
+			this.appendChild(input)
+			const status = new Element('p')
+			status.setAttribute('class', 'pore-talk-recording__settings-status')
+			this.appendChild(status)
+		}
+	}
+	get innerHTML() { return this._innerHTML }
 	appendChild(child) { this.children.push(child); child.parentNode = this; return child }
 	removeChild(child) { const i = this.children.indexOf(child); if (i >= 0) this.children.splice(i, 1); child.parentNode = null; return child }
 	setAttribute(name, value) { this.attributes.set(name, String(value)); if (name === 'class') this.className = String(value); this[name] = String(value) }
