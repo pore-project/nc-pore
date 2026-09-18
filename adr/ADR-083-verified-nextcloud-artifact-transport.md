@@ -69,6 +69,16 @@ prepared
 
 A failure does not erase the preservation artifact. Recovery retries the appropriate outstanding transport step.
 
+## Relationship to fachlicher Recording and Production completion
+
+`completed` in the browser transport lifecycle means **verified transport completion of one Artifact**. It does not by itself mean `core.Recording.Completed` and never means `core.Production.Completed`.
+
+The verified transport completion contributes to Recording completion only when every expected participant artifact of that Recording has been confirmed as defined by ADR-084.
+
+If a Production has already been closed through normal completion, timeout, or Host Force-Close, an outstanding Artifact remains valid and may still complete later. A late client may call `prepare` again and receive fresh temporary upload authorization. Expiration of an earlier share, token, URL, or other transport handle does not invalidate the stable Artifact identity.
+
+Late Artifact Completion must not reopen the Production.
+
 ## Responsibility boundary
 
 The provider-neutral PoRe layers know only that an artifact is being transferred and that a remote receipt must be verified.
@@ -123,4 +133,6 @@ Preparation treats the path and filename as a content-addressed target candidate
 - Local durable preservation remains the recovery source until verified transport completion.
 - Nextcloud-specific mechanics are isolated in one connector.
 - A future transport provider can implement the same provider-neutral lifecycle without introducing Nextcloud concepts into Core.
+- Transport completion remains distinct from fachliche Recording and Production completion.
+- Production timeout/Force-Close is not an Artifact retention or expiration policy.
 - The historical ADR-082 remains valuable as architectural history, but its prohibition of browser-to-WebDAV transport no longer describes the accepted V1 mechanism and is therefore superseded for this finalized-artifact transport.
