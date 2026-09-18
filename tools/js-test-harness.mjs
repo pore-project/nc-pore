@@ -142,15 +142,15 @@ globalThis.beforeEach = fn => beforeEachHooks.push(fn)
 globalThis.it = (name, fn) => tests.push({ name, fn })
 
 const files = [
-	'./web/pore-browser-completion-job.test.js',
-	'./web/pore-browser-pcm-recorder.test.js',
-	'./web/pore-browser-recording-lifecycle.test.js',
-	'./web/pore-browser-runtime-transport.test.js',
-	'./web/pore-recording-controller-persistence-safety.test.js',
-	'./web/pore-recording-controller.test.js',
-	'./web/pore-talk-recording-state-bridge.test.js',
-	'./web/pore-talk-recording-ui.test.js',
-	'./web/pore-talk-capture-init.test.js',
+	'../web/pore-browser-completion-job.test.js',
+	'../web/pore-browser-pcm-recorder.test.js',
+	'../web/pore-browser-recording-lifecycle.test.js',
+	'../web/pore-browser-runtime-transport.test.js',
+	'../web/pore-recording-controller-persistence-safety.test.js',
+	'../web/pore-recording-controller.test.js',
+	'../web/pore-talk-recording-state-bridge.test.js',
+	'../web/pore-talk-recording-ui.test.js',
+	'../web/pore-talk-capture-init.test.js',
 ]
 
 for (const file of files) await import(new URL(file, import.meta.url))
