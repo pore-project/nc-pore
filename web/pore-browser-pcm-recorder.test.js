@@ -35,6 +35,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 		expect(recorder.persistenceQueue).toHaveLength(2)
 		expect(recorder.persistenceState).toBe('recovering')
 
+		if (recorder.persistenceDrainPromise) await recorder.persistenceDrainPromise
 		recorder._clearPersistenceRetry()
 		await recorder._drainPersistenceQueue()
 
