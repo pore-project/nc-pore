@@ -123,6 +123,23 @@
 			return this.recorder.markOpeningSignet(at)
 		}
 
+		async waitForOpeningSignet() {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE opening signet requires an active local capture')
+			if (typeof this.recorder.waitForOpeningSignet !== 'function') return true
+			return this.recorder.waitForOpeningSignet()
+		}
+
+		markClosingSignet(at = new Date().toISOString()) {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE closing signet requires an active local capture')
+			return this.recorder.markClosingSignet(at)
+		}
+
+		async waitForClosingSignet() {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE closing signet requires an active local capture')
+			if (typeof this.recorder.waitForClosingSignet !== 'function') return true
+			return this.recorder.waitForClosingSignet()
+		}
+
 		noteSourceChange(previousTrack, nextTrack, occurredAt = new Date().toISOString(), metadata = {}) {
 			if (!this.isRecording()) return null
 			const change = {
