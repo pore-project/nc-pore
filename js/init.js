@@ -236,6 +236,17 @@
 
 	const stopRequested = async () => window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
 
+	const forceCloseRequested = async () => {
+		const coordinator = window.__poreTalkRecordingCoordinator
+		if (!coordinator?.command) return
+		try {
+			await coordinator.command('force_close')
+			await pollCoordination()
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		}
+	}
+
 	const render = nextContext => {
 		if (!nextContext) return
 		context = {
@@ -245,6 +256,7 @@
 			...(talkUiMountElement ? { mountElement: talkUiMountElement } : {}),
 			onStart: nextContext.onStart || startRequested,
 			onStop: nextContext.onStop || stopRequested,
+			onForceClose: nextContext.onForceClose || forceCloseRequested,
 		}
 		Ui.mount(context)
 	}
