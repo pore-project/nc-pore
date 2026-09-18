@@ -260,6 +260,7 @@ impl From<ActivityType> for PersistedActivityType {
             ActivityType::RecordingAdded => Self::RecordingAdded,
             ActivityType::RecordingStarted => Self::RecordingStarted,
             ActivityType::RecordingStopped => Self::RecordingStopped,
+            ActivityType::RecordingArtifactCompleted => Self::RecordingArtifactCompleted,
             ActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
@@ -275,6 +276,7 @@ impl From<PersistedActivityType> for ActivityType {
             PersistedActivityType::RecordingAdded => Self::RecordingAdded,
             PersistedActivityType::RecordingStarted => Self::RecordingStarted,
             PersistedActivityType::RecordingStopped => Self::RecordingStopped,
+            PersistedActivityType::RecordingArtifactCompleted => Self::RecordingArtifactCompleted,
             PersistedActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
