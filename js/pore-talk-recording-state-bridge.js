@@ -20,13 +20,18 @@
 		const readyParticipants = participants.filter(participant => participant?.ready === true)
 		return Object.freeze({
 			productionId: snapshot.productionId || snapshot.production_id || null,
+			productionStatus: snapshot.productionStatus || snapshot.production_status || null,
 			recordingId: snapshot.recordingId || snapshot.recording_id || null,
 			role: snapshot.role || 'none',
 			state,
 			listener: snapshot.role === 'listener' || snapshot.listener === true,
-			confirmed: snapshot.confirmed === true || state === 'done',
+			confirmed: snapshot.confirmed === true || state === 'completed' || state === 'done',
 			ready: snapshot.ready === true,
+			openingConfirmed: snapshot.openingConfirmed === true,
 			readyCount: Number.isFinite(snapshot.readyCount) ? snapshot.readyCount : readyParticipants.length,
+			openingConfirmedCount: Number.isFinite(snapshot.openingConfirmedCount)
+				? snapshot.openingConfirmedCount
+				: participants.filter(participant => participant?.opening_confirmed === true || participant?.openingConfirmed === true).length,
 			participantCount: Number.isFinite(snapshot.participantCount) ? snapshot.participantCount : participants.length,
 			participants,
 			elapsedSeconds: Number.isFinite(snapshot.elapsedSeconds) ? snapshot.elapsedSeconds : 0,
