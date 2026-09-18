@@ -493,7 +493,9 @@ mod tests {
         session
             .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
             .unwrap();
-        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
         session.mark_recording_ready_by(&bob, &recording_id).unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
         session.stop_recording_by(&owner, &recording_id).unwrap();
@@ -549,7 +551,9 @@ mod tests {
         session
             .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
             .unwrap();
-        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
         session.mark_recording_ready_by(&bob, &recording_id).unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
         session.stop_recording_by(&owner, &recording_id).unwrap();
@@ -601,7 +605,9 @@ mod tests {
         session
             .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
             .unwrap();
-        session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
         session.mark_recording_ready_by(&bob, &recording_id).unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
 
