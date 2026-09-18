@@ -241,7 +241,10 @@
 
 			const showReadiness = role === 'host' && participantCount > 0 && !listener && !confirmed
 			readiness.hidden = !showReadiness
-			if (showReadiness) readiness.textContent = `${readyCount} / ${participantCount} bereit`
+			if (showReadiness) {
+				readiness.textContent = `${readyCount} / ${participantCount} bereit`
+				if (openingConfirmedCount < participantCount) readiness.textContent += ` · Opening ${openingConfirmedCount} / ${participantCount}`
+			}
 
 			const showElapsed = state === 'recording' && !listener
 			elapsed.hidden = !showElapsed
@@ -249,10 +252,12 @@
 
 			const canStart = role === 'host' && !listener && state === 'preparing' && !ready && typeof onStart === 'function'
 			const canStop = role === 'host' && !listener && state === 'recording' && typeof onStop === 'function'
-			actionHandler = canStart ? onStart : canStop ? onStop : null
+			const canForceClose = role === 'host' && !listener && state === 'stopped' && productionStatus === 'active' && !confirmed && typeof onForceClose === 'function'
+			actionHandler = canStart ? onStart : canStop ? onStop : canForceClose ? onForceClose : null
 			action.hidden = !actionHandler
 			if (canStart) action.textContent = 'Aufnahme starten'
 			if (canStop) action.textContent = 'Aufnahme beenden'
+			if (canForceClose) action.textContent = 'Production endgültig schließen'
 
 			if (wasOpen) setOpen(true)
 		}
