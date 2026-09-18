@@ -28,3 +28,37 @@ jobs:
       - name: Run browser JavaScript tests
         run: |
           node --experimental-default-type=module --input-type=module -e 'Object.defineProperty(globalThis, "navigator", { value: { mediaDevices: {} }, configurable: true, writable: true }); await import("./tools/js-test-harness.mjs")'
+
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP CLI
+        run: sudo apt-get update && sudo apt-get install -y php-cli
+      - name: Syntax check Nextcloud PHP boundary
+        run: |
+          php -l lib/AppInfo/Application.php
+          php -l lib/Controller/RecordingTransportController.php
+          php -l lib/Controller/SettingsController.php
+          php -l lib/Service/NextcloudArtifactPath.php
+          php -l lib/Service/NextcloudArtifactConnector.php
+          php -l tools/nextcloud-v1-contract-check.php
+      - name: Run Nextcloud V1 path contract checks
+        run: php tools/nextcloud-v1-contract-check.php
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+          components: rustfmt
+      - name: Install audio development dependency
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Check workspace
+        run: cargo check --workspace
+      - name: Test workspace
+        run: cargo test --workspace
+      - name: Check formatting
+        run: cargo fmt --all -- --check
