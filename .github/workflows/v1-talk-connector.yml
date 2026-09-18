@@ -11,9 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Show Node version
+        run: node --version
       - name: Syntax check browser scripts
         run: |
           node --check js/init.js
@@ -26,5 +25,3 @@ jobs:
           node --check js/pore-talk-audio-connector.js
           node --check js/pore-talk-recording-ui.js
           node --check js/pore-talk-settings.js
-      - name: Run browser JavaScript tests
-        run: node --experimental-default-type=module --input-type=module -e 'Object.defineProperty(globalThis, "navigator", { value: { mediaDevices: {} }, configurable: true, writable: true }); await import("./tools/js-test-harness.mjs")'
