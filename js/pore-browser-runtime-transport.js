@@ -58,7 +58,7 @@
 					try {
 						await this.upload(state.uploadUrl, state.uploadUsername, state.uploadPassword, state.filename, descriptor.blob)
 					} catch (error) {
-						if (!this.isUploadCollision(error) || uploadCollisionRetries >= 4) throw error
+						if ((!this.isUploadCollision(error) && !this.isUploadAuthorizationFailure(error)) || uploadCollisionRetries >= 4) throw error
 						uploadCollisionRetries += 1
 						await this.close(state.transferId).catch(() => {})
 						await this.prepare(descriptor)
@@ -160,8 +160,18 @@
 			return body
 		}
 
+		resolveUploadUrl(uploadUrl) {
+			if (uploadUrl.startsWith('http://') || uploadUrl.startsWith('https://')) return uploadUrl
+			if (uploadUrl.startsWith('/')) {
+				const rootPath = typeof window.OC?.getRootPath === 'function' ? window.OC.getRootPath() : ''
+				return String(rootPath).replace(/\/$/, '') + uploadUrl
+			}
+			return window.OC?.generateUrl ? window.OC.generateUrl(uploadUrl) : uploadUrl
+		}
+
 		async upload(uploadUrl, username, password, filename, blob) {
-			const url = window.OC?.generateUrl ? window.OC.generateUrl(uploadUrl) : uploadUrl
+			const url = this.resolveUploadUrl(uploadUrl)
+			const publicDav = url.includes('/public.php/dav/')
 			const response = await fetch(`${url.replace(/\/$/, '')}/${encodeURIComponent(filename)}`, {
 				method: 'PUT',
 				headers: {
@@ -170,7 +180,7 @@
 					Authorization: `Basic ${btoa(`${username}:${password}`)}`,
 					'If-None-Match': '*',
 				},
-				credentials: 'same-origin',
+				credentials: publicDav ? 'omit' : 'same-origin',
 				body: blob,
 			})
 			if (!response.ok) {
@@ -182,6 +192,10 @@
 
 		isUploadCollision(error) {
 			return [403, 409, 412].includes(error?.status)
+		}
+
+		isUploadAuthorizationFailure(error) {
+			return [401, 404, 410].includes(error?.status)
 		}
 
 		async control(path, form) {
