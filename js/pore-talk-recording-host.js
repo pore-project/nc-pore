@@ -259,8 +259,11 @@
 				listener: false,
 				confirmed: false,
 				ready: false,
+				openingConfirmed: false,
 				readyCount: 0,
+				openingConfirmedCount: 0,
 				participantCount: participantIds.length,
+				productionStatus: 'active',
 				participants: participantIds.map(id => ({ id, ready: false })),
 			},
 		}))
