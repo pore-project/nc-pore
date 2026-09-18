@@ -184,7 +184,17 @@ let failed = 0
 for (const test of tests) {
 	try {
 		for (const hook of beforeEachHooks) await hook()
-		await test.fn()
+		let timer = null
+		try {
+			await Promise.race([
+				test.fn(),
+				new Promise((_, reject) => {
+					timer = setTimeout(() => reject(new Error('JavaScript test timed out after 5s')), 5000)
+				}),
+			])
+		} finally {
+			if (timer) clearTimeout(timer)
+		}
 		process.stdout.write(`PASS ${test.name}\n`)
 	} catch (error) {
 		failed += 1
