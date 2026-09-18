@@ -415,7 +415,9 @@ mod tests {
     fn one_artifact_does_not_complete_multi_track_recording() {
         let mut recording = prepared_recording();
         recording.start().unwrap();
-        recording.stop_at(UNIX_EPOCH + Duration::from_secs(100)).unwrap();
+        recording
+            .stop_at(UNIX_EPOCH + Duration::from_secs(100))
+            .unwrap();
 
         assert_eq!(
             recording.complete_for_participant(&participant_id("alice"), artifact_id("alice-1")),
@@ -432,7 +434,9 @@ mod tests {
     fn last_artifact_completes_multi_track_recording() {
         let mut recording = prepared_recording();
         recording.start().unwrap();
-        recording.stop_at(UNIX_EPOCH + Duration::from_secs(100)).unwrap();
+        recording
+            .stop_at(UNIX_EPOCH + Duration::from_secs(100))
+            .unwrap();
 
         recording
             .complete_for_participant(&participant_id("alice"), artifact_id("alice-1"))
