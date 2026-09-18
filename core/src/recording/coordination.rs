@@ -133,6 +133,9 @@ impl RecordingCoordination {
         &mut self,
         participant_id: &ParticipantId,
     ) -> Result<(), RecordingCoordinationError> {
+        if self.status != RecordingCoordinationStatus::Ready {
+            return Err(RecordingCoordinationError::InvalidState);
+        }
         if !self.participants.contains(participant_id) {
             return Err(RecordingCoordinationError::ParticipantNotSelected);
         }
@@ -159,5 +162,17 @@ impl RecordingCoordination {
 
     pub fn is_ready(&self) -> bool {
         self.status == RecordingCoordinationStatus::Ready
+    }
+
+    pub fn opening_confirmed_participants(&self) -> &[ParticipantId] {
+        &self.opening_confirmed
+    }
+
+    pub fn all_opening_confirmed(&self) -> bool {
+        self.is_ready()
+            && self
+                .participants
+                .iter()
+                .all(|participant| self.opening_confirmed.contains(participant))
     }
 }
