@@ -5,8 +5,8 @@ use crate::identity::ProductionId;
 use crate::participant::ParticipantId;
 use crate::participation::Participation;
 use crate::recording::{
-    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError,
-    RecordingId, RecordingLifecycleError, RecordingStatus,
+    Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError, RecordingId,
+    RecordingLifecycleError, RecordingStatus,
 };
 use crate::role::ProductionAction;
 use std::time::{Duration, SystemTime};
