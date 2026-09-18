@@ -1,7 +1,7 @@
 use crate::session::{
-    add_participation_to_production_session, check_production_timeout,
-    complete_production_session, create_production_session, get_production_session,
-    start_production_session, DEFAULT_ARTIFACT_COMPLETION_TIMEOUT,
+    add_participation_to_production_session, check_production_timeout, complete_production_session,
+    create_production_session, get_production_session, start_production_session,
+    DEFAULT_ARTIFACT_COMPLETION_TIMEOUT,
 };
 use crate::session_context::{SessionContext, SessionContextProvider};
 use nc_pore_core::identity::ProductionId;
