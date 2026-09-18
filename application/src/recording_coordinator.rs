@@ -320,13 +320,40 @@ mod tests {
             coordinator.snapshot().unwrap().phase,
             crate::recording_state::ClientRecordingPhase::Stopped
         );
-        coordinator.complete("artifact-001").unwrap();
+        coordinator.complete("artifact-alice-001").unwrap();
+        let partial = coordinator.snapshot().unwrap();
+        assert_eq!(
+            partial.phase,
+            crate::recording_state::ClientRecordingPhase::Stopped
+        );
+        assert_eq!(partial.artifact_id.as_deref(), Some("artifact-alice-001"));
+        assert!(!partial.confirmed);
+
+        drop(coordinator);
+
+        {
+            let mut bob = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("bob"),
+                RecordingId::new("recording-001"),
+            );
+            bob.complete("artifact-bob-001").unwrap();
+        }
+
+        let coordinator = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-001"),
+            ParticipantId::new("alice"),
+            RecordingId::new("recording-001"),
+        );
         let state = coordinator.snapshot().unwrap();
         assert_eq!(
             state.phase,
             crate::recording_state::ClientRecordingPhase::Completed
         );
-        assert_eq!(state.artifact_id.as_deref(), Some("artifact-001"));
+        assert_eq!(state.artifact_id.as_deref(), Some("artifact-alice-001"));
+        assert!(state.confirmed);
     }
 
     #[test]

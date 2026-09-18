@@ -69,6 +69,8 @@ struct PersistedProductionSession {
     #[serde(default)]
     recording_coordination: Option<PersistedRecordingCoordination>,
     activities: Vec<PersistedActivityEvent>,
+    #[serde(default)]
+    completion_reason: Option<PersistedProductionCompletionReason>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -76,6 +78,13 @@ enum PersistedProductionStatus {
     Created,
     Active,
     Completed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+enum PersistedProductionCompletionReason {
+    AllRecordingsCompleted,
+    ArtifactCompletionTimeout,
+    HostForced,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +107,18 @@ struct PersistedRecording {
     #[serde(default)]
     participant_id: Option<String>,
     status: PersistedRecordingStatus,
+    #[serde(default)]
+    artifact_id: Option<String>,
+    #[serde(default)]
+    artifact_slots: Option<Vec<PersistedRecordingArtifactSlot>>,
+    #[serde(default)]
+    stopped_at_nanos: Option<u128>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedRecordingArtifactSlot {
+    participant_id: String,
+    #[serde(default)]
     artifact_id: Option<String>,
 }
 
@@ -146,6 +167,7 @@ enum PersistedActivityType {
     RecordingAdded,
     RecordingStarted,
     RecordingStopped,
+    RecordingArtifactCompleted,
     RecordingCompleted,
 }
 
@@ -153,6 +175,38 @@ enum PersistedActivityType {
 enum PersistedActivityResult {
     Success,
     Rejected,
+}
+
+impl From<nc_pore_core::session::ProductionCompletionReason>
+    for PersistedProductionCompletionReason
+{
+    fn from(reason: nc_pore_core::session::ProductionCompletionReason) -> Self {
+        match reason {
+            nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted => {
+                Self::AllRecordingsCompleted
+            }
+            nc_pore_core::session::ProductionCompletionReason::ArtifactCompletionTimeout => {
+                Self::ArtifactCompletionTimeout
+            }
+            nc_pore_core::session::ProductionCompletionReason::HostForced => Self::HostForced,
+        }
+    }
+}
+
+impl From<PersistedProductionCompletionReason>
+    for nc_pore_core::session::ProductionCompletionReason
+{
+    fn from(reason: PersistedProductionCompletionReason) -> Self {
+        match reason {
+            PersistedProductionCompletionReason::AllRecordingsCompleted => {
+                Self::AllRecordingsCompleted
+            }
+            PersistedProductionCompletionReason::ArtifactCompletionTimeout => {
+                Self::ArtifactCompletionTimeout
+            }
+            PersistedProductionCompletionReason::HostForced => Self::HostForced,
+        }
+    }
 }
 
 impl From<ProductionStatus> for PersistedProductionStatus {
@@ -239,6 +293,7 @@ impl From<ActivityType> for PersistedActivityType {
             ActivityType::RecordingAdded => Self::RecordingAdded,
             ActivityType::RecordingStarted => Self::RecordingStarted,
             ActivityType::RecordingStopped => Self::RecordingStopped,
+            ActivityType::RecordingArtifactCompleted => Self::RecordingArtifactCompleted,
             ActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
@@ -254,6 +309,7 @@ impl From<PersistedActivityType> for ActivityType {
             PersistedActivityType::RecordingAdded => Self::RecordingAdded,
             PersistedActivityType::RecordingStarted => Self::RecordingStarted,
             PersistedActivityType::RecordingStopped => Self::RecordingStopped,
+            PersistedActivityType::RecordingArtifactCompleted => Self::RecordingArtifactCompleted,
             PersistedActivityType::RecordingCompleted => Self::RecordingCompleted,
         }
     }
@@ -394,11 +450,25 @@ impl PersistedProductionSession {
                 .iter()
                 .map(|recording| PersistedRecording {
                     id: recording.id().value().to_owned(),
-                    participant_id: recording
-                        .participant_id()
-                        .map(|participant| participant.value().to_owned()),
+                    participant_id: None,
                     status: recording.status().into(),
-                    artifact_id: recording.artifact_id().map(|id| id.value().to_owned()),
+                    artifact_id: None,
+                    artifact_slots: Some(
+                        recording
+                            .artifact_slots()
+                            .iter()
+                            .map(|slot| PersistedRecordingArtifactSlot {
+                                participant_id: slot.participant_id().value().to_owned(),
+                                artifact_id: slot.artifact_id().map(|id| id.value().to_owned()),
+                            })
+                            .collect(),
+                    ),
+                    stopped_at_nanos: recording.stopped_at().map(|timestamp| {
+                        timestamp
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos()
+                    }),
                 })
                 .collect(),
             recording_coordination: session
@@ -424,6 +494,7 @@ impl PersistedProductionSession {
                     result: activity.result.into(),
                 })
                 .collect(),
+            completion_reason: session.completion_reason().map(Into::into),
         }
     }
 
@@ -448,14 +519,53 @@ impl PersistedProductionSession {
             .recordings
             .into_iter()
             .map(|recording| {
-                Recording::reconstitute(
-                    RecordingId::new(recording.id),
-                    recording.participant_id.map(ParticipantId::new),
-                    recording.status.into(),
-                    recording.artifact_id.map(RecordingArtifactId::new),
-                )
+                let artifact_slots = recording.artifact_slots.map(|slots| {
+                    slots
+                        .into_iter()
+                        .map(|slot| {
+                            nc_pore_core::recording::RecordingArtifactSlot::reconstitute(
+                                ParticipantId::new(slot.participant_id),
+                                slot.artifact_id.map(RecordingArtifactId::new),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                });
+
+                let stopped_at = recording
+                    .stopped_at_nanos
+                    .map(|value| {
+                        let seconds = value / 1_000_000_000;
+                        let nanos = value % 1_000_000_000;
+                        if seconds > u64::MAX as u128 {
+                            return Err(FileProductionSessionRepositoryError::InvalidTimestamp(
+                                value,
+                            ));
+                        }
+                        UNIX_EPOCH
+                            .checked_add(Duration::new(seconds as u64, nanos as u32))
+                            .ok_or(FileProductionSessionRepositoryError::InvalidTimestamp(
+                                value,
+                            ))
+                    })
+                    .transpose()?;
+
+                if let Some(artifact_slots) = artifact_slots {
+                    Ok(Recording::reconstitute_with_artifact_slots(
+                        RecordingId::new(recording.id),
+                        artifact_slots,
+                        recording.status.into(),
+                        stopped_at,
+                    ))
+                } else {
+                    Ok(Recording::reconstitute(
+                        RecordingId::new(recording.id),
+                        recording.participant_id.map(ParticipantId::new),
+                        recording.status.into(),
+                        recording.artifact_id.map(RecordingArtifactId::new),
+                    ))
+                }
             })
-            .collect();
+            .collect::<Result<Vec<_>, FileProductionSessionRepositoryError>>()?;
 
         let mut activities = Vec::with_capacity(self.activities.len());
         for activity in self.activities {
@@ -490,6 +600,7 @@ impl PersistedProductionSession {
                 recordings,
                 recording_coordination,
                 activities,
+                self.completion_reason.map(Into::into),
             ),
         )
     }

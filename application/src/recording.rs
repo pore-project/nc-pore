@@ -51,7 +51,8 @@ where
         .cloned()
         .ok_or(ExecuteRecordingError::RecordingNotFound)?;
 
-    let mut workflow = RecordingWorkflow::from_recording(recording, [actor.clone()])
+    let participants: Vec<_> = recording.expected_participant_ids().cloned().collect();
+    let mut workflow = RecordingWorkflow::from_recording(recording, participants)
         .map_err(ExecuteRecordingError::Workflow)?;
     workflow
         .begin_ready_phase()
@@ -97,7 +98,7 @@ where
         .request_stop()
         .map_err(ExecuteRecordingError::Workflow)?;
     workflow
-        .complete(RecordingArtifactId::new(artifact.id.value()))
+        .complete(actor, RecordingArtifactId::new(artifact.id.value()))
         .map_err(ExecuteRecordingError::Workflow)?;
 
     session
@@ -270,10 +271,10 @@ mod tests {
 
         assert_eq!(
             recording.status(),
-            nc_pore_core::recording::RecordingStatus::Completed
+            nc_pore_core::recording::RecordingStatus::Stopped
         );
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording.artifact_for_participant(&actor).unwrap().value(),
             artifact.id.value()
         );
         assert_eq!(artifact.production_id(), Some("production-001"));
@@ -371,10 +372,10 @@ mod tests {
 
         assert_eq!(
             recording.status(),
-            nc_pore_core::recording::RecordingStatus::Completed
+            nc_pore_core::recording::RecordingStatus::Stopped
         );
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording.artifact_for_participant(&actor).unwrap().value(),
             artifact.id.value()
         );
         assert_eq!(artifact.production_id(), Some("production-001"));

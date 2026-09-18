@@ -26,6 +26,7 @@ pub enum ProductionAction {
     ManageParticipants,
     ManageRecordings,
     ParticipateInRecording,
+    CompleteRecordingArtifact,
 }
 
 impl ParticipantRole {
@@ -44,8 +45,13 @@ impl ParticipantRole {
                     | ProductionAction::ManageParticipants
                     | ProductionAction::ManageRecordings
                     | ProductionAction::ParticipateInRecording
+                    | ProductionAction::CompleteRecordingArtifact
             ),
-            Self::Participant => matches!(action, ProductionAction::ParticipateInRecording),
+            Self::Participant => matches!(
+                action,
+                ProductionAction::ParticipateInRecording
+                    | ProductionAction::CompleteRecordingArtifact
+            ),
             Self::Guest => false,
         }
     }
@@ -60,12 +66,14 @@ mod tests {
         assert!(ParticipantRole::Owner.allows(ProductionAction::StartSession));
         assert!(ParticipantRole::Owner.allows(ProductionAction::ManageParticipants));
         assert!(ParticipantRole::Owner.allows(ProductionAction::ParticipateInRecording));
+        assert!(ParticipantRole::Owner.allows(ProductionAction::CompleteRecordingArtifact));
     }
 
     #[test]
     fn producer_has_participant_capabilities_but_not_owner_only_semantics() {
         assert!(ParticipantRole::Producer.allows(ProductionAction::ManageRecordings));
         assert!(ParticipantRole::Producer.allows(ProductionAction::ParticipateInRecording));
+        assert!(ParticipantRole::Producer.allows(ProductionAction::CompleteRecordingArtifact));
     }
 
     #[test]
@@ -73,6 +81,7 @@ mod tests {
         assert!(!ParticipantRole::Participant.allows(ProductionAction::ManageParticipants));
         assert!(!ParticipantRole::Participant.allows(ProductionAction::StartSession));
         assert!(ParticipantRole::Participant.allows(ProductionAction::ParticipateInRecording));
+        assert!(ParticipantRole::Participant.allows(ProductionAction::CompleteRecordingArtifact));
     }
 
     #[test]

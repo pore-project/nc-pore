@@ -22,13 +22,10 @@ pub enum ClientRecordingRole {
 pub struct ClientRecordingParticipant {
     pub id: String,
     pub ready: bool,
+    pub artifact_id: Option<String>,
 }
 
 /// Authoritative application read model for the recording surface.
-///
-/// This is deliberately a projection of the Core-owned ProductionSession. It
-/// contains no recording lifecycle logic and does not invent states that Core
-/// can persist.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientRecordingState {
     pub recording_id: String,
@@ -36,6 +33,7 @@ pub struct ClientRecordingState {
     pub role: ClientRecordingRole,
     pub participants: Vec<ClientRecordingParticipant>,
     pub confirmed: bool,
+    /// The current actor's participant Artifact, if one has been confirmed.
     pub artifact_id: Option<String>,
 }
 
@@ -75,71 +73,31 @@ pub fn recording_state(
         .recording_coordination()
         .filter(|coordination| coordination.recording_id().value() == recording_id);
 
-    let (phase, participants) = match recording.status() {
-        RecordingStatus::Completed => (
-            ClientRecordingPhase::Completed,
-            coordination
-                .map(|coordination| {
-                    coordination
-                        .participants()
-                        .iter()
-                        .map(|participant| ClientRecordingParticipant {
-                            id: participant.value().to_owned(),
-                            ready: coordination.ready_participants().contains(participant),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-        ),
-        RecordingStatus::Stopped => (
-            ClientRecordingPhase::Stopped,
-            coordination
-                .map(|coordination| {
-                    coordination
-                        .participants()
-                        .iter()
-                        .map(|participant| ClientRecordingParticipant {
-                            id: participant.value().to_owned(),
-                            ready: coordination.ready_participants().contains(participant),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-        ),
-        RecordingStatus::Recording => (
-            ClientRecordingPhase::Recording,
-            coordination
-                .map(|coordination| {
-                    coordination
-                        .participants()
-                        .iter()
-                        .map(|participant| ClientRecordingParticipant {
-                            id: participant.value().to_owned(),
-                            ready: coordination.ready_participants().contains(participant),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-        ),
+    let participants = recording
+        .expected_participant_ids()
+        .map(|participant| ClientRecordingParticipant {
+            id: participant.value().to_owned(),
+            ready: coordination
+                .map(|value| value.ready_participants().contains(participant))
+                .unwrap_or(false),
+            artifact_id: recording
+                .artifact_for_participant(participant)
+                .map(|artifact| artifact.value().to_owned()),
+        })
+        .collect::<Vec<_>>();
+
+    let phase = match recording.status() {
+        RecordingStatus::Completed => ClientRecordingPhase::Completed,
+        RecordingStatus::Stopped => ClientRecordingPhase::Stopped,
+        RecordingStatus::Recording => ClientRecordingPhase::Recording,
         RecordingStatus::Prepared => {
             let coordination =
                 coordination.ok_or(RecordingStateError::RecordingCoordinationNotFound)?;
-            let phase = match coordination.status() {
+            match coordination.status() {
                 RecordingCoordinationStatus::Ready => ClientRecordingPhase::Ready,
                 RecordingCoordinationStatus::Preparing
                 | RecordingCoordinationStatus::WaitingForReady => ClientRecordingPhase::Preparing,
-            };
-            (
-                phase,
-                coordination
-                    .participants()
-                    .iter()
-                    .map(|participant| ClientRecordingParticipant {
-                        id: participant.value().to_owned(),
-                        ready: coordination.ready_participants().contains(participant),
-                    })
-                    .collect(),
-            )
+            }
         }
     };
 
@@ -149,7 +107,9 @@ pub fn recording_state(
         role,
         participants,
         confirmed: recording.status() == RecordingStatus::Completed,
-        artifact_id: recording.artifact_id().map(|id| id.value().to_owned()),
+        artifact_id: recording
+            .artifact_for_participant(&nc_pore_core::participant::ParticipantId::new(actor_id))
+            .map(|artifact| artifact.value().to_owned()),
     })
 }
 
@@ -161,6 +121,7 @@ mod tests {
     use nc_pore_core::participation::Participation;
     use nc_pore_core::recording::Recording;
     use nc_pore_core::role::ParticipantRole;
+    use nc_pore_core::session::ProductionSession;
 
     fn session_with_recording() -> ProductionSession {
         let owner = ParticipantId::new("alice");
@@ -206,6 +167,7 @@ mod tests {
         assert_eq!(state.role, ClientRecordingRole::Host);
         assert_eq!(state.participants.len(), 2);
         assert!(!state.confirmed);
+        assert!(state.participants.iter().all(|p| p.artifact_id.is_none()));
     }
 
     #[test]
@@ -243,10 +205,11 @@ mod tests {
         assert_eq!(state.phase, ClientRecordingPhase::Stopped);
         assert!(!state.confirmed);
         assert_eq!(state.artifact_id, None);
+        assert!(state.participants.iter().all(|p| p.artifact_id.is_none()));
     }
 
     #[test]
-    fn reports_recording_and_completion_from_core_recording() {
+    fn reports_partial_artifacts_without_completing_recording() {
         let mut session = session_with_recording();
         let alice = ParticipantId::new("alice");
         let bob = ParticipantId::new("bob");
@@ -258,25 +221,70 @@ mod tests {
             .mark_recording_ready_by(&bob, &recording_id)
             .unwrap();
         session.start_recording_by(&alice, &recording_id).unwrap();
-
-        let state = recording_state(&session, "bob", "recording-001").unwrap();
-        assert_eq!(state.phase, ClientRecordingPhase::Recording);
-
         session.stop_recording_by(&alice, &recording_id).unwrap();
+        session
+            .complete_recording_by(
+                &alice,
+                &recording_id,
+                nc_pore_core::recording::RecordingArtifactId::new("alice-artifact"),
+            )
+            .unwrap();
+
         let state = recording_state(&session, "alice", "recording-001").unwrap();
         assert_eq!(state.phase, ClientRecordingPhase::Stopped);
         assert!(!state.confirmed);
+        assert_eq!(state.artifact_id.as_deref(), Some("alice-artifact"));
+        assert_eq!(
+            state
+                .participants
+                .iter()
+                .find(|p| p.id == "bob")
+                .and_then(|p| p.artifact_id.as_deref()),
+            None
+        );
+    }
+
+    #[test]
+    fn reports_recording_completed_only_after_last_expected_artifact() {
+        let mut session = session_with_recording();
+        let alice = ParticipantId::new("alice");
+        let bob = ParticipantId::new("bob");
+        let recording_id = nc_pore_core::recording::RecordingId::new("recording-001");
+        session
+            .mark_recording_ready_by(&alice, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session.start_recording_by(&alice, &recording_id).unwrap();
+        session.stop_recording_by(&alice, &recording_id).unwrap();
 
         session
             .complete_recording_by(
                 &alice,
                 &recording_id,
-                nc_pore_core::recording::RecordingArtifactId::new("artifact-001"),
+                nc_pore_core::recording::RecordingArtifactId::new("alice-artifact"),
             )
             .unwrap();
+        session
+            .complete_recording_by(
+                &bob,
+                &recording_id,
+                nc_pore_core::recording::RecordingArtifactId::new("bob-artifact"),
+            )
+            .unwrap();
+
         let state = recording_state(&session, "alice", "recording-001").unwrap();
         assert_eq!(state.phase, ClientRecordingPhase::Completed);
         assert!(state.confirmed);
-        assert_eq!(state.artifact_id.as_deref(), Some("artifact-001"));
+        assert_eq!(state.artifact_id.as_deref(), Some("alice-artifact"));
+        assert_eq!(
+            state
+                .participants
+                .iter()
+                .find(|p| p.id == "bob")
+                .and_then(|p| p.artifact_id.as_deref()),
+            Some("bob-artifact")
+        );
     }
 }

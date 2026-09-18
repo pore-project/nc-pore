@@ -23,6 +23,8 @@ fn completed_session() -> ProductionSession {
     let recording_id = RecordingId::new("recording-001");
     let mut session = ProductionSession::new_with_actor(production_id, Some(owner.clone()));
 
+    let participant = ParticipantId::new("participant-1");
+
     session
         .add_participation_by(
             &owner,
@@ -36,9 +38,24 @@ fn completed_session() -> ProductionSession {
             ),
         )
         .unwrap();
+    session
+        .add_participation_by(
+            &owner,
+            Participation::new(participant.clone(), ParticipantRole::Participant),
+        )
+        .unwrap();
     session.start_by(&owner).unwrap();
     session
         .add_recording_by(&owner, Recording::new(recording_id.value()))
+        .unwrap();
+    session
+        .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
+        .unwrap();
+    session
+        .mark_recording_ready_by(&owner, &recording_id)
+        .unwrap();
+    session
+        .mark_recording_ready_by(&participant, &recording_id)
         .unwrap();
     session.start_recording_by(&owner, &recording_id).unwrap();
     session.stop_recording_by(&owner, &recording_id).unwrap();
@@ -46,7 +63,14 @@ fn completed_session() -> ProductionSession {
         .complete_recording_by(
             &owner,
             &recording_id,
-            RecordingArtifactId::new("artifact-001"),
+            RecordingArtifactId::new("artifact-owner"),
+        )
+        .unwrap();
+    session
+        .complete_recording_by(
+            &participant,
+            &recording_id,
+            RecordingArtifactId::new("artifact-participant"),
         )
         .unwrap();
 
@@ -76,7 +100,25 @@ fn completed_recording_survives_repository_restart() {
 
     let recording = &reloaded.recordings()[0];
     assert_eq!(recording.status(), RecordingStatus::Completed);
-    assert_eq!(recording.artifact_id().unwrap().value(), "artifact-001");
+    assert_eq!(recording.artifact_slots().len(), 2);
+    assert_eq!(
+        recording
+            .artifact_for_participant(&ParticipantId::new("owner-1"))
+            .unwrap()
+            .value(),
+        "artifact-owner"
+    );
+    assert_eq!(
+        recording
+            .artifact_for_participant(&ParticipantId::new("participant-1"))
+            .unwrap()
+            .value(),
+        "artifact-participant"
+    );
+    assert_eq!(
+        reloaded.completion_reason(),
+        Some(nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted)
+    );
     assert_eq!(reloaded.activities().len(), expected_activity_count);
     assert_eq!(
         reloaded.activities()[expected_activity_count - 1].activity_type,

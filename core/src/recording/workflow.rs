@@ -59,9 +59,13 @@ impl RecordingWorkflow {
     }
 
     pub fn from_recording(
-        recording: Recording,
+        mut recording: Recording,
         participants: impl IntoIterator<Item = ParticipantId>,
     ) -> Result<Self, RecordingWorkflowError> {
+        let participants: Vec<_> = participants.into_iter().collect();
+        if recording.artifact_slots().is_empty() {
+            recording.set_expected_participants(participants.clone())?;
+        }
         let coordination = RecordingCoordination::new(recording.id().clone(), participants)?;
 
         Ok(Self {
@@ -148,13 +152,17 @@ impl RecordingWorkflow {
 
     pub fn complete(
         &mut self,
+        participant_id: &ParticipantId,
         artifact_id: RecordingArtifactId,
     ) -> Result<(), RecordingWorkflowError> {
         if self.status != RecordingWorkflowStatus::Stopping {
             return Err(RecordingWorkflowError::InvalidState);
         }
-        self.recording.complete(artifact_id)?;
-        self.status = RecordingWorkflowStatus::Completed;
+        self.recording
+            .complete_for_participant(participant_id, artifact_id)?;
+        if self.recording.status() == RecordingStatus::Completed {
+            self.status = RecordingWorkflowStatus::Completed;
+        }
         Ok(())
     }
 
@@ -234,7 +242,17 @@ mod tests {
         workflow.request_stop().unwrap();
 
         workflow
-            .complete(RecordingArtifactId::new("artifact-workflow-01"))
+            .complete(
+                &participant("participant-a"),
+                RecordingArtifactId::new("artifact-workflow-a"),
+            )
+            .unwrap();
+        assert!(!workflow.is_complete());
+        workflow
+            .complete(
+                &participant("participant-b"),
+                RecordingArtifactId::new("artifact-workflow-b"),
+            )
             .unwrap();
         assert!(workflow.is_complete());
     }
@@ -275,8 +293,7 @@ mod tests {
     // TEST-07
     #[test]
     fn workflow_can_reconstitute_and_return_existing_recording_state() {
-        let mut recording = Recording::new("recording-workflow-02");
-        recording.assign_participant(participant("participant-a"));
+        let recording = Recording::new("recording-workflow-02");
         let mut workflow =
             RecordingWorkflow::from_recording(recording.clone(), [participant("participant-a")])
                 .unwrap();
@@ -286,15 +303,20 @@ mod tests {
         workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
         workflow
-            .complete(RecordingArtifactId::new("artifact-workflow-02"))
+            .complete(
+                &participant("participant-a"),
+                RecordingArtifactId::new("artifact-workflow-02"),
+            )
             .unwrap();
 
         let result = workflow.into_recording();
         assert_eq!(result.id(), recording.id());
-        assert_eq!(result.participant_id(), recording.participant_id());
         assert_eq!(result.status(), RecordingStatus::Completed);
         assert_eq!(
-            result.artifact_id().unwrap().value(),
+            result
+                .artifact_for_participant(&participant("participant-a"))
+                .unwrap()
+                .value(),
             "artifact-workflow-02"
         );
     }

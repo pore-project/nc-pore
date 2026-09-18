@@ -77,3 +77,25 @@ where
 {
     ClientSessionService::new(repository).start(production_id, actor_id)
 }
+
+pub fn force_close_production<R>(
+    repository: &mut R,
+    production_id: &str,
+    actor_id: &str,
+) -> Result<ClientProductionSession, ClientSessionError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    ClientSessionService::new(repository).force_close(production_id, actor_id)
+}
+
+pub fn check_production_timeout<R>(
+    repository: &mut R,
+    production_id: &str,
+    now: std::time::SystemTime,
+) -> Result<ClientProductionSession, ClientSessionError<R::Error>>
+where
+    R: ProductionSessionRepository,
+{
+    ClientSessionService::new(repository).check_timeout(production_id, now)
+}
