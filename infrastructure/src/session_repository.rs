@@ -69,6 +69,8 @@ struct PersistedProductionSession {
     #[serde(default)]
     recording_coordination: Option<PersistedRecordingCoordination>,
     activities: Vec<PersistedActivityEvent>,
+    #[serde(default)]
+    completion_reason: Option<PersistedProductionCompletionReason>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -76,6 +78,13 @@ enum PersistedProductionStatus {
     Created,
     Active,
     Completed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+enum PersistedProductionCompletionReason {
+    AllRecordingsCompleted,
+    ArtifactCompletionTimeout,
+    HostForced,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +107,18 @@ struct PersistedRecording {
     #[serde(default)]
     participant_id: Option<String>,
     status: PersistedRecordingStatus,
+    #[serde(default)]
+    artifact_id: Option<String>,
+    #[serde(default)]
+    artifact_slots: Option<Vec<PersistedRecordingArtifactSlot>>,
+    #[serde(default)]
+    stopped_at_nanos: Option<u128>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedRecordingArtifactSlot {
+    participant_id: String,
+    #[serde(default)]
     artifact_id: Option<String>,
 }
 
