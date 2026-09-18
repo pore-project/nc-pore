@@ -105,6 +105,15 @@ The existing `NextcloudArtifactPath` contract remains authoritative for the fina
 
 The browser receives only the bounded upload authorization and the final filename. It does not construct or own the authoritative Nextcloud storage path.
 
+## Collision and concurrency rule
+
+Preparation treats the path and filename as a content-addressed target candidate:
+
+1. If the intended filename already exists and its exact byte size and SHA-256 match the prepared artifact, the existing file is reused and no upload authorization is created.
+2. If the intended filename exists with different content, the connector selects the first free numeric suffix: `name (2).ext`, then `name (3).ext`, and so on. Existing files are never overwritten by PoRE transport.
+3. The temporary public share grants create permission only. The browser also sends `If-None-Match: *` on the final PUT. A race that makes the selected filename unavailable is treated as a collision: the temporary authorization is closed, preparation is repeated, and the next free target is selected.
+4. Reused and uploaded artifacts both pass through the same server-side size + SHA-256 verification and transport-close lifecycle before completion.
+
 ## Consequences
 
 - There is one artifact transport path to Nextcloud.
