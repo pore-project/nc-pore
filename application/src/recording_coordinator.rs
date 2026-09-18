@@ -307,6 +307,17 @@ mod tests {
                 RecordingId::new("recording-001"),
             );
             bob.mark_ready().unwrap();
+            bob.confirm_opening().unwrap();
+        }
+
+        {
+            let mut alice = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            alice.confirm_opening().unwrap();
         }
 
         let mut coordinator = RecordingCoordinator::new(
