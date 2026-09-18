@@ -104,14 +104,6 @@ Aufnahmezeit und menschenlesbarer Display Name sind **keine fachlichen Bestandte
 
 Damit bleibt die menschenlesbare Nextcloud-Ordnerstruktur eine Connector-Funktion und keine Core-Verantwortung.
 
-## Authentifizierung und Sicherheit
-
-V1 verwendet Nextcloud App Passwords. Das normale Nextcloud-Benutzerpasswort wird nicht als dauerhafte Provider-Credential verwendet.
-
-Für eine öffentliche V1-Freigabe werden **ausschließlich HTTPS-Endpunkte** unterstützt. HTTP ist kein zulässiger produktiver Konfigurationspfad.
-
-Credential-/Secret-Speicherung bleibt außerhalb des fachlichen Synchronisationsmodells.
-
 ## Bewusste Abgrenzung
 
 Nicht Bestandteil dieser V1-Entscheidung sind:
@@ -134,9 +126,7 @@ Die verbleibenden V1-Härtungspunkte sind:
 
 1. Provider-Metadaten zuverlässig durch den vollständigen normalen Synchronisationspfad an den Nextcloud-Connector übergeben.
 2. Remote-Payload-Integrität bei der Erkennung bereits vorhandener Artefakte im vollständigen Providerpfad nachweisen.
-3. Verhalten bei unterbrochenen Chunked Uploads gegen eine reale Nextcloud-Instanz verifizieren.
-4. Einen reproduzierbaren Nextcloud-End-to-End-/Smoke-Test bereitstellen.
-5. Den ersten nutzbaren Client fertigstellen.
+3. Den ersten nutzbaren Client fertigstellen.
 
 Diese Punkte ändern die in diesem ADR getroffene Architekturentscheidung nicht.
 
@@ -205,6 +195,6 @@ V1 uses Nextcloud App Passwords. For a public V1 release, **HTTPS is mandatory**
 
 The provider boundary, local synchronization queue, idempotency/conflict semantics, Nextcloud file representation, payload integrity checks, and Production-owner storage targeting are implemented in the current V1 application path.
 
-Remaining V1 hardening consists of complete metadata propagation through the normal provider path, remote integrity verification for already-present artifacts in the full provider path, real-Nextcloud interruption testing, a reproducible end-to-end smoke test, and completion of the first usable client.
+Remaining V1 hardening consists of complete metadata propagation through the normal provider path, remote integrity verification for already-present artifacts in the full provider path, and completion of the first usable client.
 
 These remaining tasks do not change the architectural decision recorded here.
