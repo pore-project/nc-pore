@@ -384,10 +384,8 @@ mod tests {
     fn duplicate_expected_participant_is_rejected() {
         let mut recording = Recording::new("recording-test-02");
         assert_eq!(
-            recording.set_expected_participants([
-                participant_id("alice"),
-                participant_id("alice"),
-            ]),
+            recording
+                .set_expected_participants([participant_id("alice"), participant_id("alice"),]),
             Err(RecordingLifecycleError::DuplicateExpectedParticipant {
                 participant_id: participant_id("alice"),
             })
