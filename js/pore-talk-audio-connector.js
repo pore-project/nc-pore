@@ -19,8 +19,8 @@
 			this._outputTrackId = null
 		}
 
-		connectTrackSource(inputTrackId, trackSource, outputTrackId = 'default') {
-			if (inputTrackId !== 'default' || this._source) throw new Error('PoRE Talk microphone observer can only be connected once')
+		connectTrackSource(inputTrackId, trackSource, outputTrackId = 'audio') {
+			if (inputTrackId !== 'audio' || this._source) throw new Error('PoRE Talk microphone observer can only be connected once')
 			this._source = trackSource
 			this._outputTrackId = outputTrackId
 			trackSource.on('outputTrackSet', this._handleOutputTrackSet)
@@ -28,7 +28,7 @@
 			this._onTrack(trackSource.getOutputTrack(outputTrackId))
 		}
 
-		disconnectTrackSource(inputTrackId, trackSource, outputTrackId = 'default') {
+		disconnectTrackSource(inputTrackId, trackSource, outputTrackId = 'audio') {
 			if (inputTrackId !== 'default' || this._source !== trackSource || this._outputTrackId !== outputTrackId) return
 			trackSource.off('outputTrackSet', this._handleOutputTrackSet)
 			trackSource.off('outputTrackEnabled', this._handleOutputTrackEnabled)
