@@ -114,16 +114,6 @@
 			return this.closingSignet
 		}
 
-		markClosingSignet(at = new Date().toISOString()) {
-			if (!this.isRecording()) throw new Error('PoRE closing signet requires an active local capture')
-			if (this.closingSignet) return this.closingSignet
-			this.closingTestTonePending = true
-			this.closingTestToneSamplesWritten = 0
-			this.closingSignet = { kind: 'closing-test-tone', occurredAt: at, elapsedMs: null, sampleOffset: null, toneHz: 800, toneDurationMs: OPENING_TEST_TONE_MS }
-			window.dispatchEvent(new CustomEvent('pore:recording-closing-signet', { detail: { sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, ...this.closingSignet } }))
-			return this.closingSignet
-		}
-
 		_acceptSamples(samples) {
 			if (this.persistenceSafetyStopEmitted) return
 			if (this.openingTestTonePending) {
@@ -137,7 +127,8 @@
 				}
 				this.openingTestToneSamplesWritten += tone
 				this.openingTestTonePending = this.openingTestToneSamplesWritten < toneSamples
-				if (this.openingSignet && this.openingSignet.sampleOffset === null) { this.openingSignet.sampleOffset = sampleOffset; this.openingSignet.elapsedMs = sampleOffset * 1000 / this.sampleRate; this.openingSignetReadyResolve?.(this.openingSignet) }
+				if (this.openingSignet && this.openingSignet.sampleOffset === null) { this.openingSignet.sampleOffset = sampleOffset; this.openingSignet.elapsedMs = sampleOffset * 1000 / this.sampleRate }
+				if (this.openingSignet && !this.openingTestTonePending) this.openingSignetReadyResolve?.(this.openingSignet)
 			}
 
 			if (this.closingTestTonePending) {
@@ -151,7 +142,8 @@
 				}
 				this.closingTestToneSamplesWritten += tone
 				this.closingTestTonePending = this.closingTestToneSamplesWritten < toneSamples
-				if (this.closingSignet && this.closingSignet.sampleOffset === null) { this.closingSignet.sampleOffset = sampleOffset; this.closingSignet.elapsedMs = sampleOffset * 1000 / this.sampleRate; this.closingSignetReadyResolve?.(this.closingSignet) }
+				if (this.closingSignet && this.closingSignet.sampleOffset === null) { this.closingSignet.sampleOffset = sampleOffset; this.closingSignet.elapsedMs = sampleOffset * 1000 / this.sampleRate }
+				if (this.closingSignet && !this.closingTestTonePending) this.closingSignetReadyResolve?.(this.closingSignet)
 			}
 			this.capturedSamples += samples.length
 			const chunk = float32ToPcm24(samples); this.pendingParts.push(chunk); this.pendingBytes += chunk.length
