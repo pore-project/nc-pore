@@ -125,7 +125,7 @@ final class RecordingTransportController extends OCSController {
 		return new DataResponse([
 			'protocol_version' => 2,
 			'status' => 'rejected',
-			'error_code' => 'nextcloud_transport_failed',
-		], 500);
+			'error_code' => $errorCode,
+		], $status);
 	}
 }
