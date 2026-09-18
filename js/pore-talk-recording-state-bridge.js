@@ -10,7 +10,7 @@
 	'use strict'
 
 	const EVENT = 'pore:recording-state'
-	const REQUIRED_STATES = new Set(['preparing', 'ready', 'opening', 'recording', 'stopping', 'done', 'error'])
+	const REQUIRED_STATES = new Set(['preparing', 'ready', 'opening', 'recording', 'stopped', 'stopping', 'completed', 'done', 'error'])
 
 	const normalize = snapshot => {
 		if (!snapshot || typeof snapshot !== 'object') return null
