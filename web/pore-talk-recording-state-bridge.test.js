@@ -52,6 +52,28 @@ describe('Talk recording state bridge', () => {
 		expect(snapshot.listener).toBe(true)
 		expect(snapshot.state).toBe('recording')
 	})
+
+	it('preserves authoritative stopped state', () => {
+		const snapshot = window.PoRETalkRecordingStateNormalize({
+			role: 'participant',
+			state: 'stopped',
+			participants: [{ ready: true, opening_confirmed: true }],
+		})
+		expect(snapshot.state).toBe('stopped')
+		expect(snapshot.confirmed).toBe(false)
+	})
+
+	it('preserves authoritative completed state and confirmation', () => {
+		const snapshot = window.PoRETalkRecordingStateNormalize({
+			role: 'participant',
+			state: 'completed',
+			production_status: 'completed',
+			participants: [{ ready: true, opening_confirmed: true, artifact_id: 'artifact-1' }],
+		})
+		expect(snapshot.state).toBe('completed')
+		expect(snapshot.confirmed).toBe(true)
+		expect(snapshot.productionStatus).toBe('completed')
+	})
 })
 
 describe('PoRE local audio capture', () => {
