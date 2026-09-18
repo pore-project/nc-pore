@@ -136,10 +136,11 @@
 			return change
 		}
 
-		async stop(reason = 'host') {
+		async stop(reason = 'host', { closingSignet = false } = {}) {
 			if (!this.recorder || !this.isRecording()) return null
 			this.state = 'stopping'
 			try {
+				if (closingSignet && typeof this.recorder.markClosingSignet === 'function') this.recorder.markClosingSignet()
 				const artifact = await this.recorder.stop(reason)
 				const enriched = artifact ? { ...artifact, sequence: this.sequence, source: { ...(this.initialSource || {}), ...(artifact.source || {}) }, sourceChanges: this.sourceChanges.slice() } : null
 				this.recorder = null; this.state = 'idle'
