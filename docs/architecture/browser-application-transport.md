@@ -1,17 +1,57 @@
 # Browser-to-Application Artifact Transport
 
-The browser recorder is a capture client. After local finalization it produces a persistence handoff containing authoritative production/recording identity plus distinct technical capture and recorder-session identities.
+The browser recorder is a capture client. After local finalization it produces a durable persistence handoff containing authoritative production/recording identity plus distinct technical capture and recorder-session identities.
 
-The handoff is intentionally independent of WebDAV and persistence implementation details.
+The finalized payload is not uploaded to a PoRe PHP multipart endpoint.
 
 ## Required runtime chain
 
-Browser capture -> authenticated transport -> Application BrowserRecordingArtifact -> RecordingArtifactProcessor -> PersistenceProvider -> SynchronizationWork -> ArtifactTransfer -> Nextcloud -> authoritative recording completion.
+```text
+Browser capture
+ -> durable local preservation
+ -> completion job
+ -> authenticated Nextcloud transport prepare
+ -> temporary Nextcloud upload authorization
+ -> browser PUT to bounded public WebDAV authorization
+ -> authenticated remote verification
+ -> idempotent transport close
+ -> authoritative recording completion
+```
 
-The repository currently contains the Rust domain/application/recorder/infrastructure workspace and the Nextcloud PHP host integration, but no Rust HTTP runtime composition root. Consequently this document defines the runtime boundary without pretending that a PHP route or Rust library is already an accepting HTTP service.
+The PoRe application endpoints are control-plane operations. They receive metadata, transport handles and integrity information, but never the finalized audio payload.
 
-## Acceptance criteria
+## Responsibility boundary
 
-A concrete runtime is complete only when it can demonstrate authenticated browser submission, decoding and validation of all required identities, construction of BrowserRecordingArtifact, persistence through the existing RecordingArtifactProcessor, creation/recovery of existing synchronization work, transfer through the existing ArtifactTransfer implementation, remote integrity verification, and completion through the existing authoritative recording completion boundary.
+The browser completion job owns durable transport state and recovery.
 
-No direct browser-to-WebDAV path is permitted.
+The Nextcloud connector owns:
+
+- production-owner resolution
+- final Files-relative destination construction
+- temporary public upload authorization
+- WebDAV endpoint and credentials
+- remote file lookup
+- exact size verification
+- SHA-256 verification
+- authorization cleanup
+
+Core and provider-neutral recording code do not know these Nextcloud concepts.
+
+## Completion criterion
+
+A recording is not complete because a browser upload returns HTTP success.
+
+Completion requires:
+
+```text
+remote artifact exists
+AND remote size matches
+AND remote SHA-256 matches
+AND temporary authorization is closed
+```
+
+The local preservation artifact remains available until this condition is satisfied.
+
+## Historical boundary
+
+The former direct browser -> PoRe PHP multipart -> Nextcloud Files path is obsolete and has been removed. The historical ADR-082 prohibition of browser WebDAV transport is superseded for this concrete V1 transport by ADR-083; the provider boundary and separation of Core from Nextcloud mechanics remain mandatory.

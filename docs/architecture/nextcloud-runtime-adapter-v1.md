@@ -2,103 +2,138 @@
 
 ## Status
 
-Implemented as the thin normal Nextcloud app boundary for V1 recording artifact delivery.
+Implemented as the thin Nextcloud host boundary for V1 recording artifact transport.
+
+The finalized-artifact transport is governed by ADR-083.
 
 ## V1 boundary
 
 ```text
-Browser completion
-    -> authenticated Nextcloud OCS endpoint
-    -> RecordingTransportController
-    -> Nextcloud Files API
-    -> authoritative stored artifact
+Browser completion job
+    -> prepare (authenticated OCS control request)
+    -> temporary Nextcloud upload authorization
+    -> browser PUT to temporary public WebDAV authorization
+    -> verify (authenticated OCS control request)
+    -> close temporary authorization
+    -> authoritative recording completion
 ```
 
-The browser already owns a fully finalized and durably persisted transfer artifact. V1 therefore does not introduce a second server-side artifact lifecycle. Nextcloud is the host and owns the authoritative file storage.
+The browser already owns a fully finalized and durably preserved transfer artifact. V1 therefore does not introduce a second server-side recording artifact lifecycle.
 
-The host-neutral PoRe Runtime remains a separate boundary for PoRe-owned processing and future host variants; it is not required to duplicate the authoritative Nextcloud file in V1.
+The payload itself is transferred directly into the final Nextcloud Files location through a temporary, password-protected public upload authorization. The PoRe PHP application handles control-plane preparation, verification and cleanup; it does not receive the audio payload as a multipart upload.
 
-## Browser request
+## Browser control requests
 
-The browser sends a `multipart/form-data` POST to the normal authenticated Nextcloud OCS endpoint:
+The browser uses authenticated OCS requests for three control operations:
 
-`/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact`
+```text
+POST /ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare
+POST /ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/verify
+POST /ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/close
+```
 
-The request contains:
+`prepare` receives only metadata and integrity information:
 
-- `metadata`: JSON metadata with authoritative and technical identities, recording start time, production label and audio format facts
-- `payload`: the finalized WAV blob
+- `core.ProductionId`
+- `core.RecordingId`
+- `recorder.RecordingSessionId`
+- browser technical capture identity
+- recording start time
+- production/participant labels
+- finalized payload size
+- finalized payload SHA-256
 
-The browser sets `OCS-APIRequest: true` and uses the existing Nextcloud session. No second authentication mechanism is introduced.
+It does **not** receive the finalized audio payload.
+
+## Nextcloud transport authorization
+
+During `prepare`, the Nextcloud connector:
+
+1. resolves the production owner;
+2. resolves the configured Files-relative storage root;
+3. constructs the final artifact destination using `NextcloudArtifactPath`;
+4. creates the required destination folders;
+5. creates a temporary password-protected public upload share for the destination folder;
+6. returns an opaque transport handle together with the temporary upload authorization.
+
+The authorization contains a bounded public WebDAV endpoint, share credentials and the final filename. The browser does not construct the authoritative storage path.
+
+Nextcloud's public WebDAV file endpoint is the transport data plane. Non-GET requests use the required `X-Requested-With: XMLHttpRequest` header. citeturn5search0
+
+The temporary share is not the storage object. It only authorizes the one bounded upload operation and is closed after verification.
 
 ## Storage ownership and path contract
 
-The host chooses a **storage root inside the current user's Nextcloud Files tree**. This is a logical Files path, not a server filesystem path. A value such as:
+The host chooses a **storage root inside the production owner's Nextcloud Files tree**. This is a logical Files path, not a server filesystem path. A value such as:
 
 `Büro/interviews`
 
-means that PoRe starts directly below that location through Nextcloud's Files API. PoRe must never receive, construct or use a path such as:
+means that PoRe starts directly below that location. PoRe must never receive, construct or use a path such as:
 
 `/var/www/nextcloud/data/max/files/Büro/interviews/`
 
-The latter is an implementation detail of the Nextcloud installation and is deliberately outside the app contract. In particular, the app must not use direct filesystem access to bypass Nextcloud's permission model.
+The latter is an implementation detail of the Nextcloud installation and remains outside the app contract.
 
-The user-facing Talk settings section shows `audio` as the default placeholder. If no custom root is configured, PoRe uses `audio` at the user's Files root. If the host configures a root, that configured path is the **complete PoRe root**; PoRe does not append `audio` to it.
+The user-facing Talk settings section shows `audio` as the default placeholder. If no custom root is configured, PoRe uses `audio` at the owner's Files root. If the host configures a root, that configured path is the **complete PoRe root**; PoRe does not append `audio` to it.
 
 PoRe then applies its standardized structure directly below the effective root:
 
 ```text
-<effective PoRe root>/YYYY/MM/DD - HH:MIN <production label> - <core.ProductionId>/<captureId>.wav
+<effective PoRe root>/YYYY/MM/DD - HH:MIN <production label> - <core.ProductionId>/<participant>.wav
 ```
 
-Therefore an explicitly configured root produces, for example:
+If no participant label is available, the technical capture identity remains the filename fallback.
 
-```text
-Büro/interviews/2026/09/05 - 15:42 Interview mit Max Muster - <core.ProductionId>/<captureId>.wav
-```
+## Connector responsibility
 
-and the default produces:
+`NextcloudArtifactConnector` owns all Nextcloud-specific mechanics:
 
-```text
-audio/2026/09/05 - 15:42 Interview mit Max Muster - <core.ProductionId>/<captureId>.wav
-```
+- production-owner resolution
+- target folder resolution
+- temporary public share creation
+- share token/password handling
+- public WebDAV upload authorization
+- final artifact lookup
+- remote size verification
+- remote SHA-256 verification
+- idempotent temporary-share cleanup
 
-The responsibility split is intentional:
+The connector does not expose Nextcloud concepts to Core or the provider-neutral recording model.
 
-1. **Host:** chooses the base location in its own Nextcloud Files namespace.
-2. **PoRe:** constructs the standardized organization below that base.
-3. **Nextcloud:** creates/writes the file and remains authoritative for storage and permissions.
-
-The complete returned `path` is a **user-Files-relative Nextcloud path**, never a server data-directory path.
-
-## Talk settings integration
-
-PoRe registers a custom `NC-PoRE` section in the existing Nextcloud Talk settings dialog through Talk's `OCA.Talk.Settings` extension point. This keeps PoRe configuration where Talk users already expect Talk-related settings to live and avoids introducing a separate PoRe settings page.
-
-V1 exposes the storage root as a plain relative path field. The field is empty when no custom root has been saved, so the visible `audio` value is the default placeholder rather than a value that gets concatenated to configured paths. Entering `Büro/interviews` therefore makes `Büro/interviews` the complete PoRe root.
-
-No folder picker is required for V1. This keeps the UI aligned with the existing settings convention and avoids coupling PoRe's storage contract to a second path-selection abstraction.
-
-## Nextcloud storage handoff
-
-`RecordingTransportController` validates the request and obtains the uploaded temporary file through `IRequest::getUploadedFile()`.
-
-`NextcloudArtifactStorage` obtains the authenticated user's Files root through Nextcloud's public `IRootFolder` / `IUserSession` APIs. It resolves the configured logical root below that user root, creates the required folders, and streams the temporary upload into the destination in bounded chunks. No direct access to Nextcloud's underlying data directory is used.
-
-Path components are validated so neither artifact identity nor the host-configured root can escape the user's Files namespace.
+`NextcloudArtifactStorage` is obsolete and is no longer part of the transport path.
 
 ## Authoritative completion
 
-A successful HTTP/OCS response alone is not considered sufficient for PoRe completion.
+A successful upload response alone is **never** considered sufficient for PoRe completion.
 
-Before storage, the server hashes the uploaded temporary payload and checks it against the browser's SHA-256. After writing, the adapter verifies both:
+After the browser upload, the authenticated `verify` operation reads the destination file back through Nextcloud's Files API and checks:
 
-1. the stored Nextcloud file size equals the finalized payload size;
-2. SHA-256 of the file read back through the Nextcloud Files API equals SHA-256 of the finalized transfer payload.
+1. the remote file exists;
+2. its exact size equals the finalized payload size;
+3. SHA-256 of the remote bytes equals the finalized payload SHA-256.
 
-Only after both checks succeed does the controller return `status: stored` together with the Nextcloud file id, user-relative path, size and SHA-256. The browser then marks the durable completion job as completed.
+Only after all three checks succeed may the transport proceed to `close`.
 
-This gives PoRe the concrete host-side acknowledgement it needs: the artifact exists in Nextcloud Files and is bit-for-bit identical to the finalized transfer artifact.
+`close` removes the temporary upload share. Closing is idempotent: an already expired or already removed share is considered closed.
+
+Only after successful verification **and** successful transport close does the browser completion job become `completed` and trigger authoritative recording completion.
+
+The local preservation artifact remains available until that point.
+
+## Durable recovery
+
+The browser completion job persists transport state:
+
+```text
+prepared
+  -> authorized
+  -> remote_present
+  -> verified
+  -> transport_closed
+  -> completed
+```
+
+A failure retains the local finalized capture and the durable completion-job state. Recovery retries the outstanding step rather than declaring success merely because a previous HTTP request returned successfully.
 
 ## Configuration
 
@@ -108,14 +143,14 @@ The setting endpoint accepts only a relative Files path. Absolute server paths a
 
 ## Explicit non-goals
 
-- No AppAPI dependency
-- No ExApp
-- No standalone PoRe HTTP server for V1
-- No direct browser WebDAV dependency
+- No browser-to-PoRe multipart payload upload
 - No second authoritative persistence path
-- No identity aliasing
 - No direct access to Nextcloud's private data directory
+- No recording transport through Nextcloud Talk recording
+- No identity aliasing
+- No HTTP-success-as-completion shortcut
+- No provider-specific Nextcloud concepts in Core
 
 ## Architectural consequence
 
-Nextcloud owns the transport and storage responsibility that it already provides. PoRe owns the capture, durable browser preservation, artifact identity and integrity proof up to the host boundary. V1 completion is the successful, size-checked and hash-checked handoff into Nextcloud Files.
+Nextcloud is the sole V1 transport provider and remains authoritative for final file storage. PoRe owns capture finalization, durable browser preservation, artifact identity and the integrity proof required before completion.

@@ -46,6 +46,37 @@ describe('Browser completion job', () => {
 		window.removeEventListener('pore:recording-transport-ready', handler)
 	})
 
+	it('persists transport state without losing existing completion-job fields', async () => {
+		const store = {
+			finalizeCapture: jest.fn(async () => {}),
+			getCapture: jest.fn(async () => ({
+				manifest: {
+					status: 'finalized',
+					completionJob: {
+						status: 'prepared',
+						payloadSha256: 'abc',
+						size: 123,
+					},
+				},
+			})),
+		}
+		const job = new Job({ persistenceStoreFactory: () => store })
+
+		await job.updateTransportState('capture-1', {
+			status: 'authorized',
+			transferId: 'opaque-transfer-handle',
+		})
+
+		expect(store.finalizeCapture).toHaveBeenCalledWith('capture-1', {
+			completionJob: {
+				status: 'authorized',
+				payloadSha256: 'abc',
+				size: 123,
+				transferId: 'opaque-transfer-handle',
+			},
+		})
+	})
+
 	it('rejects a handoff with aliased or missing identities', async () => {
 		const job = new Job({ persistenceStoreFactory: () => ({}) })
 

@@ -5,97 +5,127 @@ declare(strict_types=1);
 namespace OCA\PoRe\Controller;
 
 use OCA\PoRe\AppInfo\Application;
-use OCA\PoRe\Service\NextcloudArtifactStorage;
+use OCA\PoRe\Service\NextcloudArtifactConnector;
+use OCA\PoRe\Service\RecordingRuntimeService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
+use OCP\IUserSession;
 use RuntimeException;
 
 final class RecordingTransportController extends OCSController {
 	public function __construct(
 		IRequest $request,
-		private readonly NextcloudArtifactStorage $artifactStorage,
+		private readonly NextcloudArtifactConnector $connector,
+		private readonly RecordingRuntimeService $runtime,
+		private readonly IUserSession $userSession,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
 
 	#[NoAdminRequired]
-	public function submitFinalizedArtifact(string $metadata): DataResponse {
-		$requestId = '';
+	public function prepareFinalizedArtifact(
+		string $production_id,
+		string $production_label,
+		string $recording_id,
+		string $capture_id,
+		string $started_at,
+		string $participant_label,
+		int $size,
+		string $payload_sha256,
+	): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) return $this->rejected('unauthorized', 401);
 
 		try {
-			$decoded = json_decode($metadata, true, 512, JSON_THROW_ON_ERROR);
-			if (!is_array($decoded)) {
-				throw new RuntimeException('Metadata must be a JSON object.');
-			}
-
-			$requestId = $this->requiredString($decoded, 'request_id');
-			$payloadFile = $this->request->getUploadedFile('payload');
-			if (!is_array($payloadFile) || !isset($payloadFile['tmp_name'], $payloadFile['error'])) {
-				throw new RuntimeException('Finalized artifact payload is missing.');
-			}
-			if ((int)$payloadFile['error'] !== UPLOAD_ERR_OK) {
-				throw new RuntimeException('Finalized artifact upload failed.');
-			}
-
-			$payloadPath = (string)$payloadFile['tmp_name'];
-			$payloadLength = filesize($payloadPath);
-			if ($payloadLength === false) {
-				throw new RuntimeException('Unable to determine finalized artifact size.');
-			}
-
-			$expectedHash = strtolower($this->requiredString($decoded, 'payload_sha256'));
-			if (!preg_match('/^[a-f0-9]{64}$/', $expectedHash)) {
-				throw new RuntimeException('payload_sha256 must be a SHA-256 hex digest.');
-			}
-			$actualHash = hash_file('sha256', $payloadPath);
-			if ($actualHash === false || !hash_equals($expectedHash, strtolower($actualHash))) {
-				throw new RuntimeException('Uploaded payload does not match the browser transfer hash.');
-			}
-
-			$stored = $this->artifactStorage->storeFinalizedArtifact(
-				$this->requiredString($decoded, 'production_id'),
-				$this->requiredString($decoded, 'production_label'),
-				$this->requiredString($decoded, 'recording_id'),
-				$this->requiredString($decoded, 'capture_id'),
-				$this->requiredString($decoded, 'started_at'),
-				$payloadPath,
-				(int)$payloadLength,
+			$this->authorizeRecordingTransport($user->getUID(), $production_id, $recording_id);
+			$prepared = $this->connector->prepare(
+				$this->required($production_id, 'production_id'),
+				$this->required($production_label, 'production_label'),
+				$this->required($recording_id, 'recording_id'),
+				$this->required($capture_id, 'capture_id'),
+				$this->required($started_at, 'started_at'),
+				$participant_label,
+				$size,
+				$this->required($payload_sha256, 'payload_sha256'),
+				$user->getUID(),
 			);
-
 			return new DataResponse([
-				'protocol_version' => 1,
-				'request_id' => $requestId,
-				'status' => 'stored',
-				'artifact_id' => $this->requiredString($decoded, 'capture_id'),
-				'file_id' => $stored['file_id'],
-				'path' => $stored['path'],
-				'size' => $stored['size'],
-				'sha256' => $stored['sha256'],
+				'protocol_version' => 2,
+				'status' => 'prepared',
+				...$prepared,
 				'error_code' => null,
 			]);
 		} catch (\Throwable $exception) {
-			return new DataResponse([
-				'protocol_version' => 1,
-				'request_id' => $requestId,
-				'status' => 'rejected',
-				'artifact_id' => null,
-				'file_id' => null,
-				'path' => null,
-				'size' => null,
-				'sha256' => null,
-				'error_code' => 'nextcloud_storage_failed',
-			], 500);
+			if ($exception->getMessage() === 'PoRE transport authorization is not available.') return $this->rejected('runtime_unavailable', 503);
+			if ($exception->getMessage() === 'PoRE transport authorization is not permitted for this recording') return $this->rejected('transport_unauthorized', 403);
+			return $this->rejected();
 		}
 	}
 
-	/** @param array<string, mixed> $metadata */
-	private function requiredString(array $metadata, string $key): string {
-		$value = $metadata[$key] ?? null;
-		if (!is_string($value) || trim($value) === '') {
-			throw new RuntimeException(sprintf('Metadata field "%s" is required.', $key));
+	#[NoAdminRequired]
+	public function verifyFinalizedArtifact(string $transfer_id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) return $this->rejected('unauthorized', 401);
+
+		try {
+			$receipt = $this->connector->verify($this->required($transfer_id, 'transfer_id'), $user->getUID());
+			return new DataResponse([
+				'protocol_version' => 2,
+				'status' => 'verified',
+				...$receipt,
+				'error_code' => null,
+			]);
+		} catch (\Throwable) {
+			return $this->rejected();
 		}
+	}
+
+	#[NoAdminRequired]
+	public function closeFinalizedArtifactTransfer(string $transfer_id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) return $this->rejected('unauthorized', 401);
+
+		try {
+			$this->connector->close($this->required($transfer_id, 'transfer_id'), $user->getUID());
+			return new DataResponse([
+				'protocol_version' => 2,
+				'status' => 'closed',
+				'error_code' => null,
+			]);
+		} catch (\Throwable) {
+			return $this->rejected();
+		}
+	}
+
+	private function required(string $value, string $name): string {
+		if (trim($value) === '') throw new RuntimeException(sprintf('%s is required.', $name));
 		return $value;
+	}
+
+	private function authorizeRecordingTransport(string $actorId, string $productionId, string $recordingId): void {
+		try {
+			$response = $this->runtime->command([
+				'request_id' => bin2hex(random_bytes(16)),
+				'session_id' => $productionId,
+				'actor_id' => $actorId,
+				'recording_id' => $recordingId,
+				'command' => ['Snapshot' => null],
+			], 'recording.command');
+		} catch (\Throwable $exception) {
+			throw new RuntimeException('PoRE transport authorization is not available.', 0, $exception);
+		}
+		if (($response['status'] ?? null) !== 'ok' || !is_array($response['state'] ?? null) || !in_array($response['state']['role'] ?? null, ['host', 'participant'], true)) {
+			throw new RuntimeException('PoRE transport authorization is not permitted for this recording');
+		}
+	}
+
+	private function rejected(string $errorCode = 'nextcloud_transport_failed', int $status = 500): DataResponse {
+		return new DataResponse([
+			'protocol_version' => 2,
+			'status' => 'rejected',
+			'error_code' => $errorCode,
+		], $status);
 	}
 }

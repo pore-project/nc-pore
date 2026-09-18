@@ -3,12 +3,12 @@ import '../js/pore-recording-controller.js'
 describe('Browser recording controller', () => {
 	const Controller = window.PoREBrowserRecordingController
 
-	const createTrack = () => ({
+	const createTrack = (id = 'pore-track-1', deviceId = 'device-1') => ({
 		kind: 'audio',
-		id: 'pore-track-1',
+		id,
 		label: 'PoRE microphone',
 		readyState: 'live',
-		getSettings: () => ({ deviceId: 'device-1', sampleRate: 48000, channelCount: 1 }),
+		getSettings: () => ({ deviceId, sampleRate: 48000, channelCount: 1 }),
 	})
 
 	it('preserves production, recording and technical identities in source metadata', async () => {
@@ -88,7 +88,7 @@ describe('Browser recording controller', () => {
 			start: jest.fn().mockResolvedValue(undefined),
 			stop: jest.fn().mockResolvedValue({
 				kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: 12,
-				sampleRate: 48000, channels: 1, blob: new Blob(['payload'], { type: 'audio/wav' }),
+				sampleRate: 48000, channels: 1,
 			}),
 		}
 		const controller = new Controller({ recorderFactory: () => recorder })
@@ -106,8 +106,30 @@ describe('Browser recording controller', () => {
 		expect(handoff.recordingId).toBe('recording-17')
 		expect(handoff.captureId).toBe('capture-17')
 		expect(handoff.recordingSessionId).toBe('recorder-session-17')
-		expect(handoff.blob).toBe(artifact.blob)
+		expect(handoff.blob).toBeUndefined()
 		expect(handoff.format).toBe('audio/wav')
 		expect(handoff.encoding).toBe('pcm_s24le')
+	})
+
+	it('replaces the microphone without ending the technical capture', async () => {
+		const firstTrack = createTrack('pore-track-1', 'device-1')
+		const secondTrack = createTrack('pore-track-2', 'device-2')
+		const recorder = {
+			start: jest.fn().mockResolvedValue(undefined),
+			replaceTrack: jest.fn().mockResolvedValue(secondTrack),
+			stop: jest.fn().mockResolvedValue({ kind: 'audio', format: 'audio/wav' }),
+		}
+		const controller = new Controller({ recorderFactory: () => recorder })
+
+		await controller.start(firstTrack, { productionId: 'conversation-42', recordingId: 'recording-17' })
+		await controller.replaceTrack(secondTrack)
+		controller.noteSourceChange(firstTrack, secondTrack, '2026-09-16T08:00:10.000Z', { from: { deviceId: 'device-1' }, to: { deviceId: 'device-2' } })
+
+		expect(controller.getState()).toBe('recording')
+		expect(recorder.replaceTrack).toHaveBeenCalledTimes(1)
+		expect(recorder.stop).not.toHaveBeenCalled()
+		expect(controller.sourceChanges).toHaveLength(1)
+		expect(controller.sourceChanges[0].from.deviceId).toBe('device-1')
+		expect(controller.sourceChanges[0].to.deviceId).toBe('device-2')
 	})
 })

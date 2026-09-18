@@ -30,8 +30,8 @@
 			const stored = await store.getCapture(captureId)
 			if (!stored) throw new Error(`PoRE completion job capture not found: ${captureId}`)
 			if (stored.manifest.status !== 'finalized') throw new Error(`PoRE completion job requires finalized capture: ${captureId}`)
-			const job = stored.manifest.completionJob
-			if (job?.status === 'completed') return null
+			const job = stored.manifest.completionJob || {}
+			if (job.status === 'completed') return null
 
 			try {
 				const pcm = new Blob(stored.chunks, { type: 'application/octet-stream' })
@@ -45,6 +45,7 @@
 					recordingSessionId: stored.manifest.recordingSessionId,
 					productionId: stored.manifest.productionId,
 					productionLabel: stored.manifest.productionLabel || stored.manifest.productionTitle || stored.manifest.productionId,
+					participantLabel: stored.manifest.participantLabel || null,
 					recordingId: stored.manifest.recordingId,
 					startedAt: stored.manifest.startedAt || stored.manifest.createdAt || new Date().toISOString(),
 					format: 'audio/wav',
@@ -56,11 +57,13 @@
 					chunkCount: stored.chunks.length,
 					manifest: stored.manifest,
 					blob,
+					completionJob: job,
 				}
 				await store.finalizeCapture(captureId, {
 					completionJob: {
-						status: 'prepared',
-						preparedAt: new Date().toISOString(),
+						...job,
+						status: job.status === 'authorized' || job.status === 'remote_present' || job.status === 'verified' || job.status === 'transport_closed' ? job.status : 'prepared',
+						preparedAt: job.preparedAt || new Date().toISOString(),
 						payloadSha256,
 						size: blob.size,
 					},
@@ -70,6 +73,7 @@
 			} catch (error) {
 				await store.finalizeCapture(captureId, {
 					completionJob: {
+						...job,
 						status: 'failed',
 						failedAt: new Date().toISOString(),
 						error: String(error?.message || error),
@@ -79,13 +83,27 @@
 			}
 		}
 
-		async markCompleted(captureId, details = {}) {
+		async updateTransportState(captureId, patch) {
 			const store = this._store()
+			const stored = await store.getCapture(captureId)
+			if (!stored) throw new Error(`PoRE transport capture not found: ${captureId}`)
 			return store.finalizeCapture(captureId, {
 				completionJob: {
-					status: 'completed',
-					...details,
+					...(stored.manifest.completionJob || {}),
+					...patch,
 				},
+			})
+		}
+
+		async getTransportState(captureId) {
+			const stored = await this._store().getCapture(captureId)
+			return stored?.manifest?.completionJob || null
+		}
+
+		async markCompleted(captureId, details = {}) {
+			return this.updateTransportState(captureId, {
+				status: 'completed',
+				...details,
 			})
 		}
 
