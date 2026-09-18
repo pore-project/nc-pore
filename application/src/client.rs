@@ -104,9 +104,7 @@ pub enum ClientProductionCompletionReason {
     HostForced,
 }
 
-impl From<nc_pore_core::session::ProductionCompletionReason>
-    for ClientProductionCompletionReason
-{
+impl From<nc_pore_core::session::ProductionCompletionReason> for ClientProductionCompletionReason {
     fn from(reason: nc_pore_core::session::ProductionCompletionReason) -> Self {
         match reason {
             nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted => {
