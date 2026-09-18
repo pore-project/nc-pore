@@ -13,7 +13,7 @@ describe('Talk recording state bridge', () => {
 		expect(snapshot.role).toBe('host')
 		expect(snapshot.state).toBe('recording')
 		expect(snapshot.readyCount).toBe(2)
-		expect(snapshot.participantCount).toBe(2)
+	expect(snapshot.participantCount).toBe(2)
 		expect(bridge.getSnapshot()).toBe(snapshot)
 	})
 
@@ -41,9 +41,18 @@ describe('PoRE local audio capture', () => {
 		const stream = { getAudioTracks: () => [track], getTracks: () => [track] }
 		const getUserMedia = jest.fn().mockResolvedValue(stream)
 		const capture = new window.PoRELocalAudioCapture({ mediaDevices: { getUserMedia } })
+
 		const result = await capture.open('mic-1')
+
 		expect(result).toBe(track)
-		expect(getUserMedia).toHaveBeenCalledWith({ audio: expect.objectContaining({ deviceId: { exact: 'mic-1' }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }) })
+		expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({
+			audio: expect.objectContaining({
+				deviceId: { exact: 'mic-1' },
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false,
+			}),
+		}))
 	})
 })
 
@@ -51,18 +60,34 @@ describe('Talk microphone observer', () => {
 	it('reports microphone identity changes without cloning or forwarding the Talk track', () => {
 		const events = []
 		const observer = new window.PoRETalkAudioCaptureConnector({ dispatchEvent: event => events.push(event) })
-		const source = { connectTrackSink: jest.fn((input, sink) => { source.sink = sink }), disconnectTrackSink: jest.fn() }
-		window.OCA = { Talk: { SimpleWebRTC: { webrtc: { _mediaDevicesSource: source } } } }
+		const listeners = new Map()
+		const source = {
+			connectTrackSink: jest.fn((input, sink) => sink.connectTrackSource(input, source, 'audio')),
+			disconnectTrackSink: jest.fn((input, sink) => sink.disconnectTrackSource(input, source, 'audio')),
+			getOutputTrack: jest.fn(() => talkTrack),
+			on: jest.fn((event, handler) => listeners.set(event, handler)),
+			off: jest.fn((event, handler) => {
+				if (listeners.get(event) === handler) listeners.delete(event)
+			}),
+			emitTrack: nextTrack => {
+				source.getOutputTrack.mockReturnValue(nextTrack)
+				listeners.get('outputTrackSet')?.(source, 'audio', nextTrack)
+			},
+		}
 		const talkTrack = { id: 'talk-track-1', getSettings: () => ({ deviceId: 'mic-1' }) }
 		const replacementTrack = { id: 'talk-track-2', getSettings: () => ({ deviceId: 'mic-2' }) }
+		source.getOutputTrack.mockReturnValue(talkTrack)
+		window.OCA = { Talk: { SimpleWebRTC: { webrtc: { _mediaDevicesSource: source } } } }
+
 		expect(observer.attachToTalk()).toBe(true)
-		source.sink._onTrack(talkTrack)
-		source.sink._onTrack(replacementTrack)
+		source.emitTrack(replacementTrack)
+
 		expect(observer.getCurrentMicrophone().deviceId).toBe('mic-2')
 		expect(events.map(event => event.type)).toEqual(['pore:talk-microphone', 'pore:talk-microphone'])
 		expect(events[1].detail.previousDeviceId).toBe('mic-1')
-		expect(talkTrack.clone).toBeUndefined()
-		expect(replacementTrack.clone).toBeUndefined()
+		expect(events[1].detail.deviceId).toBe('mic-2')
+		expect(talkTrack.stop).toBeUndefined()
+		expect(replacementTrack.stop).toBeUndefined()
 		observer.dispose()
 		delete window.OCA
 	})
