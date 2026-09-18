@@ -187,10 +187,6 @@ Storage-target resolution belongs to the application/provider boundary. The visi
 
 Recording start time and human-readable display name are not Core domain fields for synchronization. They may cross the application/transfer boundary as provider-neutral transfer metadata and are translated into the Nextcloud representation only by the connector.
 
-## Authentication and Security
-
-V1 uses Nextcloud App Passwords. For a public V1 release, **HTTPS is mandatory**; HTTP is not a supported productive configuration.
-
 ## Implementation Status
 
 The provider boundary, local synchronization queue, idempotency/conflict semantics, Nextcloud file representation, payload integrity checks, and Production-owner storage targeting are implemented in the current V1 application path.
