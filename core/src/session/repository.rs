@@ -11,7 +11,9 @@ use crate::identity::ProductionId;
 use crate::participation::Participation;
 use crate::recording::{Recording, RecordingCoordination};
 
-use super::{ProductionSession, ProductionStatus};
+use super::{
+    ProductionCompletionReason, ProductionSession, ProductionStatus,
+};
 
 /// Domain-facing repository contract for Production Sessions.
 ///
@@ -47,6 +49,7 @@ pub fn reconstitute_production_session(
     recordings: Vec<Recording>,
     recording_coordination: Option<RecordingCoordination>,
     activities: Vec<ActivityEvent>,
+    completion_reason: Option<ProductionCompletionReason>,
 ) -> ProductionSession {
     ProductionSession {
         id,
@@ -55,6 +58,7 @@ pub fn reconstitute_production_session(
         recordings,
         recording_coordination,
         activities,
+        completion_reason,
     }
 }
 
