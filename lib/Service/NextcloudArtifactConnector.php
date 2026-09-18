@@ -49,8 +49,10 @@ final class NextcloudArtifactConnector {
 		string $participantLabel,
 		int $size,
 		string $sha256,
+		string $actorUserId,
 	): array {
 		$this->validateHash($sha256);
+		if (trim($actorUserId) === '') throw new RuntimeException('Transport actor is required.');
 		if ($size < 0) throw new RuntimeException('Transport payload size must not be negative.');
 
 		$targetUserId = trim($this->config->getAppValue(
@@ -88,6 +90,7 @@ final class NextcloudArtifactConnector {
 					'capture_id' => $captureId,
 					'size' => $size,
 					'sha256' => strtolower($sha256),
+					'actor_user_id' => $actorUserId,
 					'upload_required' => false,
 				];
 				$handle = $this->encodeHandle($state);
@@ -134,6 +137,7 @@ final class NextcloudArtifactConnector {
 			'capture_id' => $captureId,
 			'size' => $size,
 			'sha256' => strtolower($sha256),
+			'actor_user_id' => $actorUserId,
 			'upload_required' => true,
 		];
 		$handle = $this->encodeHandle($state);
@@ -153,8 +157,9 @@ final class NextcloudArtifactConnector {
 	/**
 	 * @return array{artifact_id:string, file_id:int, path:string, size:int, sha256:string}
 	 */
-	public function verify(string $handle): array {
+	public function verify(string $handle, string $actorUserId): array {
 		$state = $this->decodeHandle($handle);
+		$this->assertHandleActor($state, $actorUserId);
 		$folder = $this->folderForState($state);
 		$file = $this->findFile($folder, $state['filename']);
 		if ($file === null) throw new RuntimeException('Nextcloud transport artifact has not arrived.');
@@ -174,8 +179,9 @@ final class NextcloudArtifactConnector {
 		];
 	}
 
-	public function close(string $handle): void {
+	public function close(string $handle, string $actorUserId): void {
 		$state = $this->decodeHandle($handle);
+		$this->assertHandleActor($state, $actorUserId);
 		if ($state['share_id'] === null) return;
 		try {
 			$share = $this->shareManager->getShareById($state['share_id']);
@@ -192,7 +198,7 @@ final class NextcloudArtifactConnector {
 		return $payload . '.' . $signature;
 	}
 
-	/** @return array{transfer_id:string,share_id:string|null,target_user_id:string,folder_path:string,filename:string,capture_id:string,size:int,sha256:string,upload_required:bool} */
+	/** @return array{transfer_id:string,share_id:string|null,target_user_id:string,folder_path:string,filename:string,capture_id:string,size:int,sha256:string,actor_user_id:string,upload_required:bool} */
 	private function decodeHandle(string $handle): array {
 		$parts = explode('.', $handle, 2);
 		if (count($parts) !== 2) throw new RuntimeException('Invalid transport handle.');
@@ -201,7 +207,7 @@ final class NextcloudArtifactConnector {
 		if (!hash_equals($expected, $signature)) throw new RuntimeException('Invalid transport handle signature.');
 		$decoded = json_decode($this->base64UrlDecode($payload), true, 512, JSON_THROW_ON_ERROR);
 		if (!is_array($decoded)) throw new RuntimeException('Invalid transport handle payload.');
-		foreach (['transfer_id','share_id','target_user_id','folder_path','filename','capture_id','size','sha256'] as $key) {
+		foreach (['transfer_id','share_id','target_user_id','folder_path','filename','capture_id','size','sha256','actor_user_id'] as $key) {
 			if (!array_key_exists($key, $decoded)) throw new RuntimeException('Incomplete transport handle.');
 		}
 		return [
@@ -213,8 +219,16 @@ final class NextcloudArtifactConnector {
 			'capture_id' => (string)$decoded['capture_id'],
 			'size' => (int)$decoded['size'],
 			'sha256' => strtolower((string)$decoded['sha256']),
+			'actor_user_id' => (string)$decoded['actor_user_id'],
 			'upload_required' => !array_key_exists('upload_required', $decoded) || (bool)$decoded['upload_required'],
 		];
+	}
+
+	/** @param array{actor_user_id:string} $state */
+	private function assertHandleActor(array $state, string $actorUserId): void {
+		if (trim($actorUserId) === '' || !hash_equals($state['actor_user_id'], $actorUserId)) {
+			throw new RuntimeException('Transport handle is not authorized for this user.');
+		}
 	}
 
 	private function nextFreeFilename(Folder $folder, string $filename): string {
