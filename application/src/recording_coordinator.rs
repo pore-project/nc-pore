@@ -329,14 +329,24 @@ mod tests {
         assert_eq!(partial.artifact_id.as_deref(), Some("artifact-alice-001"));
         assert!(!partial.confirmed);
 
-        let mut bob = RecordingCoordinator::new(
+        drop(coordinator);
+
+        {
+            let mut bob = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("bob"),
+                RecordingId::new("recording-001"),
+            );
+            bob.complete("artifact-bob-001").unwrap();
+        }
+
+        let coordinator = RecordingCoordinator::new(
             &mut repository,
             ProductionId::new("session-001"),
-            ParticipantId::new("bob"),
+            ParticipantId::new("alice"),
             RecordingId::new("recording-001"),
         );
-        bob.complete("artifact-bob-001").unwrap();
-
         let state = coordinator.snapshot().unwrap();
         assert_eq!(
             state.phase,
