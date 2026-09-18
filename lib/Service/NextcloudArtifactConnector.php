@@ -38,7 +38,7 @@ final class NextcloudArtifactConnector {
 	}
 
 	/**
-	 * @return array{transfer_id:string, upload_url:string, upload_username:string, upload_password:string, filename:string, size:int, sha256:string}
+	 * @return array{transfer_id:string, upload_url:string, upload_username:string, upload_password:string, filename:string, size:int, sha256:string, upload_required:bool}
 	 */
 	public function prepare(
 		string $productionId,
@@ -75,8 +75,34 @@ final class NextcloudArtifactConnector {
 		$folder = $this->ensureFolder($folder, $path['month']);
 		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		if ($this->findFile($folder, $path['filename']) !== null) {
-			throw new RuntimeException('Nextcloud transport destination already contains the artifact filename.');
+		$existing = $this->findFile($folder, $path['filename']);
+		if ($existing !== null) {
+			if ($existing->getSize() === $size && hash_equals(strtolower($sha256), $this->hashFile($existing))) {
+				$transferId = $this->secureRandom->generate(32, ISecureRandom::CHAR_ALPHANUMERIC);
+				$state = [
+					'transfer_id' => $transferId,
+					'share_id' => null,
+					'target_user_id' => $targetUserId,
+					'folder_path' => $this->relativeUserPath($folder, $targetUserId),
+					'filename' => $path['filename'],
+					'capture_id' => $captureId,
+					'size' => $size,
+					'sha256' => strtolower($sha256),
+					'upload_required' => false,
+				];
+				$handle = $this->encodeHandle($state);
+				return [
+					'transfer_id' => $handle,
+					'upload_url' => '',
+					'upload_username' => '',
+					'upload_password' => '',
+					'filename' => $path['filename'],
+					'size' => $size,
+					'sha256' => strtolower($sha256),
+					'upload_required' => false,
+				];
+			}
+			$path['filename'] = $this->nextFreeFilename($folder, $path['filename']);
 		}
 
 		if (!$this->shareManager->shareApiAllowLinks() || !$this->shareManager->shareApiLinkAllowPublicUpload()) {
@@ -108,6 +134,7 @@ final class NextcloudArtifactConnector {
 			'capture_id' => $captureId,
 			'size' => $size,
 			'sha256' => strtolower($sha256),
+			'upload_required' => true,
 		];
 		$handle = $this->encodeHandle($state);
 
@@ -119,6 +146,7 @@ final class NextcloudArtifactConnector {
 			'filename' => $path['filename'],
 			'size' => $size,
 			'sha256' => strtolower($sha256),
+			'upload_required' => true,
 		];
 	}
 
@@ -148,6 +176,7 @@ final class NextcloudArtifactConnector {
 
 	public function close(string $handle): void {
 		$state = $this->decodeHandle($handle);
+		if ($state['share_id'] === null) return;
 		try {
 			$share = $this->shareManager->getShareById($state['share_id']);
 			$this->shareManager->deleteShare($share);
@@ -177,14 +206,24 @@ final class NextcloudArtifactConnector {
 		}
 		return [
 			'transfer_id' => (string)$decoded['transfer_id'],
-			'share_id' => (string)$decoded['share_id'],
+			'share_id' => $decoded['share_id'] === null ? null : (string)$decoded['share_id'],
 			'target_user_id' => (string)$decoded['target_user_id'],
 			'folder_path' => (string)$decoded['folder_path'],
 			'filename' => (string)$decoded['filename'],
 			'capture_id' => (string)$decoded['capture_id'],
 			'size' => (int)$decoded['size'],
 			'sha256' => strtolower((string)$decoded['sha256']),
+			'upload_required' => !array_key_exists('upload_required', $decoded) || (bool)$decoded['upload_required'],
 		];
+	}
+
+	private function nextFreeFilename(Folder $folder, string $filename): string {
+		$extension = pathinfo($filename, PATHINFO_EXTENSION);
+		$stem = pathinfo($filename, PATHINFO_FILENAME);
+		for ($suffix = 2; ; $suffix++) {
+			$candidate = $stem . ' (' . $suffix . ')' . ($extension !== '' ? '.' . $extension : '');
+			if ($this->findFile($folder, $candidate) === null) return $candidate;
+		}
 	}
 
 	/** @param array{target_user_id:string,folder_path:string} $state */
