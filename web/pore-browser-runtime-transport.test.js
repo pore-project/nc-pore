@@ -16,8 +16,8 @@ describe('Browser runtime transport', () => {
 		blob: new Blob([new Uint8Array(44)], { type: 'audio/wav' }),
 	}
 
-	function completionJob() {
-		let state = null
+	function completionJob(initialState = null) {
+		let state = initialState
 		return {
 			getTransportState: jest.fn(async () => state),
 			updateTransportState: jest.fn(async (_captureId, patch) => {
@@ -63,6 +63,24 @@ describe('Browser runtime transport', () => {
 		expect(fetchMock.mock.calls[1][1].headers.Authorization).toContain('anonymous:secret')
 		expect(fetchMock.mock.calls[2][0]).toContain('/finalized-artifact/verify')
 		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/close')
+	})
+
+	it('returns the stored receipt without repeating work after completion', async () => {
+		const receipt = { status: 'verified', artifact_id: 'capture-1', file_id: 42, size: 44, sha256: 'a'.repeat(64) }
+		const job = completionJob({ status: 'completed', receipt })
+		const fetchMock = jest.fn()
+		global.fetch = fetchMock
+		const completedEvent = jest.fn()
+		window.addEventListener('pore:recording-transport-completed', completedEvent)
+
+		const transport = new Transport({ completionJob: job })
+		await expect(transport.transfer(descriptor)).resolves.toEqual(receipt)
+
+		expect(fetchMock).not.toHaveBeenCalled()
+		expect(job.updateTransportState).not.toHaveBeenCalled()
+		expect(job.markCompleted).not.toHaveBeenCalled()
+		expect(completedEvent).not.toHaveBeenCalled()
+		window.removeEventListener('pore:recording-transport-completed', completedEvent)
 	})
 
 	it('does not close or complete when remote verification fails', async () => {
