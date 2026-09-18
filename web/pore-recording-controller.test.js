@@ -17,8 +17,9 @@ describe('Browser recording controller', () => {
 			stop: jest.fn().mockResolvedValue({ kind: 'audio', format: 'audio/wav' }),
 		}
 		const controller = new Controller({ recorderFactory: () => recorder })
+		const track = createTrack()
 
-		await controller.start(createTrack(), {
+		await controller.start(track, {
 			productionId: 'conversation-42',
 			recordingId: 'recording-17',
 			captureId: 'capture-17',
@@ -26,7 +27,7 @@ describe('Browser recording controller', () => {
 		})
 		const artifact = await controller.stop('host')
 
-		expect(recorder.start).toHaveBeenCalledWith(createTrack(), {
+		expect(recorder.start).toHaveBeenCalledWith(track, {
 			productionId: 'conversation-42',
 			recordingId: 'recording-17',
 			captureId: 'capture-17',
