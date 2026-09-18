@@ -504,7 +504,9 @@ impl PersistedProductionSession {
                         let seconds = value / 1_000_000_000;
                         let nanos = value % 1_000_000_000;
                         if seconds > u64::MAX as u128 {
-                            return Err(FileProductionSessionRepositoryError::InvalidTimestamp(value));
+                            return Err(
+                                FileProductionSessionRepositoryError::InvalidTimestamp(value),
+                            );
                         }
                         UNIX_EPOCH
                             .checked_add(Duration::new(seconds as u64, nanos as u32))
