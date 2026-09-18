@@ -51,7 +51,9 @@ fn completed_session() -> ProductionSession {
     session
         .begin_recording_by(&owner, &recording_id, [owner.clone(), participant.clone()])
         .unwrap();
-    session.mark_recording_ready_by(&owner, &recording_id).unwrap();
+    session
+        .mark_recording_ready_by(&owner, &recording_id)
+        .unwrap();
     session
         .mark_recording_ready_by(&participant, &recording_id)
         .unwrap();
@@ -115,9 +117,7 @@ fn completed_recording_survives_repository_restart() {
     );
     assert_eq!(
         reloaded.completion_reason(),
-        Some(
-            nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted
-        )
+        Some(nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted)
     );
     assert_eq!(reloaded.activities().len(), expected_activity_count);
     assert_eq!(
