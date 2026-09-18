@@ -129,7 +129,7 @@ namespace {
 	$receipt=$c->verify($prepared['transfer_id'],'actor-1');
 	check($receipt['file_id']===17,'Identical artifact verification must resolve the existing file.');
 	check($receipt['sha256']===hash('sha256','same'),'Identical artifact verification must preserve the exact hash.');
-	$c->close($prepared['transfer_id']);
+	$c->close($prepared['transfer_id'],'actor-1');
 
 	$leaf->add('Host (2).wav',new File(18,'occupied'));
 	$prepared=$c->prepare('prod-1','Interview','recording-2','capture-2','2026-09-05T15:42:31+02:00','Host',7,hash('sha256','payload'),'actor-1');
