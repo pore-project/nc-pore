@@ -24,6 +24,10 @@
 			try {
 				let state = await this.completionJob?.getTransportState?.(descriptor.captureId)
 
+				// A replay after durable completion must be a no-op: do not upload,
+				// close again, rewrite completion metadata, or emit a duplicate event.
+				if (state?.status === 'completed') return state.receipt || {}
+
 				if (!state || state.status === 'failed' || state.status === 'pending' || (state.status === 'prepared' && !state.transferId)) {
 					await this.prepare(descriptor)
 					state = await this.completionJob.getTransportState(descriptor.captureId)
