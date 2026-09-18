@@ -146,7 +146,7 @@ Diese Themen bleiben den jeweiligen technischen bzw. produktbezogenen Entscheidu
 
 ## Context
 
-A fachlich PoRE Recording is not a single audio file. A multi-participant recording creates one participant-specific audio artifact per expected participant.
+A PoRE Recording is a logical multi-track recording, not a single audio file. A multi-participant recording creates one participant-specific audio artifact per expected participant.
 
 The former representation with one `artifact_id` on the Recording is therefore insufficient for the actual multi-track semantics. At the same time, completion of one participant artifact must not be confused with completion of the complete Recording or the Production.
 
@@ -154,11 +154,11 @@ The former representation with one `artifact_id` on the Recording is therefore i
 
 `core.Recording` represents the **logical recording**, not one file.
 
-For V1, a Recording consists of one expected artifact slot per participant. The stable artifact identity remains `artifact.ArtifactId`; retries never create a second fachlich distinct artifact.
+For V1, a Recording consists of one expected artifact slot per participant. The stable artifact identity remains `artifact.ArtifactId`; retries never create a second semantically distinct artifact.
 
-The expected participant set is fixed when fachlich recording starts. Participants expected at that point remain expected even if they later leave the Talk room. Participants joining after recording start are not retroactively added to the active Recording.
+The expected participant set is fixed when the fachlich recording starts. Participants expected at that point remain expected even if they later leave the Talk room. Participants joining after recording start are not retroactively added to the active Recording.
 
-Each expected participant has exactly one fachlich artifact slot for that Recording.
+Each expected participant has exactly one fachlich defined artifact slot for that Recording.
 
 A Recording is **Completed** only when every expected participant artifact exists and its server-side receipt has been successfully confirmed.
 
