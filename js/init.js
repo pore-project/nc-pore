@@ -44,6 +44,8 @@
 	let coordinationPollTimer = null
 	let coordinationPollInFlight = false
 	let hostStartInFlight = false
+	let openingSignetRequestInFlight = false
+	let localStopInFlight = false
 	let talkUiMountElement = null
 
 	document.addEventListener('click', event => {
@@ -140,23 +142,68 @@
 			const snapshot = result?.state ? window.PoRETalkRecordingStateNormalize(result.state) : null
 			if (!snapshot) return
 			updateAuthoritativeState(snapshot)
-			if (snapshot.state === 'preparing' && snapshot.role !== 'listener' && !snapshot.ready && !localCaptureReady && !localCaptureStartInFlight && connector.getCurrentMicrophone?.()?.deviceId) {
-				try { await startLocalCapture() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
+
+			if (snapshot.state === 'preparing'
+				&& snapshot.role !== 'listener'
+				&& !snapshot.ready
+				&& !localCaptureReady
+				&& !localCaptureStartInFlight
+				&& connector.getCurrentMicrophone?.()?.deviceId) {
+				try {
+					await startLocalCapture()
+				} catch (error) {
+					window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+				}
 			}
-			if (snapshot.state === 'ready' && snapshot.role === 'host' && startRequestedByHost && !hostStartInFlight && snapshot.readyCount >= snapshot.participantCount) {
+
+			if (snapshot.state === 'ready' && snapshot.role !== 'listener') {
+				const me = snapshot.participants?.find(participant => participant.id === coordinator.actorId)
+				if (me?.ready && !me.opening_confirmed && !openingSignetRequestInFlight && recorder.isRecording()) {
+					openingSignetRequestInFlight = true
+					try {
+						emitOpeningSignet()
+						const confirmed = await coordinator.command('confirm_opening')
+						if (confirmed?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(confirmed.state))
+					} finally {
+						openingSignetRequestInFlight = false
+					}
+				}
+			}
+
+			const openingCount = snapshot.participants?.filter(participant => participant.opening_confirmed).length || 0
+			if (snapshot.state === 'ready'
+				&& snapshot.role === 'host'
+				&& startRequestedByHost
+				&& !hostStartInFlight
+				&& snapshot.readyCount >= snapshot.participantCount
+				&& openingCount >= snapshot.participantCount) {
 				hostStartInFlight = true
 				try {
 					const started = await coordinator.command('start')
 					if (started?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(started.state))
-				} finally { hostStartInFlight = false }
+				} finally {
+					hostStartInFlight = false
+				}
 			}
-			if (snapshot.state === 'recording') {
-				emitOpeningSignet()
-				if (coordinationPollTimer) { window.clearInterval(coordinationPollTimer); coordinationPollTimer = null }
+
+			if (snapshot.state === 'stopped' && !localStopInFlight && recorder.isRecording()) {
+				localStopInFlight = true
+				try {
+					await stopLocalCapture('remote-stop', { closingSignet: true })
+					const acknowledged = await coordinator.command('acknowledge_stop')
+					if (acknowledged?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(acknowledged.state))
+				} catch (error) {
+					window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+				} finally {
+					localStopInFlight = false
+				}
 			}
 		} catch (error) {
 			if (error?.code === 'recording_coordination_not_found' || error?.code === 'recording_not_found') return
-			if (authoritativeState?.state !== 'preparing' && authoritativeState?.state !== 'ready' && authoritativeState?.state !== 'recording') return
+			if (authoritativeState?.state !== 'preparing'
+				&& authoritativeState?.state !== 'ready'
+				&& authoritativeState?.state !== 'recording'
+				&& authoritativeState?.state !== 'stopped') return
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		} finally {
 			coordinationPollInFlight = false
@@ -264,8 +311,9 @@
 
 	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
 
-	const stopLocalCapture = async reason => {
+	const stopLocalCapture = async (reason, { closingSignet = false } = {}) => {
 		try {
+			if (closingSignet && recorder.isRecording()) recorder.markClosingSignet()
 			return await recorder.stop(reason)
 		} finally {
 			localCapture.stop()
@@ -274,15 +322,26 @@
 	}
 
 	window.addEventListener('pore:recording-ui-stop-local', async event => {
+		const reason = event.detail?.reason || 'host'
+		if (localStopInFlight) return
+
+		localStopInFlight = true
 		try {
-			// ADR-071i: persist the fachliche recording stop in Core first.
-			// Only then may technical capture be ended; recorder.stop() emits
-			// the Closing Signet while capture is still active.
+			if (reason === 'persistence-safety-stop') {
+				await stopLocalCapture(reason, { closingSignet: false })
+				return
+			}
+
 			const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
-			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-			await stopLocalCapture(event.detail?.reason || 'host')
+			if (!result?.state) return
+			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			await stopLocalCapture(reason, { closingSignet: true })
+			const acknowledged = await window.__poreTalkRecordingCoordinator?.command?.('acknowledge_stop')
+			if (acknowledged?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(acknowledged.state))
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		} finally {
+			localStopInFlight = false
 		}
 	})
 
