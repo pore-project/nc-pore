@@ -233,6 +233,8 @@
 		window.__poreTalkRecordingCoordinator = Object.freeze({
 			sessionId: token,
 			recordingId,
+			actorId,
+			recordingParticipantId: actorId,
 			participants: participantIds,
 			ownerId,
 			command: (name, artifactId = '') => command(token, recordingId, name, { participants: coordinatorContext?.participants || participantIds, ownerId, artifactId }),
