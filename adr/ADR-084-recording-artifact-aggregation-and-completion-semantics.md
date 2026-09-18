@@ -113,6 +113,10 @@ Insbesondere folgt aus `core.Production.Completed` **nicht**, dass jedes Recordi
 
 Die Semantik der Production-Schließung und die Zulässigkeit später Artefakt-Nachlieferung sind in ADR-085 festgelegt.
 
+# Begründung
+
+Die fachliche Aggregation muss die tatsächliche verteilte Capture-Struktur abbilden. Nur so können einzelne Teilnehmer unabhängig fertig werden, ohne die Bedeutung des gesamten Recordings oder der Production zu vermischen.
+
 # Consequences
 
 - Das Recording-Modell kann Mehrspur-Aufnahmen mit individuellen Teilnehmer-Artefakten korrekt repräsentieren.
@@ -121,6 +125,26 @@ Die Semantik der Production-Schließung und die Zulässigkeit später Artefakt-N
 - Teilweise verfügbare Tracks dürfen als Arbeitsgrundlage verwendet werden, müssen aber als unvollständig erkennbar bleiben.
 - Ein vollständiger Export kann eindeutig an `core.Recording.Completed` gebunden werden.
 - Late Artifact Completion kann ein zuvor unvollständiges Recording noch zu `Completed` führen, ohne die Production erneut zu öffnen.
+
+# Alternatives Considered
+
+## Recording als einzelne Audiodatei
+
+Verworfen. Ein verteiltes Recording besteht fachlich aus mehreren Teilnehmer-Spuren und damit aus mehreren Artifacts.
+
+## Artifact als einzige fachliche Einheit
+
+Verworfen. Das einzelne Artifact beschreibt eine Teilnehmer-Spur, nicht die logische Mehrspur-Aufnahme.
+
+## Recording erst bei vollständiger Lieferung nutzbar machen
+
+Verworfen. Bereits bestätigte Tracks sollen für Verarbeitung und Arbeitsabläufe nutzbar sein, ohne auf einen eventuell verspäteten Teilnehmer zu warten.
+
+# Relationship to Existing Architecture
+
+Diese ADR konkretisiert ADR-039 sowie die in ADR-071i und ADR-072i festgelegte Trennung von fachlichem Recording, lokaler Preservation und asynchroner Completion.
+
+Die Remote-Transport- und Verifikationssemantik bleibt in ADR-083 und ADR-079i geregelt. Die Production-Schließung ist in ADR-085 definiert.
 
 # Future Considerations
 
@@ -133,6 +157,10 @@ Diese ADR legt nicht fest:
 - die konkrete Exportimplementierung.
 
 Diese Themen bleiben den jeweiligen technischen bzw. produktbezogenen Entscheidungen vorbehalten.
+
+# Status
+
+Die Entscheidung gilt als angenommen.
 
 ---
 
@@ -168,10 +196,38 @@ The following states remain distinct:
 
 Production completion therefore does not imply that every participant artifact is already complete. Late artifact completion is defined separately by ADR-085.
 
+# Rationale
+
+The fachlich aggregation must reflect the actual distributed capture structure. This allows participant Artifacts to complete independently without conflating the meaning of the Recording with the state of the Production.
+
 # Consequences
 
 The domain model can represent a multi-track Recording correctly, partial working sets remain possible, full exports can be tied to `core.Recording.Completed`, and a late participant artifact may complete an earlier Recording without reopening the Production.
 
+# Alternatives Considered
+
+## Recording as a Single Audio File
+
+Rejected. A distributed Recording is fachlich composed of multiple participant tracks and therefore multiple Artifacts.
+
+## Artifact as the Only Fachlich Unit
+
+Rejected. An individual Artifact represents one participant track, not the logical multi-track Recording.
+
+## Make the Recording Usable Only After All Artifacts Arrive
+
+Rejected. Already confirmed tracks should be usable for processing and work without waiting indefinitely for a missing participant.
+
+# Relationship to Existing Architecture
+
+This ADR concretizes ADR-039 and the separation of fachlich Recording, local Preservation and asynchronous Completion established by ADR-071i and ADR-072i.
+
+Concrete remote transport and verification remain governed by ADR-083 and ADR-079i. Production closure is defined by ADR-085.
+
 # Future Considerations
 
 This ADR does not define the concrete database/struct representation, transport technology, retention policy, partial-work UI, or export implementation.
+
+# Status
+
+This decision is accepted.
