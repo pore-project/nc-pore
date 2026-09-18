@@ -22,6 +22,7 @@ pub enum ClientRecordingRole {
 pub struct ClientRecordingParticipant {
     pub id: String,
     pub ready: bool,
+    pub opening_confirmed: bool,
     pub artifact_id: Option<String>,
 }
 
@@ -79,6 +80,9 @@ pub fn recording_state(
             id: participant.value().to_owned(),
             ready: coordination
                 .map(|value| value.ready_participants().contains(participant))
+                .unwrap_or(false),
+            opening_confirmed: coordination
+                .map(|value| value.opening_confirmed_participants().contains(participant))
                 .unwrap_or(false),
             artifact_id: recording
                 .artifact_for_participant(participant)
@@ -167,7 +171,10 @@ mod tests {
         assert_eq!(state.role, ClientRecordingRole::Host);
         assert_eq!(state.participants.len(), 2);
         assert!(!state.confirmed);
-        assert!(state.participants.iter().all(|p| p.artifact_id.is_none()));
+        assert!(state
+            .participants
+            .iter()
+            .all(|p| p.artifact_id.is_none() && !p.opening_confirmed));
     }
 
     #[test]
