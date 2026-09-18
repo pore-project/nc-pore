@@ -136,7 +136,10 @@ impl Recording {
     ) -> Self {
         let artifact_slots = participant_id
             .map(|participant_id| {
-                vec![RecordingArtifactSlot::reconstitute(participant_id, artifact_id)]
+                vec![RecordingArtifactSlot::reconstitute(
+                    participant_id,
+                    artifact_id,
+                )]
             })
             .unwrap_or_default();
 
