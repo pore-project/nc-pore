@@ -203,5 +203,6 @@ for (const test of tests) {
 }
 
 if (failed) {
-	throw new Error(`${failed} JavaScript test(s) failed`)
+	process.exit(1)
 }
+process.exit(0)
