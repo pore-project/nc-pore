@@ -423,7 +423,9 @@ mod tests {
         );
         assert_eq!(recording.status(), RecordingStatus::Stopped);
         assert_eq!(
-            recording.artifact_for_participant(&participant_id("alice")).map(RecordingArtifactId::value),
+            recording
+                .artifact_for_participant(&participant_id("alice"))
+                .map(RecordingArtifactId::value),
             Some("alice-1")
         );
     }
