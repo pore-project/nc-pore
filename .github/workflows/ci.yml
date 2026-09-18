@@ -53,6 +53,9 @@ jobs:
       - name: Nextcloud storage contract checks
         run: php tools/nextcloud-v1-contract-check.php
 
+      - name: Nextcloud artifact collision checks
+        run: php tools/nextcloud-artifact-connector-contract-check.php
+
       - name: Architecture checks
         run: ./tools/architecture-checks/run-all.sh
 
