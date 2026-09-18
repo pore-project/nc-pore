@@ -6,16 +6,20 @@ namespace OCA\PoRe\Controller;
 
 use OCA\PoRe\AppInfo\Application;
 use OCA\PoRe\Service\NextcloudArtifactConnector;
+use OCA\PoRe\Service\RecordingRuntimeService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
+use OCP\IUserSession;
 use RuntimeException;
 
 final class RecordingTransportController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private readonly NextcloudArtifactConnector $connector,
+		private readonly RecordingRuntimeService $runtime,
+		private readonly IUserSession $userSession,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -31,7 +35,11 @@ final class RecordingTransportController extends OCSController {
 		int $size,
 		string $payload_sha256,
 	): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) return $this->rejected('unauthorized', 401);
+
 		try {
+			$this->authorizeRecordingTransport($user->getUID(), $production_id, $recording_id);
 			$prepared = $this->connector->prepare(
 				$this->required($production_id, 'production_id'),
 				$this->required($production_label, 'production_label'),
@@ -41,6 +49,7 @@ final class RecordingTransportController extends OCSController {
 				$participant_label,
 				$size,
 				$this->required($payload_sha256, 'payload_sha256'),
+				$user->getUID(),
 			);
 			return new DataResponse([
 				'protocol_version' => 2,
@@ -48,15 +57,20 @@ final class RecordingTransportController extends OCSController {
 				...$prepared,
 				'error_code' => null,
 			]);
-		} catch (\Throwable) {
+		} catch (\Throwable $exception) {
+			if ($exception->getMessage() === 'PoRE transport authorization is not available.') return $this->rejected('runtime_unavailable', 503);
+			if ($exception->getMessage() === 'PoRE transport authorization is not permitted for this recording') return $this->rejected('transport_unauthorized', 403);
 			return $this->rejected();
 		}
 	}
 
 	#[NoAdminRequired]
 	public function verifyFinalizedArtifact(string $transfer_id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) return $this->rejected('unauthorized', 401);
+
 		try {
-			$receipt = $this->connector->verify($this->required($transfer_id, 'transfer_id'));
+			$receipt = $this->connector->verify($this->required($transfer_id, 'transfer_id'), $user->getUID());
 			return new DataResponse([
 				'protocol_version' => 2,
 				'status' => 'verified',
@@ -70,8 +84,11 @@ final class RecordingTransportController extends OCSController {
 
 	#[NoAdminRequired]
 	public function closeFinalizedArtifactTransfer(string $transfer_id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) return $this->rejected('unauthorized', 401);
+
 		try {
-			$this->connector->close($this->required($transfer_id, 'transfer_id'));
+			$this->connector->close($this->required($transfer_id, 'transfer_id'), $user->getUID());
 			return new DataResponse([
 				'protocol_version' => 2,
 				'status' => 'closed',
@@ -87,7 +104,24 @@ final class RecordingTransportController extends OCSController {
 		return $value;
 	}
 
-	private function rejected(): DataResponse {
+	private function authorizeRecordingTransport(string $actorId, string $productionId, string $recordingId): void {
+		try {
+			$response = $this->runtime->command([
+				'request_id' => bin2hex(random_bytes(16)),
+				'session_id' => $productionId,
+				'actor_id' => $actorId,
+				'recording_id' => $recordingId,
+				'command' => ['Snapshot' => null],
+			], 'recording.command');
+		} catch (\Throwable $exception) {
+			throw new RuntimeException('PoRE transport authorization is not available.', 0, $exception);
+		}
+		if (($response['status'] ?? null) !== 'ok' || !is_array($response['state'] ?? null) || !in_array($response['state']['role'] ?? null, ['host', 'participant'], true)) {
+			throw new RuntimeException('PoRE transport authorization is not permitted for this recording');
+		}
+	}
+
+	private function rejected(string $errorCode = 'nextcloud_transport_failed', int $status = 500): DataResponse {
 		return new DataResponse([
 			'protocol_version' => 2,
 			'status' => 'rejected',
