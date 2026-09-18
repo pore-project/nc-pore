@@ -95,6 +95,9 @@ function makeExpect(actual) {
 		toBeNull() { assert.strictEqual(actual, null) },
 		toContain(expected) { assert.ok(actual?.includes?.(expected)) },
 		toMatch(expected) { assert.match(actual, expected) },
+		resolves: {
+			toEqual(expected) { return Promise.resolve(actual).then(value => { expect(value).toEqual(expected) }) },
+		},
 		rejects: {
 			toThrow(expected) {
 				return Promise.resolve(actual).then(
