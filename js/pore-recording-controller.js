@@ -181,6 +181,7 @@
 				encoding: artifact.encoding || null, size: artifact.size || null, sequence: artifact.sequence || null,
 				startedAt: artifact.startedAt || source.startedAt || null, stoppedAt: artifact.stoppedAt || null,
 				stopReason: artifact.stopReason || null, openingSignet: artifact.openingSignet || source.openingSignet || null,
+				closingSignet: artifact.closingSignet || source.closingSignet || null,
 			}
 		}
 	}
