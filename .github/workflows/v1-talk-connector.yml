@@ -49,14 +49,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
           components: rustfmt
+      - name: Install audio development dependency
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - name: Check workspace
         run: cargo check --workspace
       - name: Test workspace
