@@ -515,7 +515,7 @@ mod tests {
             recording
                 .complete_for_participant(
                     &participant_id(participant),
-                    artifact_id(format!("{participant}-1")),
+                    artifact_id(&format!("{participant}-1")),
                 )
                 .unwrap();
         }
