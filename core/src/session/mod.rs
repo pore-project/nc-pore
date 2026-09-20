@@ -534,6 +534,20 @@ mod tests {
     }
 
     #[test]
+    fn recording_start_requires_coordination() {
+        let (mut session, owner) = active_session();
+        let recording_id = RecordingId::new("recording-1");
+        session
+            .add_recording_by(&owner, Recording::new(recording_id.value()))
+            .unwrap();
+
+        assert_eq!(
+            session.start_recording_by(&owner, &recording_id),
+            Err(ProductionSessionError::InvalidStateTransition)
+        );
+    }
+
+    #[test]
     fn recording_start_requires_opening_confirmation() {
         let (mut session, owner) = active_session();
         let bob = ParticipantId::new("participant-1");
