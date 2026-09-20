@@ -571,10 +571,7 @@ mod tests {
         session
             .confirm_recording_opening_by(&bob, &recording_id)
             .unwrap();
-        assert_eq!(
-            session.start_recording_by(&owner, &recording_id),
-            Ok(())
-        );
+        assert_eq!(session.start_recording_by(&owner, &recording_id), Ok(()));
     }
 
     #[test]
