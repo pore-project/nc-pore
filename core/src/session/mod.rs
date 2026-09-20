@@ -656,6 +656,12 @@ mod tests {
         session
             .mark_recording_ready_by(&bob, &recording_id)
             .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
+            .unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
         session.stop_recording_by(&owner, &recording_id).unwrap();
 
@@ -713,6 +719,12 @@ mod tests {
         session
             .mark_recording_ready_by(&bob, &recording_id)
             .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
+            .unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
         session.stop_recording_by(&owner, &recording_id).unwrap();
 
@@ -768,6 +780,12 @@ mod tests {
             .unwrap();
         session
             .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
             .unwrap();
         session.start_recording_by(&owner, &recording_id).unwrap();
 
