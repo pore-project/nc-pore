@@ -365,13 +365,15 @@ impl ProductionSession {
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
-        if let Some(coordination) = self.recording_coordination.as_ref() {
-            if coordination.recording_id() != recording_id
-                || !coordination.is_ready()
-                || !coordination.all_opening_confirmed()
-            {
-                return Err(ProductionSessionError::InvalidStateTransition);
-            }
+        let coordination = self
+            .recording_coordination
+            .as_ref()
+            .ok_or(ProductionSessionError::InvalidStateTransition)?;
+        if coordination.recording_id() != recording_id
+            || !coordination.is_ready()
+            || !coordination.all_opening_confirmed()
+        {
+            return Err(ProductionSessionError::InvalidStateTransition);
         }
         let recording = self
             .recordings
