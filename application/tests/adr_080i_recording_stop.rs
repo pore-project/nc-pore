@@ -100,6 +100,15 @@ fn session_with_recording() -> (ProductionSession, ProductionId, ParticipantId, 
     session
         .add_recording_by(&actor, Recording::new(recording_id.value()))
         .unwrap();
+    session
+        .begin_recording_by(&actor, &recording_id, [actor.clone()])
+        .unwrap();
+    session
+        .mark_recording_ready_by(&actor, &recording_id)
+        .unwrap();
+    session
+        .confirm_recording_opening_by(&actor, &recording_id)
+        .unwrap();
 
     (session, production_id, actor, recording_id)
 }
