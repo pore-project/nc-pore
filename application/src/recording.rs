@@ -280,11 +280,19 @@ mod tests {
 
         assert_eq!(
             recording.status(),
-            nc_pore_core::recording::RecordingStatus::Stopped
+            nc_pore_core::recording::RecordingStatus::Completed
         );
         assert_eq!(
             recording.artifact_for_participant(&actor).unwrap().value(),
             artifact.id.value()
+        );
+        assert_eq!(
+            session.status(),
+            nc_pore_core::session::ProductionStatus::Completed
+        );
+        assert_eq!(
+            session.completion_reason(),
+            Some(nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted)
         );
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-001"));
