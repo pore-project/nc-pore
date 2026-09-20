@@ -746,9 +746,7 @@ mod tests {
         session
             .confirm_recording_opening_by(&owner, &recording_id)
             .unwrap();
-        session
-            .start_recording_by(&owner, &recording_id)
-            .unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
         session
             .stop_recording_by(&owner, &RecordingId::new("recording-001"))
             .unwrap();
