@@ -164,10 +164,6 @@ impl RecordingCoordination {
         self.status == RecordingCoordinationStatus::Ready
     }
 
-    pub fn opening_confirmed_participants(&self) -> &[ParticipantId] {
-        &self.opening_confirmed
-    }
-
     pub fn all_opening_confirmed(&self) -> bool {
         self.is_ready()
             && self
