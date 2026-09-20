@@ -77,9 +77,7 @@ where
     pub fn confirm_opening(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
         let actor_id = self.actor_id.clone();
         let recording_id = self.recording_id.clone();
-        self.mutate(|session| {
-            session.confirm_recording_opening_by(&actor_id, &recording_id)
-        })?;
+        self.mutate(|session| session.confirm_recording_opening_by(&actor_id, &recording_id))?;
         self.snapshot()
     }
 
