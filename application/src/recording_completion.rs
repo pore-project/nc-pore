@@ -196,7 +196,10 @@ mod tests {
         let recording = &session.recordings()[0];
         assert_eq!(recording.status(), RecordingStatus::Completed);
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording
+                .artifact_for_participant(&actor)
+                .unwrap()
+                .value(),
             artifact.id.value()
         );
     }
