@@ -3,6 +3,7 @@ name: V1 Talk Connector
 on:
   push:
     branches:
+      - develop
       - fix-v1-final
   pull_request:
 
