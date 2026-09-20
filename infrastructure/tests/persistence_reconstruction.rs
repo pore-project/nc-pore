@@ -127,8 +127,12 @@ fn completed_recording_survives_repository_restart() {
     );
     assert_eq!(reloaded.activities().len(), expected_activity_count);
     assert_eq!(
-        reloaded.activities()[expected_activity_count - 1].activity_type,
+        reloaded.activities()[expected_activity_count - 2].activity_type,
         nc_pore_core::activity::ActivityType::RecordingCompleted
+    );
+    assert_eq!(
+        reloaded.activities()[expected_activity_count - 1].activity_type,
+        nc_pore_core::activity::ActivityType::SessionCompleted
     );
 
     let _ = std::fs::remove_dir_all(root);
