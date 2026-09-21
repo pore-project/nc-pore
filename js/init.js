@@ -87,7 +87,7 @@
 			localCaptureArmed = true
 			return existing
 		}
-		if (localCapturePrepareInFlight || !connector.isAudioPipelineReady?.()) return null
+		if (localCapturePrepareInFlight) return null
 		localCapturePrepareInFlight = true
 		try {
 			const track = await localCapture.open()
@@ -132,10 +132,6 @@
 
 	const scheduleLocalCapturePreparation = () => {
 		if (!authoritativeState || authoritativeState.role === 'listener' || localCaptureArmed || localCapturePrepareInFlight) return
-		if (!connector.isAudioPipelineReady?.()) {
-			window.setTimeout(scheduleLocalCapturePreparation, 250)
-			return
-		}
 		void prepareLocalCapture().catch(error => {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		})
