@@ -202,9 +202,10 @@ mod tests {
 
     // TEST-01
     #[test]
-    fn workflow_requires_all_ready_before_recording() {
+    fn workflow_starts_technical_recording_before_ready_barrier() {
         let mut workflow = workflow();
         workflow.begin_ready_phase().unwrap();
+        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
         assert!(!workflow.mark_ready(&participant("participant-a")).unwrap());
         assert_eq!(workflow.status(), RecordingWorkflowStatus::WaitingForReady);
         assert_eq!(
@@ -214,6 +215,7 @@ mod tests {
         assert!(workflow.mark_ready(&participant("participant-b")).unwrap());
         workflow.start_recording().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Recording);
+        assert_eq!(workflow.recording().status(), RecordingStatus::Recording);
     }
 
     // TEST-02
@@ -228,16 +230,11 @@ mod tests {
 
     // TEST-03
     #[test]
-    fn workflow_requires_recording_before_stop() {
+    fn workflow_can_stop_while_waiting_for_ready() {
         let mut workflow = workflow();
         workflow.begin_ready_phase().unwrap();
         workflow.mark_ready(&participant("participant-a")).unwrap();
         workflow.mark_ready(&participant("participant-b")).unwrap();
-        assert_eq!(
-            workflow.request_stop(),
-            Err(RecordingWorkflowError::InvalidState)
-        );
-        workflow.start_recording().unwrap();
         workflow.request_stop().unwrap();
         assert_eq!(workflow.status(), RecordingWorkflowStatus::Stopping);
         assert_eq!(workflow.recording().status(), RecordingStatus::Stopped);

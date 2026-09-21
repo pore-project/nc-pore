@@ -585,7 +585,7 @@ mod tests {
     }
 
     #[test]
-    fn recording_start_requires_opening_confirmation() {
+    fn recording_starts_before_ready_and_opening_is_a_separate_barrier() {
         let (mut session, owner) = active_session();
         let bob = ParticipantId::new("participant-1");
         session
@@ -601,6 +601,13 @@ mod tests {
         session
             .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
             .unwrap();
+
+        assert_eq!(
+            session.recordings()[0].status(),
+            RecordingStatus::Recording
+        );
+        assert_eq!(session.start_recording_by(&owner, &recording_id), Ok(()));
+
         session
             .mark_recording_ready_by(&owner, &recording_id)
             .unwrap();
@@ -609,21 +616,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            session.start_recording_by(&owner, &recording_id),
-            Err(ProductionSessionError::InvalidStateTransition)
+            session.confirm_recording_opening_by(&owner, &recording_id),
+            Err(ProductionSessionError::RecordingCoordination(
+                RecordingCoordinationError::InvalidState
+            ))
         );
 
+        session
+            .trigger_recording_opening_by(&owner, &recording_id)
+            .unwrap();
         session
             .confirm_recording_opening_by(&owner, &recording_id)
             .unwrap();
-        assert_eq!(
-            session.start_recording_by(&owner, &recording_id),
-            Err(ProductionSessionError::InvalidStateTransition)
-        );
-
         session
             .confirm_recording_opening_by(&bob, &recording_id)
             .unwrap();
+
         assert_eq!(session.start_recording_by(&owner, &recording_id), Ok(()));
     }
 
@@ -707,6 +715,9 @@ mod tests {
             .mark_recording_ready_by(&bob, &recording_id)
             .unwrap();
         session
+            .trigger_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
             .confirm_recording_opening_by(&owner, &recording_id)
             .unwrap();
         session
@@ -770,6 +781,9 @@ mod tests {
             .mark_recording_ready_by(&bob, &recording_id)
             .unwrap();
         session
+            .trigger_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
             .confirm_recording_opening_by(&owner, &recording_id)
             .unwrap();
         session
@@ -830,6 +844,9 @@ mod tests {
             .unwrap();
         session
             .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&owner, &recording_id)
             .unwrap();
         session
             .confirm_recording_opening_by(&owner, &recording_id)

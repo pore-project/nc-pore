@@ -280,7 +280,7 @@ mod tests {
             let state = coordinator.snapshot().unwrap();
             assert_eq!(
                 state.phase,
-                crate::recording_state::ClientRecordingPhase::Preparing
+                crate::recording_state::ClientRecordingPhase::Recording
             );
         }
 
@@ -312,7 +312,6 @@ mod tests {
                 RecordingId::new("recording-001"),
             );
             bob.mark_ready().unwrap();
-            bob.confirm_opening().unwrap();
         }
 
         {
@@ -322,7 +321,18 @@ mod tests {
                 ParticipantId::new("alice"),
                 RecordingId::new("recording-001"),
             );
+            alice.trigger_opening().unwrap();
             alice.confirm_opening().unwrap();
+        }
+
+        {
+            let mut bob = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("bob"),
+                RecordingId::new("recording-001"),
+            );
+            bob.confirm_opening().unwrap();
         }
 
         let mut coordinator = RecordingCoordinator::new(
@@ -333,7 +343,7 @@ mod tests {
         );
         assert_eq!(
             coordinator.snapshot().unwrap().phase,
-            crate::recording_state::ClientRecordingPhase::Ready
+            crate::recording_state::ClientRecordingPhase::Recording
         );
         coordinator.start().unwrap();
         assert_eq!(

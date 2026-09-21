@@ -81,7 +81,7 @@
 	}
 
 	const prepareLocalCapture = async () => {
-		if (authoritativeState?.role === 'listener') return null
+		if (!authoritativeState || authoritativeState.role === 'listener') return null
 		const existing = localCapture.getCurrentTrack?.()
 		if (existing?.readyState === 'live') {
 			localCaptureArmed = true
@@ -131,7 +131,7 @@
 	}
 
 	const scheduleLocalCapturePreparation = () => {
-		if (localCaptureArmed || localCapturePrepareInFlight || authoritativeState?.role === 'listener') return
+		if (!authoritativeState || authoritativeState.role === 'listener' || localCaptureArmed || localCapturePrepareInFlight) return
 		if (!connector.isAudioPipelineReady?.()) {
 			window.setTimeout(scheduleLocalCapturePreparation, 250)
 			return
@@ -266,7 +266,8 @@
 		if (!window.__poreTalkRecordingCoordinator?.command) throw new Error('PoRE recording coordinator is not available')
 		startRequestedByHost = true
 		try {
-			await prepareLocalCapture()
+			const preparedTrack = await prepareLocalCapture()
+			if (!preparedTrack) throw new Error('PoRE local microphone capture is not armed')
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 			return

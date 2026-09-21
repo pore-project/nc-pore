@@ -1,6 +1,30 @@
 import '../js/pore-talk-audio-connector.js'
 
 describe('Nextcloud Talk microphone observer', () => {
+	it('keeps initial PoRE capture independent from Talk microphone selection', async () => {
+		const track = {
+			id: 'pore-default-track',
+			kind: 'audio',
+			getSettings: jest.fn(() => ({ deviceId: 'browser-default', sampleRate: 48000 })),
+		}
+		const stream = { getAudioTracks: () => [track], getTracks: () => [track] }
+		const getUserMedia = jest.fn().mockResolvedValue(stream)
+		const capture = new window.PoRELocalAudioCapture({ mediaDevices: { getUserMedia } })
+
+		await capture.open()
+
+		expect(getUserMedia).toHaveBeenCalledWith({
+			audio: {
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false,
+			},
+		})
+		expect(capture.getCurrentTrack()).toBe(track)
+		expect(capture.getCurrentDeviceId()).toBe('browser-default')
+	})
+
+
 	const Connector = window.PoRETalkAudioCaptureConnector
 	const eventName = window.PoRETalkMicrophoneEvent
 

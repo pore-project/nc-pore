@@ -178,10 +178,10 @@ mod tests {
     }
 
     #[test]
-    fn reports_core_preparation_and_roles() {
+    fn reports_active_recording_before_ready_barrier() {
         let session = session_with_recording();
         let state = recording_state(&session, "alice", "recording-001").unwrap();
-        assert_eq!(state.phase, ClientRecordingPhase::Preparing);
+        assert_eq!(state.phase, ClientRecordingPhase::Recording);
         assert_eq!(state.role, ClientRecordingRole::Host);
         assert_eq!(state.participants.len(), 2);
         assert!(!state.confirmed);
@@ -202,7 +202,7 @@ mod tests {
             )
             .unwrap();
         let state = recording_state(&session, "bob", "recording-001").unwrap();
-        assert_eq!(state.phase, ClientRecordingPhase::Preparing);
+        assert_eq!(state.phase, ClientRecordingPhase::Recording);
         assert_eq!(state.participants.iter().filter(|p| p.ready).count(), 1);
         assert_eq!(state.role, ClientRecordingRole::Participant);
     }
@@ -218,6 +218,9 @@ mod tests {
             .unwrap();
         session
             .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&alice, &recording_id)
             .unwrap();
         session
             .confirm_recording_opening_by(&alice, &recording_id)
@@ -246,6 +249,9 @@ mod tests {
             .unwrap();
         session
             .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&alice, &recording_id)
             .unwrap();
         session
             .confirm_recording_opening_by(&alice, &recording_id)
@@ -288,6 +294,9 @@ mod tests {
             .unwrap();
         session
             .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&alice, &recording_id)
             .unwrap();
         session
             .confirm_recording_opening_by(&alice, &recording_id)
