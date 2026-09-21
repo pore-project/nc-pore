@@ -179,6 +179,7 @@
 			let snapshot = result?.state ? window.PoRETalkRecordingStateNormalize(result.state) : null
 			if (!snapshot) return
 			updateAuthoritativeState(snapshot)
+			scheduleLocalCapturePreparation()
 
 			if (snapshot.state === 'recording'
 				&& snapshot.role !== 'listener'
