@@ -321,10 +321,12 @@
 
 	window.addEventListener('pore:recording-transport-completed', async event => {
 		const artifactId = event.detail?.artifact_id || event.detail?.artifactId
+		const captureId = artifactId
 		if (!artifactId || !window.__poreTalkRecordingCoordinator?.command) return
 		try {
 			const result = await window.__poreTalkRecordingCoordinator.command('complete', artifactId)
 			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			await completionJob.removeCapture(captureId)
 		} catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 	})
 
