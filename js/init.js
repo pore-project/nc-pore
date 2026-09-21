@@ -153,7 +153,7 @@
 			if (recorder.isRecording()) recorder.noteSourceChange(previousTrack, nextTrack, new Date().toISOString(), { from: { deviceId: previousTrack?.getSettings?.()?.deviceId || null }, to: { deviceId } })
 		} catch (error) {
 			localCapture.discardPendingReplacement()
-			localCaptureReady = false
+			localCaptureArmed = false
 			throw error
 		}
 	}
