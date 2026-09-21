@@ -28,10 +28,12 @@ describe('Nextcloud Talk audio adapter', () => {
 		}
 		const enabler = {
 			connectTrackSource: jest.fn((_inputTrackId, poreSource) => {
-				poreSource.on('outputTrackSet', () => {
+				if (typeof poreSource?.on === 'function') {
+					poreSource.on('outputTrackSet', () => {
+						outputTrack = poreSource.getOutputTrack('audio')
+					})
 					outputTrack = poreSource.getOutputTrack('audio')
-				})
-				outputTrack = poreSource.getOutputTrack('audio')
+				}
 			}),
 			disconnectTrackSource: jest.fn(),
 		}
