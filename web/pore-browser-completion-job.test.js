@@ -17,7 +17,7 @@ describe('Browser completion job', () => {
 					size: 123,
 					sha256: 'abc',
 				},
-			}],
+			}]),
 		}
 		const job = new Job({ persistenceStoreFactory: () => store })
 		const events = []
