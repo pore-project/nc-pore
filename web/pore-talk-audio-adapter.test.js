@@ -67,7 +67,7 @@ describe('Nextcloud Talk audio adapter', () => {
 		expect(adapter.attachToTalk()).toBe(true)
 		window.__poreLocalAudioCapture = { getCurrentTrack: () => masterOne }
 
-		window.dispatchEvent(new CustomEvent('pore:recording-started'))
+		window.dispatchEvent(new CustomEvent('pore:recording-capture-ready'))
 		const talkCloneOne = pipeline.source.getOutputTrack('audio')
 
 		expect(talkCloneOne).not.toBe(masterOne)

@@ -186,6 +186,7 @@ fn phase_name(phase: ClientRecordingPhase) -> &'static str {
     match phase {
         ClientRecordingPhase::Preparing => "Preparing",
         ClientRecordingPhase::Ready => "Ready",
+        ClientRecordingPhase::Opening => "Opening",
         ClientRecordingPhase::Recording => "Recording",
         ClientRecordingPhase::Stopped => "Stopped",
         ClientRecordingPhase::Completed => "Completed",
