@@ -72,6 +72,7 @@ describe('PoRE recording coordination channel', () => {
 	})
 
 	it('publishes lifecycle events through the PoRE endpoint, not a host transport', async () => {
+		const previousFetch = global.fetch
 		const fetchMock = jest.fn().mockResolvedValue({
 			ok: true,
 			status: 200,
@@ -88,6 +89,7 @@ describe('PoRE recording coordination channel', () => {
 		expect(fetchMock.mock.calls[0][1].method).toBe('POST')
 		expect(String(fetchMock.mock.calls[0][1].body)).toContain('eventType=opening')
 		channel.disconnect()
+		global.fetch = previousFetch
 	})
 
 	it('waits for a real reconnect after an established stream is lost', async () => {
