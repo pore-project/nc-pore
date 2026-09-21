@@ -1,8 +1,4 @@
-import '../js/pore-talk-audio-adapter.js'
-
 describe('Nextcloud Talk audio adapter', () => {
-	const Adapter = window.PoRETalkAudioAdapter
-
 	const createTrack = (id, deviceId, clone = null) => {
 		const track = {
 			id,
@@ -21,7 +17,6 @@ describe('Nextcloud Talk audio adapter', () => {
 
 	const createTalkPipeline = initialTrack => {
 		let outputTrack = initialTrack
-		const sourceListeners = new Map()
 		const source = {
 			connectTrackSink: jest.fn((inputTrackId, sink) => {
 				sink.connectTrackSource(inputTrackId, source, 'audio')
@@ -37,7 +32,6 @@ describe('Nextcloud Talk audio adapter', () => {
 					outputTrack = poreSource.getOutputTrack('audio')
 				})
 				outputTrack = poreSource.getOutputTrack('audio')
-				sourceListeners.set('poreSource', poreSource)
 			}),
 			disconnectTrackSource: jest.fn(),
 		}
