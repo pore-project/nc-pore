@@ -30,7 +30,11 @@ final class RecordingCoordinationController extends OCSController {
 	#[NoCSRFRequired]
 	public function events(string $sessionId, string $recordingId): Response {
 		$user = $this->userSession->getUser();
-		if ($user === null) return new Response(401);
+		if ($user === null) {
+			$response = new Response();
+			$response->setStatus(401);
+			return $response;
+		}
 
 		try {
 			$this->coordination->authorizeStream($sessionId, $recordingId, $user->getUID());
@@ -41,10 +45,14 @@ final class RecordingCoordinationController extends OCSController {
 				},
 			);
 		} catch (InvalidArgumentException) {
-			return new Response(400);
+			$response = new Response();
+			$response->setStatus(400);
+			return $response;
 		} catch (RuntimeException $exception) {
-			if ($exception->getMessage() === 'coordination_unauthorized') return new Response(403);
-			return new Response(503);
+			$status = $exception->getMessage() === 'coordination_unauthorized' ? 403 : 503;
+			$response = new Response();
+			$response->setStatus($status);
+			return $response;
 		}
 	}
 
