@@ -281,6 +281,8 @@ impl From<RecordingCoordinationStatus> for PersistedRecordingCoordinationStatus 
             RecordingCoordinationStatus::Preparing => Self::Preparing,
             RecordingCoordinationStatus::WaitingForReady => Self::WaitingForReady,
             RecordingCoordinationStatus::Ready => Self::Ready,
+            RecordingCoordinationStatus::Opening => Self::Opening,
+            RecordingCoordinationStatus::Recording => Self::Recording,
         }
     }
 }

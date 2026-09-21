@@ -16,11 +16,11 @@ describe('Nextcloud Talk microphone observer', () => {
 	const createSource = track => {
 		const listeners = new Map()
 		const source = {
-			connectTrackSink: jest.fn((inputTrackId, sink) => {
-				sink.connectTrackSource(inputTrackId, source, 'audio')
+			connectTrackSink: jest.fn((outputTrackId, sink, inputTrackId = 'default') => {
+				sink.connectTrackSource(inputTrackId, source, outputTrackId)
 			}),
-			disconnectTrackSink: jest.fn((inputTrackId, sink) => {
-				sink.disconnectTrackSource(inputTrackId, source, 'audio')
+			disconnectTrackSink: jest.fn((outputTrackId, sink, inputTrackId = 'default') => {
+				sink.disconnectTrackSource(inputTrackId, source, outputTrackId)
 			}),
 			getOutputTrack: jest.fn(() => track),
 			on: jest.fn((event, handler) => listeners.set(event, handler)),

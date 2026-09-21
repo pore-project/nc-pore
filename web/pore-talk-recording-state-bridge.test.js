@@ -107,8 +107,8 @@ describe('Talk microphone observer', () => {
 		const talkTrack = { id: 'talk-track-1', getSettings: () => ({ deviceId: 'mic-1' }) }
 		const replacementTrack = { id: 'talk-track-2', getSettings: () => ({ deviceId: 'mic-2' }) }
 		const source = {
-			connectTrackSink: jest.fn((input, sink) => sink.connectTrackSource(input, source, 'audio')),
-			disconnectTrackSink: jest.fn((input, sink) => sink.disconnectTrackSource(input, source, 'audio')),
+			connectTrackSink: jest.fn((outputTrackId, sink, inputTrackId = 'default') => sink.connectTrackSource(inputTrackId, source, outputTrackId)),
+			disconnectTrackSink: jest.fn((outputTrackId, sink, inputTrackId = 'default') => sink.disconnectTrackSource(inputTrackId, source, outputTrackId)),
 			getOutputTrack: jest.fn(() => talkTrack),
 			on: jest.fn((event, handler) => listeners.set(event, handler)),
 			off: jest.fn((event, handler) => {
