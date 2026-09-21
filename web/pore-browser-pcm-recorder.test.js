@@ -7,6 +7,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 		jest.restoreAllMocks()
 	})
 
+	// TEST-01: transient persistence failure must not stop active capture.
 	it('keeps realtime capture active when a persistence chunk temporarily fails', async () => {
 		let attempts = 0
 		const store = {
@@ -45,6 +46,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 	expect(store.appendChunk).toHaveBeenCalledTimes(3)
 	})
 
+	// TEST-02: safety cutoff is time-based below the hard backlog bound.
 	it('waits for sustained persistence failure before safety stop below the hard backlog bound', async () => {
 		const originalDateNow = Date.now
 		let now = 1000
@@ -82,6 +84,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 		}
 	})
 
+	// TEST-03: a recovering queue must stop immediately at its hard backlog bound.
 	it('requests a controlled safety stop when persistence backlog reaches its bound', async () => {
 		const safetyStop = jest.fn()
 		const store = { appendChunk: jest.fn(async () => { throw new Error('persistence unavailable') }) }
@@ -101,8 +104,6 @@ describe('Browser PCM recorder persistence recovery', () => {
 		await Promise.resolve()
 		await Promise.resolve()
 		recorder._acceptSamples(new Float32Array([0]))
-		await Promise.resolve()
-		await Promise.resolve()
 
 		expect(recorder.getState()).toBe('recording')
 		expect(safetyStop).toHaveBeenCalledTimes(1)

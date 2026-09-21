@@ -156,6 +156,7 @@
 			const blob = new Blob(parts, { type: 'application/octet-stream' })
 			this.persistenceQueue.push({ index, blob, size })
 			this.persistenceQueueBytes += size
+			if (this.persistenceState === 'recovering' && this.persistenceQueueBytes >= this.maxPersistenceQueueBytes) this._emitPersistenceSafetyStop()
 			void this._drainPersistenceQueue()
 		}
 
