@@ -177,7 +177,6 @@
 		}
 		if (name === 'ready') {
 			const result = await recordingCommand(sessionId, recordingId, name, options)
-			const participants = Array.isArray(result?.state?.participants) ? result.state.participants : []
 			await publishRecordingSignal('ready')
 			return result
 		}
