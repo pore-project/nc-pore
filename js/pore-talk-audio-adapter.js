@@ -69,6 +69,7 @@
 			this._audioTrackEnabler = null
 			this._source = new PoRETalkAudioSource()
 			this._installed = false
+			this._masterTrack = null
 		}
 
 		attachToTalk() {
@@ -85,6 +86,7 @@
 
 		connectMasterTrack(masterTrack) {
 			if (!masterTrack || masterTrack.kind !== 'audio') throw new Error('PoRE Talk adapter requires an audio master track')
+			if (this._masterTrack === masterTrack && this._source.getOutputTrack('audio')?.readyState === 'live') return this._source.getOutputTrack('audio')
 			if (!this._mediaDevicesSource || !this._audioTrackEnabler) {
 				if (!this.attachToTalk()) throw new Error('Nextcloud Talk audio pipeline is not available')
 			}
@@ -97,6 +99,7 @@
 			}
 
 			const clone = masterTrack.clone()
+			this._masterTrack = masterTrack
 			this._source.setTrack(clone)
 			if (oldTalkTrack && oldTalkTrack !== clone) oldTalkTrack.stop()
 			return clone
@@ -106,6 +109,7 @@
 			if (!this._installed || !this._mediaDevicesSource || !this._audioTrackEnabler) return
 			this._audioTrackEnabler.disconnectTrackSource('default', this._source, 'audio')
 			this._source.setTrack(null)
+			this._masterTrack = null
 			this._mediaDevicesSource.connectTrackSink('audio', this._audioTrackEnabler)
 			this._installed = false
 			try {
@@ -142,6 +146,17 @@
 		try {
 			adapter.connectMasterTrack(track)
 			window.dispatchEvent(new CustomEvent('pore:talk-audio-adapter-connected', { detail: { masterTrackId: track.id } }))
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
+		}
+	})
+
+	window.addEventListener('pore:recording-master-track-changed', event => {
+		const track = event.detail?.track
+		if (!track) return
+		try {
+			adapter.connectMasterTrack(track)
+			window.dispatchEvent(new CustomEvent('pore:talk-audio-adapter-connected', { detail: { masterTrackId: track.id, replaced: true } }))
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
 		}
