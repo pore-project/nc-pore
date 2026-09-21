@@ -54,7 +54,6 @@
 					if (event.data?.type === 'flush-complete') this._resolveWorkletFlush()
 				}
 				this.source.connect(this.worklet); const sink = this.context.createGain(); sink.gain.value = 0; this.worklet.connect(sink); sink.connect(this.context.destination); if (this.context.state === 'suspended') await this.context.resume(); this.state = 'recording'
-				window.dispatchEvent(new CustomEvent('pore:recording-started', { detail: { sequence: this.sequence, startedAt: this.startedAt, sampleRate: this.sampleRate, channels: this.channels, format: 'pcm_s24le', trackId: track.id, trackLabel: track.label, captureId: this.captureId, recordingSessionId: this.recordingSessionId, participantLabel: this.participantLabel } }))
 			} catch (error) { this.state = 'error'; await this._cleanup(); throw error }
 		}
 
