@@ -3,6 +3,13 @@
 declare(strict_types=1);
 
 return [
+	'routes' => [
+		[
+			'name' => 'RecordingCoordination#events',
+			'url' => '/v1/recordings/coordination/events',
+			'verb' => 'GET',
+		],
+	],
 	'ocs' => [
 		[
 			'name' => 'RecordingTransport#prepareFinalizedArtifact',
@@ -27,6 +34,11 @@ return [
 		[
 			'name' => 'Production#command',
 			'url' => '/v1/productions/command',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'RecordingCoordination#publish',
+			'url' => '/v1/recordings/coordination/publish',
 			'verb' => 'POST',
 		],
 		[
