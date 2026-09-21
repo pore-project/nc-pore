@@ -156,6 +156,7 @@ describe('Browser recording controller', () => {
 	it('keeps the active local microphone until the recorder accepts the replacement', async () => {
 		const firstStop = jest.fn()
 		const secondStop = jest.fn()
+		const thirdStop = jest.fn()
 		const firstTrack = {
 			kind: 'audio', id: 'pore-track-1', label: 'PoRE microphone 1', readyState: 'live',
 			getSettings: () => ({ deviceId: 'device-1' }), stop: firstStop,
@@ -164,13 +165,22 @@ describe('Browser recording controller', () => {
 			kind: 'audio', id: 'pore-track-2', label: 'PoRE microphone 2', readyState: 'live',
 			getSettings: () => ({ deviceId: 'device-2' }), stop: secondStop,
 		}
+		const thirdTrack = {
+			kind: 'audio', id: 'pore-track-3', label: 'PoRE microphone 3', readyState: 'live',
+			getSettings: () => ({ deviceId: 'device-2' }), stop: thirdStop,
+		}
 		let replacementCalls = 0
 		const firstStream = { getAudioTracks: () => [firstTrack], getTracks: () => [firstTrack] }
 		const secondStream = { getAudioTracks: () => [secondTrack], getTracks: () => [secondTrack] }
+		const thirdStream = { getAudioTracks: () => [thirdTrack], getTracks: () => [thirdTrack] }
 		const mediaDevices = {
 			getUserMedia: jest.fn(() => {
 				replacementCalls += 1
-				return Promise.resolve(replacementCalls === 1 ? firstStream : secondStream)
+				return Promise.resolve(
+					replacementCalls === 1 ? firstStream
+						: replacementCalls === 2 ? secondStream
+							: thirdStream
+				)
 			}),
 		}
 		const capture = new window.PoRELocalAudioCapture({ mediaDevices })
@@ -188,10 +198,11 @@ describe('Browser recording controller', () => {
 
 		const replacement = await capture.replace('device-2')
 		capture.commitReplacement(replacement)
-		expect(capture.getCurrentTrack()).toBe(secondTrack)
+		expect(capture.getCurrentTrack()).toBe(thirdTrack)
 		expect(firstStop).toHaveBeenCalledTimes(1)
-		capture.stop()
 		expect(secondStop).toHaveBeenCalledTimes(1)
+		capture.stop()
+		expect(thirdStop).toHaveBeenCalledTimes(1)
 	})
 
 })
