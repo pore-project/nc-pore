@@ -602,10 +602,7 @@ mod tests {
             .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
             .unwrap();
 
-        assert_eq!(
-            session.recordings()[0].status(),
-            RecordingStatus::Recording
-        );
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Recording);
         assert_eq!(session.start_recording_by(&owner, &recording_id), Ok(()));
 
         session
