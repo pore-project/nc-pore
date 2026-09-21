@@ -147,7 +147,7 @@ describe('Browser recording controller', () => {
 		expect(masterChanges[1].trackId).toBe('pore-track-1')
 
 		expect(controller.getState()).toBe('recording')
-		expect(recorder.replaceTrack).toHaveBeenCalledTimes(1)
+		expect(recorder.replaceTrack).toHaveBeenCalledTimes(2)
 		expect(recorder.stop).not.toHaveBeenCalled()
 		expect(controller.sourceChanges).toHaveLength(1)
 		expect(controller.sourceChanges[0].from.deviceId).toBe('device-1')
