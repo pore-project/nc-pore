@@ -120,10 +120,10 @@
 		if (!nextTrack || nextTrack === previousTrack) return
 		try {
 			await recorder.replaceTrack(nextTrack)
-			localCapture.commitReplacement?.(nextTrack)
+			localCapture.commitReplacement(nextTrack)
 			if (recorder.isRecording()) recorder.noteSourceChange(previousTrack, nextTrack, new Date().toISOString(), { from: { deviceId: previousTrack?.getSettings?.()?.deviceId || null }, to: { deviceId } })
 		} catch (error) {
-			localCapture.discardPendingReplacement?.()
+			localCapture.discardPendingReplacement()
 			localCaptureReady = false
 			throw error
 		}
