@@ -21,7 +21,12 @@ if grep -R -nE "OCA\\\\Talk|apps/spreed|SimpleWebRTC|sendToAll"     lib/Service/
     exit 1
 fi
 
-# TEST-COORD-04: the app must load the neutral channel before the Talk host adapter.
+# TEST-COORD-04: the new PHP transport surface must pass syntax validation.
+php -l lib/Service/RecordingCoordinationService.php >/dev/null
+php -l lib/Controller/RecordingCoordinationController.php >/dev/null
+php -l lib/Http/CoordinationEventStreamResponse.php >/dev/null
+
+# TEST-COORD-05: the app must load the neutral channel before the Talk host adapter.
 grep -q "pore-recording-coordination" lib/AppInfo/Application.php
 grep -q "RecordingCoordination#events" appinfo/routes.php
 grep -q "RecordingCoordination#publish" appinfo/routes.php
