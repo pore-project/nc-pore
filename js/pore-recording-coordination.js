@@ -72,6 +72,7 @@
 				const wasConnected = this.connected
 				this.connected = false
 				if (wasConnected) {
+					this.readyPromise = new Promise(resolve => { this.resolveReady = resolve })
 					window.dispatchEvent(new CustomEvent('pore:recording-coordination-lost', {
 						detail: { sessionId: this.sessionId, recordingId: this.recordingId },
 					}))
