@@ -124,7 +124,9 @@ pub fn recording_state(
         role,
         participants,
         confirmed: recording.status() == RecordingStatus::Completed,
-        opening_triggered: coordination.map(|value| value.opening_triggered()).unwrap_or(false),
+        opening_triggered: coordination
+            .map(|value| value.opening_triggered())
+            .unwrap_or(false),
         artifact_id: recording
             .artifact_for_participant(&nc_pore_core::participant::ParticipantId::new(actor_id))
             .map(|artifact| artifact.value().to_owned()),
