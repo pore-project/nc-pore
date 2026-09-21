@@ -107,6 +107,11 @@
 			})
 		}
 
+		async removeCapture(captureId) {
+			if (!captureId) throw new Error('PoRE completion job requires a capture id for cleanup')
+			return this._store().removeCapture(captureId)
+		}
+
 		async recover() {
 			const store = this._store()
 			const captures = await store.listRecoverableCaptures()
