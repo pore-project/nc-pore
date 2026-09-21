@@ -419,7 +419,9 @@ impl PersistedRecordingCoordination {
             }
             PersistedRecordingCoordinationStatus::Ready => RecordingCoordinationStatus::Ready,
             PersistedRecordingCoordinationStatus::Opening => RecordingCoordinationStatus::Opening,
-            PersistedRecordingCoordinationStatus::Recording => RecordingCoordinationStatus::Recording,
+            PersistedRecordingCoordinationStatus::Recording => {
+                RecordingCoordinationStatus::Recording
+            }
         };
         if coordination.status() != expected_status {
             return Err(
