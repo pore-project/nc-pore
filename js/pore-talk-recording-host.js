@@ -191,6 +191,9 @@
 		if (name === 'force_close') {
 			return productionCommand(sessionId, 'force_close', options)
 		}
+		if (name === 'trigger_opening') {
+			return recordingCommand(sessionId, recordingId, name, options)
+		}
 		if (name === 'begin') {
 			stopLiveParticipantPolling()
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)

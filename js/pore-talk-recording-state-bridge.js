@@ -36,6 +36,7 @@
 			participants,
 			elapsedSeconds: Number.isFinite(snapshot.elapsedSeconds) ? snapshot.elapsedSeconds : 0,
 			startedAt: snapshot.startedAt || snapshot.started_at || null,
+			openingTriggered: snapshot.openingTriggered === true || snapshot.opening_triggered === true,
 			error: snapshot.error || null,
 		})
 	}

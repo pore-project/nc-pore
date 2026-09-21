@@ -35,8 +35,8 @@
 		if (confirmed) return STATUS.confirmed
 		if (state === 'error') return STATUS.error
 		if (state === 'stopping') return STATUS.stopping
-		if (state === 'recording' && ready) return STATUS.recording
-		if (state === 'opening' && ready) return STATUS.opening
+		if (state === 'opening') return STATUS.opening
+		if (state === 'recording') return STATUS.recording
 		if (ready) return STATUS.ready
 		return STATUS.preparing
 	}

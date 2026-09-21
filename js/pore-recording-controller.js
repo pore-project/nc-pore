@@ -29,10 +29,10 @@
 		getCurrentTrack() { return this._track }
 		getCurrentDeviceId() { return this._deviceId }
 
-		async open(deviceId) {
-			const { stream, track } = await this._getStream(deviceId)
+		async open(deviceId = null) {
+			const { stream, track, resolvedDeviceId } = await this._getStream(deviceId)
 			this._discardPendingReplacement()
-			this._replaceStream(stream, deviceId, track)
+			this._replaceStream(stream, resolvedDeviceId, track)
 			return track
 		}
 
@@ -65,21 +65,22 @@
 			this._replaceStream(null, null, null)
 		}
 
-		async _getStream(deviceId) {
+		async _getStream(deviceId = null) {
 			if (!this._mediaDevices?.getUserMedia) throw new Error('PoRE local microphone capture is not available')
-			if (!deviceId) throw new Error('PoRE requires the currently selected Talk microphone')
-			const stream = await this._mediaDevices.getUserMedia({ audio: {
-				deviceId: { exact: deviceId },
+			const audio = {
 				echoCancellation: false,
 				noiseSuppression: false,
 				autoGainControl: false,
-			} })
+			}
+			if (deviceId) audio.deviceId = { exact: deviceId }
+			const stream = await this._mediaDevices.getUserMedia({ audio })
 			const track = stream.getAudioTracks?.()[0] || null
 			if (!track) {
 				stream.getTracks?.().forEach(item => item.stop())
 				throw new Error('PoRE local microphone capture returned no audio track')
 			}
-			return { stream, track }
+			const resolvedDeviceId = deviceId || track.getSettings?.()?.deviceId || null
+			return { stream, track, resolvedDeviceId }
 		}
 
 		_discardPendingReplacement() {

@@ -38,12 +38,13 @@
 	let authoritativeState = null
 	let productionId = null
 	let startRequestedByHost = false
-	let localCaptureStartInFlight = false
-	let localCaptureReady = false
+	let localCapturePrepareInFlight = false
+	let localCaptureArmed = false
+	let localRecordingStartInFlight = false
 	let openingSignetEmitted = false
 	let coordinationPollTimer = null
 	let coordinationPollInFlight = false
-	let hostStartInFlight = false
+	let openingTriggerInFlight = false
 	let openingSignetRequestInFlight = false
 	let localStopInFlight = false
 	let talkUiMountElement = null
@@ -79,41 +80,69 @@
 		})
 	}
 
-	const startLocalCapture = async ({ signalReady = true } = {}) => {
-		if (localCaptureReady || localCaptureStartInFlight) return
-		const microphone = connector.getCurrentMicrophone?.()
-		if (!microphone?.deviceId) throw new Error('Talk microphone selection is not available')
-		if (!productionId) throw new Error('Talk production identity is not available')
-		if (!authoritativeState?.recordingId) throw new Error('Authoritative recording identity is not available')
-		localCaptureStartInFlight = true
+	const prepareLocalCapture = async () => {
+		if (authoritativeState?.role === 'listener') return null
+		const existing = localCapture.getCurrentTrack?.()
+		if (existing?.readyState === 'live') {
+			localCaptureArmed = true
+			return existing
+		}
+		if (localCapturePrepareInFlight || !connector.isAudioPipelineReady?.()) return null
+		localCapturePrepareInFlight = true
 		try {
-			const track = await localCapture.open(microphone.deviceId)
-			try {
-				await recorder.start(track, {
-					...(context?.sourceMetadata || {}),
-					productionId,
-					recordingId: authoritativeState.recordingId,
-					productionLabel: context?.productionLabel || context?.title || productionId,
-					participantLabel: context?.participantLabel || null,
-					deviceId: microphone.deviceId,
-				})
-			} catch (error) {
-				localCapture.stop()
-				throw error
-			}
-			localCaptureReady = true
-			window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
-			if (signalReady) {
-				const result = await window.__poreTalkRecordingCoordinator?.command?.('ready')
-				if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-			}
+			const track = await localCapture.open()
+			localCaptureArmed = true
+			window.dispatchEvent(new CustomEvent('pore:recording-capture-ready', {
+				detail: {
+					trackId: track.id,
+					deviceId: localCapture.getCurrentDeviceId?.() || track.getSettings?.()?.deviceId || null,
+				},
+			}))
+			return track
 		} finally {
-			localCaptureStartInFlight = false
+			localCapturePrepareInFlight = false
 		}
 	}
 
+	const startLocalRecording = async () => {
+		if (recorder.isRecording() || localRecordingStartInFlight) return
+		if (authoritativeState?.role === 'listener') return
+		if (!productionId) throw new Error('Talk production identity is not available')
+		if (!authoritativeState?.recordingId) throw new Error('Authoritative recording identity is not available')
+		localRecordingStartInFlight = true
+		try {
+			const track = await prepareLocalCapture()
+			if (!track || track.readyState !== 'live') throw new Error('PoRE local microphone capture is not armed')
+			const deviceId = localCapture.getCurrentDeviceId?.() || track.getSettings?.()?.deviceId || null
+			await recorder.start(track, {
+				...(context?.sourceMetadata || {}),
+				productionId,
+				recordingId: authoritativeState.recordingId,
+				productionLabel: context?.productionLabel || context?.title || productionId,
+				participantLabel: context?.participantLabel || null,
+				deviceId,
+			})
+			window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
+			const result = await window.__poreTalkRecordingCoordinator?.command?.('ready')
+			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+		} finally {
+			localRecordingStartInFlight = false
+		}
+	}
+
+	const scheduleLocalCapturePreparation = () => {
+		if (localCaptureArmed || localCapturePrepareInFlight || authoritativeState?.role === 'listener') return
+		if (!connector.isAudioPipelineReady?.()) {
+			window.setTimeout(scheduleLocalCapturePreparation, 250)
+			return
+		}
+		void prepareLocalCapture().catch(error => {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		})
+	}
+
 	const switchLocalCaptureForMicrophone = async deviceId => {
-		if (!deviceId || !startRequestedByHost || authoritativeState?.role === 'listener') return
+		if (!deviceId || authoritativeState?.role === 'listener') return
 		if (!recorder.isRecording()) return
 		const previousTrack = localCapture.getCurrentTrack?.()
 		const nextTrack = await localCapture.replace(deviceId)
@@ -147,50 +176,58 @@
 		coordinationPollInFlight = true
 		try {
 			const result = await coordinator.command('snapshot')
-			const snapshot = result?.state ? window.PoRETalkRecordingStateNormalize(result.state) : null
+			let snapshot = result?.state ? window.PoRETalkRecordingStateNormalize(result.state) : null
 			if (!snapshot) return
 			updateAuthoritativeState(snapshot)
 
-			if (snapshot.state === 'preparing'
+			if (snapshot.state === 'recording'
 				&& snapshot.role !== 'listener'
-				&& !snapshot.ready
-				&& !localCaptureReady
-				&& !localCaptureStartInFlight
-				&& connector.getCurrentMicrophone?.()?.deviceId) {
+				&& !recorder.isRecording()
+				&& !localRecordingStartInFlight) {
 				try {
-					await startLocalCapture()
+					await startLocalRecording()
+					const refreshed = await coordinator.command('snapshot')
+					if (refreshed?.state) {
+						snapshot = window.PoRETalkRecordingStateNormalize(refreshed.state)
+						updateAuthoritativeState(snapshot)
+					}
 				} catch (error) {
 					window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 				}
 			}
 
-			if (snapshot.state === 'ready' && snapshot.role !== 'listener') {
+			if (snapshot.state === 'recording'
+				&& snapshot.role === 'host'
+				&& startRequestedByHost
+				&& snapshot.readyCount >= snapshot.participantCount
+				&& !snapshot.openingTriggered
+				&& !openingTriggerInFlight) {
+				openingTriggerInFlight = true
+				try {
+					const triggered = await coordinator.command('trigger_opening')
+					if (triggered?.state) {
+						snapshot = window.PoRETalkRecordingStateNormalize(triggered.state)
+						updateAuthoritativeState(snapshot)
+					}
+				} finally {
+					openingTriggerInFlight = false
+				}
+			}
+
+			if (snapshot.state === 'opening' && snapshot.role !== 'listener') {
 				const me = snapshot.participants?.find(participant => participant.id === coordinator.actorId)
 				if (me?.ready && !me.opening_confirmed && !openingSignetRequestInFlight && recorder.isRecording()) {
 					openingSignetRequestInFlight = true
 					try {
 						await emitOpeningSignet()
 						const confirmed = await coordinator.command('confirm_opening')
-						if (confirmed?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(confirmed.state))
+						if (confirmed?.state) {
+							snapshot = window.PoRETalkRecordingStateNormalize(confirmed.state)
+							updateAuthoritativeState(snapshot)
+						}
 					} finally {
 						openingSignetRequestInFlight = false
 					}
-				}
-			}
-
-			const openingCount = snapshot.participants?.filter(participant => participant.opening_confirmed).length || 0
-			if (snapshot.state === 'ready'
-				&& snapshot.role === 'host'
-				&& startRequestedByHost
-				&& !hostStartInFlight
-				&& snapshot.readyCount >= snapshot.participantCount
-				&& openingCount >= snapshot.participantCount) {
-				hostStartInFlight = true
-				try {
-					const started = await coordinator.command('start')
-					if (started?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(started.state))
-				} finally {
-					hostStartInFlight = false
 				}
 			}
 
@@ -228,10 +265,16 @@
 		console.debug('[NC-PoRe] startRequested: entered')
 		if (!window.__poreTalkRecordingCoordinator?.command) throw new Error('PoRE recording coordinator is not available')
 		startRequestedByHost = true
+		try {
+			await prepareLocalCapture()
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+			return
+		}
 		console.debug('[NC-PoRe] startRequested: before begin')
 		const result = await window.__poreTalkRecordingCoordinator.command('begin')
 		if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-		try { await startLocalCapture() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
+		try { await startLocalRecording() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 		startCoordinationPolling()
 	}
 
@@ -305,7 +348,7 @@
 	window.addEventListener('pore:recording-started', event => publish({ startedAt: event.detail?.startedAt || event.detail?.source?.startedAt }))
 
 	window.addEventListener('pore:recording-local-finalized', event => {
-		localCaptureReady = false
+		localCaptureArmed = false
 		openingSignetEmitted = false
 		const artifact = event.detail
 		publish({ artifact })
@@ -332,7 +375,10 @@
 		} catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 	})
 
-	window.addEventListener('pore:recording-ui-context', event => render(event.detail))
+	window.addEventListener('pore:recording-ui-context', event => {
+		render(event.detail)
+		scheduleLocalCapturePreparation()
+	})
 
 	const stopLocalCapture = async (reason, { closingSignet = false } = {}) => {
 		try {
@@ -340,7 +386,7 @@
 			return await recorder.stop(reason)
 		} finally {
 			localCapture.stop()
-			localCaptureReady = false
+			localCaptureArmed = false
 		}
 	}
 
@@ -409,6 +455,7 @@
 			await HostAdapter.bootstrap()
 			if (window.__poreTalkRecordingCoordinator?.sessionId) lastBootstrappedCallPath = callPath
 			startCoordinationPolling()
+			scheduleLocalCapturePreparation()
 		} catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 		finally { hostBootstrapInFlight = false }
 	}
@@ -416,5 +463,6 @@
 	window.addEventListener('pore:recording-ui-mount', () => { void bootstrapTalkCall() })
 	void announceRecoveryCandidates()
 	tryAttach()
+	scheduleLocalCapturePreparation()
 	void bootstrapTalkCall()
 })()

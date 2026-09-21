@@ -135,21 +135,26 @@
 	window.PoRETalkAudioAdapter = TalkAudioAdapter
 	window.__poreTalkAudioAdapter = adapter
 
-	const tryAttach = () => {
-		if (adapter.attachToTalk()) return
-		window.setTimeout(tryAttach, 100)
-	}
-
-	window.addEventListener('pore:recording-started', () => {
+	const connectCurrentMasterTrack = () => {
 		const track = window.__poreLocalAudioCapture?.getCurrentTrack?.()
-		if (!track) return
+		if (!track || track.readyState !== 'live') return
 		try {
 			adapter.connectMasterTrack(track)
 			window.dispatchEvent(new CustomEvent('pore:talk-audio-adapter-connected', { detail: { masterTrackId: track.id } }))
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
 		}
-	})
+	}
+
+	const tryAttach = () => {
+		if (adapter.attachToTalk()) {
+			connectCurrentMasterTrack()
+			return
+		}
+		window.setTimeout(tryAttach, 100)
+	}
+
+	window.addEventListener('pore:recording-capture-ready', connectCurrentMasterTrack)
 
 	window.addEventListener('pore:recording-master-track-changed', event => {
 		const track = event.detail?.track

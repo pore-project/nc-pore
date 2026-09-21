@@ -56,18 +56,22 @@
 			const source = window.OCA?.Talk?.SimpleWebRTC?.webrtc?._mediaDevicesSource
 			if (!source || typeof source.connectTrackSink !== 'function' || typeof source.disconnectTrackSink !== 'function') return false
 			if (this._mediaDevicesSource === source) {
-				const track = source.getOutputTrack('audio')
-				this._observeTrack(track)
-				return Boolean(track?.getSettings?.()?.deviceId)
+				this._observeTrack(source.getOutputTrack('audio'))
+				return true
 			}
 			this._detachFromTalk()
 			const sink = new TalkMicrophoneObserverSink(track => this._observeTrack(track))
 			source.connectTrackSink('audio', sink)
 			this._mediaDevicesSource = source
 			this._trackSink = sink
-			const track = source.getOutputTrack('audio')
-			this._observeTrack(track)
-			return Boolean(track?.getSettings?.()?.deviceId)
+			this._observeTrack(source.getOutputTrack('audio'))
+			return true
+		}
+
+		isAudioPipelineReady() {
+			const source = this._mediaDevicesSource || window.OCA?.Talk?.SimpleWebRTC?.webrtc?._mediaDevicesSource
+			const track = source?.getOutputTrack?.('audio')
+			return Boolean(track?.kind === 'audio' && track.readyState === 'live')
 		}
 
 		detachFromTalk() { this._detachFromTalk() }
