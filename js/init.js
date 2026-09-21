@@ -44,7 +44,6 @@
 	let openingSignetEmitted = false
 	let openingSignetRequestInFlight = false
 	let openingTriggerInFlight = false
-	let openingSignetRequestInFlight = false
 	let localStopInFlight = false
 	let talkUiMountElement = null
 
