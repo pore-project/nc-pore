@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - fix-v1-final
+      - fix-v1-pore-coordination
   pull_request:
 
 jobs:
