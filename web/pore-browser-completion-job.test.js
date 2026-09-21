@@ -3,6 +3,52 @@ import '../js/pore-browser-completion-job.js'
 describe('Browser completion job', () => {
 	const Job = window.PoREBrowserCompletionJob
 
+	it('re-emits a completed transport handoff when Core completion is still pending', async () => {
+		const store = {
+			listRecoverableCaptures: jest.fn(async () => [{
+				captureId: 'capture-1',
+				status: 'finalized',
+				completionJob: {
+					status: 'completed',
+					coreCompletionStatus: 'pending',
+					artifactId: 'capture-1',
+					fileId: 42,
+					path: 'PoRE/example.wav',
+					size: 123,
+					sha256: 'abc',
+				},
+			}],
+		}
+		const job = new Job({ persistenceStoreFactory: () => store })
+		const events = []
+		const handler = event => events.push(event.detail)
+		window.addEventListener('pore:recording-transport-completed', handler)
+
+		await job.recover()
+
+		expect(events).toHaveLength(1)
+		expect(events[0].artifact_id).toBe('capture-1')
+		expect(events[0].file_id).toBe(42)
+		window.removeEventListener('pore:recording-transport-completed', handler)
+	})
+
+	it('retries cleanup for a capture whose Core completion was already acknowledged', async () => {
+		const store = {
+			listRecoverableCaptures: jest.fn(async () => [{
+				captureId: 'capture-2',
+				status: 'finalized',
+				completionJob: { status: 'completed', coreCompletionStatus: 'completed' },
+			}]),
+			removeCapture: jest.fn(async () => {}),
+		}
+		const job = new Job({ persistenceStoreFactory: () => store })
+
+		await job.recover()
+
+		expect(store.removeCapture).toHaveBeenCalledTimes(1)
+		expect(store.removeCapture).toHaveBeenCalledWith('capture-2')
+	})
+
 	it('removes the local capture only through the completion job cleanup boundary', async () => {
 		const store = {
 			removeCapture: jest.fn(async () => {}),
