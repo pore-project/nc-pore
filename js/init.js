@@ -327,6 +327,7 @@
 		try {
 			const result = await window.__poreTalkRecordingCoordinator.command('complete', artifactId)
 			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			await completionJob.updateTransportState(captureId, { coreCompletionStatus: 'completed' })
 			await completionJob.removeCapture(captureId)
 		} catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 	})
