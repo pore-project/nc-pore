@@ -3,6 +3,18 @@ import '../js/pore-browser-completion-job.js'
 describe('Browser completion job', () => {
 	const Job = window.PoREBrowserCompletionJob
 
+	it('removes the local capture only through the completion job cleanup boundary', async () => {
+		const store = {
+			removeCapture: jest.fn(async () => {}),
+		}
+		const job = new Job({ persistenceStoreFactory: () => store })
+
+		await job.removeCapture('capture-1')
+
+		expect(store.removeCapture).toHaveBeenCalledTimes(1)
+		expect(store.removeCapture).toHaveBeenCalledWith('capture-1')
+	})
+
 	it('prepares a finalized durable capture for transport without uploading it', async () => {
 		const persisted = []
 		const store = {
