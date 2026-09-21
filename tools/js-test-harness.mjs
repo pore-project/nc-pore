@@ -171,6 +171,7 @@ const files = [
 	'../web/pore-browser-pcm-recorder.test.js',
 	'../web/pore-browser-recording-lifecycle.test.js',
 	'../web/pore-browser-runtime-transport.test.js',
+	'../web/pore-recording-coordination.test.js',
 	'../web/pore-recording-controller-persistence-safety.test.js',
 	'../web/pore-recording-controller.test.js',
 	'../web/pore-talk-recording-state-bridge.test.js',
