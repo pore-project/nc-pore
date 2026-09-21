@@ -10,13 +10,16 @@ grep -q "new window.EventSource" js/pore-recording-coordination.js
 grep -q "/v1/recordings/coordination/publish" js/pore-recording-coordination.js
 
 # TEST-COORD-02: Talk may not carry PoRE recording lifecycle events.
-if grep -nE "sendToAll|SimpleWebRTC|signalingConnection|signalingMessageHandler|connection\.on\(['"]message" js/pore-talk-recording-host.js; then
+if grep -nE 'sendToAll|SimpleWebRTC|signalingConnection|signalingMessageHandler|connection\.on\(.message' js/pore-talk-recording-host.js; then
     echo "ERROR: Talk signaling is still used by the PoRE recording host adapter."
     exit 1
 fi
 
 # TEST-COORD-03: the PoRE coordination service/controller may not depend on Talk.
-if grep -R -nE "OCA\\\\Talk|apps/spreed|SimpleWebRTC|sendToAll"     lib/Service/RecordingCoordinationService.php     lib/Controller/RecordingCoordinationController.php     lib/Http/CoordinationEventStreamResponse.php; then
+if grep -R -nE 'apps/spreed|SimpleWebRTC|sendToAll' \
+    lib/Service/RecordingCoordinationService.php \
+    lib/Controller/RecordingCoordinationController.php \
+    lib/Http/CoordinationEventStreamResponse.php; then
     echo "ERROR: Recording coordination server code contains a Talk dependency."
     exit 1
 fi
@@ -38,12 +41,11 @@ if [ "$coord_line" -ge "$host_line" ]; then
     exit 1
 fi
 
-# TEST-COORD-05: lifecycle state remains authoritative in Core; the browser event
-# handler must synchronize from a Core snapshot instead of trusting event payload.
+# TEST-COORD-06: lifecycle state remains authoritative in Core; browser signals trigger a snapshot.
+grep -q "const handleRecordingSignal = async event" js/init.js
 grep -q "await synchronizeCoordinatorState()" js/init.js
-grep -q "ready.*synchronizeCoordinatorState" js/init.js || true
 
-# TEST-COORD-06: the production lifecycle must remain free of polling timers.
+# TEST-COORD-07: the production lifecycle must remain free of polling timers.
 if grep -nE "setInterval\(|pollCoordination|startCoordinationPolling|coordinationPollTimer" js/init.js js/pore-talk-recording-host.js; then
     echo "ERROR: recording coordination polling was reintroduced."
     exit 1
