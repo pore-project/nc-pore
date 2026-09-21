@@ -72,6 +72,7 @@
 			this.initialSource = null
 			this.captureId = null
 			this.recordingSessionId = null
+			this.currentTrack = null
 		}
 
 		getState() { return this.state }
@@ -105,17 +106,26 @@
 
 			try {
 				await this.recorder.start(track, { ...sourceMetadata, captureId: this.captureId, recordingSessionId: this.recordingSessionId })
+				this.currentTrack = track
 				this.state = 'recording'
-				window.dispatchEvent(new CustomEvent('pore:recording-started', { detail: { sequence: this.sequence, source: this.initialSource } }))
+				window.dispatchEvent(new CustomEvent('pore:recording-started', { detail: { sequence: this.sequence, startedAt: this.recorder.startedAt || this.initialSource.startedAt, source: this.initialSource } }))
 			} catch (error) {
-				this.state = 'error'; this.recorder = null; this.captureId = null; this.recordingSessionId = null; throw error
+				this.state = 'error'; this.recorder = null; this.currentTrack = null; this.captureId = null; this.recordingSessionId = null; throw error
 			}
 		}
 
 		async replaceTrack(track) {
 			if (!this.recorder || !this.isRecording()) throw new Error('PoRE microphone replacement requires an active local recording')
+			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
+			if (track.readyState !== 'live') throw new Error('PoRE cannot replace the active microphone with an ended audio track')
 			if (typeof this.recorder.replaceTrack !== 'function') throw new Error('PoRE PCM recorder cannot replace the active microphone')
-			return this.recorder.replaceTrack(track)
+			const previousTrack = this.currentTrack
+			const nextTrack = await this.recorder.replaceTrack(track) || track
+			this.currentTrack = nextTrack
+			window.dispatchEvent(new CustomEvent('pore:recording-master-track-changed', {
+				detail: { sequence: this.sequence, previousTrack, track: nextTrack, trackId: nextTrack.id, deviceId: nextTrack.getSettings?.()?.deviceId || null },
+			}))
+			return nextTrack
 		}
 
 		markOpeningSignet(at = new Date().toISOString()) {
@@ -160,11 +170,11 @@
 				if (closingSignet && typeof this.recorder.markClosingSignet === 'function') this.recorder.markClosingSignet()
 				const artifact = await this.recorder.stop(reason)
 				const enriched = artifact ? { ...artifact, sequence: this.sequence, source: { ...(this.initialSource || {}), ...(artifact.source || {}) }, sourceChanges: this.sourceChanges.slice() } : null
-				this.recorder = null; this.state = 'idle'
+				this.recorder = null; this.currentTrack = null; this.state = 'idle'
 				if (enriched) window.dispatchEvent(new CustomEvent('pore:recording-local-finalized', { detail: enriched }))
 				return enriched
 			} catch (error) {
-				this.recorder = null; this.state = 'error'; throw error
+				this.recorder = null; this.currentTrack = null; this.state = 'error'; throw error
 			} finally {
 				if (this.state === 'idle' || this.state === 'error') { this.captureId = null; this.recordingSessionId = null }
 			}
