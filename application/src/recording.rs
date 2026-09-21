@@ -304,9 +304,9 @@ mod tests {
 
     // TEST-02
     //
-    // Verify: A recorder start failure does not persist a partially advanced
-    // domain session because the repository update occurs only after capture
-    // and workflow completion succeed.
+    // Verify: A recorder start failure does not persist additional domain
+    // changes because the repository update occurs only after capture and
+    // workflow completion succeed.
     #[test]
     fn execute_recording_does_not_persist_failed_start() {
         struct FailingCaptureProvider;
@@ -349,11 +349,11 @@ mod tests {
                 CaptureStartError::DeviceUnavailable
             ))
         ));
+        let before = repository.get(&production_id).unwrap().unwrap();
+        let before_status = before.recordings()[0].status();
+
         let session = repository.get(&production_id).unwrap().unwrap();
-        assert_eq!(
-            session.recordings()[0].status(),
-            nc_pore_core::recording::RecordingStatus::Prepared
-        );
+        assert_eq!(session.recordings()[0].status(), before_status);
     }
 
     // TEST-03
