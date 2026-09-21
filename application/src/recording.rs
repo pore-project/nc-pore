@@ -239,6 +239,9 @@ mod tests {
             .mark_recording_ready_by(&actor, &recording_id)
             .unwrap();
         session
+            .trigger_recording_opening_by(&actor, &recording_id)
+            .unwrap();
+        session
             .confirm_recording_opening_by(&actor, &recording_id)
             .unwrap();
         repository.store(&session).unwrap();
