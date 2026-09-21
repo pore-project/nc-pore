@@ -3,7 +3,7 @@
 	'use strict'
 
 	const DB_NAME = 'nc-pore-recordings'
-	const DB_VERSION = 1
+	const DB_VERSION = 2
 	const MANIFEST_STORE = 'manifests'
 	const CHUNK_STORE = 'chunks'
 
@@ -23,12 +23,23 @@
 				request.onupgradeneeded = () => {
 					const db = request.result
 					if (!db.objectStoreNames.contains(MANIFEST_STORE)) db.createObjectStore(MANIFEST_STORE, { keyPath: 'captureId' })
-					if (!db.objectStoreNames.contains(CHUNK_STORE)) {
-						const chunks = db.createObjectStore(CHUNK_STORE, { keyPath: ['captureId', 'index'] })
-						chunks.createIndex('captureId', 'captureId', { unique: false })
+					let chunks
+					if (db.objectStoreNames.contains(CHUNK_STORE)) {
+						chunks = request.transaction.objectStore(CHUNK_STORE)
+					} else {
+						chunks = db.createObjectStore(CHUNK_STORE, { keyPath: ['captureId', 'index'] })
 					}
+					if (!chunks.indexNames.contains('captureId')) chunks.createIndex('captureId', 'captureId', { unique: false })
 				}
-				request.onsuccess = () => resolve(request.result)
+				request.onsuccess = () => {
+					const db = request.result
+					if (!db.objectStoreNames.contains(MANIFEST_STORE) || !db.objectStoreNames.contains(CHUNK_STORE)) {
+						db.close()
+						reject(new Error('PoRE IndexedDB schema is incomplete'))
+						return
+					}
+					resolve(db)
+				}
 				request.onerror = () => reject(request.error || new Error('Unable to open PoRE IndexedDB database'))
 			})
 			this.db.onversionchange = () => { this.db.close(); this.db = null }

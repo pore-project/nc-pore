@@ -6,11 +6,53 @@
 	const PRODUCTION_API_VERSION = '/ocs/v2.php/apps/pore/v1/productions/command'
 	const TALK_API_VERSION = '/ocs/v2.php/apps/spreed/api/v4'
 	let coordinatorContext = null
-	let liveParticipantPollTimer = null
-	let liveParticipantPollInFlight = false
-	let liveParticipantIds = []
+	let signalingConnection = null
+	let signalingMessageHandler = null
 
 	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
+	const PORE_SIGNAL_TYPE = 'pore-recording'
+	const PORE_SIGNAL_VERSION = 1
+
+	const getTalkSignalingConnection = () => window.OCA?.Talk?.SimpleWebRTC?.connection || null
+	const getTalkWebRtc = () => window.OCA?.Talk?.SimpleWebRTC || null
+
+	const detachRecordingSignaling = () => {
+		if (signalingConnection && signalingMessageHandler && typeof signalingConnection.off === 'function') signalingConnection.off('message', signalingMessageHandler)
+		signalingConnection = null
+		signalingMessageHandler = null
+	}
+
+	const attachRecordingSignaling = () => {
+		const connection = getTalkSignalingConnection()
+		if (!connection || typeof connection.on !== 'function') return false
+		if (signalingConnection === connection) return true
+		detachRecordingSignaling()
+		signalingConnection = connection
+		signalingMessageHandler = message => {
+			if (message?.type !== PORE_SIGNAL_TYPE) return
+			const payload = message.payload
+			if (!payload || payload.version !== PORE_SIGNAL_VERSION) return
+			if (!coordinatorContext || payload.token !== coordinatorContext.sessionId || payload.recordingId !== coordinatorContext.recordingId) return
+			window.dispatchEvent(new CustomEvent('pore:recording-signal', { detail: { ...payload, from: message.from || null } }))
+		}
+		connection.on('message', signalingMessageHandler)
+		return true
+	}
+
+	const broadcastRecordingSignal = (type, payload = {}) => {
+		const talk = getTalkWebRtc()
+		if (!talk?.sendToAll || !coordinatorContext) return false
+		talk.sendToAll(PORE_SIGNAL_TYPE, {
+			version: PORE_SIGNAL_VERSION,
+			type,
+			token: coordinatorContext.sessionId,
+			recordingId: coordinatorContext.recordingId,
+			actorId: coordinatorContext.actorId,
+			...payload,
+		})
+		return true
+	}
+
 
 	const requestJson = async (target, options = {}) => {
 		let response
@@ -71,46 +113,6 @@
 		const preserved = coordinatorContext.participants.filter(id => active.has(id))
 		const appended = participantIds.filter(id => !preserved.includes(id))
 		return [...preserved, ...appended]
-	}
-
-	const stopLiveParticipantPolling = () => {
-		if (liveParticipantPollTimer) {
-			window.clearInterval(liveParticipantPollTimer)
-			liveParticipantPollTimer = null
-		}
-	}
-
-	const refreshLiveParticipantCount = async token => {
-		if (liveParticipantPollInFlight || !coordinatorContext || coordinatorContext.sessionId !== token) return
-		liveParticipantPollInFlight = true
-		try {
-			const participantIds = await getCurrentRecordingParticipantIds(token)
-			const changed = participantIds.length !== liveParticipantIds.length
-				|| participantIds.some((participantId, index) => participantId !== liveParticipantIds[index])
-			liveParticipantIds = participantIds
-			coordinatorContext.participants = mergeParticipantOrder(participantIds)
-			if (changed) {
-				console.debug('[NC-PoRe] Talk participant count refreshed', { token, participantIds })
-				window.dispatchEvent(new CustomEvent('pore:talk-participants-updated', {
-					detail: {
-						conversationId: token,
-						participantCount: participantIds.length,
-						participants: participantIds,
-					},
-				}))
-			}
-		} catch (error) {
-			console.debug('[NC-PoRe] Talk participant count refresh failed', { token, error })
-		} finally {
-			liveParticipantPollInFlight = false
-		}
-	}
-
-	const startLiveParticipantPolling = token => {
-		stopLiveParticipantPolling()
-		liveParticipantIds = coordinatorContext?.participants || []
-		liveParticipantPollTimer = window.setInterval(() => { void refreshLiveParticipantCount(token) }, 3000)
-		void refreshLiveParticipantCount(token)
 	}
 
 	const publishState = snapshot => {
@@ -189,23 +191,45 @@
 			return { ...recording, production_status: production.production_status }
 		}
 		if (name === 'force_close') {
-			return productionCommand(sessionId, 'force_close', options)
+			const result = await productionCommand(sessionId, 'force_close', options)
+			broadcastRecordingSignal('production_closed', { productionStatus: result?.production_status || 'completed' })
+			return result
 		}
 		if (name === 'trigger_opening') {
-			return recordingCommand(sessionId, recordingId, name, options)
+			const result = await recordingCommand(sessionId, recordingId, name, options)
+			broadcastRecordingSignal('opening')
+			return result
 		}
 		if (name === 'begin') {
-			stopLiveParticipantPolling()
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
 			coordinatorContext.participants = mergeParticipantOrder(currentParticipantIds)
 			const beginOptions = { ...options, participants: coordinatorContext.participants }
+			const beginOptions2 = { ...options, participants: coordinatorContext.participants }
 			const production = await productionCommand(sessionId, 'ensure', beginOptions)
 			if (production?.production_status === 'created') {
 				await productionCommand(sessionId, 'start', beginOptions)
 			}
 			await recordingCommand(sessionId, recordingId, 'ensure', beginOptions)
-			return recordingCommand(sessionId, recordingId, 'begin', beginOptions)
+			const result = await recordingCommand(sessionId, recordingId, 'begin', beginOptions)
+			broadcastRecordingSignal('begin', { participants: coordinatorContext.participants })
+			return result
 		}
+		if (name === 'ready') {
+			const result = await recordingCommand(sessionId, recordingId, name, options)
+			const participants = Array.isArray(result?.state?.participants) ? result.state.participants : []
+			broadcastRecordingSignal('ready', {
+				readyCount: participants.filter(participant => participant?.ready === true).length,
+				participantCount: participants.length || coordinatorContext?.participants?.length || 0,
+			})
+			return result
+		}
+
+		if (name === 'stop') {
+			const result = await recordingCommand(sessionId, recordingId, name, options)
+			broadcastRecordingSignal('stop')
+			return result
+		}
+
 		return recordingCommand(sessionId, recordingId, name, options)
 	}
 
@@ -235,7 +259,7 @@
 		const ownerId = owner?.actorId || actorId
 		const recordingId = `recording-${token}`
 		coordinatorContext = { sessionId: token, recordingId, actorId, ownerId, participants: participantIds }
-		liveParticipantIds = participantIds
+		if (!attachRecordingSignaling()) console.warn('[NC-PoRe] Talk recording signaling is not available yet')
 		const participantLabel = getParticipantLabel(participantList, actorId, ownerId)
 		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { token, actorId, ownerId, participantIds, participantLabel })
 
@@ -275,8 +299,8 @@
 				participants: participantIds.map(id => ({ id, ready: false })),
 			},
 		}))
-		startLiveParticipantPolling(token)
+		
 	}
 
-	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })
+	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args), attachSignaling: attachRecordingSignaling })
 })()

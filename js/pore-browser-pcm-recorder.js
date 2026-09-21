@@ -7,7 +7,8 @@
 	const OPENING_TEST_TONE_AMPLITUDE = 0.2
 	const PERSISTENCE_RETRY_INITIAL_MS = 250
 	const PERSISTENCE_RETRY_MAX_MS = 5000
-	const PERSISTENCE_RETRY_BUFFER_CHUNKS = 8
+	const PERSISTENCE_MAX_RECOVERY_MS = 2 * 60 * 1000
+	const PERSISTENCE_MAX_PENDING_BYTES = 256 * 1024 * 1024
 	const PERSISTENCE_STOP_RETRY_ATTEMPTS = 8
 	const WORKLET_FLUSH_TIMEOUT_MS = 2000
 
@@ -19,10 +20,10 @@
 	}
 
 	class PoREBrowserPcmRecorder {
-		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = resolveWorkletUrl(), persistenceStoreFactory = () => new window.PoREBrowserPcmPersistenceStore(), persistenceChunkBytes = 128 * 1024, maxPersistenceQueueBytes = persistenceChunkBytes * PERSISTENCE_RETRY_BUFFER_CHUNKS, onPersistenceSafetyStop = null } = {}) {
+		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = resolveWorkletUrl(), persistenceStoreFactory = () => new window.PoREBrowserPcmPersistenceStore(), persistenceChunkBytes = 128 * 1024, maxPersistenceQueueBytes = PERSISTENCE_MAX_PENDING_BYTES, onPersistenceSafetyStop = null } = {}) {
 			this.AudioContextClass = AudioContextClass; this.workletUrl = workletUrl; this.persistenceStoreFactory = persistenceStoreFactory; this.persistenceChunkBytes = persistenceChunkBytes; this.maxPersistenceQueueBytes = maxPersistenceQueueBytes; this.onPersistenceSafetyStop = onPersistenceSafetyStop
 			this.state = 'idle'; this.context = null; this.source = null; this.worklet = null; this.stream = null; this.sampleRate = null; this.channels = 1; this.startedAt = null; this.stoppedAt = null; this.sequence = 0
-			this.captureId = null; this.recordingSessionId = null; this.productionId = null; this.productionLabel = null; this.participantLabel = null; this.recordingId = null; this.persistenceStore = null; this.workletFlushPromise = null; this.workletFlushTimer = null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this.persistenceRetryTimer = null; this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'idle'; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0
+			this.captureId = null; this.recordingSessionId = null; this.productionId = null; this.productionLabel = null; this.participantLabel = null; this.recordingId = null; this.persistenceStore = null; this.workletFlushPromise = null; this.workletFlushTimer = null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this.persistenceRetryTimer = null; this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'idle'; this.persistenceFailureStartedAt = null; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0
 		}
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
@@ -41,7 +42,7 @@
 			if (!this.AudioContextClass) throw new Error('Web Audio is not available in this browser')
 			if (!window.PoREBrowserPcmPersistenceStore && !metadata.persistenceStore) throw new Error('PoRE durable browser preservation is not available')
 
-			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.participantLabel = metadata.participantLabel || null; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this._clearPersistenceRetry(); this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'healthy'; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0; this.closingTestTonePending = false; this.closingTestToneSamplesWritten = 0; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
+			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.participantLabel = metadata.participantLabel || null; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this._clearPersistenceRetry(); this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'healthy'; this.persistenceFailureStartedAt = null; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0; this.closingTestTonePending = false; this.closingTestToneSamplesWritten = 0; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
 			try {
 				await this.primeAudioContext(); await this.context.audioWorklet.addModule(this.workletUrl); this.sampleRate = this.context.sampleRate
 				await this.persistenceStore.beginCapture({ captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, productionLabel: this.productionLabel, participantLabel: this.participantLabel, recordingId: this.recordingId, sequence: this.sequence, startedAt: this.startedAt, sampleRate: this.sampleRate, channels: this.channels, encoding: 'pcm_s24le', format: 'audio/wav' })
@@ -155,7 +156,6 @@
 			const blob = new Blob(parts, { type: 'application/octet-stream' })
 			this.persistenceQueue.push({ index, blob, size })
 			this.persistenceQueueBytes += size
-			if (this.persistenceQueueBytes >= this.maxPersistenceQueueBytes) this._emitPersistenceSafetyStop()
 			void this._drainPersistenceQueue()
 		}
 
@@ -169,10 +169,15 @@
 					try {
 						await this.persistenceStore.appendChunk(this.captureId, entry.index, entry.blob)
 						this.persistenceQueue.shift(); this.persistenceQueueBytes -= entry.size; this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS
+						if (!this.persistenceQueue.length) this.persistenceFailureStartedAt = null
 						this._publishPersistenceState(this.persistenceQueue.length ? 'degraded' : 'healthy')
 					} catch (error) {
+						if (this.persistenceFailureStartedAt === null) this.persistenceFailureStartedAt = Date.now()
 						this._publishPersistenceState('recovering', error)
-						if (this.persistenceQueueBytes >= this.maxPersistenceQueueBytes) this._emitPersistenceSafetyStop(error)
+						if (Date.now() - this.persistenceFailureStartedAt >= PERSISTENCE_MAX_RECOVERY_MS
+							|| this.persistenceQueueBytes >= this.maxPersistenceQueueBytes) {
+							this._emitPersistenceSafetyStop(error)
+						}
 						this._schedulePersistenceRetry()
 						return
 					}
