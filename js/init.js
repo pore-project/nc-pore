@@ -204,7 +204,7 @@
 			updateAuthoritativeState(snapshot)
 			scheduleLocalCapturePreparation()
 
-			if (snapshot.state === 'recording' && snapshot.role !== 'listener' && !recorder.isRecording() && !localRecordingStartInFlight) {
+			if (['recording', 'opening'].includes(snapshot.state) && snapshot.role !== 'listener' && !recorder.isRecording() && !localRecordingStartInFlight) {
 				await startLocalRecording()
 			}
 
