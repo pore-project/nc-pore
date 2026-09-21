@@ -132,7 +132,7 @@
 		async listRecoverableCaptures() {
 			const db = await this._database()
 			const manifests = await this._getAll(db, MANIFEST_STORE)
-			return manifests.filter(manifest => manifest.status !== 'finalized' || manifest.completionJob?.status !== 'completed')
+			return manifests.filter(manifest => manifest.status !== 'finalized' || manifest.completionJob?.status !== 'completed' || manifest.completionJob?.coreCompletionStatus === 'pending')
 		}
 
 		async removeCapture(captureId) {
