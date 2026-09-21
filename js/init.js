@@ -17,7 +17,7 @@
 	const RuntimeTransport = window.PoREBrowserRuntimeTransport
 	const HostAdapter = window.PoRETalkRecordingHostAdapter
 
-	if (!Connector || !LocalCapture || !Recorder || !Ui || !StateBridge || !CompletionJob || !RuntimeTransport || !HostAdapter) return
+	if (!Connector || !LocalCapture || !Recorder || !Ui || !StateBridge || !CompletionJob || !RuntimeTransport || !HostAdapter || !window.__poreRecordingCoordinationChannel) return
 
 	const connector = new Connector()
 	const localCapture = new LocalCapture()
@@ -187,58 +187,13 @@
 		const signal = event.detail
 		const coordinator = window.__poreTalkRecordingCoordinator
 		if (!signal || !coordinator || signal.recordingId !== coordinator.recordingId) return
-		const role = authoritativeState?.role || context?.role || null
-		if (!role || role === 'listener' || role === 'none') return
-
-		if (signal.type === 'begin') {
-			try { await startLocalRecording() } catch (error) {
-				window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
-			}
-			return
-		}
-
-		if (signal.type === 'ready') {
-			if (role !== 'host' || !startRequestedByHost || !Number.isInteger(signal.participantCount) || signal.participantCount <= 0) return
-			if (signal.readyCount < signal.participantCount || authoritativeState?.openingTriggered || openingTriggerInFlight) return
-			await triggerOpeningFromHost()
-			return
-		}
-
-		if (signal.type === 'opening') {
-			if (openingSignetRequestInFlight || !recorder.isRecording()) return
-			openingSignetRequestInFlight = true
-			try {
-				await emitOpeningSignet()
-				const result = await coordinator.command('confirm_opening')
-				if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-			} catch (error) {
-				window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
-			} finally {
-				openingSignetRequestInFlight = false
-			}
-			return
-		}
-
-		if (signal.type === 'stop') {
-			if (localStopInFlight || !recorder.isRecording()) return
-			localStopInFlight = true
-			try {
-				await stopLocalCapture('remote-stop', { closingSignet: true })
-				const result = await coordinator.command('acknowledge_stop')
-				if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-			} catch (error) {
-				window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
-			} finally {
-				localStopInFlight = false
-			}
-			return
-		}
-
 		if (signal.type === 'production_closed') {
-			publish({ productionStatus: signal.productionStatus || 'completed', state: 'completed', confirmed: true })
+			publish({ productionStatus: 'completed', state: 'completed', confirmed: true })
+			return
 		}
+		if (!['begin', 'ready', 'opening', 'stop'].includes(signal.type)) return
+		await synchronizeCoordinatorState()
 	}
-
 	const synchronizeCoordinatorState = async () => {
 		const coordinator = window.__poreTalkRecordingCoordinator
 		if (!coordinator?.command) return
@@ -300,7 +255,12 @@
 			return
 		}
 		console.debug('[NC-PoRe] startRequested: before begin')
-		if (!HostAdapter.attachSignaling?.()) throw new Error('Talk recording signaling is not available')
+		try {
+			await window.__poreRecordingCoordinationChannel.waitUntilReady(5000)
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+			return
+		}
 		const result = await window.__poreTalkRecordingCoordinator.command('begin')
 		if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
 		try { await startLocalRecording() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
@@ -351,6 +311,8 @@
 	})
 
 	window.addEventListener('pore:recording-signal', event => { void handleRecordingSignal(event) })
+
+	window.addEventListener('pore:recording-coordination-ready', () => { void synchronizeCoordinatorState() })
 
 	window.addEventListener('pore:talk-production-identity', event => {
 		const conversationId = event.detail?.conversationId || null
