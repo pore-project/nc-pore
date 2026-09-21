@@ -58,6 +58,9 @@ fn completed_session() -> ProductionSession {
         .mark_recording_ready_by(&participant, &recording_id)
         .unwrap();
     session
+        .trigger_recording_opening_by(&owner, &recording_id)
+        .unwrap();
+    session
         .confirm_recording_opening_by(&owner, &recording_id)
         .unwrap();
     session
