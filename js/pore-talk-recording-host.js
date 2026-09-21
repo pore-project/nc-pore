@@ -6,51 +6,13 @@
 	const PRODUCTION_API_VERSION = '/ocs/v2.php/apps/pore/v1/productions/command'
 	const TALK_API_VERSION = '/ocs/v2.php/apps/spreed/api/v4'
 	let coordinatorContext = null
-	let signalingConnection = null
-	let signalingMessageHandler = null
 
-	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
-	const PORE_SIGNAL_TYPE = 'pore-recording'
-	const PORE_SIGNAL_VERSION = 1
+	const coordinationChannel = () => window.__poreRecordingCoordinationChannel || null
 
-	const getTalkSignalingConnection = () => window.OCA?.Talk?.SimpleWebRTC?.connection || null
-	const getTalkWebRtc = () => window.OCA?.Talk?.SimpleWebRTC || null
-
-	const detachRecordingSignaling = () => {
-		if (signalingConnection && signalingMessageHandler && typeof signalingConnection.off === 'function') signalingConnection.off('message', signalingMessageHandler)
-		signalingConnection = null
-		signalingMessageHandler = null
-	}
-
-	const attachRecordingSignaling = () => {
-		const connection = getTalkSignalingConnection()
-		if (!connection || typeof connection.on !== 'function') return false
-		if (signalingConnection === connection) return true
-		detachRecordingSignaling()
-		signalingConnection = connection
-		signalingMessageHandler = message => {
-			if (message?.type !== PORE_SIGNAL_TYPE) return
-			const payload = message.payload
-			if (!payload || payload.version !== PORE_SIGNAL_VERSION) return
-			if (!coordinatorContext || payload.token !== coordinatorContext.sessionId || payload.recordingId !== coordinatorContext.recordingId) return
-			window.dispatchEvent(new CustomEvent('pore:recording-signal', { detail: { ...payload, from: message.from || null } }))
-		}
-		connection.on('message', signalingMessageHandler)
-		return true
-	}
-
-	const broadcastRecordingSignal = (type, payload = {}) => {
-		const talk = getTalkWebRtc()
-		if (!talk?.sendToAll || !coordinatorContext) return false
-		talk.sendToAll(PORE_SIGNAL_TYPE, {
-			version: PORE_SIGNAL_VERSION,
-			type,
-			token: coordinatorContext.sessionId,
-			recordingId: coordinatorContext.recordingId,
-			actorId: coordinatorContext.actorId,
-			...payload,
-		})
-		return true
+	const publishRecordingSignal = async type => {
+		const channel = coordinationChannel()
+		if (!channel?.publish) throw new Error('PoRE recording coordination channel is not available')
+		return channel.publish(type)
 	}
 
 
@@ -192,41 +154,37 @@
 		}
 		if (name === 'force_close') {
 			const result = await productionCommand(sessionId, 'force_close', options)
-			broadcastRecordingSignal('production_closed', { productionStatus: result?.production_status || 'completed' })
+			await publishRecordingSignal('production_closed')
 			return result
 		}
 		if (name === 'trigger_opening') {
 			const result = await recordingCommand(sessionId, recordingId, name, options)
-			broadcastRecordingSignal('opening')
+			await publishRecordingSignal('opening')
 			return result
 		}
 		if (name === 'begin') {
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
 			coordinatorContext.participants = mergeParticipantOrder(currentParticipantIds)
 			const beginOptions = { ...options, participants: coordinatorContext.participants }
-			const beginOptions2 = { ...options, participants: coordinatorContext.participants }
 			const production = await productionCommand(sessionId, 'ensure', beginOptions)
 			if (production?.production_status === 'created') {
 				await productionCommand(sessionId, 'start', beginOptions)
 			}
 			await recordingCommand(sessionId, recordingId, 'ensure', beginOptions)
 			const result = await recordingCommand(sessionId, recordingId, 'begin', beginOptions)
-			broadcastRecordingSignal('begin', { participants: coordinatorContext.participants })
+			await publishRecordingSignal('begin')
 			return result
 		}
 		if (name === 'ready') {
 			const result = await recordingCommand(sessionId, recordingId, name, options)
 			const participants = Array.isArray(result?.state?.participants) ? result.state.participants : []
-			broadcastRecordingSignal('ready', {
-				readyCount: participants.filter(participant => participant?.ready === true).length,
-				participantCount: participants.length || coordinatorContext?.participants?.length || 0,
-			})
+			await publishRecordingSignal('ready')
 			return result
 		}
 
 		if (name === 'stop') {
 			const result = await recordingCommand(sessionId, recordingId, name, options)
-			broadcastRecordingSignal('stop')
+			await publishRecordingSignal('stop')
 			return result
 		}
 
@@ -259,7 +217,6 @@
 		const ownerId = owner?.actorId || actorId
 		const recordingId = `recording-${token}`
 		coordinatorContext = { sessionId: token, recordingId, actorId, ownerId, participants: participantIds }
-		if (!attachRecordingSignaling()) console.warn('[NC-PoRe] Talk recording signaling is not available yet')
 		const participantLabel = getParticipantLabel(participantList, actorId, ownerId)
 		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { token, actorId, ownerId, participantIds, participantLabel })
 
@@ -267,6 +224,11 @@
 
 		await productionCommand(token, 'ensure', { participants: participantIds, ownerId })
 		console.debug('[NC-PoRe] Talk bootstrap: production ensured', { token, participantIds, ownerId })
+		await recordingCommand(token, recordingId, 'ensure', { participants: participantIds, ownerId })
+		console.debug('[NC-PoRe] PoRE recording ensured', { token, recordingId })
+		const channel = coordinationChannel()
+		if (!channel?.connect) throw new Error('PoRE recording coordination channel is not available')
+		void channel.connect(token, recordingId).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
 			sessionId: token,
@@ -302,5 +264,5 @@
 		
 	}
 
-	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args), attachSignaling: attachRecordingSignaling })
+	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })
 })()
