@@ -21,12 +21,51 @@
 			this._stream = null
 			this._track = null
 			this._deviceId = null
+			this._pendingStream = null
+			this._pendingTrack = null
+			this._pendingDeviceId = null
 		}
 
 		getCurrentTrack() { return this._track }
 		getCurrentDeviceId() { return this._deviceId }
 
 		async open(deviceId) {
+			const { stream, track } = await this._getStream(deviceId)
+			this._discardPendingReplacement()
+			this._replaceStream(stream, deviceId, track)
+			return track
+		}
+
+		async replace(deviceId) {
+			if (!deviceId || deviceId === this._deviceId) return this._track
+			const { stream, track } = await this._getStream(deviceId)
+			this._discardPendingReplacement()
+			this._pendingStream = stream
+			this._pendingTrack = track
+			this._pendingDeviceId = deviceId
+			return track
+		}
+
+		commitReplacement(track) {
+			if (!this._pendingStream || !this._pendingTrack || (track && this._pendingTrack !== track)) return this._track
+			const nextStream = this._pendingStream
+			const nextTrack = this._pendingTrack
+			const nextDeviceId = this._pendingDeviceId
+			this._pendingStream = null
+			this._pendingTrack = null
+			this._pendingDeviceId = null
+			this._replaceStream(nextStream, nextDeviceId, nextTrack)
+			return nextTrack
+		}
+
+		discardPendingReplacement() { this._discardPendingReplacement() }
+
+		stop() {
+			this._discardPendingReplacement()
+			this._replaceStream(null, null, null)
+		}
+
+		async _getStream(deviceId) {
 			if (!this._mediaDevices?.getUserMedia) throw new Error('PoRE local microphone capture is not available')
 			if (!deviceId) throw new Error('PoRE requires the currently selected Talk microphone')
 			const stream = await this._mediaDevices.getUserMedia({ audio: {
@@ -40,17 +79,14 @@
 				stream.getTracks?.().forEach(item => item.stop())
 				throw new Error('PoRE local microphone capture returned no audio track')
 			}
-			this._replaceStream(stream, deviceId, track)
-			return track
+			return { stream, track }
 		}
 
-		async replace(deviceId) {
-			if (!deviceId || deviceId === this._deviceId) return this._track
-			return this.open(deviceId)
-		}
-
-		stop() {
-			this._replaceStream(null, null, null)
+		_discardPendingReplacement() {
+			this._pendingStream?.getTracks?.().forEach(item => item.stop())
+			this._pendingStream = null
+			this._pendingTrack = null
+			this._pendingDeviceId = null
 		}
 
 		_replaceStream(stream, deviceId, track) {
