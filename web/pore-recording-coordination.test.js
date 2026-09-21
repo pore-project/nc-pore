@@ -97,9 +97,9 @@ describe('PoRE recording coordination channel', () => {
 		source.open()
 		await ready
 
-		const reconnectReady = channel.waitUntilReady(1000)
 		source.fail()
 		expect(channel.connected).toBe(false)
+		const reconnectReady = channel.waitUntilReady(1000)
 
 		source.open()
 		await reconnectReady
