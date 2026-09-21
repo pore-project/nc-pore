@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - feat/v1-nextcloud-runtime-adapter
+      - fix-v1-pore-coordination
   pull_request:
     branches:
       - main
