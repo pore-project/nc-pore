@@ -97,6 +97,11 @@ impl RecordingWorkflow {
             return Err(RecordingWorkflowError::InvalidState);
         }
         self.coordination.begin_waiting_for_ready()?;
+        if self.recording.status() == RecordingStatus::Prepared {
+            self.recording.start()?;
+        } else if self.recording.status() != RecordingStatus::Recording {
+            return Err(RecordingWorkflowError::InvalidState);
+        }
         self.status = RecordingWorkflowStatus::WaitingForReady;
         Ok(())
     }
@@ -116,16 +121,23 @@ impl RecordingWorkflow {
     }
 
     pub fn start_recording(&mut self) -> Result<(), RecordingWorkflowError> {
-        if self.status != RecordingWorkflowStatus::Ready {
+        if self.status != RecordingWorkflowStatus::Ready
+            || self.recording.status() != RecordingStatus::Recording
+        {
             return Err(RecordingWorkflowError::InvalidState);
         }
-        self.recording.start()?;
         self.status = RecordingWorkflowStatus::Recording;
         Ok(())
     }
 
     pub fn request_stop(&mut self) -> Result<(), RecordingWorkflowError> {
-        if self.status != RecordingWorkflowStatus::Recording {
+        if !matches!(
+            self.status,
+            RecordingWorkflowStatus::WaitingForReady
+                | RecordingWorkflowStatus::Ready
+                | RecordingWorkflowStatus::Recording
+        ) || self.recording.status() != RecordingStatus::Recording
+        {
             return Err(RecordingWorkflowError::InvalidState);
         }
         self.recording.stop()?;

@@ -316,6 +316,14 @@ impl ProductionSession {
         coordination
             .begin_waiting_for_ready()
             .map_err(ProductionSessionError::RecordingCoordination)?;
+        recording
+            .start()
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingStarted,
+            Some(recording_id.value().to_owned()),
+        );
         self.recording_coordination = Some(coordination);
         Ok(())
     }
@@ -335,6 +343,35 @@ impl ProductionSession {
         }
         coordination
             .mark_ready(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
+    }
+
+    pub fn trigger_recording_opening_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ManageRecordings)?;
+        if self.status != ProductionStatus::Active {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        let recording = self
+            .recordings
+            .iter()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+        if recording.status() != RecordingStatus::Recording {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
+        }
+        coordination
+            .trigger_opening()
             .map_err(ProductionSessionError::RecordingCoordination)
     }
 
@@ -369,10 +406,7 @@ impl ProductionSession {
             .recording_coordination
             .as_ref()
             .ok_or(ProductionSessionError::InvalidStateTransition)?;
-        if coordination.recording_id() != recording_id
-            || !coordination.is_ready()
-            || !coordination.all_opening_confirmed()
-        {
+        if coordination.recording_id() != recording_id {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
         let recording = self
@@ -380,6 +414,9 @@ impl ProductionSession {
             .iter_mut()
             .find(|recording| recording.id() == recording_id)
             .ok_or(ProductionSessionError::RecordingNotFound)?;
+        if recording.status() == RecordingStatus::Recording {
+            return Ok(());
+        }
         recording
             .start()
             .map_err(ProductionSessionError::RecordingLifecycle)?;

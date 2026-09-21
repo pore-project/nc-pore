@@ -6,6 +6,7 @@ use nc_pore_core::session::ProductionSession;
 pub enum ClientRecordingPhase {
     Preparing,
     Ready,
+    Opening,
     Recording,
     Stopped,
     Completed,
@@ -34,6 +35,7 @@ pub struct ClientRecordingState {
     pub role: ClientRecordingRole,
     pub participants: Vec<ClientRecordingParticipant>,
     pub confirmed: bool,
+    pub opening_triggered: bool,
     /// The current actor's participant Artifact, if one has been confirmed.
     pub artifact_id: Option<String>,
 }
@@ -93,14 +95,25 @@ pub fn recording_state(
     let phase = match recording.status() {
         RecordingStatus::Completed => ClientRecordingPhase::Completed,
         RecordingStatus::Stopped => ClientRecordingPhase::Stopped,
-        RecordingStatus::Recording => ClientRecordingPhase::Recording,
+        RecordingStatus::Recording => match coordination
+            .map(|value| value.status())
+            .unwrap_or(RecordingCoordinationStatus::Preparing)
+        {
+            RecordingCoordinationStatus::Opening => ClientRecordingPhase::Opening,
+            RecordingCoordinationStatus::Preparing
+            | RecordingCoordinationStatus::WaitingForReady
+            | RecordingCoordinationStatus::Ready
+            | RecordingCoordinationStatus::Recording => ClientRecordingPhase::Recording,
+        },
         RecordingStatus::Prepared => {
             let coordination =
                 coordination.ok_or(RecordingStateError::RecordingCoordinationNotFound)?;
             match coordination.status() {
                 RecordingCoordinationStatus::Ready => ClientRecordingPhase::Ready,
                 RecordingCoordinationStatus::Preparing
-                | RecordingCoordinationStatus::WaitingForReady => ClientRecordingPhase::Preparing,
+                | RecordingCoordinationStatus::WaitingForReady
+                | RecordingCoordinationStatus::Opening
+                | RecordingCoordinationStatus::Recording => ClientRecordingPhase::Preparing,
             }
         }
     };
@@ -111,6 +124,7 @@ pub fn recording_state(
         role,
         participants,
         confirmed: recording.status() == RecordingStatus::Completed,
+        opening_triggered: coordination.map(|value| value.opening_triggered()).unwrap_or(false),
         artifact_id: recording
             .artifact_for_participant(&nc_pore_core::participant::ParticipantId::new(actor_id))
             .map(|artifact| artifact.value().to_owned()),

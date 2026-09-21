@@ -145,6 +145,8 @@ enum PersistedRecordingCoordinationStatus {
     Preparing,
     WaitingForReady,
     Ready,
+    Opening,
+    Recording,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,6 +386,16 @@ impl PersistedRecordingCoordination {
                 .map_err(Self::coordination_error)?;
         }
 
+        if matches!(
+            persisted_status,
+            PersistedRecordingCoordinationStatus::Opening
+                | PersistedRecordingCoordinationStatus::Recording
+        ) {
+            coordination
+                .trigger_opening()
+                .map_err(Self::coordination_error)?;
+        }
+
         for participant in self.opening_confirmed {
             coordination
                 .confirm_opening(&ParticipantId::new(participant))
@@ -404,6 +416,8 @@ impl PersistedRecordingCoordination {
                 RecordingCoordinationStatus::WaitingForReady
             }
             PersistedRecordingCoordinationStatus::Ready => RecordingCoordinationStatus::Ready,
+            PersistedRecordingCoordinationStatus::Opening => RecordingCoordinationStatus::Opening,
+            PersistedRecordingCoordinationStatus::Recording => RecordingCoordinationStatus::Recording,
         };
         if coordination.status() != expected_status {
             return Err(

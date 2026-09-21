@@ -62,6 +62,7 @@ pub enum RecordingCommand {
     EnsureRecording,
     Begin { participants: Vec<String> },
     MarkReady,
+    TriggerOpening,
     ConfirmOpening,
     Start,
     RequestStop,
@@ -86,6 +87,7 @@ pub struct RecordingStateDto {
     pub role: String,
     pub participants: Vec<RecordingParticipantDto>,
     pub confirmed: bool,
+    pub opening_triggered: bool,
     pub artifact_id: Option<String>,
 }
 
@@ -104,6 +106,7 @@ impl From<ClientRecordingState> for RecordingStateDto {
             phase: match state.phase {
                 ClientRecordingPhase::Preparing => "preparing",
                 ClientRecordingPhase::Ready => "ready",
+                ClientRecordingPhase::Opening => "opening",
                 ClientRecordingPhase::Recording => "recording",
                 ClientRecordingPhase::Stopped => "stopped",
                 ClientRecordingPhase::Completed => "completed",
@@ -126,6 +129,7 @@ impl From<ClientRecordingState> for RecordingStateDto {
                 })
                 .collect(),
             confirmed: state.confirmed,
+            opening_triggered: state.opening_triggered,
             artifact_id: state.artifact_id,
         }
     }
@@ -212,6 +216,7 @@ pub fn handle_recording_command<R: ProductionSessionRepository>(
             .begin(participants.iter().cloned().map(ParticipantId::new))
             .map(Some),
         RecordingCommand::MarkReady => coordinator.mark_ready().map(Some),
+        RecordingCommand::TriggerOpening => coordinator.trigger_opening().map(Some),
         RecordingCommand::ConfirmOpening => coordinator.confirm_opening().map(Some),
         RecordingCommand::Start => coordinator.start().map(Some),
         RecordingCommand::RequestStop => coordinator.request_stop().map(Some),
