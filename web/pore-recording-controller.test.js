@@ -125,13 +125,12 @@ describe('Browser recording controller', () => {
 		const secondTrack = createTrack('pore-track-2', 'device-2')
 		const recorder = {
 			start: jest.fn().mockResolvedValue(undefined),
-			replaceTrack: jest.fn().mockResolvedValue(secondTrack),
+			replaceTrack: jest.fn(track => Promise.resolve(track)),
 			stop: jest.fn().mockResolvedValue({ kind: 'audio', format: 'audio/wav' }),
 		}
 		const controller = new Controller({ recorderFactory: () => recorder })
 
 		await controller.start(firstTrack, { productionId: 'conversation-42', recordingId: 'recording-17' })
-		await controller.replaceTrack(secondTrack)
 		const masterChanges = []
 		window.addEventListener('pore:recording-master-track-changed', event => masterChanges.push(event.detail))
 		controller.noteSourceChange(firstTrack, secondTrack, '2026-09-16T08:00:10.000Z', { from: { deviceId: 'device-1' }, to: { deviceId: 'device-2' } })
