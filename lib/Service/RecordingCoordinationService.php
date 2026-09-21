@@ -198,7 +198,11 @@ final class RecordingCoordinationService {
 		if (!is_array($lines) || count($lines) <= self::MAX_EVENT_COUNT) return;
 
 		$lines = array_slice($lines, -self::MAX_EVENT_COUNT);
-		file_put_contents($logPath, implode("\n", $lines) . "\n", LOCK_EX);
+		$tmpPath = $logPath . '.tmp';
+		if (file_put_contents($tmpPath, implode("\n", $lines) . "\n", LOCK_EX) === false || !rename($tmpPath, $logPath)) {
+			@unlink($tmpPath);
+			throw new RuntimeException('Unable to compact the PoRE coordination event log.');
+		}
 	}
 
 	private function readLastEventId(string $logPath): int {
