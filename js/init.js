@@ -81,7 +81,8 @@
 	}
 
 	const prepareLocalCapture = async () => {
-		if (!authoritativeState || authoritativeState.role === 'listener') return null
+		const role = authoritativeState?.role || context?.role || null
+		if (!role || role === 'listener' || role === 'none') return null
 		const existing = localCapture.getCurrentTrack?.()
 		if (existing?.readyState === 'live') {
 			localCaptureArmed = true
