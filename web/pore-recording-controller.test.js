@@ -132,15 +132,20 @@ describe('Browser recording controller', () => {
 
 		await controller.start(firstTrack, { productionId: 'conversation-42', recordingId: 'recording-17' })
 		await controller.replaceTrack(secondTrack)
-		controller.noteSourceChange(firstTrack, secondTrack, '2026-09-16T08:00:10.000Z', { from: { deviceId: 'device-1' }, to: { deviceId: 'device-2' } })
-
 		const masterChanges = []
 		window.addEventListener('pore:recording-master-track-changed', event => masterChanges.push(event.detail))
-		await controller.replaceTrack(firstTrack)
+		controller.noteSourceChange(firstTrack, secondTrack, '2026-09-16T08:00:10.000Z', { from: { deviceId: 'device-1' }, to: { deviceId: 'device-2' } })
+		await controller.replaceTrack(secondTrack)
 		expect(masterChanges).toHaveLength(1)
-		expect(masterChanges[0].previousTrack).toBe(secondTrack)
-		expect(masterChanges[0].track).toBe(firstTrack)
-		expect(masterChanges[0].trackId).toBe('pore-track-1')
+		expect(masterChanges[0].previousTrack).toBe(firstTrack)
+		expect(masterChanges[0].track).toBe(secondTrack)
+		expect(masterChanges[0].trackId).toBe('pore-track-2')
+
+		await controller.replaceTrack(firstTrack)
+		expect(masterChanges).toHaveLength(2)
+		expect(masterChanges[1].previousTrack).toBe(secondTrack)
+		expect(masterChanges[1].track).toBe(firstTrack)
+		expect(masterChanges[1].trackId).toBe('pore-track-1')
 
 		expect(controller.getState()).toBe('recording')
 		expect(recorder.replaceTrack).toHaveBeenCalledTimes(1)
