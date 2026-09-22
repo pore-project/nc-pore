@@ -35,6 +35,7 @@ php -l lib/Http/CoordinationEventStreamResponse.php >/dev/null
 grep -q "pore-recording-coordination" lib/AppInfo/Application.php
 grep -q "RecordingCoordinationEvent#events" appinfo/routes.php
 grep -q "final class RecordingCoordinationEventController extends Controller" lib/Controller/RecordingCoordinationEventController.php
+grep -q "public function events(string \\$sessionId = '', string \\$recordingId = '')" lib/Controller/RecordingCoordinationEventController.php
 grep -q "RecordingCoordination#publish" appinfo/routes.php
 
 coord_line=$(grep -n "pore-recording-coordination" lib/AppInfo/Application.php | cut -d: -f1)
