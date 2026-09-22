@@ -7,6 +7,8 @@
 	const TALK_API_VERSION = '/ocs/v2.php/apps/spreed/api/v4'
 	let coordinatorContext = null
 
+	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
+
 	const coordinationChannel = () => window.__poreRecordingCoordinationChannel || null
 
 	const publishRecordingSignal = async type => {
