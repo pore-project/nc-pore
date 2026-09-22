@@ -22,8 +22,8 @@
 	class PoREBrowserPcmRecorder {
 		constructor({ AudioContextClass = window.AudioContext || window.webkitAudioContext, workletUrl = resolveWorkletUrl(), persistenceStoreFactory = () => new window.PoREBrowserPcmPersistenceStore(), persistenceChunkBytes = 128 * 1024, maxPersistenceQueueBytes = PERSISTENCE_MAX_PENDING_BYTES, onPersistenceSafetyStop = null } = {}) {
 			this.AudioContextClass = AudioContextClass; this.workletUrl = workletUrl; this.persistenceStoreFactory = persistenceStoreFactory; this.persistenceChunkBytes = persistenceChunkBytes; this.maxPersistenceQueueBytes = maxPersistenceQueueBytes; this.onPersistenceSafetyStop = onPersistenceSafetyStop
-			this.state = 'idle'; this.context = null; this.source = null; this.worklet = null; this.stream = null; this.sampleRate = null; this.channels = 1; this.startedAt = null; this.stoppedAt = null; this.sequence = 0
-			this.captureId = null; this.recordingSessionId = null; this.productionId = null; this.productionLabel = null; this.participantLabel = null; this.recordingId = null; this.persistenceStore = null; this.workletFlushPromise = null; this.workletFlushTimer = null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this.persistenceRetryTimer = null; this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'idle'; this.persistenceFailureStartedAt = null; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0
+			this.state = 'idle'; this.context = null; this.source = null; this.worklet = null; this.monitorDestination = null; this.stream = null; this.sampleRate = null; this.channels = 1; this.startedAt = null; this.stoppedAt = null; this.sequence = 0
+			this.captureId = null; this.recordingSessionId = null; this.productionId = null; this.productionLabel = null; this.participantLabel = null; this.recordingId = null; this.persistenceStore = null; this.workletFlushPromise = null; this.workletFlushTimer = null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this.persistenceRetryTimer = null; this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'idle'; this.persistenceFailureStartedAt = null; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.receivedAudioBuffers = 0; this.workletProcessorError = null; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0
 		}
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
@@ -42,20 +42,50 @@
 			if (!this.AudioContextClass) throw new Error('Web Audio is not available in this browser')
 			if (!window.PoREBrowserPcmPersistenceStore && !metadata.persistenceStore) throw new Error('PoRE durable browser preservation is not available')
 
-			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.participantLabel = metadata.participantLabel || null; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this._clearPersistenceRetry(); this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'healthy'; this.persistenceFailureStartedAt = null; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0; this.closingTestTonePending = false; this.closingTestToneSamplesWritten = 0; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
+			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.participantLabel = metadata.participantLabel || null; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this._clearPersistenceRetry(); this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'healthy'; this.persistenceFailureStartedAt = null; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.receivedAudioBuffers = 0; this.workletProcessorError = null; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0; this.closingTestTonePending = false; this.closingTestToneSamplesWritten = 0; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
 			try {
 				await this.primeAudioContext(); await this.context.audioWorklet.addModule(this.workletUrl); this.sampleRate = this.context.sampleRate
 				await this.persistenceStore.beginCapture({ captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, productionLabel: this.productionLabel, participantLabel: this.participantLabel, recordingId: this.recordingId, sequence: this.sequence, startedAt: this.startedAt, sampleRate: this.sampleRate, channels: this.channels, encoding: 'pcm_s24le', format: 'audio/wav' })
-				this.source = this.context.createMediaStreamSource(this.stream); this.worklet = new AudioWorkletNode(this.context, 'pore-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers' })
+				this.source = typeof this.context.createMediaStreamTrackSource === 'function'
+					? this.context.createMediaStreamTrackSource(track)
+					: this.context.createMediaStreamSource(this.stream)
+				this.worklet = new AudioWorkletNode(this.context, 'pore-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCountMode: 'max', channelInterpretation: 'speakers' })
+				this.worklet.onprocessorerror = event => {
+					this.workletProcessorError = event
+					console.error('[NC-PoRe] PCM AudioWorklet processor error', event)
+					window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error: new Error('PoRE AudioWorklet processor failed') } }))
+				}
 				this.worklet.port.onmessage = event => {
 					if (event.data instanceof Float32Array) {
+						this.receivedAudioBuffers += 1
 						if (this.state === 'recording' || this.state === 'stopping') this._acceptSamples(event.data)
 						return
 					}
 					if (event.data?.type === 'flush-complete') this._resolveWorkletFlush()
 				}
-				this.source.connect(this.worklet); const sink = this.context.createGain(); sink.gain.value = 0; this.worklet.connect(sink); sink.connect(this.context.destination); if (this.context.state === 'suspended') await this.context.resume(); this.state = 'recording'
-			} catch (error) { this.state = 'error'; await this._cleanup(); throw error }
+				this.monitorDestination = this.context.createMediaStreamDestination()
+				this.source.connect(this.worklet)
+				this.worklet.connect(this.monitorDestination)
+				if (this.context.state === 'suspended') await this.context.resume()
+				console.debug('[NC-PoRe] PCM recorder active', {
+					contextState: this.context.state,
+					sampleRate: this.context.sampleRate,
+					trackId: track.id,
+					trackReadyState: track.readyState,
+					trackMuted: track.muted,
+					trackEnabled: track.enabled,
+				})
+				this.state = 'recording'
+			} catch (error) {
+				this.state = 'error'
+				try {
+					if (this.captureId && this.persistenceStore) await this.persistenceStore.removeCapture(this.captureId)
+				} catch (cleanupError) {
+					console.error('[NC-PoRe] Failed to remove incomplete browser capture after start failure', cleanupError)
+				}
+				await this._cleanup()
+				throw error
+			}
 		}
 
 		async replaceTrack(track) {
@@ -227,6 +257,14 @@
 			if (!this.isRecording()) return null
 			this.state = 'stopping'
 			this.stoppedAt = new Date().toISOString()
+			console.debug('[NC-PoRe] PCM recorder stopping', {
+				captureId: this.captureId,
+				recordingId: this.recordingId,
+				receivedAudioBuffers: this.receivedAudioBuffers,
+				capturedSamples: this.capturedSamples,
+				persistenceQueue: this.persistenceQueue.length,
+				closingSignet: !!this.closingSignet,
+			})
 			this._clearPersistenceRetry()
 			try {
 				if (this.closingSignet) await this.waitForClosingSignet()
@@ -235,7 +273,9 @@
 				await this._flushPersistenceQueue()
 				if (this.context?.state !== 'closed') await this.context?.close()
 				const stored = await this.persistenceStore.getCapture(this.captureId)
-				if (!stored || !stored.chunks.length) throw new Error('PoRE durable capture contains no persisted audio chunks')
+				if (!stored || !stored.chunks.length) {
+					throw new Error(`PoRE durable capture contains no persisted audio chunks (audioBuffers=${this.receivedAudioBuffers}, samples=${this.capturedSamples}, processorError=${this.workletProcessorError ? 'yes' : 'no'})`)
+				}
 				const pcmSize = stored.chunks.reduce((total, chunk) => total + chunk.size, 0)
 				const artifact = { kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: 44 + pcmSize, sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, recordingId: this.recordingId, startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, sampleRate: this.sampleRate, channels: this.channels, participantLabel: this.participantLabel, openingSignet: this.openingSignet, closingSignet: this.closingSignet, source: { productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, captureId: this.captureId, recordingSessionId: this.recordingSessionId, participantLabel: this.participantLabel, trackId: this.stream?.getAudioTracks?.()[0]?.id || null, startedAt: this.startedAt, openingSignet: this.openingSignet, closingSignet: this.closingSignet } }
 				await this.persistenceStore.finalizeCapture(this.captureId, { stoppedAt: this.stoppedAt, stopReason: reason, size: artifact.size, chunkCount: stored.chunks.length, openingSignet: this.openingSignet, closingSignet: this.closingSignet })
@@ -272,7 +312,7 @@
 			resolve?.()
 		}
 
-		async _cleanup() { this._clearPersistenceRetry(); if (this.workletFlushTimer) window.clearTimeout(this.workletFlushTimer); this.workletFlushTimer = null; this.workletFlushPromise = null; this._pendingWorkletFlushResolve = null; this._pendingWorkletFlushReject = null; this.openingSignetReadyResolve = null; this.closingSignetReadyResolve = null; if (this.stream) this.stream.getTracks().forEach(track => track.stop()); this.stream = null; this.source = null; this.worklet = null; this.context = null; this.pendingParts = []; this.pendingBytes = 0 }
+		async _cleanup() { this._clearPersistenceRetry(); if (this.workletFlushTimer) window.clearTimeout(this.workletFlushTimer); this.workletFlushTimer = null; this.workletFlushPromise = null; this._pendingWorkletFlushResolve = null; this._pendingWorkletFlushReject = null; this.openingSignetReadyResolve = null; this.closingSignetReadyResolve = null; if (this.stream) this.stream.getTracks().forEach(track => track.stop()); this.stream = null; this.source = null; this.worklet = null; this.monitorDestination = null; this.context = null; this.pendingParts = []; this.pendingBytes = 0 }
 	}
 
 	function technicalId(prefix) { if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`; return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}` }
