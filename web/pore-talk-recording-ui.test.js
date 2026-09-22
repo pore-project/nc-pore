@@ -25,6 +25,11 @@ describe('Talk recording UI', () => {
 		expect(Ui.formatElapsed(3661)).toBe('61:01')
 	})
 
+	it('derives live elapsed time from the technical start timestamp', () => {
+		expect(Ui.elapsedSecondsFromStartedAt('2026-09-14T15:00:00.000Z', Date.parse('2026-09-14T15:01:05.900Z'))).toBeCloseTo(65.9)
+		expect(Ui.elapsedSecondsFromStartedAt(null, Date.now(), 12)).toBe(12)
+	})
+
 	it('exposes the compact Talk-like control and host recording action', () => {
 		const participant = Ui.create({ role: 'participant', state: 'recording', ready: true, elapsedSeconds: 12 })
 		const host = Ui.create({

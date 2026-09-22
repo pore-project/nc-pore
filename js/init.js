@@ -55,6 +55,10 @@
 			...snapshot,
 			productionId: snapshot.productionId || authoritativeState?.productionId || productionId,
 			productionStatus: snapshot.productionStatus ?? authoritativeState?.productionStatus ?? context?.productionStatus ?? null,
+			startedAt: snapshot.startedAt || authoritativeState?.startedAt || context?.startedAt || null,
+			elapsedSeconds: snapshot.state === 'recording' && Number.isFinite(snapshot.elapsedSeconds)
+				? snapshot.elapsedSeconds
+				: authoritativeState?.elapsedSeconds ?? context?.elapsedSeconds ?? 0,
 		}
 		authoritativeState = mergedSnapshot
 		if (mergedSnapshot.productionId) productionId = mergedSnapshot.productionId
@@ -401,8 +405,8 @@
 
 	window.addEventListener('pore:recording-transport-completed', async event => {
 		const artifactId = event.detail?.artifact_id || event.detail?.artifactId
-		const captureId = artifactId
-		if (!artifactId || !window.__poreTalkRecordingCoordinator?.command) return
+		const captureId = event.detail?.captureId || null
+		if (!artifactId || !captureId || !window.__poreTalkRecordingCoordinator?.command) return
 		try {
 			const result = await window.__poreTalkRecordingCoordinator.command('complete', artifactId)
 			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))

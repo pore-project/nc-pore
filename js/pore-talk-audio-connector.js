@@ -11,6 +11,7 @@
 	'use strict'
 
 	const MICROPHONE_EVENT = 'pore:talk-microphone'
+	const AUDIO_PIPELINE_READY_EVENT = 'pore:talk-audio-pipeline-ready'
 
 	class TalkMicrophoneObserverSink {
 		constructor(onTrack) {
@@ -65,6 +66,7 @@
 			this._mediaDevicesSource = source
 			this._trackSink = sink
 			this._observeTrack(source.getOutputTrack('audio'))
+			window.dispatchEvent(new CustomEvent(AUDIO_PIPELINE_READY_EVENT, { detail: { source } }))
 			return true
 		}
 
@@ -104,5 +106,6 @@
 	}
 
 	window.PoRETalkAudioCaptureConnector = TalkMicrophoneObserver
+	window.PoRETalkAudioPipelineReadyEvent = AUDIO_PIPELINE_READY_EVENT
 	window.PoRETalkMicrophoneEvent = MICROPHONE_EVENT
 })()

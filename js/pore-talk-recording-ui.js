@@ -32,6 +32,12 @@
 		return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
 	}
 
+	const elapsedSecondsFromStartedAt = (startedAt, now = Date.now(), fallback = 0) => {
+		const timestamp = Date.parse(startedAt || '')
+		if (!Number.isFinite(timestamp)) return Math.max(0, Number(fallback) || 0)
+		return Math.max(0, (now - timestamp) / 1000)
+	}
+
 	const resolveStatus = ({ state = 'preparing', listener = false, ready = false, confirmed = false, productionStatus = null }) => {
 		if (listener) return STATUS.listener
 		if (confirmed && state === 'completed') return STATUS.confirmed
@@ -181,6 +187,26 @@
 		action.type = 'button'
 		action.className = 'pore-talk-recording__button'
 		let actionHandler = null
+		let elapsedTimer = null
+
+		const stopElapsedTimer = () => {
+			if (elapsedTimer) window.clearInterval(elapsedTimer)
+			elapsedTimer = null
+		}
+
+		const updateElapsed = ({ startedAt = null, elapsedSeconds = 0 } = {}) => {
+			elapsed.textContent = formatElapsed(elapsedSecondsFromStartedAt(startedAt, Date.now(), elapsedSeconds))
+		}
+
+		const syncElapsedTimer = ({ state, listener, startedAt, elapsedSeconds }) => {
+			if (state !== 'recording' || listener || !startedAt) {
+				stopElapsedTimer()
+				return
+			}
+			updateElapsed({ startedAt, elapsedSeconds })
+			if (elapsedTimer) return
+			elapsedTimer = window.setInterval(() => updateElapsed({ startedAt, elapsedSeconds }), 500)
+		}
 		action.addEventListener('click', event => {
 			event.stopPropagation()
 			if (typeof actionHandler === 'function') void actionHandler(event)
@@ -253,7 +279,8 @@
 
 			const showElapsed = state === 'recording' && !listener
 			elapsed.hidden = !showElapsed
-			if (showElapsed) elapsed.textContent = formatElapsed(elapsedSeconds)
+			if (showElapsed) updateElapsed({ startedAt: context?.startedAt, elapsedSeconds })
+			syncElapsedTimer({ state, listener, startedAt: context?.startedAt, elapsedSeconds })
 
 			const canStart = role === 'host' && !listener && state === 'preparing' && !ready && typeof onStart === 'function'
 			const canStop = role === 'host' && !listener && state === 'recording' && typeof onStop === 'function'
@@ -305,5 +332,5 @@
 		window.__poreTalkRecordingUiGlobalListeners = true
 	}
 
-	window.PoRETalkRecordingUi = Object.freeze({ STATUS, formatElapsed, resolveStatus, create, mount })
+	window.PoRETalkRecordingUi = Object.freeze({ STATUS, formatElapsed, elapsedSecondsFromStartedAt, resolveStatus, create, mount })
 })()

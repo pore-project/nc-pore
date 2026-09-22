@@ -146,15 +146,14 @@
 		}
 	}
 
-	const tryAttach = () => {
-		if (adapter.attachToTalk()) {
-			connectCurrentMasterTrack()
-			return
-		}
-		window.setTimeout(tryAttach, 100)
+	const attachAndConnect = () => {
+		if (!adapter.attachToTalk()) return false
+		connectCurrentMasterTrack()
+		return true
 	}
 
 	window.addEventListener('pore:recording-capture-ready', connectCurrentMasterTrack)
+	window.addEventListener(window.PoRETalkAudioPipelineReadyEvent || 'pore:talk-audio-pipeline-ready', attachAndConnect)
 
 	window.addEventListener('pore:recording-master-track-changed', event => {
 		const track = event.detail?.track
@@ -169,5 +168,5 @@
 
 	window.addEventListener('pore:recording-local-finalized', () => adapter.clearMasterTrack())
 
-	tryAttach()
+	attachAndConnect()
 })()
