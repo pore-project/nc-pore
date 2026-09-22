@@ -39,6 +39,7 @@
 	let productionId = null
 	let startRequestedByHost = false
 	let localCapturePrepareInFlight = false
+	let localCapturePreparePromise = null
 	let localCaptureArmed = false
 	let localRecordingStartInFlight = false
 	let openingSignetEmitted = false
@@ -81,24 +82,29 @@
 			localCaptureArmed = true
 			return existing
 		}
-		if (localCapturePrepareInFlight) return null
+		if (localCapturePreparePromise) return localCapturePreparePromise
+
 		localCapturePrepareInFlight = true
-		try {
-			const track = await localCapture.open()
-			localCaptureArmed = true
-			window.dispatchEvent(new CustomEvent('pore:recording-capture-ready', {
-				detail: {
-					trackId: track.id,
-					deviceId: localCapture.getCurrentDeviceId?.() || track.getSettings?.()?.deviceId || null,
-				},
-			}))
-			return track
-		} finally {
-			localCapturePrepareInFlight = false
-		}
+		localCapturePreparePromise = (async () => {
+			try {
+				const track = await localCapture.open()
+				localCaptureArmed = true
+				window.dispatchEvent(new CustomEvent('pore:recording-capture-ready', {
+					detail: {
+						trackId: track.id,
+						deviceId: localCapture.getCurrentDeviceId?.() || track.getSettings?.()?.deviceId || null,
+					},
+				}))
+				return track
+			} finally {
+				localCapturePrepareInFlight = false
+				localCapturePreparePromise = null
+			}
+		})()
+		return localCapturePreparePromise
 	}
 
-	const startLocalRecording = async () => {
+	const startLocalRecording = async ({ announceReady = true } = {}) => {
 		if (recorder.isRecording() || localRecordingStartInFlight) return
 		if (authoritativeState?.role === 'listener') return
 		if (!productionId) throw new Error('Talk production identity is not available')
@@ -108,6 +114,16 @@
 			const track = await prepareLocalCapture()
 			if (!track || track.readyState !== 'live') throw new Error('PoRE local microphone capture is not armed')
 			const deviceId = localCapture.getCurrentDeviceId?.() || track.getSettings?.()?.deviceId || null
+			console.debug('[NC-PoRe] Local recording start: preparing PCM recorder', {
+				recordingId: authoritativeState.recordingId,
+				productionId,
+				trackId: track.id,
+				readyState: track.readyState,
+				muted: track.muted,
+				enabled: track.enabled,
+				deviceId,
+				settings: track.getSettings?.() || null,
+			})
 			await recorder.start(track, {
 				...(context?.sourceMetadata || {}),
 				productionId,
@@ -117,8 +133,10 @@
 				deviceId,
 			})
 			window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
-			const result = await window.__poreTalkRecordingCoordinator?.command?.('ready')
-			if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			if (announceReady) {
+				const result = await window.__poreTalkRecordingCoordinator?.command?.('ready')
+				if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			}
 		} finally {
 			localRecordingStartInFlight = false
 		}
@@ -254,16 +272,31 @@
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 			return
 		}
-		console.debug('[NC-PoRe] startRequested: before begin')
+		console.debug('[NC-PoRe] startRequested: before local start')
 		try {
 			await window.__poreRecordingCoordinationChannel.waitUntilReady(5000)
+			const ensured = await window.__poreTalkRecordingCoordinator.command('ensure')
+			if (ensured?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(ensured.state))
+			await startLocalRecording({ announceReady: false })
 		} catch (error) {
+			console.error('[NC-PoRe] Local recording start failed before Core begin', error)
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 			return
 		}
-		const result = await window.__poreTalkRecordingCoordinator.command('begin')
-		if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
-		try { await startLocalRecording() } catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
+
+		console.debug('[NC-PoRe] startRequested: local recorder active, beginning Core recording')
+		try {
+			const result = await window.__poreTalkRecordingCoordinator.command('begin')
+			if (!result?.state) throw new Error('PoRE Core begin did not return authoritative recording state')
+			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			const ready = await window.__poreTalkRecordingCoordinator.command('ready')
+			if (!ready?.state) throw new Error('PoRE Core ready did not return authoritative recording state')
+			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(ready.state))
+		} catch (error) {
+			console.error('[NC-PoRe] Core begin/ready failed after local recorder start', error)
+			try { await stopLocalCapture('begin-failed', { closingSignet: false }) } catch (stopError) { console.error('[NC-PoRe] Local cleanup after begin failure failed', stopError) }
+			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+		}
 	}
 
 	const stopRequested = async () => window.dispatchEvent(new CustomEvent('pore:recording-ui-stop-local', { detail: { reason: 'host' } }))
