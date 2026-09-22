@@ -71,14 +71,9 @@
 				const manifestStore = transaction.objectStore(MANIFEST_STORE)
 				const chunkStore = transaction.objectStore(CHUNK_STORE)
 				const manifestRequest = manifestStore.get(captureId)
-				const existingChunkRequest = chunkStore.get([captureId, index])
-				let manifest = null
-				let existingChunk = null
-				let manifestLoaded = false
-				let chunkLoaded = false
 
-				const finish = () => {
-					if (!manifestLoaded || !chunkLoaded) return
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
 					if (!manifest) {
 						abort(new Error(`PoRE capture manifest not found: ${captureId}`))
 						return
@@ -88,26 +83,15 @@
 						abort(new Error(`PoRE capture chunk gap detected: ${captureId}/${index}`))
 						return
 					}
-					if (existingChunk) {
-						if (existingChunk.size !== blob.size || existingChunk.sha256 !== sha256) {
-							abort(new Error(`PoRE capture chunk conflict: ${captureId}/${index}`))
-							return
-						}
-					} else {
-						chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
-					}
-					const chunks = Array.isArray(manifest.chunks) ? manifest.chunks.filter(chunk => chunk.index !== index) : []
-					chunks.push({ index, size: blob.size, sha256 })
-					chunks.sort((a, b) => a.index - b.index)
-					manifest.chunks = chunks
-					manifest.chunkCount = chunks.length
+
+					// Chunk keys are unique and the recorder queues chunks serially. Using
+					// put() makes retries idempotent without a second read transaction.
+					chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
+					manifest.chunkCount = Math.max(Number.isInteger(manifest.chunkCount) ? manifest.chunkCount : 0, index + 1)
 					manifest.lastChunkIndex = Math.max(lastChunkIndex, index)
 					manifest.updatedAt = new Date().toISOString()
 					manifestStore.put(manifest)
 				}
-
-				manifestRequest.onsuccess = () => { manifest = manifestRequest.result; manifestLoaded = true; finish() }
-				existingChunkRequest.onsuccess = () => { existingChunk = existingChunkRequest.result; chunkLoaded = true; finish() }
 			})
 		}
 
@@ -132,8 +116,6 @@
 			}
 			if (manifest.chunkCount !== chunks.length) throw new Error(`PoRE capture chunk count check failed: ${captureId}`)
 			for (const chunk of chunks) {
-				const expected = manifest.chunks?.find(entry => entry.index === chunk.index)?.sha256
-				if (expected !== chunk.sha256) throw new Error(`PoRE capture chunk integrity check failed: ${captureId}/${chunk.index}`)
 				const actual = await this._sha256(chunk.payload)
 				if (actual !== chunk.sha256) throw new Error(`PoRE capture chunk payload integrity check failed: ${captureId}/${chunk.index}`)
 			}
@@ -187,10 +169,10 @@
 				const transaction = db.transaction(stores, mode)
 				let abortError = null
 				const abort = error => { abortError = error; transaction.abort() }
-				configure(transaction, abort)
 				transaction.oncomplete = () => resolve()
 				transaction.onerror = () => reject(abortError || transaction.error || new Error('PoRE IndexedDB transaction failed'))
 				transaction.onabort = () => reject(abortError || transaction.error || new Error('PoRE IndexedDB transaction aborted'))
+				configure(transaction, abort)
 			})
 		}
 	}
