@@ -265,20 +265,33 @@
 				persistenceQueue: this.persistenceQueue.length,
 				closingSignet: !!this.closingSignet,
 			})
+			const timingStartedAt = performance.now()
 			this._clearPersistenceRetry()
 			try {
+				const signetStartedAt = performance.now()
 				if (this.closingSignet) await this.waitForClosingSignet()
+				console.debug('[NC-PoRe] PCM stop stage: closing signet', { elapsedMs: Math.round(performance.now() - signetStartedAt) })
+				const flushStartedAt = performance.now()
 				await this._flushWorkletOutput()
+				console.debug('[NC-PoRe] PCM stop stage: worklet flush', { elapsedMs: Math.round(performance.now() - flushStartedAt) })
 				this._queuePersistenceChunk()
+				const persistenceStartedAt = performance.now()
 				await this._flushPersistenceQueue()
+				console.debug('[NC-PoRe] PCM stop stage: persistence flush', { elapsedMs: Math.round(performance.now() - persistenceStartedAt) })
+				const closeStartedAt = performance.now()
 				if (this.context?.state !== 'closed') await this.context?.close()
+				console.debug('[NC-PoRe] PCM stop stage: AudioContext close', { elapsedMs: Math.round(performance.now() - closeStartedAt) })
+				const readStartedAt = performance.now()
 				const stored = await this.persistenceStore.getCapture(this.captureId)
+				console.debug('[NC-PoRe] PCM stop stage: persisted capture read/integrity', { elapsedMs: Math.round(performance.now() - readStartedAt), chunks: stored?.chunks?.length || 0 })
 				if (!stored || !stored.chunks.length) {
 					throw new Error(`PoRE durable capture contains no persisted audio chunks (audioBuffers=${this.receivedAudioBuffers}, samples=${this.capturedSamples}, processorError=${this.workletProcessorError ? 'yes' : 'no'})`)
 				}
 				const pcmSize = stored.chunks.reduce((total, chunk) => total + chunk.size, 0)
 				const artifact = { kind: 'audio', format: 'audio/wav', encoding: 'pcm_s24le', size: 44 + pcmSize, sequence: this.sequence, captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, recordingId: this.recordingId, startedAt: this.startedAt, stoppedAt: this.stoppedAt, stopReason: reason, sampleRate: this.sampleRate, channels: this.channels, participantLabel: this.participantLabel, openingSignet: this.openingSignet, closingSignet: this.closingSignet, source: { productionId: this.productionId, productionLabel: this.productionLabel, recordingId: this.recordingId, captureId: this.captureId, recordingSessionId: this.recordingSessionId, participantLabel: this.participantLabel, trackId: this.stream?.getAudioTracks?.()[0]?.id || null, startedAt: this.startedAt, openingSignet: this.openingSignet, closingSignet: this.closingSignet } }
+				const finalizeStartedAt = performance.now()
 				await this.persistenceStore.finalizeCapture(this.captureId, { stoppedAt: this.stoppedAt, stopReason: reason, size: artifact.size, chunkCount: stored.chunks.length, openingSignet: this.openingSignet, closingSignet: this.closingSignet })
+				console.debug('[NC-PoRe] PCM stop stage: manifest finalize', { elapsedMs: Math.round(performance.now() - finalizeStartedAt), totalElapsedMs: Math.round(performance.now() - timingStartedAt) })
 				await this._cleanup(); this.state = 'idle'; this.persistenceState = 'idle'; window.dispatchEvent(new CustomEvent('pore:recording-finalized', { detail: artifact })); return artifact
 			} catch (error) { this.state = 'error'; await this._cleanup(); window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } })); throw error }
 		}
