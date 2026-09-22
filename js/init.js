@@ -105,17 +105,29 @@
 	}
 
 	const startLocalRecording = async ({ announceReady = true } = {}) => {
-		if (recorder.isRecording() || localRecordingStartInFlight) return
-		if (authoritativeState?.role === 'listener') return
+		const coordinator = window.__poreTalkRecordingCoordinator
+		const recordingId = authoritativeState?.recordingId || coordinator?.recordingId || null
+		const role = authoritativeState?.role || context?.role || null
+		if (recorder.isRecording() || localRecordingStartInFlight) {
+			console.debug('[NC-PoRe] Local recording start skipped: already in progress', {
+				recorderRecording: recorder.isRecording(),
+				localRecordingStartInFlight,
+			})
+			return
+		}
+		if (role === 'listener') {
+			console.debug('[NC-PoRe] Local recording start skipped: listener role')
+			return
+		}
 		if (!productionId) throw new Error('Talk production identity is not available')
-		if (!authoritativeState?.recordingId) throw new Error('Authoritative recording identity is not available')
+		if (!recordingId) throw new Error('PoRE recording identity is not available')
 		localRecordingStartInFlight = true
 		try {
 			const track = await prepareLocalCapture()
 			if (!track || track.readyState !== 'live') throw new Error('PoRE local microphone capture is not armed')
 			const deviceId = localCapture.getCurrentDeviceId?.() || track.getSettings?.()?.deviceId || null
 			console.debug('[NC-PoRe] Local recording start: preparing PCM recorder', {
-				recordingId: authoritativeState.recordingId,
+				recordingId,
 				productionId,
 				trackId: track.id,
 				readyState: track.readyState,
@@ -127,7 +139,7 @@
 			await recorder.start(track, {
 				...(context?.sourceMetadata || {}),
 				productionId,
-				recordingId: authoritativeState.recordingId,
+				recordingId,
 				productionLabel: context?.productionLabel || context?.title || productionId,
 				participantLabel: context?.participantLabel || null,
 				deviceId,
@@ -294,6 +306,7 @@
 			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(ready.state))
 		} catch (error) {
 			console.error('[NC-PoRe] Core begin/ready failed after local recorder start', error)
+			try { await window.__poreTalkRecordingCoordinator.command('stop') } catch (stopError) { console.warn('[NC-PoRe] Core stop after failed begin/ready was not accepted', stopError) }
 			try { await stopLocalCapture('begin-failed', { closingSignet: false }) } catch (stopError) { console.error('[NC-PoRe] Local cleanup after begin failure failed', stopError) }
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		}
