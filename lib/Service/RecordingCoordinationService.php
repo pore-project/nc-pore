@@ -63,7 +63,7 @@ final class RecordingCoordinationService {
 
 	public function authorizeStream(string $sessionId, string $recordingId, string $actorId): void {
 		$this->validateIdentity($sessionId, $recordingId, $actorId);
-		$this->authorizeParticipant($sessionId, $recordingId, $actorId);
+		$this->authorizeRecordingAccess($sessionId, $recordingId, $actorId);
 	}
 
 	/**
@@ -105,6 +105,29 @@ final class RecordingCoordinationService {
 	/**
 	 * @return array<string, mixed>
 	 */
+	private function authorizeRecordingAccess(string $sessionId, string $recordingId, string $actorId): void {
+		try {
+			$response = $this->runtime->command([
+				'request_id' => bin2hex(random_bytes(16)),
+				'session_id' => $sessionId,
+				'actor_id' => $actorId,
+				'recording_id' => $recordingId,
+				'command' => ['EnsureRecording' => null],
+			], 'recording.command');
+		} catch (\Throwable $exception) {
+			throw new RuntimeException('coordination_unavailable', 0, $exception);
+		}
+
+		if (($response['status'] ?? null) === 'ok') return;
+
+		$errorCode = $response['error_code'] ?? null;
+		if ($errorCode === 'unauthorized') {
+			throw new RuntimeException('coordination_unauthorized');
+		}
+
+		throw new RuntimeException('coordination_unavailable');
+	}
+
 	private function authorizeParticipant(string $sessionId, string $recordingId, string $actorId): array {
 		try {
 			$response = $this->runtime->command([
