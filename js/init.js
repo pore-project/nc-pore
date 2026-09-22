@@ -51,26 +51,31 @@
 
 	const updateAuthoritativeState = snapshot => {
 		if (!snapshot) return
-		authoritativeState = snapshot
-		if (snapshot.productionId) productionId = snapshot.productionId
+		const mergedSnapshot = {
+			...snapshot,
+			productionId: snapshot.productionId || authoritativeState?.productionId || productionId,
+			productionStatus: snapshot.productionStatus ?? authoritativeState?.productionStatus ?? context?.productionStatus ?? null,
+		}
+		authoritativeState = mergedSnapshot
+		if (mergedSnapshot.productionId) productionId = mergedSnapshot.productionId
 		if (!context) return
 		publish({
-			productionId: snapshot.productionId || productionId,
-			productionStatus: snapshot.productionStatus || null,
-			recordingId: snapshot.recordingId,
-			role: snapshot.role,
-			state: snapshot.state,
-			listener: snapshot.listener,
-			confirmed: snapshot.confirmed,
-			ready: snapshot.ready,
-			openingConfirmed: snapshot.openingConfirmed,
-			readyCount: snapshot.readyCount,
-			openingConfirmedCount: snapshot.openingConfirmedCount,
-			participantCount: snapshot.participantCount,
-			participants: snapshot.participants,
-			elapsedSeconds: snapshot.elapsedSeconds,
-			startedAt: snapshot.startedAt,
-			error: snapshot.error,
+			productionId: mergedSnapshot.productionId || productionId,
+			productionStatus: mergedSnapshot.productionStatus || null,
+			recordingId: mergedSnapshot.recordingId,
+			role: mergedSnapshot.role,
+			state: mergedSnapshot.state,
+			listener: mergedSnapshot.listener,
+			confirmed: mergedSnapshot.confirmed,
+			ready: mergedSnapshot.ready,
+			openingConfirmed: mergedSnapshot.openingConfirmed,
+			readyCount: mergedSnapshot.readyCount,
+			openingConfirmedCount: mergedSnapshot.openingConfirmedCount,
+			participantCount: mergedSnapshot.participantCount,
+			participants: mergedSnapshot.participants,
+			elapsedSeconds: mergedSnapshot.elapsedSeconds,
+			startedAt: mergedSnapshot.startedAt,
+			error: mergedSnapshot.error,
 		})
 	}
 
@@ -426,6 +431,8 @@
 		if (localStopInFlight) return
 
 		localStopInFlight = true
+		const stopStartedAt = performance.now()
+		console.debug('[NC-PoRe] Stop lifecycle: entered', { reason, state: authoritativeState?.state, productionStatus: authoritativeState?.productionStatus })
 		try {
 			if (reason === 'persistence-safety-stop') {
 				let coreStopped = false
@@ -446,15 +453,22 @@
 				return
 			}
 
+			const coreStopStartedAt = performance.now()
 			const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
+			console.debug('[NC-PoRe] Stop lifecycle: Core stop returned', { elapsedMs: Math.round(performance.now() - coreStopStartedAt) })
 			if (!result?.state) return
 			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+			const localStopStartedAt = performance.now()
 			await stopLocalCapture(reason, { closingSignet: true })
+			console.debug('[NC-PoRe] Stop lifecycle: local capture finalized', { elapsedMs: Math.round(performance.now() - localStopStartedAt) })
+			const ackStartedAt = performance.now()
 			const acknowledged = await window.__poreTalkRecordingCoordinator?.command?.('acknowledge_stop')
+			console.debug('[NC-PoRe] Stop lifecycle: acknowledge returned', { elapsedMs: Math.round(performance.now() - ackStartedAt), totalElapsedMs: Math.round(performance.now() - stopStartedAt) })
 			if (acknowledged?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(acknowledged.state))
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		} finally {
+			console.debug('[NC-PoRe] Stop lifecycle: exited', { totalElapsedMs: Math.round(performance.now() - stopStartedAt) })
 			localStopInFlight = false
 		}
 	})
