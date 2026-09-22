@@ -27,7 +27,10 @@ final class RecordingCoordinationEventController extends Controller {
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function events(string $sessionId, string $recordingId): Response {
+	// sessionId and recordingId are query parameters on this GET route. Defaults keep
+	// the AppFramework dispatcher from passing null into non-nullable string parameters
+	// when a malformed request omits one; validateIdentity() then rejects it cleanly.
+	public function events(string $sessionId = '', string $recordingId = ''): Response {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			$response = new Response();
