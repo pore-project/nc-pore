@@ -13,7 +13,8 @@ describe('Talk recording UI', () => {
 		expect(Ui.resolveStatus({ state: 'opening', ready: true })).toEqual(Ui.STATUS.opening)
 		expect(Ui.resolveStatus({ state: 'recording', ready: true })).toEqual(Ui.STATUS.recording)
 		expect(Ui.resolveStatus({ state: 'stopping' })).toEqual(Ui.STATUS.stopping)
-		expect(Ui.resolveStatus({ state: 'done', confirmed: true })).toEqual(Ui.STATUS.confirmed)
+		expect(Ui.resolveStatus({ state: 'completed', confirmed: true })).toEqual(Ui.STATUS.confirmed)
+		expect(Ui.resolveStatus({ state: 'stopped', confirmed: true, productionStatus: 'completed' })).toEqual(Ui.STATUS.productionClosed)
 		expect(Ui.resolveStatus({ state: 'error' })).toEqual(Ui.STATUS.error)
 	})
 
