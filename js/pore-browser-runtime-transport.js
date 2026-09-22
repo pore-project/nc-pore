@@ -106,7 +106,7 @@
 					size: details.size,
 					sha256: details.sha256,
 				})
-				window.dispatchEvent(new CustomEvent('pore:recording-transport-completed', { detail: details }))
+				window.dispatchEvent(new CustomEvent('pore:recording-transport-completed', { detail: { ...details, captureId: descriptor.captureId } }))
 				return details
 			} catch (error) {
 				await this.completionJob?.updateTransportState?.(descriptor.captureId, {

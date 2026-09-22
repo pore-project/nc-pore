@@ -127,6 +127,7 @@
 					} else if (job.coreCompletionStatus === 'pending' && job.artifactId) {
 						window.dispatchEvent(new CustomEvent('pore:recording-transport-completed', {
 							detail: {
+								captureId: manifest.captureId,
 								artifact_id: job.artifactId,
 								file_id: job.fileId,
 								path: job.path,

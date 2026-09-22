@@ -53,9 +53,14 @@ describe('Browser runtime transport', () => {
 		global.fetch = fetchMock
 
 		const transport = new Transport({ completionJob: job })
+		const completedEvent = jest.fn()
+		window.addEventListener('pore:recording-transport-completed', completedEvent)
 		const receipt = await transport.transfer(descriptor)
 
 		expect(receipt.file_id).toBe(42)
+		expect(completedEvent).toHaveBeenCalledTimes(1)
+		expect(completedEvent.mock.calls[0][0].detail.captureId).toBe('capture-1')
+		window.removeEventListener('pore:recording-transport-completed', completedEvent)
 		expect(job.markCompleted).toHaveBeenCalledTimes(1)
 		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/prepare')
 		expect(fetchMock.mock.calls[1][1].method).toBe('PUT')
