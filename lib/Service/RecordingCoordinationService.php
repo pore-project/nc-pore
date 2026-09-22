@@ -128,12 +128,12 @@ final class RecordingCoordinationService {
 			throw new RuntimeException('coordination_unauthorized');
 		}
 
-		$participants = is_array($state['participants'] ?? null) ? $state['participants'] : [];
-		foreach ($participants as $participant) {
-			if (($participant['id'] ?? null) === $actorId) return $state;
-		}
-
-		throw new RuntimeException('coordination_unauthorized');
+		// Coordination is a production-level control channel. Before the recording
+		// receives Begin, its expected_participant_ids list is intentionally empty.
+		// The authoritative authorization boundary here is therefore the active
+		// production membership/recording role, not the recording's later participant
+		// readiness list.
+		return $state;
 	}
 
 	private function validateIdentity(string $sessionId, string $recordingId, string $actorId): void {
