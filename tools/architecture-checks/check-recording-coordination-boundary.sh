@@ -28,11 +28,13 @@ fi
 # TEST-COORD-04: the new PHP transport surface must pass syntax validation.
 php -l lib/Service/RecordingCoordinationService.php >/dev/null
 php -l lib/Controller/RecordingCoordinationController.php >/dev/null
+php -l lib/Controller/RecordingCoordinationEventController.php >/dev/null
 php -l lib/Http/CoordinationEventStreamResponse.php >/dev/null
 
 # TEST-COORD-05: the app must load the neutral channel before the Talk host adapter.
 grep -q "pore-recording-coordination" lib/AppInfo/Application.php
-grep -q "RecordingCoordination#events" appinfo/routes.php
+grep -q "RecordingCoordinationEvent#events" appinfo/routes.php
+grep -q "final class RecordingCoordinationEventController extends Controller" lib/Controller/RecordingCoordinationEventController.php
 grep -q "RecordingCoordination#publish" appinfo/routes.php
 
 coord_line=$(grep -n "pore-recording-coordination" lib/AppInfo/Application.php | cut -d: -f1)
