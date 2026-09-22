@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
 	'routes' => [
 		[
-			'name' => 'RecordingCoordination#events',
+			'name' => 'RecordingCoordinationEvent#events',
 			'url' => '/v1/recordings/coordination/events',
 			'verb' => 'GET',
 		],
