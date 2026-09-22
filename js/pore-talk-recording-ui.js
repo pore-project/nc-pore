@@ -17,6 +17,7 @@
 		recording: { label: 'Aufnahme läuft', tone: 'recording', symbol: '●' },
 		opening: { label: 'Aufnahme wird geöffnet', tone: 'opening', symbol: '●' },
 		stopping: { label: 'Aufnahme wird übertragen', tone: 'transfer', symbol: '↗' },
+		stopped: { label: 'Aufnahme beendet', tone: 'stopped', symbol: '■' },
 		confirmed: { label: 'Aufnahme bestätigt', tone: 'confirmed', symbol: '✓' },
 		productionClosed: { label: 'Produktion geschlossen', tone: 'production-closed', symbol: '■' },
 	})
@@ -36,6 +37,7 @@
 		if (confirmed && state === 'completed') return STATUS.confirmed
 		if (productionStatus === 'completed' && state === 'stopped') return STATUS.productionClosed
 		if (state === 'error') return STATUS.error
+		if (state === 'stopped') return STATUS.stopped
 		if (state === 'stopping') return STATUS.stopping
 		if (state === 'opening') return STATUS.opening
 		if (state === 'recording') return STATUS.recording
