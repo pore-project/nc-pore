@@ -188,7 +188,7 @@
 		const coordinator = window.__poreTalkRecordingCoordinator
 		if (!signal || !coordinator || signal.recordingId !== coordinator.recordingId) return
 		if (signal.type === 'production_closed') {
-			publish({ productionStatus: 'completed', state: 'completed', confirmed: true })
+			await synchronizeCoordinatorState()
 			return
 		}
 		if (!['begin', 'ready', 'opening', 'stop'].includes(signal.type)) return
@@ -272,8 +272,8 @@
 		const coordinator = window.__poreTalkRecordingCoordinator
 		if (!coordinator?.command) return
 		try {
-			const result = await coordinator.command('force_close')
-			publish({ productionStatus: result?.production_status || 'completed', state: 'completed', confirmed: true })
+			await coordinator.command('force_close')
+			await synchronizeCoordinatorState()
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
 		}
