@@ -35,6 +35,8 @@ php -l lib/Http/CoordinationEventStreamResponse.php >/dev/null
 grep -q "pore-recording-coordination" lib/AppInfo/Application.php
 grep -q "RecordingCoordinationEvent#events" appinfo/routes.php
 grep -q "final class RecordingCoordinationEventController extends Controller" lib/Controller/RecordingCoordinationEventController.php
+grep -q "authorizeRecordingAccess" lib/Service/RecordingCoordinationService.php
+grep -q "EnsureRecording" lib/Service/RecordingCoordinationService.php
 grep -q 'public function events' lib/Controller/RecordingCoordinationEventController.php
 grep -q "sessionId = ''" lib/Controller/RecordingCoordinationEventController.php
 grep -q "recordingId = ''" lib/Controller/RecordingCoordinationEventController.php
