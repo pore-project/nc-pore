@@ -10,6 +10,7 @@ grep -q "new window.EventSource" js/pore-recording-coordination.js
 grep -q "/v1/recordings/coordination/publish" js/pore-recording-coordination.js
 
 # TEST-COORD-02: Talk may not carry PoRE recording lifecycle events.
+grep -q "const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path" js/pore-talk-recording-host.js
 if grep -nE 'sendToAll|SimpleWebRTC|signalingConnection|signalingMessageHandler|connection\.on\(.message' js/pore-talk-recording-host.js; then
     echo "ERROR: Talk signaling is still used by the PoRE recording host adapter."
     exit 1
