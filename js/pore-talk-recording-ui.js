@@ -18,6 +18,7 @@
 		opening: { label: 'Aufnahme wird geöffnet', tone: 'opening', symbol: '●' },
 		stopping: { label: 'Aufnahme wird übertragen', tone: 'transfer', symbol: '↗' },
 		confirmed: { label: 'Aufnahme bestätigt', tone: 'confirmed', symbol: '✓' },
+		productionClosed: { label: 'Produktion geschlossen', tone: 'production-closed', symbol: '■' },
 	})
 
 	const SETTINGS_URL = '/ocs/v2.php/apps/pore/v1/settings'
@@ -30,9 +31,10 @@
 		return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
 	}
 
-	const resolveStatus = ({ state = 'preparing', listener = false, ready = false, confirmed = false }) => {
+	const resolveStatus = ({ state = 'preparing', listener = false, ready = false, confirmed = false, productionStatus = null }) => {
 		if (listener) return STATUS.listener
-		if (confirmed) return STATUS.confirmed
+		if (confirmed && state === 'completed') return STATUS.confirmed
+		if (productionStatus === 'completed' && state === 'stopped') return STATUS.productionClosed
 		if (state === 'error') return STATUS.error
 		if (state === 'stopping') return STATUS.stopping
 		if (state === 'opening') return STATUS.opening
@@ -233,7 +235,7 @@
 				readyCount = 0, openingConfirmedCount = 0, participantCount = 0, elapsedSeconds = 0,
 				productionStatus = null, onStart = null, onStop = null, onForceClose = null,
 			} = context || {}
-			const status = resolveStatus({ state, listener, ready, confirmed })
+			const status = resolveStatus({ state, listener, ready, confirmed, productionStatus })
 			root.dataset.status = status.tone
 			root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
 
