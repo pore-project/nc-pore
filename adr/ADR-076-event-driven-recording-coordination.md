@@ -24,7 +24,7 @@ Ongoing recording transitions are distributed through the PoRE-owned recording c
 
 Signaling messages are transport events, not a second authoritative state source. The Core remains responsible for accepting or rejecting fachliche transitions. A received event triggers the corresponding local technical action and, where required, the authorized Core command.
 
-A client that cannot establish the Talk signaling connection does not silently start a distributed recording. It reports the missing coordination transport instead.
+A client that cannot establish the PoRE recording coordination transport does not silently start a distributed recording. It reports the missing coordination transport instead.
 
 ## Coordination events
 
@@ -38,6 +38,6 @@ A client that cannot establish the Talk signaling connection does not silently s
 
 - No production recording-state polling timer exists in PoRE.
 - One-shot reads remain available for lifecycle boundaries and recovery.
-- Talk is the coordination transport, not the owner of PoRE local capture.
+- The PoRE recording coordination transport carries lifecycle events; Talk remains the external session host, not the owner of PoRE local capture.
 - Core remains authoritative for fachliche lifecycle state.
 - Signaling remains separate from local recording persistence and completion processing.
