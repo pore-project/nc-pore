@@ -74,6 +74,9 @@ describe('Nextcloud Talk audio adapter', () => {
 		expect(talkCloneOne).not.toBe(talkTrack)
 		expect(talkTrack.stop).toHaveBeenCalledTimes(1)
 		expect(masterOne.stop).not.toHaveBeenCalled()
+		// The initial Talk input is intentionally retired when the adapter
+		// replaces it with a clone of the PoRE master. This must never stop
+		// masterOne; only the superseded Talk-side track is stopped.
 		expect(talkCloneOne.stop).toBeInstanceOf(Function)
 
 		window.dispatchEvent(new CustomEvent('pore:recording-master-track-changed', {
