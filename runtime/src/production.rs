@@ -1,4 +1,4 @@
-use nc_pore_application::client::{ClientProductionStatus, ClientSessionError};
+use nc_pore_application::client::{ClientProductionStatus, ClientSessionError, ClientSessionService};
 use nc_pore_application::production_coordinator::{
     check_production_timeout, ensure_production, force_close_production, start_production,
 };
