@@ -99,3 +99,98 @@ where
 {
     ClientSessionService::new(repository).check_timeout(production_id, now)
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nc_pore_core::identity::ProductionId;
+    use nc_pore_core::participant::ParticipantId;
+    use nc_pore_core::session::ProductionSession;
+
+    struct InMemory {
+        sessions: Vec<ProductionSession>,
+    }
+
+    impl ProductionSessionRepository for InMemory {
+        type Error = &'static str;
+
+        fn store(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            if self
+                .sessions
+                .iter()
+                .any(|existing| existing.id == session.id)
+            {
+                return Err("session already exists");
+            }
+            self.sessions.push(session.clone());
+            Ok(())
+        }
+
+        fn update(&mut self, session: &ProductionSession) -> Result<(), Self::Error> {
+            let existing = self
+                .sessions
+                .iter_mut()
+                .find(|existing| existing.id == session.id)
+                .ok_or("session not found")?;
+            *existing = session.clone();
+            Ok(())
+        }
+
+        fn get(&self, id: &ProductionId) -> Result<Option<ProductionSession>, Self::Error> {
+            Ok(self
+                .sessions
+                .iter()
+                .find(|session| &session.id == id)
+                .cloned())
+        }
+    }
+
+    #[test]
+    fn TEST_01_host_materializes_production_with_recording_participants() {
+        let mut repository = InMemory { sessions: vec![] };
+
+        let production = ensure_production(
+            &mut repository,
+            "talk-room-001",
+            "host-1",
+            "host-1",
+            &["host-1".to_owned(), "guest-1".to_owned()],
+        )
+        .unwrap();
+
+        assert_eq!(production.status, ClientProductionStatus::Created);
+        assert_eq!(
+            production
+                .participants
+                .iter()
+                .map(|participant| (participant.id.as_str(), participant.roles.clone()))
+                .collect::<Vec<_>>()
+                .len(),
+            2
+        );
+        assert_eq!(production.participants[0].id, "host-1");
+        assert_eq!(production.participants[1].id, "guest-1");
+
+        let started = start_production(&mut repository, "talk-room-001", "host-1").unwrap();
+        assert_eq!(started.status, ClientProductionStatus::Active);
+        assert_eq!(started.participants[1].id, "guest-1");
+    }
+
+    #[test]
+    fn TEST_02_non_owner_does_not_create_production_before_host_start() {
+        let mut repository = InMemory { sessions: vec![] };
+
+        assert_eq!(
+            ensure_production(
+                &mut repository,
+                "talk-room-002",
+                "guest-1",
+                "host-1",
+                &["host-1".to_owned(), "guest-1".to_owned()],
+            ),
+            Err(ClientSessionError::Unauthorized)
+        );
+        assert!(repository.sessions.is_empty());
+    }
+}
