@@ -20,7 +20,7 @@ NC-PoRe uses event-driven coordination.
 
 One-shot Core reads are permitted only at concrete lifecycle or user-action boundaries, especially during bootstrap, explicit recording start, and recovery from a missing predecessor event.
 
-Ongoing recording transitions are distributed through the existing Nextcloud Talk signaling path using a dedicated PoRE message type, `pore-recording`, with an explicit protocol version and recording identity.
+Ongoing recording transitions are distributed through the PoRE-owned recording coordination transport using a dedicated event type, `pore-recording`, with an explicit protocol version and recording identity.
 
 Signaling messages are transport events, not a second authoritative state source. The Core remains responsible for accepting or rejecting fachliche transitions. A received event triggers the corresponding local technical action and, where required, the authorized Core command.
 
