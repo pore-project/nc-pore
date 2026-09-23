@@ -157,10 +157,30 @@
 		_request(db, storeName, mode, operation) {
 			return new Promise((resolve, reject) => {
 				const transaction = db.transaction(storeName, mode)
-				const request = operation(transaction.objectStore(storeName))
-				request.onsuccess = () => resolve(request.result)
-				request.onerror = () => reject(request.error || new Error(`PoRE IndexedDB request failed: ${storeName}`))
-				transaction.onerror = () => reject(transaction.error || new Error(`PoRE IndexedDB transaction failed: ${storeName}`))
+				let requestResult
+				let settled = false
+				const rejectOnce = error => {
+					if (settled) return
+					settled = true
+					reject(error)
+				}
+				transaction.oncomplete = () => {
+					if (settled) return
+					settled = true
+					resolve(requestResult)
+				}
+				transaction.onerror = () => rejectOnce(transaction.error || new Error(`PoRE IndexedDB transaction failed: ${storeName}`))
+				transaction.onabort = () => rejectOnce(transaction.error || new Error(`PoRE IndexedDB transaction aborted: ${storeName}`))
+				let request
+				try {
+					request = operation(transaction.objectStore(storeName))
+				} catch (error) {
+					rejectOnce(error)
+					try { transaction.abort() } catch (_) {}
+					return
+				}
+				request.onsuccess = () => { requestResult = request.result }
+				request.onerror = () => rejectOnce(request.error || new Error(`PoRE IndexedDB request failed: ${storeName}`))
 			})
 		}
 
