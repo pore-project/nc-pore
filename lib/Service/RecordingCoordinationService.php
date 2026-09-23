@@ -112,20 +112,26 @@ final class RecordingCoordinationService {
 				'session_id' => $sessionId,
 				'actor_id' => $actorId,
 				'recording_id' => $recordingId,
-				'command' => ['EnsureRecording' => null],
+				'command' => ['Snapshot' => null],
 			], 'recording.command');
 		} catch (\Throwable $exception) {
 			throw new RuntimeException('coordination_unavailable', 0, $exception);
 		}
 
-		if (($response['status'] ?? null) === 'ok') return;
-
-		$errorCode = $response['error_code'] ?? null;
-		if ($errorCode === 'unauthorized') {
-			throw new RuntimeException('coordination_unauthorized');
+		if (($response['status'] ?? null) !== 'ok' || !is_array($response['state'] ?? null)) {
+			$errorCode = $response['error_code'] ?? null;
+			throw new RuntimeException(match ($errorCode) {
+				'session_not_found' => 'coordination_session_not_found',
+				'recording_not_found' => 'coordination_recording_not_found',
+				'unauthorized' => 'coordination_unauthorized',
+				default => 'coordination_unavailable',
+			});
 		}
 
-		throw new RuntimeException('coordination_unavailable');
+		$state = $response['state'];
+		if (!in_array($state['role'] ?? null, ['host', 'participant'], true)) {
+			throw new RuntimeException('coordination_unauthorized');
+		}
 	}
 
 	private function authorizeParticipant(string $sessionId, string $recordingId, string $actorId): array {
