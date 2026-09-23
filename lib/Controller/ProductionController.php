@@ -39,7 +39,7 @@ final class ProductionController extends OCSController {
 			return $this->rejected('unauthorized', 401, $requestId);
 		}
 
-		if (!in_array($command, ['ensure', 'start', 'force_close'], true)) {
+		if (!in_array($command, ['get', 'ensure', 'start', 'force_close'], true)) {
 			return $this->rejected('unsupported_command', 400, $requestId);
 		}
 
@@ -50,10 +50,11 @@ final class ProductionController extends OCSController {
 
 		$requestId = $requestId !== '' ? $requestId : bin2hex(random_bytes(16));
 		$runtimeCommand = match ($command) {
-    'ensure' => ['Ensure' => null],
-    'start' => ['Start' => null],
-    'force_close' => ['ForceClose' => null],
-};
+			'get' => ['Get' => null],
+			'ensure' => ['Ensure' => null],
+			'start' => ['Start' => null],
+			'force_close' => ['ForceClose' => null],
+		};
 
 		try {
 			$response = $this->runtime->command([
