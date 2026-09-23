@@ -58,7 +58,10 @@
 		.map(participant => participant.actorId)
 		.filter(Boolean)
 
-	const getCurrentRecordingParticipantIds = async token => getRecordingParticipantIds(await getTalkParticipants(token))
+	const getCurrentRecordingParticipantIds = async token => {
+		const participants = await requestJson(url(`${TALK_API_VERSION}/call/${encodeURIComponent(token)}`))
+		return getRecordingParticipantIds(Array.isArray(participants) ? participants : [])
+	}
 
 	const getParticipantLabel = (participantList, actorId, ownerId) => {
 		const participant = participantList.find(item => item?.actorType === 'users' && item.actorId === actorId)
