@@ -530,4 +530,22 @@ mod tests {
         let result = client.start("session-001", "guest-1");
         assert_eq!(result, Err(ClientSessionError::Unauthorized));
     }
-}
+
+    // TEST-04: A Production read is actor-authorized and does not expose
+    // session data to a non-member.
+    #[test]
+    fn TEST_04_client_can_read_only_an_authorized_production() {
+        let mut repository = InMemory { sessions: vec![] };
+        let mut client = ClientSessionService::new(&mut repository);
+
+        client.create("session-001", "owner-1").unwrap();
+        client
+            .add_participant("session-001", "owner-1", "guest-1", [ClientRole::Guest])
+            .unwrap();
+
+        assert!(client.get_for_actor("session-001", "guest-1").is_ok());
+        assert_eq!(
+            client.get_for_actor("session-001", "outsider"),
+            Err(ClientSessionError::Unauthorized)
+        );
+    }}
