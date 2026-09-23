@@ -60,7 +60,8 @@ pub fn handle_production_command<R: ProductionSessionRepository>(
             &request.owner_id,
             &request.participants,
         ),
-        ProductionCommand::Get => ClientSessionService::new(repository).get(&request.session_id),
+        ProductionCommand::Get => ClientSessionService::new(repository)
+            .get_for_actor(&request.session_id, &request.actor_id),
         ProductionCommand::Start => {
             start_production(repository, &request.session_id, &request.actor_id)
         }
