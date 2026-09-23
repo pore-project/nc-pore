@@ -296,8 +296,6 @@
 		console.debug('[NC-PoRe] startRequested: before local start')
 		try {
 			await window.__poreRecordingCoordinationChannel.waitUntilReady(5000)
-			const ensured = await window.__poreTalkRecordingCoordinator.command('ensure')
-			if (ensured?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(ensured.state))
 			await startLocalRecording({ announceReady: false })
 		} catch (error) {
 			console.error('[NC-PoRe] Local recording start failed before Core begin', error)
