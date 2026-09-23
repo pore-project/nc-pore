@@ -29,6 +29,7 @@ fi
 php -l lib/Service/RecordingCoordinationService.php >/dev/null
 php -l lib/Controller/RecordingCoordinationController.php >/dev/null
 php -l lib/Controller/RecordingCoordinationEventController.php >/dev/null
+php -l lib/Service/TalkSessionAccessService.php >/dev/null
 php -l lib/Http/CoordinationEventStreamResponse.php >/dev/null
 
 # TEST-COORD-05: the app must load the neutral channel before the Talk host adapter.
@@ -36,7 +37,9 @@ grep -q "pore-recording-coordination" lib/AppInfo/Application.php
 grep -q "RecordingCoordinationEvent#events" appinfo/routes.php
 grep -q "final class RecordingCoordinationEventController extends Controller" lib/Controller/RecordingCoordinationEventController.php
 grep -q "authorizeRecordingAccess" lib/Service/RecordingCoordinationService.php
-grep -q "EnsureRecording" lib/Service/RecordingCoordinationService.php
+grep -q "'Snapshot' => null" lib/Service/RecordingCoordinationService.php
+grep -q "TalkSessionAccessService" lib/Controller/RecordingCoordinationEventController.php
+grep -q "isParticipant" lib/Service/TalkSessionAccessService.php
 grep -q 'public function events' lib/Controller/RecordingCoordinationEventController.php
 grep -q "sessionId = ''" lib/Controller/RecordingCoordinationEventController.php
 grep -q "recordingId = ''" lib/Controller/RecordingCoordinationEventController.php
