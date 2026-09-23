@@ -143,7 +143,13 @@
 
 	const command = async (sessionId, recordingId, name, options = {}) => {
 		if (name === 'snapshot') {
-			const production = await productionCommand(sessionId, 'ensure', options)
+			let production
+			try {
+				production = await productionCommand(sessionId, 'get', options)
+			} catch (error) {
+				if (error?.code === 'session_not_found') return { production_status: null, state: null }
+				throw error
+			}
 			if (!['active', 'completed'].includes(production?.production_status)) {
 				return { production_status: production?.production_status || null, state: null }
 			}
@@ -223,14 +229,6 @@
 
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
 
-		await productionCommand(token, 'ensure', { participants: participantIds, ownerId })
-		console.debug('[NC-PoRe] Talk bootstrap: production ensured', { token, participantIds, ownerId })
-		await recordingCommand(token, recordingId, 'ensure', { participants: participantIds, ownerId })
-		console.debug('[NC-PoRe] PoRE recording ensured', { token, recordingId })
-		const channel = coordinationChannel()
-		if (!channel?.connect) throw new Error('PoRE recording coordination channel is not available')
-		void channel.connect(token, recordingId).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
-
 		window.__poreTalkRecordingCoordinator = Object.freeze({
 			sessionId: token,
 			recordingId,
@@ -241,6 +239,10 @@
 			command: (name, artifactId = '') => command(token, recordingId, name, { participants: coordinatorContext?.participants || participantIds, ownerId, artifactId }),
 		})
 		console.debug('[NC-PoRe] Talk bootstrap: coordinator published', { token, recordingId, ownerId, participantIds })
+
+		const channel = coordinationChannel()
+		if (!channel?.connect) throw new Error('PoRE recording coordination channel is not available')
+		void channel.connect(token, recordingId).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 
 		window.dispatchEvent(new CustomEvent('pore:recording-ui-context', {
 			detail: {
@@ -257,9 +259,9 @@
 				openingConfirmed: false,
 				readyCount: 0,
 				openingConfirmedCount: 0,
-				participantCount: participantIds.length,
-				productionStatus: 'active',
-				participants: participantIds.map(id => ({ id, ready: false })),
+				participantCount: 0,
+				productionStatus: null,
+				participants: [],
 			},
 		}))
 		
