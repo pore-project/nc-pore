@@ -43,6 +43,7 @@
 	let localCaptureArmed = false
 	let localRecordingStartInFlight = false
 	let openingSignetEmitted = false
+	let openingSignalPublished = false
 	let openingSignetRequestInFlight = false
 	let openingTriggerInFlight = false
 	let localStopInFlight = false
@@ -210,6 +211,8 @@
 			openingSignetRequestInFlight = true
 			try {
 				await emitOpeningSignet()
+				await HostAdapter.publishSignal('opening')
+				openingSignalPublished = true
 				const confirmed = await coordinator.command('confirm_opening')
 				if (confirmed?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(confirmed.state))
 			} finally {
@@ -258,6 +261,10 @@
 					openingSignetRequestInFlight = true
 					try {
 						await emitOpeningSignet()
+						if (snapshot.role === 'host' && !openingSignalPublished) {
+							await HostAdapter.publishSignal('opening')
+							openingSignalPublished = true
+						}
 						const confirmed = await coordinator.command('confirm_opening')
 						if (confirmed?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(confirmed.state))
 					} finally {
@@ -388,6 +395,7 @@
 	window.addEventListener('pore:recording-local-finalized', event => {
 		localCaptureArmed = false
 		openingSignetEmitted = false
+		openingSignalPublished = false
 		const artifact = event.detail
 		publish({ artifact })
 		if (!artifact) return
