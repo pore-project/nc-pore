@@ -7,6 +7,7 @@ namespace OCA\PoRe\Controller;
 use OCA\PoRe\AppInfo\Application;
 use OCA\PoRe\Http\CoordinationEventStreamResponse;
 use OCA\PoRe\Service\RecordingCoordinationService;
+use OCA\PoRe\Service\TalkSessionAccessService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
@@ -20,6 +21,7 @@ final class RecordingCoordinationEventController extends Controller {
 	public function __construct(
 		IRequest $request,
 		private readonly RecordingCoordinationService $coordination,
+		private readonly TalkSessionAccessService $talkSessionAccess,
 		private readonly IUserSession $userSession,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -51,7 +53,21 @@ final class RecordingCoordinationEventController extends Controller {
 			$response->setStatus(400);
 			return $response;
 		} catch (RuntimeException $exception) {
-			$status = $exception->getMessage() === 'coordination_unauthorized' ? 403 : 503;
+			if (
+				$exception->getMessage() === 'coordination_session_not_found'
+				&& $this->talkSessionAccess->isParticipant($sessionId, $user->getUID())
+			) {
+				$lastEventId = $this->lastEventId();
+				return new CoordinationEventStreamResponse(
+					function (callable $emit) use ($sessionId, $recordingId, $lastEventId): void {
+						$this->coordination->stream($sessionId, $recordingId, $lastEventId, $emit);
+					},
+				);
+			}
+			$status = in_array($exception->getMessage(), [
+				'coordination_unauthorized',
+				'coordination_forbidden',
+			], true) ? 403 : 503;
 			$response = new Response();
 			$response->setStatus($status);
 			return $response;
