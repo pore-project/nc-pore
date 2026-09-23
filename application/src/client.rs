@@ -284,6 +284,32 @@ where
             })
     }
 
+    pub fn get_for_actor(
+        &self,
+        id: &str,
+        actor_id: &str,
+    ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
+        let id = ProductionId::new(id);
+        let session = get_production_session(self.repository, &id).map_err(|error| match error {
+            crate::session::GetProductionSessionError::SessionNotFound => {
+                ClientSessionError::SessionNotFound
+            }
+            crate::session::GetProductionSessionError::Repository(error) => {
+                ClientSessionError::Repository(error)
+            }
+        })?;
+
+        if !session
+            .participations()
+            .iter()
+            .any(|participation| participation.participant_id.value() == actor_id)
+        {
+            return Err(ClientSessionError::Unauthorized);
+        }
+
+        Ok(ClientProductionSession::from(&session))
+    }
+
     pub fn create(
         &mut self,
         id: &str,
