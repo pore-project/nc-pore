@@ -169,8 +169,10 @@
 			return result
 		}
 		if (name === 'trigger_opening') {
-			return recordingCommand(sessionId, recordingId, name, options)
-		}
+			const result = await recordingCommand(sessionId, recordingId, name, options)
+			await publishRecordingSignal('opening')
+			return result
+	}
 		if (name === 'begin') {
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
 			coordinatorContext.participants = mergeParticipantOrder(currentParticipantIds)
@@ -268,9 +270,5 @@
 		
 	}
 
-	window.PoRETalkRecordingHostAdapter = Object.freeze({
-		bootstrap,
-		command: (...args) => command(...args),
-		publishSignal: publishRecordingSignal,
-	})
+	window.PoRETalkRecordingHostAdapter = Object.freeze({ bootstrap, command: (...args) => command(...args) })
 })()
