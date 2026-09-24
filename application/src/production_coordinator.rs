@@ -1,5 +1,6 @@
 use crate::client::{
-    ClientProductionSession, ClientRole, ClientSessionError, ClientSessionService,
+    ClientProductionSession, ClientProductionStatus, ClientRole, ClientSessionError,
+    ClientSessionService,
 };
 use nc_pore_core::session::repository::ProductionSessionRepository;
 
@@ -105,7 +106,6 @@ where
 mod tests {
     use super::*;
     use nc_pore_core::identity::ProductionId;
-    use nc_pore_core::participant::ParticipantId;
     use nc_pore_core::session::ProductionSession;
 
     struct InMemory {
@@ -146,6 +146,7 @@ mod tests {
         }
     }
 
+    // TEST-01: The Host materializes a Production with the recording participants.
     #[test]
     fn TEST_01_host_materializes_production_with_recording_participants() {
         let mut repository = InMemory { sessions: vec![] };
@@ -177,6 +178,7 @@ mod tests {
         assert_eq!(started.participants[1].id, "guest-1");
     }
 
+    // TEST-02: A non-owner cannot materialize a Production before Host start.
     #[test]
     fn TEST_02_non_owner_does_not_create_production_before_host_start() {
         let mut repository = InMemory { sessions: vec![] };
