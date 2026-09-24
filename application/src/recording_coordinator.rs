@@ -120,7 +120,7 @@ where
             .repository
             .get(&self.session_id)
             .map_err(|_| ProductionSessionError::InvalidStateTransition)?
-            .ok_or(ProductionSessionError::InvalidStateTransition)?;
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
 
         recording_state(&session, self.actor_id.value(), self.recording_id.value()).map_err(
             |error| match error {
@@ -223,6 +223,23 @@ mod tests {
         InMemoryRepository {
             sessions: vec![session],
         }
+    }
+
+    // TEST-03: A missing Production makes the requested recording unavailable at the recording boundary.
+    #[test]
+    fn snapshot_reports_missing_production_as_recording_not_found() {
+        let mut repository = InMemoryRepository { sessions: vec![] };
+        let coordinator = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-missing"),
+            ParticipantId::new("alice"),
+            RecordingId::new("recording-missing"),
+        );
+
+        assert_eq!(
+            coordinator.snapshot(),
+            Err(ProductionSessionError::RecordingNotFound)
+        );
     }
 
     #[test]
