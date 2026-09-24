@@ -101,7 +101,6 @@ where
     ClientSessionService::new(repository).check_timeout(production_id, now)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
