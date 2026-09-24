@@ -230,6 +230,13 @@
 			await synchronizeCoordinatorState()
 			return
 		}
+		if (signal.type === 'opening_confirmed') {
+			if (coordinator.ownerId === coordinator.actorId && signal.actorId !== coordinator.actorId) {
+				await synchronizeCoordinatorState()
+			}
+			return
+		}
+		if (signal.type === 'stop_acknowledged') return
 		if (!['begin', 'ready', 'opening', 'stop'].includes(signal.type)) return
 		await synchronizeCoordinatorState()
 	}

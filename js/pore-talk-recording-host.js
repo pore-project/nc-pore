@@ -6,6 +6,9 @@
 	const PRODUCTION_API_VERSION = '/ocs/v2.php/apps/pore/v1/productions/command'
 	const TALK_API_VERSION = '/ocs/v2.php/apps/spreed/api/v4'
 	let coordinatorContext = null
+	const STOP_RETRY_INTERVAL_MS = 1000
+	let stopRetryTimer = null
+	let stopAcknowledgedParticipantIds = new Set()
 
 	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
 
@@ -16,6 +19,58 @@
 		if (!channel?.publish) throw new Error('PoRE recording coordination channel is not available')
 		return channel.publish(type)
 	}
+
+	const clearStopRetry = () => {
+		if (stopRetryTimer !== null) {
+			window.clearTimeout(stopRetryTimer)
+			stopRetryTimer = null
+		}
+	}
+
+	const resetStopAcknowledgements = () => {
+		stopAcknowledgedParticipantIds = new Set()
+	}
+
+	const hostOwnsCoordinator = () => coordinatorContext?.ownerId === coordinatorContext?.actorId
+
+	const scheduleStopRetry = () => {
+		clearStopRetry()
+		if (!hostOwnsCoordinator() || !coordinatorContext || coordinatorContext.participants.length === 0) return
+
+		const retry = async () => {
+			stopRetryTimer = null
+			if (!hostOwnsCoordinator() || !coordinatorContext) return
+			const pending = coordinatorContext.participants.some(id => !stopAcknowledgedParticipantIds.has(id))
+			if (!pending) return
+
+			try {
+				await publishRecordingSignal('stop')
+			} catch (error) {
+				console.warn('[NC-PoRe] Stop coordination retry failed', error)
+			}
+
+			if (coordinatorContext.participants.some(id => !stopAcknowledgedParticipantIds.has(id))) {
+				stopRetryTimer = window.setTimeout(() => void retry(), STOP_RETRY_INTERVAL_MS)
+			}
+		}
+
+		stopRetryTimer = window.setTimeout(() => void retry(), STOP_RETRY_INTERVAL_MS)
+	}
+
+	window.addEventListener('pore:recording-signal', event => {
+		const signal = event.detail
+		if (!coordinatorContext) return
+		if (signal?.type === 'stop_acknowledged' && hostOwnsCoordinator()) {
+			if (coordinatorContext.participants.includes(signal.actorId)) {
+				stopAcknowledgedParticipantIds.add(signal.actorId)
+				if (!coordinatorContext.participants.some(id => !stopAcknowledgedParticipantIds.has(id))) {
+					clearStopRetry()
+				}
+			}
+			return
+		}
+		if (signal?.type === 'production_closed') clearStopRetry()
+	})
 
 
 	const requestJson = async (target, options = {}) => {
@@ -164,6 +219,8 @@
 			return { ...recording, production_status: production.production_status }
 		}
 		if (name === 'force_close') {
+			clearStopRetry()
+			resetStopAcknowledgements()
 			const result = await productionCommand(sessionId, 'force_close', options)
 			await publishRecordingSignal('production_closed')
 			return result
@@ -172,8 +229,15 @@
 			const result = await recordingCommand(sessionId, recordingId, name, options)
 			await publishRecordingSignal('opening')
 			return result
-	}
+		}
+		if (name === 'confirm_opening') {
+			const result = await recordingCommand(sessionId, recordingId, name, options)
+			await publishRecordingSignal('opening_confirmed')
+			return result
+		}
 		if (name === 'begin') {
+			clearStopRetry()
+			resetStopAcknowledgements()
 			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
 			coordinatorContext.participants = mergeParticipantOrder(currentParticipantIds)
 			const beginOptions = { ...options, participants: coordinatorContext.participants }
@@ -193,8 +257,16 @@
 		}
 
 		if (name === 'stop') {
+			clearStopRetry()
+			resetStopAcknowledgements()
 			const result = await recordingCommand(sessionId, recordingId, name, options)
 			await publishRecordingSignal('stop')
+			scheduleStopRetry()
+			return result
+		}
+		if (name === 'acknowledge_stop') {
+			const result = await recordingCommand(sessionId, recordingId, name, options)
+			await publishRecordingSignal('stop_acknowledged')
 			return result
 		}
 

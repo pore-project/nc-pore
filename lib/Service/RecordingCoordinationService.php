@@ -19,7 +19,9 @@ final class RecordingCoordinationService {
 		'begin',
 		'ready',
 		'opening',
+		'opening_confirmed',
 		'stop',
+		'stop_acknowledged',
 		'production_closed',
 	];
 
