@@ -62,4 +62,10 @@ if grep -nE "setInterval\(|pollCoordination|startCoordinationPolling|coordinatio
     exit 1
 fi
 
+# TEST-COORD-08: pre-production coordination may open before a recording exists,
+# but the Talk-specific participant check must remain at the adapter boundary.
+grep -q "coordination_recording_not_found" lib/Controller/RecordingCoordinationEventController.php
+grep -q "TalkSessionAccessService" lib/Controller/RecordingCoordinationEventController.php
+grep -q 'isParticipant($sessionId, $user->getUID())' lib/Controller/RecordingCoordinationEventController.php
+
 echo "Recording coordination boundary checks passed."

@@ -54,7 +54,10 @@ final class RecordingCoordinationEventController extends Controller {
 			return $response;
 		} catch (RuntimeException $exception) {
 			if (
-				$exception->getMessage() === 'coordination_session_not_found'
+				in_array($exception->getMessage(), [
+					'coordination_session_not_found',
+					'coordination_recording_not_found',
+				], true)
 				&& $this->talkSessionAccess->isParticipant($sessionId, $user->getUID())
 			) {
 				$lastEventId = $this->lastEventId();
