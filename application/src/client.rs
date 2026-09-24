@@ -290,14 +290,15 @@ where
         actor_id: &str,
     ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
         let id = ProductionId::new(id);
-        let session = get_production_session(self.repository, &id).map_err(|error| match error {
-            crate::session::GetProductionSessionError::SessionNotFound => {
-                ClientSessionError::SessionNotFound
-            }
-            crate::session::GetProductionSessionError::Repository(error) => {
-                ClientSessionError::Repository(error)
-            }
-        })?;
+        let session =
+            get_production_session(self.repository, &id).map_err(|error| match error {
+                crate::session::GetProductionSessionError::SessionNotFound => {
+                    ClientSessionError::SessionNotFound
+                }
+                crate::session::GetProductionSessionError::Repository(error) => {
+                    ClientSessionError::Repository(error)
+                }
+            })?;
 
         if !session
             .participations()
@@ -548,4 +549,5 @@ mod tests {
             client.get_for_actor("session-001", "outsider"),
             Err(ClientSessionError::Unauthorized)
         );
-    }}
+    }
+}
