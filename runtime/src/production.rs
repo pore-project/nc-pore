@@ -1,4 +1,6 @@
-use nc_pore_application::client::{ClientProductionStatus, ClientSessionError, ClientSessionService};
+use nc_pore_application::client::{
+    ClientProductionStatus, ClientSessionError, ClientSessionService,
+};
 use nc_pore_application::production_coordinator::{
     check_production_timeout, ensure_production, force_close_production, start_production,
 };
@@ -88,17 +90,20 @@ pub fn handle_production_command<R: ProductionSessionRepository>(
                 }
                 .to_owned(),
             ),
-            completion_reason: session.completion_reason.map(|reason| match reason {
-                nc_pore_application::client::ClientProductionCompletionReason::AllRecordingsCompleted => {
-                    "all_recordings_completed"
+            completion_reason: session.completion_reason.map(|reason| {
+                match reason {
+                    nc_pore_application::client::ClientProductionCompletionReason::AllRecordingsCompleted => {
+                        "all_recordings_completed"
+                    }
+                    nc_pore_application::client::ClientProductionCompletionReason::ArtifactCompletionTimeout => {
+                        "artifact_completion_timeout"
+                    }
+                    nc_pore_application::client::ClientProductionCompletionReason::HostForced => {
+                        "host_forced"
+                    }
                 }
-                nc_pore_application::client::ClientProductionCompletionReason::ArtifactCompletionTimeout => {
-                    "artifact_completion_timeout"
-                }
-                nc_pore_application::client::ClientProductionCompletionReason::HostForced => {
-                    "host_forced"
-                }
-            }.to_owned()),
+                .to_owned()
+            }),
             participants: session
                 .participants
                 .into_iter()
