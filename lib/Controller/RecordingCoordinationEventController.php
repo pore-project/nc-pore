@@ -14,7 +14,6 @@ use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Response;
 use OCP\IRequest;
-use OCA\PoRe\Service\TalkSessionAccessService;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -22,7 +21,6 @@ final class RecordingCoordinationEventController extends Controller {
 	public function __construct(
 		IRequest $request,
 		private readonly RecordingCoordinationService $coordination,
-		private readonly TalkSessionAccessService $talkSessionAccess,
 		private readonly TalkSessionAccessService $talkSessionAccess,
 	) {
 		parent::__construct(Application::APP_ID, $request);
