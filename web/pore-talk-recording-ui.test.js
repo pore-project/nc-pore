@@ -26,7 +26,7 @@ describe('Talk recording UI', () => {
 	})
 
 	it('derives live elapsed time from the technical start timestamp', () => {
-		expect(Ui.elapsedSecondsFromStartedAt('2026-09-14T15:00:00.000Z', Date.parse('2026-09-14T15:01:05.900Z'))).toBeCloseTo(65.9)
+		expect(Ui.elapsedSecondsFromStartedAt('2026-09-14T15:00:00.000Z', Date.parse('2026-09-14T15:01:05.900Z'))).toBe(65.9)
 		expect(Ui.elapsedSecondsFromStartedAt(null, Date.now(), 12)).toBe(12)
 	})
 
