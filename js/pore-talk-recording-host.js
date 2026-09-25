@@ -114,36 +114,57 @@
 		return body.ocs.data
 	}
 
-	const getTalkParticipants = async token => {
-		const participants = await requestJson(url(`${TALK_API_VERSION}/call/${encodeURIComponent(token)}`))
-		const participantList = Array.isArray(participants) ? participants : []
-		return participantList
+	const getTalkParticipants = async talkConversationId => {
+		const participants = await requestJson(url(`${TALK_API_VERSION}/call/${encodeURIComponent(talkConversationId)}`))
+		const talkParticipantList = Array.isArray(participants) ? participants : []
+		return talkParticipantList
 	}
 
-	const getRecordingParticipantIds = participantList => participantList
-		.filter(participant => ['users', 'guests'].includes(participant?.actorType))
-		.map(participant => participant.actorId)
+	const getTalkRecordingParticipantIds = talkParticipantList => talkParticipantList
+		.filter(talkParticipant => ['users', 'guests'].includes(talkParticipant?.actorType))
+		.map(talkParticipant => talkParticipant.actorId)
 		.filter(Boolean)
 
-	const getTalkContext = async token => {
-		const context = await requestJson(url(`${PORE_TALK_CONTEXT_API}?sessionId=${encodeURIComponent(token)}`))
-		if (!context?.actorId || !context?.actorType) throw new Error('PoRE Talk actor context is unavailable')
-		return context
+	const normalizeTalkContext = talkContextPayload => {
+		const talkActorId = String(talkContextPayload?.actor_id || '').trim()
+		const talkActorType = String(talkContextPayload?.actor_type || '').trim()
+		const talkDisplayName = String(talkContextPayload?.display_name || '').trim()
+		const talkParticipantType = talkContextPayload?.participant_type ?? null
+		const talkSessionId = String(talkContextPayload?.talk_session_id || '').trim()
+		const talkOwnerId = String(talkContextPayload?.owner_id || '').trim()
+		const talkGuest = talkContextPayload?.guest === true
+
+		return {
+			talkActorId,
+			talkActorType,
+			talkDisplayName,
+			talkParticipantType,
+			talkSessionId,
+			talkOwnerId,
+			talkGuest,
+		}
 	}
 
-	const getCurrentRecordingParticipantIds = async token => {
-		const participants = await requestJson(url(`${TALK_API_VERSION}/call/${encodeURIComponent(token)}`))
-		return getRecordingParticipantIds(Array.isArray(participants) ? participants : [])
+	const getTalkContext = async talkConversationId => {
+		const talkContextPayload = await requestJson(url(`${PORE_TALK_CONTEXT_API}?sessionId=${encodeURIComponent(talkConversationId)}`))
+		const talkContext = normalizeTalkContext(talkContextPayload)
+		if (!talkContext.talkActorId || !talkContext.talkActorType) throw new Error('PoRE Talk actor context is unavailable')
+		return talkContext
 	}
 
-	const getParticipantLabel = (participantList, actorId, ownerId) => {
-		const participant = participantList.find(item => ['users', 'guests'].includes(item?.actorType) && item.actorId === actorId)
-		const displayName = String(participant?.displayName || '').trim()
-		if (displayName) return displayName
-		if (actorId === ownerId) return 'Host'
-		const participantIds = getRecordingParticipantIds(participantList).filter(id => id !== ownerId)
-		const index = participantIds.indexOf(actorId)
-		return participant?.actorType === 'guests'
+	const getCurrentRecordingParticipantIds = async talkConversationId => {
+		const participants = await requestJson(url(`${TALK_API_VERSION}/call/${encodeURIComponent(talkConversationId)}`))
+		return getTalkRecordingParticipantIds(Array.isArray(participants) ? participants : [])
+	}
+
+	const getTalkParticipantLabel = (talkParticipantList, talkActorId, talkOwnerId) => {
+		const talkParticipant = talkParticipantList.find(item => ['users', 'guests'].includes(item?.actorType) && item.actorId === talkActorId)
+		const talkDisplayName = String(talkParticipant?.displayName || '').trim()
+		if (talkDisplayName) return talkDisplayName
+		if (talkActorId === talkOwnerId) return 'Host'
+		const talkParticipantIds = getTalkRecordingParticipantIds(talkParticipantList).filter(id => id !== talkOwnerId)
+		const index = talkParticipantIds.indexOf(talkActorId)
+		return talkParticipant?.actorType === 'guests'
 			? `Gast ${index >= 0 ? index + 1 : 1}`
 			: `Participant ${index >= 0 ? index + 1 : 1}`
 	}
@@ -292,64 +313,64 @@
 		return recordingCommand(sessionId, recordingId, name, options)
 	}
 
-	const findToken = () => window.location.pathname.match(/(?:\/apps\/spreed)?\/(?:call|room)\/([^/]+)/)?.[1] || null
+	const findTalkConversationId = () => window.location.pathname.match(/(?:\/apps\/spreed)?\/(?:call|room)\/([^/]+)/)?.[1] || null
 
 	const bootstrap = async () => {
-		const token = findToken()
-		console.debug('[NC-PoRe] Talk bootstrap: entry', { token })
-		if (!token) {
-			console.warn('[NC-PoRe] Talk bootstrap: missing token', { token })
+		const talkConversationId = findTalkConversationId()
+		console.debug('[NC-PoRe] Talk bootstrap: entry', { talkConversationId })
+		if (!talkConversationId) {
+			console.warn('[NC-PoRe] Talk bootstrap: missing conversation id', { talkConversationId })
 			return
 		}
 
-		const talkContext = await getTalkContext(token)
-		const actorId = talkContext.actorId
-		const actorType = talkContext.actorType
-		console.debug('[NC-PoRe] Talk bootstrap: actor context loaded', { token, talkContext })
+		const talkContext = await getTalkContext(talkConversationId)
+		const talkActorId = talkContext.talkActorId
+		const talkActorType = talkContext.talkActorType
+		console.debug('[NC-PoRe] Talk bootstrap: actor context loaded', { talkConversationId, talkContext })
 
-		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(token)}`))
-		console.debug('[NC-PoRe] Talk bootstrap: room loaded', { token, room })
-		const participantList = await getTalkParticipants(token)
-		const participantIds = getRecordingParticipantIds(participantList)
-		console.debug('[NC-PoRe] Talk bootstrap: participants loaded', { token, actorId, participantList, participantIds })
-		if (!participantList.some(p => ['users', 'guests'].includes(p?.actorType) && p.actorId === actorId)) {
-			console.warn('[NC-PoRe] Talk bootstrap: current actor not found in Talk participant list', { token, actorId, participantList })
+		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(talkConversationId)}`))
+		console.debug('[NC-PoRe] Talk bootstrap: room loaded', { talkConversationId, room })
+		const talkParticipantList = await getTalkParticipants(talkConversationId)
+		const talkParticipantIds = getTalkRecordingParticipantIds(talkParticipantList)
+		console.debug('[NC-PoRe] Talk bootstrap: participants loaded', { talkConversationId, talkActorId, talkParticipantList, talkParticipantIds })
+		if (!talkParticipantList.some(talkParticipant => ['users', 'guests'].includes(talkParticipant?.actorType) && talkParticipant.actorId === talkActorId)) {
+			console.warn('[NC-PoRe] Talk bootstrap: current actor not found in Talk participant list', { talkConversationId, talkActorId, talkParticipantList })
 			return
 		}
 
-		const owner = participantList.find(p => p?.actorType === 'users' && p.participantType === 1)
-		const ownerId = talkContext.ownerId || owner?.actorId || ''
-		const recordingId = `recording-${token}`
-		coordinatorContext = { sessionId: token, recordingId, actorId, actorType, ownerId, participants: participantIds }
-		const participantLabel = talkContext.displayName || getParticipantLabel(participantList, actorId, ownerId)
-		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { token, actorId, ownerId, participantIds, participantLabel })
+		const talkOwner = talkParticipantList.find(talkParticipant => talkParticipant?.actorType === 'users' && talkParticipant.participantType === 1)
+		const talkOwnerId = talkContext.talkOwnerId || talkOwner?.actorId || ''
+		const recordingId = `recording-${talkConversationId}`
+		coordinatorContext = { sessionId: talkConversationId, recordingId, actorId: talkActorId, actorType: talkActorType, ownerId: talkOwnerId, participants: talkParticipantIds }
+		const participantLabel = talkContext.talkDisplayName || getTalkParticipantLabel(talkParticipantList, talkActorId, talkOwnerId)
+		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { talkConversationId, talkActorId, talkOwnerId, talkParticipantIds, participantLabel })
 
-		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: token, productionLabel: room?.displayName || room?.name || token } }))
+		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: talkConversationId, productionLabel: room?.displayName || room?.name || talkConversationId } }))
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
-			sessionId: token,
+			sessionId: talkConversationId,
 			recordingId,
-			actorId,
-			recordingParticipantId: actorId,
-			participants: participantIds,
-			ownerId,
-			command: (name, artifactId = '') => command(token, recordingId, name, { participants: coordinatorContext?.participants || participantIds, ownerId, artifactId }),
+			actorId: talkActorId,
+			recordingParticipantId: talkActorId,
+			participants: talkParticipantIds,
+			ownerId: talkOwnerId,
+			command: (name, artifactId = '') => command(talkConversationId, recordingId, name, { participants: coordinatorContext?.participants || talkParticipantIds, ownerId: talkOwnerId, artifactId }),
 		})
-		console.debug('[NC-PoRe] Talk bootstrap: coordinator published', { token, recordingId, actorId, actorType, ownerId, participantIds })
+		console.debug('[NC-PoRe] Talk bootstrap: coordinator published', { talkConversationId, recordingId, talkActorId, talkActorType, talkOwnerId, talkParticipantIds })
 
 		const channel = coordinationChannel()
 		if (!channel?.connect) throw new Error('PoRE recording coordination channel is not available')
-		void channel.connect(token, recordingId).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
+		void channel.connect(talkConversationId, recordingId).catch(error => window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })))
 
 		window.dispatchEvent(new CustomEvent('pore:recording-ui-context', {
 			detail: {
 				mountElement: window.PoRETalkRecordingUiMount?.getMountElement?.() || null,
-				productionId: token,
-				productionLabel: room?.displayName || room?.name || token,
+				productionId: talkConversationId,
+				productionLabel: room?.displayName || room?.name || talkConversationId,
 				recordingId,
 				participantLabel,
-				role: ownerId === actorId ? 'host' : 'participant',
-				guest: actorType === 'guests',
+				role: talkOwnerId === talkActorId ? 'host' : 'participant',
+				guest: talkContext.talkGuest,
 				state: 'preparing',
 				listener: false,
 				confirmed: false,

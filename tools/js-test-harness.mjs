@@ -178,6 +178,7 @@ const files = [
 	'../web/pore-talk-recording-ui.test.js',
 	'../web/pore-talk-capture-init.test.js',
 	'../web/pore-talk-audio-adapter.test.js',
+	'../web/pore-talk-recording-host.test.js',
 ]
 
 for (const file of files) await import(new URL(file, import.meta.url))
