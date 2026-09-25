@@ -7,11 +7,12 @@ namespace OCA\PoRe\Controller;
 use OCA\PoRe\AppInfo\Application;
 use OCA\PoRe\Service\NextcloudArtifactConnector;
 use OCA\PoRe\Service\RecordingRuntimeService;
+use OCA\PoRe\Service\TalkSessionAccessService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
-use OCP\IUserSession;
 use RuntimeException;
 
 final class RecordingTransportController extends OCSController {
@@ -19,11 +20,12 @@ final class RecordingTransportController extends OCSController {
 		IRequest $request,
 		private readonly NextcloudArtifactConnector $connector,
 		private readonly RecordingRuntimeService $runtime,
-		private readonly IUserSession $userSession,
+		private readonly TalkSessionAccessService $talkSessionAccess,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
 
+	#[PublicPage]
 	#[NoAdminRequired]
 	public function prepareFinalizedArtifact(
 		string $production_id,
@@ -35,11 +37,14 @@ final class RecordingTransportController extends OCSController {
 		int $size,
 		string $payload_sha256,
 	): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) return $this->rejected('unauthorized', 401);
+		try {
+			$actorId = $this->talkSessionAccess->resolve($production_id)['actor_id'];
+		} catch (RuntimeException) {
+			return $this->rejected('talk_context_unauthorized', 403);
+		}
 
 		try {
-			$this->authorizeRecordingTransport($user->getUID(), $production_id, $recording_id);
+			$this->authorizeRecordingTransport($actorId, $production_id, $recording_id);
 			$prepared = $this->connector->prepare(
 				$this->required($production_id, 'production_id'),
 				$this->required($production_label, 'production_label'),
@@ -49,7 +54,7 @@ final class RecordingTransportController extends OCSController {
 				$participant_label,
 				$size,
 				$this->required($payload_sha256, 'payload_sha256'),
-				$user->getUID(),
+				$actorId,
 			);
 			return new DataResponse([
 				'protocol_version' => 2,
@@ -64,13 +69,12 @@ final class RecordingTransportController extends OCSController {
 		}
 	}
 
+	#[PublicPage]
 	#[NoAdminRequired]
-	public function verifyFinalizedArtifact(string $transfer_id): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) return $this->rejected('unauthorized', 401);
-
+	public function verifyFinalizedArtifact(string $transfer_id, string $session_id = ''): DataResponse {
 		try {
-			$receipt = $this->connector->verify($this->required($transfer_id, 'transfer_id'), $user->getUID());
+			$actorId = $this->talkSessionAccess->resolve($session_id)['actor_id'];
+			$receipt = $this->connector->verify($this->required($transfer_id, 'transfer_id'), $actorId);
 			return new DataResponse([
 				'protocol_version' => 2,
 				'status' => 'verified',
@@ -82,13 +86,12 @@ final class RecordingTransportController extends OCSController {
 		}
 	}
 
+	#[PublicPage]
 	#[NoAdminRequired]
-	public function closeFinalizedArtifactTransfer(string $transfer_id): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) return $this->rejected('unauthorized', 401);
-
+	public function closeFinalizedArtifactTransfer(string $transfer_id, string $session_id = ''): DataResponse {
 		try {
-			$this->connector->close($this->required($transfer_id, 'transfer_id'), $user->getUID());
+			$actorId = $this->talkSessionAccess->resolve($session_id)['actor_id'];
+			$this->connector->close($this->required($transfer_id, 'transfer_id'), $actorId);
 			return new DataResponse([
 				'protocol_version' => 2,
 				'status' => 'closed',

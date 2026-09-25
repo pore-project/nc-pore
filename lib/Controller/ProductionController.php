@@ -7,11 +7,13 @@ namespace OCA\PoRe\Controller;
 use OCA\PoRe\AppInfo\Application;
 use OCA\PoRe\Service\RecordingRuntimeService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IConfig;
 use OCP\IRequest;
-use OCP\IUserSession;
+use RuntimeException;
+use OCA\PoRe\Service\TalkSessionAccessService;
 
 final class ProductionController extends OCSController {
 	private const OWNER_PREFIX = 'production_owner_';
@@ -20,12 +22,13 @@ final class ProductionController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private readonly RecordingRuntimeService $runtime,
-		private readonly IUserSession $userSession,
+		private readonly TalkSessionAccessService $talkSessionAccess,
 		private readonly IConfig $config,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
 
+	#[PublicPage]
 	#[NoAdminRequired]
 	public function command(
 		string $sessionId,
@@ -34,10 +37,14 @@ final class ProductionController extends OCSController {
 		string $participants = '[]',
 		string $ownerId = '',
 	): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return $this->rejected('unauthorized', 401, $requestId);
+		try {
+			$needOwner = in_array($command, ['ensure', 'start', 'force_close'], true);
+			$actorContext = $this->talkSessionAccess->resolve($sessionId, $needOwner);
+		} catch (RuntimeException) {
+			return $this->rejected('talk_context_unauthorized', 403, $requestId);
 		}
+		$actorId = $actorContext['actor_id'];
+		$ownerId = $actorContext['owner_id'];
 
 		if (!in_array($command, ['get', 'ensure', 'start', 'force_close'], true)) {
 			return $this->rejected('unsupported_command', 400, $requestId);
@@ -60,7 +67,7 @@ final class ProductionController extends OCSController {
 			$response = $this->runtime->command([
 				'request_id' => $requestId,
 				'session_id' => $sessionId,
-				'actor_id' => $user->getUID(),
+				'actor_id' => $actorId,
 				'owner_id' => $ownerId,
 				'participants' => array_values($participantIds),
 				'command' => $runtimeCommand,
@@ -69,7 +76,7 @@ final class ProductionController extends OCSController {
 			return $this->rejected('runtime_unavailable', 503, $requestId);
 		}
 
-		if (($response['status'] ?? null) === 'ok' && $ownerId !== '' && $ownerId === $user->getUID()) {
+		if (($response['status'] ?? null) === 'ok' && $ownerId !== '' && $ownerId === $actorId) {
 			$this->config->setAppValue(Application::APP_ID, self::ownerKey($sessionId), $ownerId);
 		}
 

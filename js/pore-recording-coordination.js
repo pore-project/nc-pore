@@ -7,8 +7,18 @@
 	const PROTOCOL_VERSION = 1
 	const EVENT_NAME = 'pore-recording'
 	const DEFAULT_READY_TIMEOUT_MS = 5000
+	const TALK_SESSION_TAB_ID = 'x-nextcloud-talk-session-tab-id'
 
 	const url = path => window.OC?.generateUrl ? window.OC.generateUrl(path) : path
+
+	const getTalkSessionTabId = () => {
+		try {
+			const value = window.sessionStorage?.getItem(TALK_SESSION_TAB_ID) || ''
+			return /^[A-Za-z0-9]{64}$/.test(value) ? value : null
+		} catch (_) {
+			return null
+		}
+	}
 
 	class PoRERecordingCoordinationChannel {
 		constructor() {
@@ -116,6 +126,7 @@
 					'OCS-APIRequest': 'true',
 					'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
 					...(window.OC?.requestToken ? { requesttoken: window.OC.requestToken } : {}),
+					...(getTalkSessionTabId() ? { [TALK_SESSION_TAB_ID]: getTalkSessionTabId() } : {}),
 				},
 				body: params,
 			})

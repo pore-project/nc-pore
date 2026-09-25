@@ -12,6 +12,11 @@ return [
 	],
 	'ocs' => [
 		[
+			'name' => 'TalkContext#context',
+			'url' => '/v1/talk/context',
+			'verb' => 'GET',
+		],
+		[
 			'name' => 'RecordingTransport#prepareFinalizedArtifact',
 			'url' => '/v1/recordings/finalized-artifact/prepare',
 			'verb' => 'POST',

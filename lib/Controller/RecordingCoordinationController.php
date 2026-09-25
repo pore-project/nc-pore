@@ -7,10 +7,11 @@ namespace OCA\PoRe\Controller;
 use OCA\PoRe\AppInfo\Application;
 use OCA\PoRe\Service\RecordingCoordinationService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
-use OCP\IUserSession;
+use OCA\PoRe\Service\TalkSessionAccessService;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -18,11 +19,12 @@ final class RecordingCoordinationController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private readonly RecordingCoordinationService $coordination,
-		private readonly IUserSession $userSession,
+		private readonly TalkSessionAccessService $talkSessionAccess,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
 
+	#[PublicPage]
 	#[NoAdminRequired]
 	public function publish(
 		string $sessionId,
@@ -30,11 +32,14 @@ final class RecordingCoordinationController extends OCSController {
 		string $eventType,
 		string $requestId = '',
 	): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) return $this->rejected('unauthorized', 401, $requestId);
+		try {
+			$actorId = $this->talkSessionAccess->resolve($sessionId)['actor_id'];
+		} catch (RuntimeException) {
+			return $this->rejected('talk_context_unauthorized', 403, $requestId);
+		}
 
 		try {
-			$result = $this->coordination->publish($sessionId, $recordingId, $eventType, $user->getUID());
+			$result = $this->coordination->publish($sessionId, $recordingId, $eventType, $actorId);
 			return new DataResponse([
 				'protocol_version' => 1,
 				'request_id' => $requestId !== '' ? $requestId : bin2hex(random_bytes(16)),

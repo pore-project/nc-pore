@@ -218,6 +218,7 @@
 		settings.innerHTML = '<label for="pore-talk-storage-root">Speicherort</label><input id="pore-talk-storage-root" type="text" autocomplete="off" placeholder="audio"><p class="pore-talk-recording__settings-status" aria-live="polite"></p>'
 		const input = settings.querySelector('input')
 		const settingsStatus = settings.querySelector('.pore-talk-recording__settings-status')
+		let guestMode = false
 		input.addEventListener('blur', async () => {
 			const value = input.value.trim()
 			settingsStatus.textContent = ''
@@ -244,8 +245,12 @@
 			panel.hidden = !open
 			toggle.setAttribute('aria-expanded', String(open))
 			if (open) {
-				void requestSettings('GET').then(data => { input.value = data.storage_root || ''; input.placeholder = data.default_storage_root || DEFAULT_ROOT }).catch(() => {})
-				settings.hidden = false
+				if (!guestMode) {
+					void requestSettings('GET').then(data => { input.value = data.storage_root || ''; input.placeholder = data.default_storage_root || DEFAULT_ROOT }).catch(() => {})
+					settings.hidden = false
+				} else {
+					settings.hidden = true
+				}
 				requestAnimationFrame(positionPanel)
 			}
 		}
@@ -259,10 +264,12 @@
 
 		const renderPanel = context => {
 			const {
-				role = 'none', state = 'preparing', listener = false, ready = false, openingConfirmed = false, confirmed = false,
+				role = 'none', state = 'preparing', listener = false, guest = false, ready = false, openingConfirmed = false, confirmed = false,
 				readyCount = 0, openingConfirmedCount = 0, participantCount = 0, elapsedSeconds = 0,
 				productionStatus = null, onStart = null, onStop = null, onForceClose = null,
 			} = context || {}
+			guestMode = guest === true
+			settings.hidden = guestMode
 			const status = resolveStatus({ state, listener, ready, confirmed, productionStatus })
 			root.dataset.status = status.tone
 			root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
