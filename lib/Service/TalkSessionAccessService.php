@@ -64,7 +64,7 @@ final class TalkSessionAccessService {
 		$ownerId = '';
 		if ($includeOwner) {
 			foreach ($this->participantService->getParticipantsForRoom($room) as $candidate) {
-				if (!$candidate instanceof Participant || !$candidate->isOwner()) {
+				if (!$candidate instanceof Participant || $candidate->getAttendee()->getParticipantType() !== Participant::OWNER) {
 					continue;
 				}
 				if ($candidate->getAttendee()->getActorType() !== Attendee::ACTOR_USERS) {
