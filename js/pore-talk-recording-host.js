@@ -9,6 +9,8 @@
 	const TALK_SESSION_TAB_ID = 'x-nextcloud-talk-session-tab-id'
 	let coordinatorContext = null
 	const STOP_RETRY_INTERVAL_MS = 1000
+	const talk_participantRefreshIntervalMs = 250
+	const talk_participantRefreshMaxRetries = 2
 	let stopRetryTimer = null
 	let stopAcknowledgedParticipantIds = new Set()
 
@@ -157,6 +159,25 @@
 		return getTalkRecordingParticipantIds(Array.isArray(participants) ? participants : [])
 	}
 
+	const getSettledRecordingParticipantIds = async talkConversationId => {
+		let talk_currentParticipantIds = await getCurrentRecordingParticipantIds(talkConversationId)
+		for (let talk_refreshAttempt = 0; talk_refreshAttempt < talk_participantRefreshMaxRetries; talk_refreshAttempt += 1) {
+			await new Promise(resolve => window.setTimeout(resolve, talk_participantRefreshIntervalMs))
+			const talk_nextParticipantIds = await getCurrentRecordingParticipantIds(talkConversationId)
+			const talk_sameParticipants = talk_currentParticipantIds.length === talk_nextParticipantIds.length
+				&& talk_currentParticipantIds.every(talk_actorId => talk_nextParticipantIds.includes(talk_actorId))
+			console.debug('[NC-PoRe] Talk participant refresh', {
+				talkConversationId,
+				talk_refreshAttempt: talk_refreshAttempt + 1,
+				talk_currentParticipantIds,
+				talk_nextParticipantIds,
+			})
+			talk_currentParticipantIds = talk_nextParticipantIds
+			if (talk_sameParticipants) break
+		}
+		return talk_currentParticipantIds
+	}
+
 	const getTalkParticipantLabel = (talkParticipantList, talk_actorId, talk_ownerId) => {
 		const talkParticipant = talkParticipantList.find(item => ['users', 'guests'].includes(item?.actorType) && item.actorId === talk_actorId)
 		const talk_displayName = String(talkParticipant?.displayName || '').trim()
@@ -278,8 +299,8 @@
 		if (name === 'begin') {
 			clearStopRetry()
 			resetStopAcknowledgements()
-			const currentParticipantIds = await getCurrentRecordingParticipantIds(sessionId)
-			coordinatorContext.participants = mergeParticipantOrder(currentParticipantIds)
+			const talk_currentParticipantIds = await getSettledRecordingParticipantIds(sessionId)
+			coordinatorContext.participants = mergeParticipantOrder(talk_currentParticipantIds)
 			const beginOptions = { ...options, participants: coordinatorContext.participants }
 			const production = await productionCommand(sessionId, 'ensure', beginOptions)
 			if (production?.production_status === 'created') {
