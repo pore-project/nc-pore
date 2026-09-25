@@ -111,6 +111,11 @@ describe('Talk recording host adapter', () => {
 				{ actorType: 'users', actorId: 'user-1' },
 				{ actorType: 'guests', actorId: 'guest-1' },
 			],
+			[
+				{ actorType: 'users', actorId: 'host-1' },
+				{ actorType: 'users', actorId: 'user-1' },
+				{ actorType: 'guests', actorId: 'guest-1' },
+			],
 		]
 		const recordingCommands = []
 		const productionCommands = []
