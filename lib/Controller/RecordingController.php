@@ -85,8 +85,8 @@ final class RecordingController extends OCSController {
 		if ($command === 'stop' && $status === 200) {
 			$this->jobList->scheduleAfter(
 				CheckProductionArtifactTimeoutJob::class,
+				time() + (24 * 60 * 60),
 				['production_id' => $sessionId],
-				24 * 60 * 60,
 			);
 		}
 

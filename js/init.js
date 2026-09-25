@@ -43,6 +43,7 @@
 	let localCaptureArmed = false
 	let localRecordingStartInFlight = false
 	let openingSignetEmitted = false
+	let closingSignetEmitted = false
 	let openingSignetRequestInFlight = false
 	let openingTriggerInFlight = false
 	let localStopInFlight = false
@@ -145,6 +146,7 @@
 				deviceId,
 				settings: track.getSettings?.() || null,
 			})
+			closingSignetEmitted = false
 			await recorder.start(track, {
 				...(context?.sourceMetadata || {}),
 				productionId,
@@ -196,6 +198,17 @@
 			window.dispatchEvent(new CustomEvent('pore:recording-opening-signet'))
 		}
 		openingSignetEmitted = true
+	}
+
+	const emitClosingSignet = async () => {
+		if (closingSignetEmitted || !recorder.isRecording()) return
+		if (typeof recorder.markClosingSignet === 'function') {
+			recorder.markClosingSignet()
+			if (typeof recorder.waitForClosingSignet === 'function') await recorder.waitForClosingSignet()
+		} else {
+			window.dispatchEvent(new CustomEvent('pore:recording-closing-signet'))
+		}
+		closingSignetEmitted = true
 	}
 
 	const triggerOpeningFromHost = async () => {
@@ -395,6 +408,7 @@
 	window.addEventListener('pore:recording-local-finalized', event => {
 		localCaptureArmed = false
 		openingSignetEmitted = false
+		closingSignetEmitted = false
 		const artifact = event.detail
 		publish({ artifact })
 		if (!artifact) return
@@ -427,7 +441,7 @@
 
 	const stopLocalCapture = async (reason, { closingSignet = false } = {}) => {
 		try {
-			if (closingSignet && recorder.isRecording()) recorder.markClosingSignet()
+			if (closingSignet) await emitClosingSignet()
 			return await recorder.stop(reason)
 		} finally {
 			localCapture.stop()
@@ -462,13 +476,14 @@
 				return
 			}
 
+			await emitClosingSignet()
 			const coreStopStartedAt = performance.now()
 			const result = await window.__poreTalkRecordingCoordinator?.command?.('stop')
 			console.debug('[NC-PoRe] Stop lifecycle: Core stop returned', { elapsedMs: Math.round(performance.now() - coreStopStartedAt) })
 			if (!result?.state) return
 			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
 			const localStopStartedAt = performance.now()
-			await stopLocalCapture(reason, { closingSignet: true })
+			await stopLocalCapture(reason, { closingSignet: false })
 			console.debug('[NC-PoRe] Stop lifecycle: local capture finalized', { elapsedMs: Math.round(performance.now() - localStopStartedAt) })
 			const ackStartedAt = performance.now()
 			const acknowledged = await window.__poreTalkRecordingCoordinator?.command?.('acknowledge_stop')
