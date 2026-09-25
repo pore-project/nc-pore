@@ -66,6 +66,6 @@ fi
 # but the Talk-specific participant check must remain at the adapter boundary.
 grep -q "coordination_recording_not_found" lib/Controller/RecordingCoordinationEventController.php
 grep -q "TalkSessionAccessService" lib/Controller/RecordingCoordinationEventController.php
-grep -q 'isParticipant($sessionId, $user->getUID())' lib/Controller/RecordingCoordinationEventController.php
+grep -q 'isParticipant($sessionId, $actorId)' lib/Controller/RecordingCoordinationEventController.php
 
 echo "Recording coordination boundary checks passed."
