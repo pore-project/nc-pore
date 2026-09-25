@@ -244,7 +244,7 @@
 			return
 		}
 		if (signal.type === 'opening_confirmed') {
-			if (coordinator.ownerId === coordinator.actorId && signal.actorId !== coordinator.actorId) {
+			if (coordinator.talk_ownerId === coordinator.talk_actorId && signal.actorId !== coordinator.talk_actorId) {
 				await synchronizeCoordinatorState()
 			}
 			return
@@ -273,7 +273,7 @@
 			}
 
 			if (snapshot.state === 'opening' && snapshot.role !== 'listener') {
-				const me = snapshot.participants?.find(participant => participant.id === coordinator.actorId)
+				const me = snapshot.participants?.find(participant => participant.id === coordinator.talk_actorId)
 				if (me?.ready && !me.opening_confirmed && recorder.isRecording()) {
 					openingSignetRequestInFlight = true
 					try {

@@ -42,7 +42,7 @@
 		stopAcknowledgedParticipantIds = new Set()
 	}
 
-	const hostOwnsCoordinator = () => coordinatorContext?.ownerId === coordinatorContext?.actorId
+	const hostOwnsCoordinator = () => coordinatorContext?.talk_ownerId === coordinatorContext?.talk_actorId
 
 	const scheduleStopRetry = () => {
 		clearStopRetry()
@@ -126,29 +126,29 @@
 		.filter(Boolean)
 
 	const normalizeTalkContext = talkContextPayload => {
-		const talkActorId = String(talkContextPayload?.actor_id || '').trim()
-		const talkActorType = String(talkContextPayload?.actor_type || '').trim()
-		const talkDisplayName = String(talkContextPayload?.display_name || '').trim()
-		const talkParticipantType = talkContextPayload?.participant_type ?? null
-		const talkSessionId = String(talkContextPayload?.talk_session_id || '').trim()
-		const talkOwnerId = String(talkContextPayload?.owner_id || '').trim()
-		const talkGuest = talkContextPayload?.guest === true
+		const talk_actorId = String(talkContextPayload?.actor_id || '').trim()
+		const talk_actorType = String(talkContextPayload?.actor_type || '').trim()
+		const talk_displayName = String(talkContextPayload?.display_name || '').trim()
+		const talk_participantType = talkContextPayload?.participant_type ?? null
+		const talk_sessionId = String(talkContextPayload?.talk_session_id || '').trim()
+		const talk_ownerId = String(talkContextPayload?.owner_id || '').trim()
+		const talk_guest = talkContextPayload?.guest === true
 
 		return {
-			talkActorId,
-			talkActorType,
-			talkDisplayName,
-			talkParticipantType,
-			talkSessionId,
-			talkOwnerId,
-			talkGuest,
+			talk_actorId,
+			talk_actorType,
+			talk_displayName,
+			talk_participantType,
+			talk_sessionId,
+			talk_ownerId,
+			talk_guest,
 		}
 	}
 
 	const getTalkContext = async talkConversationId => {
 		const talkContextPayload = await requestJson(url(`${PORE_TALK_CONTEXT_API}?sessionId=${encodeURIComponent(talkConversationId)}`))
 		const talkContext = normalizeTalkContext(talkContextPayload)
-		if (!talkContext.talkActorId || !talkContext.talkActorType) throw new Error('PoRE Talk actor context is unavailable')
+		if (!talkContext.talk_actorId || !talkContext.talk_actorType) throw new Error('PoRE Talk actor context is unavailable')
 		return talkContext
 	}
 
@@ -157,13 +157,13 @@
 		return getTalkRecordingParticipantIds(Array.isArray(participants) ? participants : [])
 	}
 
-	const getTalkParticipantLabel = (talkParticipantList, talkActorId, talkOwnerId) => {
-		const talkParticipant = talkParticipantList.find(item => ['users', 'guests'].includes(item?.actorType) && item.actorId === talkActorId)
-		const talkDisplayName = String(talkParticipant?.displayName || '').trim()
-		if (talkDisplayName) return talkDisplayName
-		if (talkActorId === talkOwnerId) return 'Host'
-		const talkParticipantIds = getTalkRecordingParticipantIds(talkParticipantList).filter(id => id !== talkOwnerId)
-		const index = talkParticipantIds.indexOf(talkActorId)
+	const getTalkParticipantLabel = (talkParticipantList, talk_actorId, talk_ownerId) => {
+		const talkParticipant = talkParticipantList.find(item => ['users', 'guests'].includes(item?.actorType) && item.actorId === talk_actorId)
+		const talk_displayName = String(talkParticipant?.displayName || '').trim()
+		if (talk_displayName) return talk_displayName
+		if (talk_actorId === talk_ownerId) return 'Host'
+		const talkParticipantIds = getTalkRecordingParticipantIds(talkParticipantList).filter(id => id !== talk_ownerId)
+		const index = talkParticipantIds.indexOf(talk_actorId)
 		return talkParticipant?.actorType === 'guests'
 			? `Gast ${index >= 0 ? index + 1 : 1}`
 			: `Participant ${index >= 0 ? index + 1 : 1}`
@@ -179,7 +179,7 @@
 
 	const publishState = snapshot => {
 		if (!snapshot || !coordinatorContext) return
-		const actorId = coordinatorContext.actorId
+		const talk_actorId = coordinatorContext.talk_actorId
 		window.__poreTalkRecordingStateBridge?.publish({
 			productionId: coordinatorContext.sessionId,
 			productionStatus: snapshot.production_status || snapshot.productionStatus || null,
@@ -187,8 +187,8 @@
 			role: snapshot.role,
 			state: snapshot.phase,
 			confirmed: snapshot.confirmed,
-			ready: snapshot.participants?.some(participant => participant.id === actorId && participant.ready) === true,
-			openingConfirmed: snapshot.participants?.some(participant => participant.id === actorId && participant.opening_confirmed) === true,
+			ready: snapshot.participants?.some(participant => participant.id === talk_actorId && participant.ready) === true,
+			openingConfirmed: snapshot.participants?.some(participant => participant.id === talk_actorId && participant.opening_confirmed) === true,
 			readyCount: snapshot.participants?.filter(participant => participant.ready).length || 0,
 			openingConfirmedCount: snapshot.participants?.filter(participant => participant.opening_confirmed).length || 0,
 			participantCount: snapshot.participants?.length || coordinatorContext.participants.length,
@@ -324,39 +324,39 @@
 		}
 
 		const talkContext = await getTalkContext(talkConversationId)
-		const talkActorId = talkContext.talkActorId
-		const talkActorType = talkContext.talkActorType
+		const talk_actorId = talkContext.talk_actorId
+		const talk_actorType = talkContext.talk_actorType
 		console.debug('[NC-PoRe] Talk bootstrap: actor context loaded', { talkConversationId, talkContext })
 
 		const room = await requestJson(url(`${TALK_API_VERSION}/room/${encodeURIComponent(talkConversationId)}`))
 		console.debug('[NC-PoRe] Talk bootstrap: room loaded', { talkConversationId, room })
 		const talkParticipantList = await getTalkParticipants(talkConversationId)
 		const talkParticipantIds = getTalkRecordingParticipantIds(talkParticipantList)
-		console.debug('[NC-PoRe] Talk bootstrap: participants loaded', { talkConversationId, talkActorId, talkParticipantList, talkParticipantIds })
-		if (!talkParticipantList.some(talkParticipant => ['users', 'guests'].includes(talkParticipant?.actorType) && talkParticipant.actorId === talkActorId)) {
-			console.warn('[NC-PoRe] Talk bootstrap: current actor not found in Talk participant list', { talkConversationId, talkActorId, talkParticipantList })
+		console.debug('[NC-PoRe] Talk bootstrap: participants loaded', { talkConversationId, talk_actorId, talkParticipantList, talkParticipantIds })
+		if (!talkParticipantList.some(talkParticipant => ['users', 'guests'].includes(talkParticipant?.actorType) && talkParticipant.actorId === talk_actorId)) {
+			console.warn('[NC-PoRe] Talk bootstrap: current actor not found in Talk participant list', { talkConversationId, talk_actorId, talkParticipantList })
 			return
 		}
 
 		const talkOwner = talkParticipantList.find(talkParticipant => talkParticipant?.actorType === 'users' && talkParticipant.participantType === 1)
-		const talkOwnerId = talkContext.talkOwnerId || talkOwner?.actorId || ''
+		const talk_ownerId = talkContext.talk_ownerId || talkOwner?.actorId || ''
 		const recordingId = `recording-${talkConversationId}`
-		coordinatorContext = { sessionId: talkConversationId, recordingId, actorId: talkActorId, actorType: talkActorType, ownerId: talkOwnerId, participants: talkParticipantIds }
-		const participantLabel = talkContext.talkDisplayName || getTalkParticipantLabel(talkParticipantList, talkActorId, talkOwnerId)
-		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { talkConversationId, talkActorId, talkOwnerId, talkParticipantIds, participantLabel })
+		coordinatorContext = { sessionId: talkConversationId, recordingId, talk_actorId, talk_actorType, talk_ownerId, participants: talkParticipantIds }
+		const participantLabel = talkContext.talk_displayName || getTalkParticipantLabel(talkParticipantList, talk_actorId, talk_ownerId)
+		console.debug('[NC-PoRe] Talk bootstrap: coordinator context prepared', { talkConversationId, talk_actorId, talk_ownerId, talkParticipantIds, participantLabel })
 
 		window.dispatchEvent(new CustomEvent('pore:talk-production-identity', { detail: { conversationId: talkConversationId, productionLabel: room?.displayName || room?.name || talkConversationId } }))
 
 		window.__poreTalkRecordingCoordinator = Object.freeze({
 			sessionId: talkConversationId,
 			recordingId,
-			actorId: talkActorId,
-			recordingParticipantId: talkActorId,
-			participants: talkParticipantIds,
-			ownerId: talkOwnerId,
-			command: (name, artifactId = '') => command(talkConversationId, recordingId, name, { participants: coordinatorContext?.participants || talkParticipantIds, ownerId: talkOwnerId, artifactId }),
+			talk_actorId,
+			talk_recordingParticipantId: talk_actorId,
+			talk_participantIds: talkParticipantIds,
+			talk_ownerId,
+			command: (name, artifactId = '') => command(talkConversationId, recordingId, name, { participants: coordinatorContext?.participants || talkParticipantIds, ownerId: talk_ownerId, artifactId }),
 		})
-		console.debug('[NC-PoRe] Talk bootstrap: coordinator published', { talkConversationId, recordingId, talkActorId, talkActorType, talkOwnerId, talkParticipantIds })
+		console.debug('[NC-PoRe] Talk bootstrap: coordinator published', { talkConversationId, recordingId, talk_actorId, talk_actorType, talk_ownerId, talkParticipantIds })
 
 		const channel = coordinationChannel()
 		if (!channel?.connect) throw new Error('PoRE recording coordination channel is not available')
@@ -369,8 +369,8 @@
 				productionLabel: room?.displayName || room?.name || talkConversationId,
 				recordingId,
 				participantLabel,
-				role: talkOwnerId === talkActorId ? 'host' : 'participant',
-				guest: talkContext.talkGuest,
+				role: talk_ownerId === talk_actorId ? 'host' : 'participant',
+				guest: talkContext.talk_guest,
 				state: 'preparing',
 				listener: false,
 				confirmed: false,

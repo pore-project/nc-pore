@@ -58,10 +58,10 @@ describe('Talk recording host adapter', () => {
 			expect(window.__poreTalkRecordingCoordinator).toEqual(expect.objectContaining({
 				sessionId: 'test-talk-token',
 				recordingId: 'recording-test-talk-token',
-				actorId: 'user-1',
-				recordingParticipantId: 'user-1',
-				ownerId: 'user-1',
-				participants: ['user-1'],
+				talk_actorId: 'user-1',
+				talk_recordingParticipantId: 'user-1',
+				talk_participantIds: ['user-1'],
+				talk_ownerId: 'user-1',
 			}))
 			expect(contextEvents).toHaveLength(1)
 			expect(contextEvents[0]).toEqual(expect.objectContaining({
