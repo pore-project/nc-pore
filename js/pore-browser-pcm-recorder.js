@@ -49,7 +49,7 @@
 				this.source = typeof this.context.createMediaStreamTrackSource === 'function'
 					? this.context.createMediaStreamTrackSource(track)
 					: this.context.createMediaStreamSource(this.stream)
-				this.worklet = new AudioWorkletNode(this.context, 'pore-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCountMode: 'max', channelInterpretation: 'speakers' })
+				this.worklet = new AudioWorkletNode(this.context, 'pore-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers' })
 				this.worklet.onprocessorerror = event => {
 					this.workletProcessorError = event
 					console.error('[NC-PoRe] PCM AudioWorklet processor error', event)
