@@ -63,6 +63,7 @@ describe('Browser completion job', () => {
 
 	it('prepares a finalized durable capture for transport without uploading it', async () => {
 		const persisted = []
+		const provenance = { schemaVersion: 1, capture: { sampleRate: 48000, sampleSize: 24, channelCount: 1, processing: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }, sourceSegments: [] }
 		const store = {
 			finalizeCapture: jest.fn(async (captureId, patch) => {
 				persisted.push({ captureId, patch })
@@ -78,6 +79,7 @@ describe('Browser completion job', () => {
 					channels: 1,
 				},
 				chunks: [new Blob([new Uint8Array([0, 0, 0])])],
+				provenance,
 			})),
 		}
 		const job = new Job({ persistenceStoreFactory: () => store })
@@ -89,6 +91,7 @@ describe('Browser completion job', () => {
 			recordingId: 'recording-1',
 			captureId: 'capture-1',
 			recordingSessionId: 'session-1',
+			provenance,
 		})
 
 		expect(store.finalizeCapture).toHaveBeenCalledTimes(2)
@@ -98,6 +101,7 @@ describe('Browser completion job', () => {
 		expect(descriptor.recordingSessionId).toBe('session-1')
 		expect(descriptor.format).toBe('audio/wav')
 		expect(descriptor.encoding).toBe('pcm_s24le')
+		expect(descriptor.provenance).toEqual(provenance)
 		expect(descriptor.blob).toBeInstanceOf(Blob)
 		expect(handler).toHaveBeenCalledTimes(1)
 
