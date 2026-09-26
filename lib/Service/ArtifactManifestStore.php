@@ -101,6 +101,8 @@ final class ArtifactManifestStore {
 		$recordingId = $this->requiredString($submission['recording_id'] ?? null, 'recording_id');
 		$recordingSessionId = $this->requiredString($submission['recording_session_id'] ?? null, 'recording_session_id');
 
+		$provenance = $this->normalizeCaptureProvenance($submission['capture_provenance'] ?? null);
+
 		return [
 			'schema_version' => self::SCHEMA_VERSION,
 			'status' => 'pending_verification',
@@ -117,8 +119,8 @@ final class ArtifactManifestStore {
 				'size' => $this->requiredInt($submission['size'] ?? null, 'size'),
 				'sha256' => $this->requiredSha256($submission['payload_sha256'] ?? null),
 			],
-			'capture' => $this->normalizeCaptureProvenance($submission['capture_provenance'] ?? null),
-			'sourceSegments' => [],
+			'capture' => $provenance['capture'] ?? null,
+			'sourceSegments' => $provenance['sourceSegments'] ?? [],
 		];
 	}
 
