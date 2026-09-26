@@ -18,7 +18,7 @@ describe('Nextcloud Talk microphone observer', () => {
 				echoCancellation: false,
 				noiseSuppression: false,
 				autoGainControl: false,
-				channelCount: { ideal: 1, max: 1 },
+				channelCount: { ideal: 1 },
 			},
 		})
 		expect(capture.getCurrentTrack()).toBe(track)
