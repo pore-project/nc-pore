@@ -71,7 +71,7 @@
 				echoCancellation: false,
 				noiseSuppression: false,
 				autoGainControl: false,
-				channelCount: { ideal: 1, max: 1 },
+				channelCount: { ideal: 1 },
 			}
 			if (deviceId) audio.deviceId = { exact: deviceId }
 			const stream = await this._mediaDevices.getUserMedia({ audio })
