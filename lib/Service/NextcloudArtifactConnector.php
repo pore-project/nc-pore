@@ -155,7 +155,7 @@ final class NextcloudArtifactConnector {
 	}
 
 	/**
-	 * @return array{artifact_id:string, file_id:int, path:string, size:int, sha256:string}
+	 * @return array{artifact_id:string, file_id:int, path:string, size:int, sha256:string, filename:string, preservation:array{format:string,encoding:string,sampleRate:int,channels:int,bitsPerSample:int}}
 	 */
 	public function verify(string $handle, string $actorUserId): array {
 		$state = $this->decodeHandle($handle);
@@ -169,13 +169,17 @@ final class NextcloudArtifactConnector {
 
 		$hash = $this->hashFile($file);
 		if (!hash_equals($state['sha256'], $hash)) throw new RuntimeException('Nextcloud transport artifact SHA-256 does not match.');
+		$preservation = $this->inspectWav($file, $size);
 
 		return [
 			'artifact_id' => $state['capture_id'],
+			'target_user_id' => $state['target_user_id'],
 			'file_id' => $file->getId(),
 			'path' => $this->relativeUserPath($file, $state['target_user_id']),
 			'size' => $size,
 			'sha256' => $hash,
+			'filename' => $state['filename'],
+			'preservation' => $preservation,
 		];
 	}
 
@@ -301,6 +305,55 @@ final class NextcloudArtifactConnector {
 			fclose($input);
 		}
 		return hash_final($context);
+	}
+
+
+	/**
+	 * V1 transport artifacts are canonical RIFF/WAVE PCM files with the
+	 * 44-byte header produced by the browser completion job.
+	 *
+	 * @return array{format:string,encoding:string,sampleRate:int,channels:int,bitsPerSample:int}
+	 */
+	private function inspectWav(File $file, int $size): array {
+		if ($size < 44) throw new RuntimeException('Nextcloud transport artifact is not a valid WAV container.');
+		$input = $file->fopen('r');
+		if ($input === false) throw new RuntimeException('Unable to read stored Nextcloud artifact.');
+		try {
+			$header = fread($input, 44);
+		} finally {
+			fclose($input);
+		}
+		if ($header === false || strlen($header) !== 44
+			|| substr($header, 0, 4) !== 'RIFF'
+			|| substr($header, 8, 4) !== 'WAVE'
+			|| substr($header, 12, 4) !== 'fmt ') {
+			throw new RuntimeException('Nextcloud transport artifact is not a valid WAV container.');
+		}
+
+		$fmtSize = unpack('V', substr($header, 16, 4))[1] ?? 0;
+		$audioFormat = unpack('v', substr($header, 20, 2))[1] ?? 0;
+		$channels = unpack('v', substr($header, 22, 2))[1] ?? 0;
+		$sampleRate = unpack('V', substr($header, 24, 4))[1] ?? 0;
+		$byteRate = unpack('V', substr($header, 28, 4))[1] ?? 0;
+		$blockAlign = unpack('v', substr($header, 32, 2))[1] ?? 0;
+		$bitsPerSample = unpack('v', substr($header, 34, 2))[1] ?? 0;
+		$dataLength = unpack('V', substr($header, 40, 4))[1] ?? 0;
+
+		if ($fmtSize !== 16 || $audioFormat !== 1 || $channels < 1 || $sampleRate < 1 || $bitsPerSample < 1
+			|| $blockAlign !== $channels * intdiv($bitsPerSample + 7, 8)
+			|| $byteRate !== $sampleRate * $blockAlign
+			|| substr($header, 36, 4) !== 'data'
+			|| 44 + $dataLength !== $size) {
+			throw new RuntimeException('Nextcloud transport artifact is not a supported PoRE PCM WAV.');
+		}
+
+		return [
+			'format' => 'audio/wav',
+			'encoding' => 'pcm_s' . $bitsPerSample . 'le',
+			'sampleRate' => $sampleRate,
+			'channels' => $channels,
+			'bitsPerSample' => $bitsPerSample,
+		];
 	}
 
 	private function validateHash(string $hash): void {

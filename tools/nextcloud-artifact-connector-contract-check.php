@@ -119,20 +119,46 @@ namespace {
 		return new NextcloudArtifactConnector($root,new FakeConfig(),$shares,new FakeRandom());
 	}
 
-	$root=new FakeRootFolder(); $leaf=$root->targetFolder(); $leaf->add('Host.wav',new File(17,'same'));
+
+	function wav(string $pcm): string {
+		$sampleRate = 48000; $channels = 1; $bits = 24;
+		$header = pack(
+			'a4Va4a4VvvVVvva4V',
+			'RIFF',
+			36 + strlen($pcm),
+			'WAVE',
+			'fmt ',
+			16,
+			1,
+			$channels,
+			$sampleRate,
+			$sampleRate * $channels * 3,
+			$channels * 3,
+			$bits,
+			'data',
+			strlen($pcm),
+		);
+		return $header . $pcm;
+	}
+
+	$root=new FakeRootFolder(); $leaf=$root->targetFolder(); $wav=wav("\x00\x00\x00"); $leaf->add('Host.wav',new File(17,$wav));
 	$shares=new FakeShareManager(); $c=connector($root,$shares);
-	$prepared=$c->prepare('prod-1','Interview','recording-1','capture-1','2026-09-05T15:42:31+02:00','Host',4,hash('sha256','same'),'actor-1');
+	$prepared=$c->prepare('prod-1','Interview','recording-1','capture-1','2026-09-05T15:42:31+02:00','Host',strlen($wav),hash('sha256',$wav),'actor-1');
 	check($prepared['filename']==='Host.wav','Identical artifact must retain the original filename.');
 	check($prepared['upload_required']===false,'Identical artifact must not require an upload.');
 	check($shares->created===0,'Identical artifact must not create a temporary upload share.');
 	try { $c->verify($prepared['transfer_id'],'actor-2'); throw new \RuntimeException('Transport handle actor binding must reject another user.'); } catch (\RuntimeException $error) { check($error->getMessage()==='Transport handle is not authorized for this user.','Unexpected actor-binding error.'); }
 	$receipt=$c->verify($prepared['transfer_id'],'actor-1');
 	check($receipt['file_id']===17,'Identical artifact verification must resolve the existing file.');
-	check($receipt['sha256']===hash('sha256','same'),'Identical artifact verification must preserve the exact hash.');
+	check($receipt['sha256']===hash('sha256',$wav),'Identical artifact verification must preserve the exact hash.');
+	check($receipt['preservation']['sampleRate']===48000,'Server must verify the actual WAV sample rate.');
+	check($receipt['preservation']['channels']===1,'Server must verify the actual WAV channel count.');
+	check($receipt['preservation']['bitsPerSample']===24,'Server must verify the actual WAV bit depth.');
+	check($receipt['preservation']['encoding']==='pcm_s24le','Server must derive the PCM encoding from the WAV container.');
 	$c->close($prepared['transfer_id'],'actor-1');
 
 	$leaf->add('Host (2).wav',new File(18,'occupied'));
-	$prepared=$c->prepare('prod-1','Interview','recording-2','capture-2','2026-09-05T15:42:31+02:00','Host',7,hash('sha256','payload'),'actor-1');
+	$prepared=$c->prepare('prod-1','Interview','recording-2','capture-2','2026-09-05T15:42:31+02:00','Host',strlen(wav("\x01\x02\x03")),hash('sha256',wav("\x01\x02\x03")),'actor-1');
 	check($prepared['filename']==='Host (3).wav','Differing content must select the first free numeric suffix.');
 	check($prepared['upload_required']===true,'Differing content must require an upload.');
 	check($shares->created===1,'Differing content must create exactly one upload share.');

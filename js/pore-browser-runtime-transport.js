@@ -137,6 +137,8 @@
 			form.set('capture_id', descriptor.captureId)
 			form.set('started_at', descriptor.startedAt)
 			form.set('participant_label', descriptor.participantLabel || '')
+			form.set('recording_session_id', descriptor.recordingSessionId)
+			form.set('capture_provenance', JSON.stringify(descriptor.provenance || {}))
 			form.set('size', String(descriptor.size))
 			form.set('payload_sha256', descriptor.payloadSha256)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare', form)

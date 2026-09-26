@@ -13,6 +13,7 @@ describe('Browser runtime transport', () => {
 		startedAt: '2026-09-14T15:00:00+02:00',
 		size: 44,
 		payloadSha256: 'a'.repeat(64),
+		provenance: { schemaVersion: 1, capture: { sampleRate: 48000, sampleSize: 24, channelCount: 1, processing: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }, sourceSegments: [] },
 		blob: new Blob([new Uint8Array(44)], { type: 'audio/wav' }),
 	}
 
@@ -63,6 +64,8 @@ describe('Browser runtime transport', () => {
 		window.removeEventListener('pore:recording-transport-completed', completedEvent)
 		expect(job.markCompleted).toHaveBeenCalledTimes(1)
 		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/prepare')
+		expect(fetchMock.mock.calls[0][1].body).toContain('recording_session_id=session-1')
+		expect(fetchMock.mock.calls[0][1].body).toContain('capture_provenance=')
 		expect(fetchMock.mock.calls[1][1].method).toBe('PUT')
 		expect(fetchMock.mock.calls[1][0]).toContain('/public.php/dav/files/share-token/Host.wav')
 		expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe(`Basic ${btoa('anonymous:secret')}`)
