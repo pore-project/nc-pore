@@ -123,7 +123,7 @@ namespace {
 	function wav(string $pcm): string {
 		$sampleRate = 48000; $channels = 1; $bits = 24;
 		$header = pack(
-			'a4Va4a4VvvVVvv a4V',
+			'a4Va4a4VvvVVvva4V',
 			'RIFF',
 			36 + strlen($pcm),
 			'WAVE',
