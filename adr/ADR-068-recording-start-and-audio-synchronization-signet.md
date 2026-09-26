@@ -8,10 +8,6 @@ Accepted
 
 2026-08-21
 
-## Accepted
-
-2026-08-21
-
 ## Decision Type
 
 Architecture
@@ -193,16 +189,6 @@ Das technische Ende einer lokalen Aufnahme ist **nicht** der zeitliche Referenzp
 
 Ein Client darf daher nach dem Closing Sync Signet noch technisch aufzeichnen. Dieses Audio gehört nicht mehr zum logischen Recording und kann bei der späteren Verarbeitung als technischer Nachlauf behandelt beziehungsweise entfernt werden.
 
-Damit gilt:
-
-> **Opening Sync Signet = logischer Beginn des Recordings**
-
-> **Closing Sync Signet = optionaler Audio-Referenzpunkt für das logische Ende des Recordings**
-
-> **Technisches Ende = separater lokaler Lifecycle-Schritt, bestätigt durch `OK`**
-
-Das technische Ende der einzelnen lokalen Recorder kann zeitlich danach liegen und muss nicht bei allen Clients exakt gleichzeitig erfolgen.
-
 ### Closing Sync Signet: optionale Ausführung
 
 Das Closing Sync Signet ist ein **optionales** Synchronisationsereignis.
@@ -212,6 +198,16 @@ Seine Ausführung darf den Abschluss des Recordings nicht blockieren. Ein Client
 Wenn ein Client das Closing Sync Signet tatsächlich empfängt und erfassen kann, **MUSS** er seine dafür definierte lokale Endroutine korrekt ausführen. Dazu gehört insbesondere, den nachfolgenden technischen Stop-Vorgang entsprechend dem Recording-Lifecycle auszuführen und anschließend `OK` zu melden.
 
 Das Fehlen eines empfangenen oder erfassten Closing Sync Signets ist dagegen kein Fehlerzustand, der den Abschluss der übrigen Recording-Teilnehmer blockieren darf.
+
+Damit gilt:
+
+> **Opening Sync Signet = logischer Beginn des Recordings**
+
+> **Closing Sync Signet = optionaler Audio-Referenzpunkt für das logische Ende des Recordings**
+
+> **Technisches Ende = separater lokaler Lifecycle-Schritt, bestätigt durch `OK`**
+
+Das technische Ende der einzelnen lokalen Recorder kann zeitlich danach liegen und muss nicht bei allen Clients exakt gleichzeitig erfolgen.
 
 ---
 
@@ -264,7 +260,7 @@ Damit können die einzelnen Audiospuren später nicht nur anhand eines gemeinsam
 
 Die Position beider Signets kann perspektivisch auch verwendet werden, um Unterschiede zwischen den Spuren über die Dauer des Recordings zu analysieren.
 
-Insbesondere kann der Vergleich der Abstände zwischen Opening und Closing Sync Signet später die Untersuchung zeitlicher Abweichungen beziehungsweise Drift zwischen einzelnen Aufnahmen ermöglichen.
+Insbesondere kann der Vergleich der Abstände zwischen Opening und Closing Sync Signet später die Untersuchung zeitlicher Abweichungen beziehungsweise Drift zwischen einzelnen Aufnahmen ermöglichen, sofern beide Referenzpunkte in der jeweiligen Spur vorhanden sind.
 
 Eine solche Analyse oder Korrektur ist nicht Bestandteil dieser ersten Ausbaustufe.
 
@@ -344,22 +340,23 @@ Insbesondere ist die Möglichkeit einer späteren aktiven Synchronisation ausdr�
 - Nicht Recording-berechtigte Session-Mitglieder erhalten keine Recording-Statusinformationen.
 - Der Host kann auch bei größeren Sessions nachvollziehen, ob und auf welche Teilnehmer noch gewartet wird.
 - Alle Aufnahmen erhalten einen gemeinsamen Opening-Referenzpunkt.
-- Das Recording erhält zusätzlich einen gemeinsamen Closing-Referenzpunkt, sofern das optionale Closing Sync Signet vorhanden ist.
-- Das optionale Closing Sync Signet kann den Recording-Abschluss nicht blockieren.
+- Das Recording erhält zusätzlich einen gemeinsamen Closing-Referenzpunkt.
 - Das logische Ende des Recordings ist unabhängig vom technisch unterschiedlichen Stop-Zeitpunkt der lokalen Recorder.
+- Das optionale Closing Sync Signet kann den Recording-Abschluss nicht blockieren.
 - Die erste Ausbaustufe benötigt keine DAW-spezifische Integration.
 - Manuelle Synchronisation ist mit vorhandener Audiobearbeitungssoftware möglich.
-- Die beiden Sync-Anker können später als Grundlage für automatische Erkennung, Driftanalyse und weitergehende Synchronisationsverfahren dienen.
+- Die beiden Sync-Anker können später als Grundlage für automatische Erkennung, Driftanalyse und weitergehende Synchronisationsverfahren dienen, sofern beide vorhanden sind.
 - Aufnahme-Lifecycle, Session-Steuerung und Audio-Synchronisationsereignisse bleiben logisch getrennt.
 
 ## Nachteile
 
 - Die erste Ausbaustufe erfordert weiterhin eine manuelle Ausrichtung der Spuren.
 - Die Signets sind Bestandteil der Audiospur und müssen bei der späteren Audioproduktion berücksichtigt beziehungsweise entfernt werden.
-- Ein gemeinsam aufgenommenes Audioereignis liefert zunächst einen Referenzpunkt, erklärt aber nicht automatisch die Ursache möglicher Latenz- oder Clock-Differenzen.
+- Ein gemeinsames Audioereignis liefert zunächst einen Referenzpunkt, erklärt aber nicht automatisch die Ursache möglicher Latenz- oder Clock-Differenzen.
 - Die konkrete technische Methode, mit der die Signets zu den jeweiligen Aufnahmewegen gelangen, muss im Rahmen der Implementierung festgelegt werden.
 - Bei einem nicht bereiten Teilnehmer kann der gemeinsame Aufnahmebeginn zunächst blockiert sein.
 - Ein Ausfall eines Recording-Teilnehmers nach dem Opening Signet kann zu einer Lücke oder einem anderen Ausfall in dessen Audiospur führen.
+- Das Closing Sync Signet ist nicht garantiert in jeder Spur vorhanden und kann daher nicht als zwingende Voraussetzung für den Recording-Abschluss verwendet werden.
 
 ---
 
@@ -566,6 +563,16 @@ The technical end of a local recording is **not** the temporal reference point o
 
 A client may therefore continue recording technically for a short time after the Closing Sync Signet. This audio is no longer part of the logical recording and may be treated or removed as technical tail data during later processing.
 
+### Closing Sync Signet: optional execution
+
+The Closing Sync Signet is an **optional** synchronization event.
+
+Its execution must not block completion of the recording. A client or technical recording path may not receive or capture the Closing Sync Signet without causing the entire recording to be considered failed.
+
+If a client actually receives and can capture the Closing Sync Signet, it **MUST** execute its defined local end routine correctly. This includes, in particular, performing the subsequent technical stop step according to the recording lifecycle and then reporting `OK`.
+
+Failure to receive or capture the Closing Sync Signet is not an error condition that may block completion for the remaining recording participants.
+
 Therefore:
 
 > **Opening Sync Signet = logical beginning of the recording**
@@ -575,16 +582,6 @@ Therefore:
 > **Technical end = separate local lifecycle step, confirmed by `OK`**
 
 The technical end of the individual local recorders may occur afterwards and does not have to happen at exactly the same time on all clients.
-
-### Closing Sync Signet: optional execution
-
-The Closing Sync Signet is an **optional** synchronization event.
-
-Its execution must not block completion of the recording. A client or technical recording path may not receive or capture the Closing Sync Signet without causing the entire recording to be considered failed.
-
-If a client actually receives and captures the Closing Sync Signet, it **MUST** execute its defined local end routine correctly. This includes, in particular, performing the subsequent technical stop step according to the recording lifecycle and then reporting `OK`.
-
-Failure to receive or capture the Closing Sync Signet is not an error condition that may block completion for the remaining recording participants.
 
 ---
 
@@ -637,7 +634,7 @@ This allows the individual audio tracks to be aligned later not only using a com
 
 The positions of both signets can potentially also be used to analyze differences between tracks over the duration of the recording.
 
-In particular, comparing the distance between the Opening and Closing Sync Signets may later allow the analysis of timing differences or drift between individual recordings.
+In particular, comparing the distance between the Opening and Closing Sync Signets may later allow the analysis of timing differences or drift between individual recordings, provided both reference points are present in the respective track.
 
 Such analysis or correction is not part of the first implementation.
 
@@ -717,12 +714,12 @@ In particular, the possibility of later active synchronization is explicitly con
 - Session members who are not authorized for the recording receive no recording status information.
 - The host can also determine, for larger sessions, whether and which participants are still awaited.
 - All recordings receive a common Opening reference point.
-- The recording also receives a common Closing reference point when the optional Closing Sync Signet is present.
-- The optional Closing Sync Signet cannot block recording completion.
+- The recording also receives a common Closing reference point.
 - The logical end of the recording is independent of technically different local recorder stop times.
+- The optional Closing Sync Signet cannot block recording completion.
 - The first implementation requires no DAW-specific integration.
 - Manual synchronization is possible with existing audio editing software.
-- The two sync anchors can later serve as a basis for automatic detection, drift analysis, and more advanced synchronization mechanisms.
+- The two sync anchors can later serve as a basis for automatic detection, drift analysis, and more advanced synchronization mechanisms, when both are available.
 - Recording lifecycle, session control, and audio synchronization events remain logically separated.
 
 ## Disadvantages
@@ -733,6 +730,7 @@ In particular, the possibility of later active synchronization is explicitly con
 - The concrete technical method by which the signets reach the respective recording paths must be defined during implementation.
 - A participant that is not ready can initially block the shared recording start.
 - A recording participant failure after the Opening Signet can result in a gap or other interruption in that participant's audio track.
+- The Closing Sync Signet is not guaranteed to be present in every track and therefore cannot be used as a mandatory prerequisite for recording completion.
 
 ---
 
