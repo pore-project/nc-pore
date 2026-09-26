@@ -18,10 +18,39 @@ describe('Nextcloud Talk microphone observer', () => {
 				echoCancellation: false,
 				noiseSuppression: false,
 				autoGainControl: false,
+				channelCount: { ideal: 1, max: 1 },
 			},
 		})
 		expect(capture.getCurrentTrack()).toBe(track)
 		expect(capture.getCurrentDeviceId()).toBe('browser-default')
+		expect(getUserMedia.mock.calls[0][0].audio.channelCount).toEqual({ ideal: 1, max: 1 })
+	})
+
+	// TEST-02: PoRE requests at most one capture channel while keeping the
+	// resulting preservation path explicitly mono.
+	it('requests mono capture without changing the host-owned track', async () => {
+		const track = {
+			id: 'pore-mono-track',
+			kind: 'audio',
+			getSettings: jest.fn(() => ({ deviceId: 'mono-device', channelCount: 1 })),
+		}
+		const stream = { getAudioTracks: () => [track], getTracks: () => [track] }
+		const getUserMedia = jest.fn().mockResolvedValue(stream)
+		const capture = new window.PoRELocalAudioCapture({ mediaDevices: { getUserMedia } })
+
+		await capture.open('mono-device')
+
+		expect(getUserMedia).toHaveBeenCalledWith({
+			audio: {
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false,
+				deviceId: { exact: 'mono-device' },
+				channelCount: { ideal: 1, max: 1 },
+			},
+		})
+		expect(capture.getCurrentTrack()).toBe(track)
+		expect(capture.getCurrentDeviceId()).toBe('mono-device')
 	})
 
 
