@@ -77,9 +77,9 @@ describe('Browser completion job', () => {
 					recordingSessionId: 'session-1',
 					sampleRate: 48000,
 					channels: 1,
+					provenance,
 				},
 				chunks: [new Blob([new Uint8Array([0, 0, 0])])],
-				provenance,
 			})),
 		}
 		const job = new Job({ persistenceStoreFactory: () => store })
