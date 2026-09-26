@@ -96,12 +96,12 @@ Aktuell verifiziert:
 
 Noch **nicht** als erledigt verbucht:
 
-- realer End-to-End-Test mit laufender Nextcloud-/Talk-Instanz auf dem aktuellen dev.98-Stand;
 - systematische Browser-/Talk-Laufzeitvalidierung über Firefox, Chromium und Safari/WebKit;
+- gezielte Beta-Validierung von Wiederholungs-/Idempotenzverhalten und Restart-Recovery (#287);
 - vollständige Release-Package-Bereinigung;
 - Beta-/App-Store-Härtung.
 
-Der reale Mehrpersonen-Test bleibt damit eine Integrationsprüfung und wird nicht durch CI ersetzt.
+Ein realer Mehrpersonen-Test mit drei Teilnehmern und drei erzeugten WAV-Artefakten hat den Recording- und Nextcloud-E2E-Pfad praktisch nachgewiesen. Wiederholte Synchronisation und Restart-Recovery werden bewusst als reale Beta-Validierung in #287 behandelt.
 
 ---
 
@@ -264,12 +264,12 @@ Currently verified:
 
 Not yet recorded as complete:
 
-- real end-to-end test against a running Nextcloud/Talk instance on current dev.98;
 - systematic Firefox/Chromium/Safari-WebKit runtime validation;
+- targeted Beta validation of repeated synchronization/idempotency and restart recovery (#287);
 - complete production package cleanup;
 - Beta/App-Store hardening.
 
-The real multi-participant test therefore remains an integration check and is not replaced by CI.
+A real multi-participant test with three participants and three generated WAV artifacts has practically demonstrated the recording and Nextcloud end-to-end path. Repeated synchronization and restart recovery are deliberately treated as real-world Beta validation in #287.
 
 ---
 
@@ -311,10 +311,9 @@ The next work is deliberately separated into two levels.
 
 ## Product and Integration Hardening
 
-- real multi-participant end-to-end test on a current Nextcloud/Talk instance
 - targeted Firefox/Chromium/Safari validation
 - UI polish and consistent state presentation
-- real-world error and recovery cases
+- targeted Beta validation of repeated synchronization and restart recovery (#287)
 - clean the release package so test files are not unnecessarily shipped in the production artifact
 - continue the separate native-capture / host-neutral recorder work in PR #228 / #232
 - define and verify Beta/App-Store release criteria
