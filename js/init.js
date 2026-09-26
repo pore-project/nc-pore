@@ -340,7 +340,15 @@
 			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
 			const ready = await window.__poreTalkRecordingCoordinator.command('ready')
 			if (!ready?.state) throw new Error('PoRE Core ready did not return authoritative recording state')
-			updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(ready.state))
+			const readyState = window.PoRETalkRecordingStateNormalize(ready.state)
+			updateAuthoritativeState(readyState)
+			if (readyState?.role === 'host'
+				&& startRequestedByHost
+				&& readyState.readyCount >= readyState.participantCount
+				&& !readyState.openingTriggered
+				&& !openingTriggerInFlight) {
+				await triggerOpeningFromHost()
+			}
 		} catch (error) {
 			console.error('[NC-PoRe] Core begin/ready failed after local recorder start', error)
 			try { await window.__poreTalkRecordingCoordinator.command('stop') } catch (stopError) { console.warn('[NC-PoRe] Core stop after failed begin/ready was not accepted', stopError) }
