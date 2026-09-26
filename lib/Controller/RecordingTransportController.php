@@ -112,6 +112,7 @@ final class RecordingTransportController extends OCSController {
 			]);
 		} catch (\Throwable $exception) {
 			if ($exception->getMessage() === 'artifact_manifest_conflict') return $this->rejected('artifact_manifest_conflict', 409);
+			if ($exception->getMessage() === 'artifact_manifest_context_missing') return $this->rejected('artifact_manifest_context_missing', 409);
 			if ($exception->getMessage() === 'artifact_manifest_storage_unavailable') return $this->rejected('artifact_manifest_storage_unavailable', 503);
 			if ($exception->getMessage() === 'artifact_preservation_invalid') return $this->rejected('artifact_preservation_invalid', 422);
 			return $this->rejected();

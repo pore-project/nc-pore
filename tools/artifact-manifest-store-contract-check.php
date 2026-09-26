@@ -118,6 +118,52 @@ namespace {
 	$storedJson = json_decode((string)file_get_contents($artifactPath), true);
 	check(($storedJson['manifest_hash'] ?? null) === $receipt['manifest_hash'], 'Persisted manifest hash must match the returned record.');
 
+	$store->remove('capture-1');
+	check($store->get('capture-1') === null, 'Artifact manifest removal must remove the persisted record.');
+
+	$store->stagePreparedArtifact([
+		'artifact_id' => 'capture-1',
+		'production_id' => 'production-1',
+		'production_label' => 'Interview',
+		'recording_id' => 'recording-1',
+		'recording_session_id' => 'session-1',
+		'participant_label' => 'Host',
+		'filename' => 'Host-renamed.wav',
+		'size' => 47,
+		'payload_sha256' => hash('sha256', 'payload'),
+		'capture_provenance' => $provenance,
+	]);
+	$relocated = $store->persistVerifiedArtifact([
+		'artifact_id' => 'capture-1',
+		'file_id' => 99,
+		'path' => 'audio/Interview/Renamed/Host-renamed.wav',
+		'filename' => 'Host-renamed.wav',
+		'size' => 47,
+		'sha256' => hash('sha256', 'payload'),
+		'preservation' => $receipt['preservation'],
+	]);
+	check($relocated['manifest_hash'] === $receipt['manifest_hash'], 'Remote filename, path and file id must not change the immutable manifest hash.');
+
+	$pendingRecordId = 'pending-expired';
+	$store->stagePreparedArtifact([
+		'artifact_id' => $pendingRecordId,
+		'production_id' => 'production-1',
+		'production_label' => 'Interview',
+		'recording_id' => 'recording-1',
+		'recording_session_id' => 'session-1',
+		'participant_label' => 'Guest',
+		'filename' => 'Guest.wav',
+		'size' => 47,
+		'payload_sha256' => hash('sha256', 'payload'),
+		'capture_provenance' => $provenance,
+	]);
+	$pendingPath = $directory . '/appdata_instance-1/pore/artifacts/' . hash('sha256', $pendingRecordId) . '.json';
+	$pendingStored = json_decode((string)file_get_contents($pendingPath), true);
+	$pendingStored['prepared_at'] = '2026-09-26T10:00:00+00:00';
+	file_put_contents($pendingPath, json_encode($pendingStored) . "\n");
+	check($store->cleanupExpiredPending(new \DateTimeImmutable('2026-09-26T13:00:00+00:00')) === 1, 'Expired pending artifact records must be removed.');
+	check($store->get($pendingRecordId) === null, 'Expired pending artifact record must not remain persisted.');
+
 	@unlink($artifactPath);
 	@unlink($artifactPath . '.lock');
 	@rmdir(dirname($artifactPath));

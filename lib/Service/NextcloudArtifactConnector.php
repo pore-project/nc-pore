@@ -173,6 +173,7 @@ final class NextcloudArtifactConnector {
 
 		return [
 			'artifact_id' => $state['capture_id'],
+			'target_user_id' => $state['target_user_id'],
 			'file_id' => $file->getId(),
 			'path' => $this->relativeUserPath($file, $state['target_user_id']),
 			'size' => $size,

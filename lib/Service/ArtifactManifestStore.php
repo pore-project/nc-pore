@@ -9,6 +9,7 @@ use RuntimeException;
 
 final class ArtifactManifestStore {
 	private const SCHEMA_VERSION = 1;
+	private const PENDING_RETENTION_SECONDS = 2 * 60 * 60;
 	private const DIRECTORY_MODE = 0700;
 	private const FILE_MODE = 0600;
 
@@ -31,6 +32,7 @@ final class ArtifactManifestStore {
 		$existing = $this->read($record['artifact_id']);
 
 		if ($existing !== null) {
+			$this->assertStableIdentityMatches($existing, $record);
 			if (($existing['status'] ?? null) === 'verified') {
 				// A previously verified immutable Artifact record wins over a
 				// repeated preparation. Do not downgrade or mutate it.
@@ -65,7 +67,10 @@ final class ArtifactManifestStore {
 			}
 			return $existing;
 		}
-		$pending = $existing !== null ? $existing : null;
+		if ($existing === null) {
+			throw new RuntimeException('artifact_manifest_context_missing');
+		}
+		$pending = $existing;
 
 		$record = [
 			'schema_version' => self::SCHEMA_VERSION,
@@ -78,7 +83,7 @@ final class ArtifactManifestStore {
 			'participant_label' => $pending['participant_label'] ?? null,
 			'remote' => [
 				'filename' => $receipt['filename'] ?? ($pending['remote']['filename'] ?? null),
-				'file_id' => $this->nullableInt($receipt['file_id'] ?? null),
+				'file_id' => $this->requiredInt($receipt['file_id'] ?? null, 'file_id'),
 				'path' => $this->nullableString($receipt['path'] ?? null),
 				'size' => $this->requiredInt($receipt['size'] ?? null, 'size'),
 				'sha256' => $this->requiredSha256($receipt['sha256'] ?? null),
@@ -101,6 +106,54 @@ final class ArtifactManifestStore {
 	 */
 	public function get(string $artifactId): ?array {
 		return $this->read($artifactId);
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function list(): array {
+		$records = [];
+		foreach (glob($this->directory() . '/*.json') ?: [] as $path) {
+			$content = file_get_contents($path);
+			if ($content === false) throw new RuntimeException('artifact_manifest_storage_unavailable');
+			$decoded = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+			if (!is_array($decoded)) throw new RuntimeException('artifact_manifest_storage_invalid');
+			$records[] = $decoded;
+		}
+		return $records;
+	}
+
+	public function remove(string $artifactId): void {
+		$path = $this->path($this->requiredString($artifactId, 'artifact_id'));
+		if (is_file($path) && !unlink($path)) {
+			throw new RuntimeException('artifact_manifest_storage_unavailable');
+		}
+		$lockPath = $path . '.lock';
+		if (is_file($lockPath) && !unlink($lockPath)) {
+			throw new RuntimeException('artifact_manifest_storage_unavailable');
+		}
+	}
+
+	public function cleanupExpiredPending(?\DateTimeImmutable $now = null): int {
+		$now ??= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+		$threshold = $now->getTimestamp() - self::PENDING_RETENTION_SECONDS;
+		$removed = 0;
+
+		foreach ($this->list() as $record) {
+			if (($record['status'] ?? null) !== 'pending_verification') continue;
+			$preparedAt = $record['prepared_at'] ?? null;
+			if (!is_string($preparedAt) || trim($preparedAt) === '') continue;
+			try {
+				$timestamp = new \DateTimeImmutable($preparedAt);
+			} catch (\Exception) {
+				continue;
+			}
+			if ($timestamp->getTimestamp() > $threshold) continue;
+			$this->remove($this->requiredString($record['artifact_id'] ?? null, 'artifact_id'));
+			$removed++;
+		}
+
+		return $removed;
 	}
 
 	/**
@@ -200,6 +253,17 @@ final class ArtifactManifestStore {
 		];
 	}
 
+	private function assertStableIdentityMatches(?array $existing, array $candidate): void {
+		if ($existing === null) return;
+		foreach (['production_id', 'recording_id', 'recording_session_id'] as $field) {
+			$existingValue = $existing[$field] ?? null;
+			$candidateValue = $candidate[$field] ?? null;
+			if ($existingValue !== null && $candidateValue !== null && $existingValue !== $candidateValue) {
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
+		}
+	}
+
 	/**
 	 * @param array<string, mixed>|null $existing
 	 * @param array<string, mixed> $candidate
@@ -239,6 +303,9 @@ final class ArtifactManifestStore {
 	}
 
 	/**
+	 * Build the immutable artifact/provenance fingerprint. Mutable remote
+	 * locator data such as filename, file id and path is deliberately excluded.
+	 *
 	 * @param array<string, mixed> $record
 	 */
 	private function manifestHash(array $record): string {
@@ -249,7 +316,10 @@ final class ArtifactManifestStore {
 			'recording_session_id' => $record['recording_session_id'] ?? null,
 			'artifact_id' => $record['artifact_id'],
 			'participant_label' => $record['participant_label'] ?? null,
-			'remote' => $record['remote'] ?? [],
+			'remote' => [
+				'size' => $record['remote']['size'] ?? null,
+				'sha256' => $record['remote']['sha256'] ?? null,
+			],
 			'preservation' => $record['preservation'] ?? [],
 			'capture' => $record['capture'] ?? null,
 			'sourceSegments' => $record['sourceSegments'] ?? [],
@@ -325,7 +395,7 @@ final class ArtifactManifestStore {
 		return strtolower($value);
 	}
 
-	private function path(string $artifactId): string {
+	private function directory(): string {
 		$dataDirectory = trim((string)$this->config->getSystemValue('datadirectory', ''));
 		$instanceId = trim((string)$this->config->getSystemValue('instanceid', ''));
 		if ($dataDirectory === '' || $instanceId === '') throw new RuntimeException('artifact_manifest_storage_unavailable');
@@ -333,7 +403,11 @@ final class ArtifactManifestStore {
 		if (!is_dir($directory) && !mkdir($directory, self::DIRECTORY_MODE, true) && !is_dir($directory)) {
 			throw new RuntimeException('artifact_manifest_storage_unavailable');
 		}
-		return $directory . '/' . hash('sha256', $artifactId) . '.json';
+		return $directory;
+	}
+
+	private function path(string $artifactId): string {
+		return $this->directory() . '/' . hash('sha256', $artifactId) . '.json';
 	}
 
 	/**
