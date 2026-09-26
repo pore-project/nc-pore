@@ -161,13 +161,6 @@
 				if (result?.state) {
 					const readyState = window.PoRETalkRecordingStateNormalize(result.state)
 					updateAuthoritativeState(readyState)
-					if (readyState?.role === 'host'
-						&& startRequestedByHost
-						&& readyState.readyCount >= readyState.participantCount
-						&& !readyState.openingTriggered
-						&& !openingTriggerInFlight) {
-						await triggerOpeningFromHost()
-					}
 				}
 			}
 		} finally {
