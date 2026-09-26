@@ -158,7 +158,17 @@
 			window.dispatchEvent(new CustomEvent('pore:recording-local-ready'))
 			if (announceReady) {
 				const result = await window.__poreTalkRecordingCoordinator?.command?.('ready')
-				if (result?.state) updateAuthoritativeState(window.PoRETalkRecordingStateNormalize(result.state))
+				if (result?.state) {
+					const readyState = window.PoRETalkRecordingStateNormalize(result.state)
+					updateAuthoritativeState(readyState)
+					if (readyState?.role === 'host'
+						&& startRequestedByHost
+						&& readyState.readyCount >= readyState.participantCount
+						&& !readyState.openingTriggered
+						&& !openingTriggerInFlight) {
+						await triggerOpeningFromHost()
+					}
+				}
 			}
 		} finally {
 			localRecordingStartInFlight = false
