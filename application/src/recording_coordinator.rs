@@ -74,6 +74,20 @@ where
         self.snapshot()
     }
 
+    pub fn trigger_opening(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
+        self.mutate(|session| session.trigger_recording_opening_by(&actor_id, &recording_id))?;
+        self.snapshot()
+    }
+
+    pub fn confirm_opening(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
+        let actor_id = self.actor_id.clone();
+        let recording_id = self.recording_id.clone();
+        self.mutate(|session| session.confirm_recording_opening_by(&actor_id, &recording_id))?;
+        self.snapshot()
+    }
+
     pub fn request_stop(&mut self) -> Result<ClientRecordingState, ProductionSessionError> {
         let actor_id = self.actor_id.clone();
         let recording_id = self.recording_id.clone();
@@ -106,7 +120,7 @@ where
             .repository
             .get(&self.session_id)
             .map_err(|_| ProductionSessionError::InvalidStateTransition)?
-            .ok_or(ProductionSessionError::InvalidStateTransition)?;
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
 
         recording_state(&session, self.actor_id.value(), self.recording_id.value()).map_err(
             |error| match error {
@@ -211,6 +225,23 @@ mod tests {
         }
     }
 
+    // TEST-03: A missing Production makes the requested recording unavailable at the recording boundary.
+    #[test]
+    fn snapshot_reports_missing_production_as_recording_not_found() {
+        let mut repository = InMemoryRepository { sessions: vec![] };
+        let coordinator = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-missing"),
+            ParticipantId::new("alice"),
+            RecordingId::new("recording-missing"),
+        );
+
+        assert_eq!(
+            coordinator.snapshot(),
+            Err(ProductionSessionError::RecordingNotFound)
+        );
+    }
+
     #[test]
     fn coordinator_ensure_is_idempotent_for_the_same_recording_id() {
         let mut repository = repository();
@@ -266,7 +297,7 @@ mod tests {
             let state = coordinator.snapshot().unwrap();
             assert_eq!(
                 state.phase,
-                crate::recording_state::ClientRecordingPhase::Preparing
+                crate::recording_state::ClientRecordingPhase::Recording
             );
         }
 
@@ -300,6 +331,27 @@ mod tests {
             bob.mark_ready().unwrap();
         }
 
+        {
+            let mut alice = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("alice"),
+                RecordingId::new("recording-001"),
+            );
+            alice.trigger_opening().unwrap();
+            alice.confirm_opening().unwrap();
+        }
+
+        {
+            let mut bob = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("bob"),
+                RecordingId::new("recording-001"),
+            );
+            bob.confirm_opening().unwrap();
+        }
+
         let mut coordinator = RecordingCoordinator::new(
             &mut repository,
             ProductionId::new("session-001"),
@@ -308,7 +360,7 @@ mod tests {
         );
         assert_eq!(
             coordinator.snapshot().unwrap().phase,
-            crate::recording_state::ClientRecordingPhase::Ready
+            crate::recording_state::ClientRecordingPhase::Recording
         );
         coordinator.start().unwrap();
         assert_eq!(
@@ -320,13 +372,40 @@ mod tests {
             coordinator.snapshot().unwrap().phase,
             crate::recording_state::ClientRecordingPhase::Stopped
         );
-        coordinator.complete("artifact-001").unwrap();
+        coordinator.complete("artifact-alice-001").unwrap();
+        let partial = coordinator.snapshot().unwrap();
+        assert_eq!(
+            partial.phase,
+            crate::recording_state::ClientRecordingPhase::Stopped
+        );
+        assert_eq!(partial.artifact_id.as_deref(), Some("artifact-alice-001"));
+        assert!(!partial.confirmed);
+
+        drop(coordinator);
+
+        {
+            let mut bob = RecordingCoordinator::new(
+                &mut repository,
+                ProductionId::new("session-001"),
+                ParticipantId::new("bob"),
+                RecordingId::new("recording-001"),
+            );
+            bob.complete("artifact-bob-001").unwrap();
+        }
+
+        let coordinator = RecordingCoordinator::new(
+            &mut repository,
+            ProductionId::new("session-001"),
+            ParticipantId::new("alice"),
+            RecordingId::new("recording-001"),
+        );
         let state = coordinator.snapshot().unwrap();
         assert_eq!(
             state.phase,
             crate::recording_state::ClientRecordingPhase::Completed
         );
-        assert_eq!(state.artifact_id.as_deref(), Some("artifact-001"));
+        assert_eq!(state.artifact_id.as_deref(), Some("artifact-alice-001"));
+        assert!(state.confirmed);
     }
 
     #[test]

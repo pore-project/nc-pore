@@ -4,6 +4,24 @@
  * PoRE owns the microphone capture and preservation master. Talk receives only
  * a clone of that master through this adapter. The adapter is the only layer
  * that knows about Talk's private media-pipeline internals.
+ *
+ * IMPORTANT ARCHITECTURE NOTE:
+ * During the V1 investigation we looked for a supported insertion point in
+ * Talk before Talk's communication processing. No suitable insertion point
+ * was available. The first usable Talk-side signal in the investigated path
+ * was already downstream of the communication/WebRTC processing and was
+ * available for recording as a lossy Opus communication representation.
+ * That signal is therefore not a suitable PoRE master.
+ *
+ * The resolved V1 direction is deliberately:
+ *
+ *     microphone -> PoRE local capture (MASTER) -> 1:1 CLONE -> Talk
+ *
+ * This adapter implements only the PoRE -> Talk clone leg. It must not be
+ * "simplified" back into recording Talk's current track. The separate
+ * pore-talk-audio-connector only observes which microphone Talk selected and
+ * tells PoRE when that selection changes, so PoRE can switch its own master
+ * capture. PoRE never takes its recording source from Talk.
  */
 
 (() => {
@@ -69,6 +87,7 @@
 			this._audioTrackEnabler = null
 			this._source = new PoRETalkAudioSource()
 			this._installed = false
+			this._masterTrack = null
 		}
 
 		attachToTalk() {
@@ -85,6 +104,7 @@
 
 		connectMasterTrack(masterTrack) {
 			if (!masterTrack || masterTrack.kind !== 'audio') throw new Error('PoRE Talk adapter requires an audio master track')
+			if (this._masterTrack === masterTrack && this._source.getOutputTrack('audio')?.readyState === 'live') return this._source.getOutputTrack('audio')
 			if (!this._mediaDevicesSource || !this._audioTrackEnabler) {
 				if (!this.attachToTalk()) throw new Error('Nextcloud Talk audio pipeline is not available')
 			}
@@ -97,7 +117,13 @@
 			}
 
 			const clone = masterTrack.clone()
+			this._masterTrack = masterTrack
 			this._source.setTrack(clone)
+
+			// INTENTIONAL: this is the superseded Talk-side input track (or the
+			// previous PoRE clone), not the PoRE master. Once the Talk pipeline is
+			// switched to the new PoRE clone, the old Talk-side track must be
+			// retired. Never stop or mutate masterTrack here.
 			if (oldTalkTrack && oldTalkTrack !== clone) oldTalkTrack.stop()
 			return clone
 		}
@@ -106,6 +132,7 @@
 			if (!this._installed || !this._mediaDevicesSource || !this._audioTrackEnabler) return
 			this._audioTrackEnabler.disconnectTrackSource('default', this._source, 'audio')
 			this._source.setTrack(null)
+			this._masterTrack = null
 			this._mediaDevicesSource.connectTrackSink('audio', this._audioTrackEnabler)
 			this._installed = false
 			try {
@@ -131,17 +158,32 @@
 	window.PoRETalkAudioAdapter = TalkAudioAdapter
 	window.__poreTalkAudioAdapter = adapter
 
-	const tryAttach = () => {
-		if (adapter.attachToTalk()) return
-		window.setTimeout(tryAttach, 100)
-	}
-
-	window.addEventListener('pore:recording-started', () => {
+	const connectCurrentMasterTrack = () => {
 		const track = window.__poreLocalAudioCapture?.getCurrentTrack?.()
-		if (!track) return
+		if (!track || track.readyState !== 'live') return
 		try {
 			adapter.connectMasterTrack(track)
 			window.dispatchEvent(new CustomEvent('pore:talk-audio-adapter-connected', { detail: { masterTrackId: track.id } }))
+		} catch (error) {
+			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
+		}
+	}
+
+	const attachAndConnect = () => {
+		if (!adapter.attachToTalk()) return false
+		connectCurrentMasterTrack()
+		return true
+	}
+
+	window.addEventListener('pore:recording-capture-ready', connectCurrentMasterTrack)
+	window.addEventListener(window.PoRETalkAudioPipelineReadyEvent || 'pore:talk-audio-pipeline-ready', attachAndConnect)
+
+	window.addEventListener('pore:recording-master-track-changed', event => {
+		const track = event.detail?.track
+		if (!track) return
+		try {
+			adapter.connectMasterTrack(track)
+			window.dispatchEvent(new CustomEvent('pore:talk-audio-adapter-connected', { detail: { masterTrackId: track.id, replaced: true } }))
 		} catch (error) {
 			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
 		}
@@ -149,5 +191,5 @@
 
 	window.addEventListener('pore:recording-local-finalized', () => adapter.clearMasterTrack())
 
-	tryAttach()
+	attachAndConnect()
 })()

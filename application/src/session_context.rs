@@ -17,6 +17,7 @@ pub enum SessionCapability {
     ManageParticipants,
     ManageRecordings,
     ParticipateInRecording,
+    CompleteRecordingArtifact,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +107,10 @@ where
             (
                 ProductionAction::ParticipateInRecording,
                 SessionCapability::ParticipateInRecording,
+            ),
+            (
+                ProductionAction::CompleteRecordingArtifact,
+                SessionCapability::CompleteRecordingArtifact,
             ),
         ]
         .into_iter()

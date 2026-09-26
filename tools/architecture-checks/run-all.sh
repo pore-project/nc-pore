@@ -15,4 +15,6 @@ echo
 
 bash "$SCRIPT_DIR/check-application-boundaries.sh"
 echo
+bash "$SCRIPT_DIR/check-recording-coordination-boundary.sh"
+echo
 echo "All architecture checks passed."

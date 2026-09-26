@@ -6,15 +6,23 @@ use crate::participant::ParticipantId;
 use crate::participation::Participation;
 use crate::recording::{
     Recording, RecordingArtifactId, RecordingCoordination, RecordingCoordinationError, RecordingId,
-    RecordingLifecycleError,
+    RecordingLifecycleError, RecordingStatus,
 };
 use crate::role::ProductionAction;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProductionStatus {
     Created,
     Active,
     Completed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProductionCompletionReason {
+    AllRecordingsCompleted,
+    ArtifactCompletionTimeout,
+    HostForced,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +47,7 @@ pub struct ProductionSession {
     recordings: Vec<Recording>,
     recording_coordination: Option<RecordingCoordination>,
     activities: Vec<ActivityEvent>,
+    completion_reason: Option<ProductionCompletionReason>,
 }
 
 impl ProductionSession {
@@ -61,6 +70,7 @@ impl ProductionSession {
             recordings: Vec::new(),
             recording_coordination: None,
             activities: vec![activity],
+            completion_reason: None,
         }
     }
 
@@ -106,6 +116,10 @@ impl ProductionSession {
         self.status
     }
 
+    pub fn completion_reason(&self) -> Option<ProductionCompletionReason> {
+        self.completion_reason
+    }
+
     pub fn participations(&self) -> &[Participation] {
         &self.participations
     }
@@ -134,9 +148,61 @@ impl ProductionSession {
         if !self.has_owner() {
             return Err(ProductionSessionError::MissingOwner);
         }
-        self.status = ProductionStatus::Completed;
-        self.push_activity(Some(actor.clone()), ActivityType::SessionCompleted, None);
+        if self
+            .recordings
+            .iter()
+            .any(|recording| recording.status() == RecordingStatus::Recording)
+        {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        self.close_production(ProductionCompletionReason::HostForced, Some(actor.clone()));
         Ok(())
+    }
+
+    pub fn complete_due_to_artifact_timeout(
+        &mut self,
+        now: SystemTime,
+        timeout: Duration,
+    ) -> Result<bool, ProductionSessionError> {
+        if self.status != ProductionStatus::Active {
+            return Ok(false);
+        }
+
+        if self
+            .recordings
+            .iter()
+            .any(|recording| recording.should_timeout(now, timeout))
+        {
+            self.close_production(ProductionCompletionReason::ArtifactCompletionTimeout, None);
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    fn close_production(
+        &mut self,
+        reason: ProductionCompletionReason,
+        actor: Option<ParticipantId>,
+    ) {
+        self.status = ProductionStatus::Completed;
+        self.completion_reason = Some(reason);
+        self.push_activity(
+            actor,
+            ActivityType::SessionCompleted,
+            Some(
+                match reason {
+                    ProductionCompletionReason::AllRecordingsCompleted => {
+                        "all_recordings_completed"
+                    }
+                    ProductionCompletionReason::ArtifactCompletionTimeout => {
+                        "artifact_completion_timeout"
+                    }
+                    ProductionCompletionReason::HostForced => "host_forced",
+                }
+                .to_owned(),
+            ),
+        );
     }
 
     pub fn add_participation_by(
@@ -236,11 +302,28 @@ impl ProductionSession {
                 })
                 .ok_or(ProductionSessionError::Unauthorized)?;
         }
+        let recording = self
+            .recordings
+            .iter_mut()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+        recording
+            .set_expected_participants(participants.clone())
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+
         let mut coordination = RecordingCoordination::new(recording_id.clone(), participants)
             .map_err(ProductionSessionError::RecordingCoordination)?;
         coordination
             .begin_waiting_for_ready()
             .map_err(ProductionSessionError::RecordingCoordination)?;
+        recording
+            .start()
+            .map_err(ProductionSessionError::RecordingLifecycle)?;
+        self.push_activity(
+            Some(actor.clone()),
+            ActivityType::RecordingStarted,
+            Some(recording_id.value().to_owned()),
+        );
         self.recording_coordination = Some(coordination);
         Ok(())
     }
@@ -260,6 +343,35 @@ impl ProductionSession {
         }
         coordination
             .mark_ready(actor)
+            .map_err(ProductionSessionError::RecordingCoordination)
+    }
+
+    pub fn trigger_recording_opening_by(
+        &mut self,
+        actor: &ParticipantId,
+        recording_id: &RecordingId,
+    ) -> Result<(), ProductionSessionError> {
+        self.authorize(actor, ProductionAction::ManageRecordings)?;
+        if self.status != ProductionStatus::Active {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        let recording = self
+            .recordings
+            .iter()
+            .find(|recording| recording.id() == recording_id)
+            .ok_or(ProductionSessionError::RecordingNotFound)?;
+        if recording.status() != RecordingStatus::Recording {
+            return Err(ProductionSessionError::InvalidStateTransition);
+        }
+        let coordination = self
+            .recording_coordination
+            .as_mut()
+            .ok_or(ProductionSessionError::RecordingCoordinationNotFound)?;
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::RecordingCoordinationNotFound);
+        }
+        coordination
+            .trigger_opening()
             .map_err(ProductionSessionError::RecordingCoordination)
     }
 
@@ -290,20 +402,24 @@ impl ProductionSession {
         if self.status != ProductionStatus::Active {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
-        if let Some(coordination) = self.recording_coordination.as_ref() {
-            if coordination.recording_id() != recording_id || !coordination.is_ready() {
-                return Err(ProductionSessionError::InvalidStateTransition);
-            }
+        let coordination = self
+            .recording_coordination
+            .as_ref()
+            .ok_or(ProductionSessionError::InvalidStateTransition)?;
+        if coordination.recording_id() != recording_id {
+            return Err(ProductionSessionError::InvalidStateTransition);
         }
         let recording = self
             .recordings
             .iter_mut()
             .find(|recording| recording.id() == recording_id)
             .ok_or(ProductionSessionError::RecordingNotFound)?;
+        if recording.status() == RecordingStatus::Recording {
+            return Ok(());
+        }
         recording
             .start()
             .map_err(ProductionSessionError::RecordingLifecycle)?;
-        recording.assign_participant(actor.clone());
         self.push_activity(
             Some(actor.clone()),
             ActivityType::RecordingStarted,
@@ -363,23 +479,57 @@ impl ProductionSession {
         recording_id: &RecordingId,
         artifact_id: RecordingArtifactId,
     ) -> Result<(), ProductionSessionError> {
-        self.authorize(actor, ProductionAction::ParticipateInRecording)?;
-        if self.status != ProductionStatus::Active {
+        self.authorize(actor, ProductionAction::CompleteRecordingArtifact)?;
+        if self.status == ProductionStatus::Created {
             return Err(ProductionSessionError::InvalidStateTransition);
         }
-        let recording = self
-            .recordings
-            .iter_mut()
-            .find(|recording| recording.id() == recording_id)
-            .ok_or(ProductionSessionError::RecordingNotFound)?;
-        recording
-            .complete(artifact_id)
-            .map_err(ProductionSessionError::RecordingLifecycle)?;
-        self.push_activity(
-            Some(actor.clone()),
-            ActivityType::RecordingCompleted,
-            Some(recording_id.value().to_owned()),
-        );
+
+        let (changed, recording_completed) = {
+            let recording = self
+                .recordings
+                .iter_mut()
+                .find(|recording| recording.id() == recording_id)
+                .ok_or(ProductionSessionError::RecordingNotFound)?;
+            let was_completed = recording.status() == RecordingStatus::Completed;
+            let changed = recording
+                .complete_for_participant(actor, artifact_id)
+                .map_err(ProductionSessionError::RecordingLifecycle)?;
+            (
+                changed,
+                !was_completed && recording.status() == RecordingStatus::Completed,
+            )
+        };
+
+        if changed {
+            self.push_activity(
+                Some(actor.clone()),
+                ActivityType::RecordingArtifactCompleted,
+                Some(recording_id.value().to_owned()),
+            );
+        }
+
+        if recording_completed {
+            self.push_activity(
+                Some(actor.clone()),
+                ActivityType::RecordingCompleted,
+                Some(recording_id.value().to_owned()),
+            );
+        }
+
+        if self.status == ProductionStatus::Active
+            && recording_completed
+            && !self.recordings.is_empty()
+            && self
+                .recordings
+                .iter()
+                .all(|recording| recording.status() == RecordingStatus::Completed)
+        {
+            self.close_production(
+                ProductionCompletionReason::AllRecordingsCompleted,
+                Some(actor.clone()),
+            );
+        }
+
         Ok(())
     }
 
@@ -418,6 +568,68 @@ mod tests {
             .unwrap();
         session.start_by(&owner).unwrap();
         (session, owner)
+    }
+
+    #[test]
+    fn recording_start_requires_coordination() {
+        let (mut session, owner) = active_session();
+        let recording_id = RecordingId::new("recording-1");
+        session
+            .add_recording_by(&owner, Recording::new(recording_id.value()))
+            .unwrap();
+
+        assert_eq!(
+            session.start_recording_by(&owner, &recording_id),
+            Err(ProductionSessionError::InvalidStateTransition)
+        );
+    }
+
+    #[test]
+    fn recording_starts_before_ready_and_opening_is_a_separate_barrier() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("participant-1");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+        let recording_id = RecordingId::new("recording-1");
+        session
+            .add_recording_by(&owner, Recording::new(recording_id.value()))
+            .unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Recording);
+        assert_eq!(session.start_recording_by(&owner, &recording_id), Ok(()));
+
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+
+        assert_eq!(
+            session.confirm_recording_opening_by(&owner, &recording_id),
+            Err(ProductionSessionError::RecordingCoordination(
+                RecordingCoordinationError::InvalidState
+            ))
+        );
+
+        session
+            .trigger_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
+            .unwrap();
+
+        assert_eq!(session.start_recording_by(&owner, &recording_id), Ok(()));
     }
 
     #[test]
@@ -475,6 +687,215 @@ mod tests {
 
         assert_eq!(session.recordings().len(), 1);
         assert_eq!(session.activities().len(), activity_count);
+    }
+
+    #[test]
+    fn participant_artifacts_complete_recording_independently() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("bob");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        let recording_id = RecordingId::new("recording-1");
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
+            .unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        session
+            .complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("alice-artifact"),
+            )
+            .unwrap();
+
+        let recording = &session.recordings()[0];
+        assert_eq!(recording.status(), RecordingStatus::Stopped);
+        assert_eq!(
+            recording.artifact_for_participant(&owner).unwrap().value(),
+            "alice-artifact"
+        );
+        assert_eq!(session.status(), ProductionStatus::Active);
+
+        session
+            .complete_recording_by(
+                &bob,
+                &recording_id,
+                RecordingArtifactId::new("bob-artifact"),
+            )
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Completed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::AllRecordingsCompleted)
+        );
+    }
+
+    #[test]
+    fn late_artifact_completion_does_not_reopen_completed_production() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("bob");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        let recording_id = RecordingId::new("recording-1");
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
+            .unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+        session.stop_recording_by(&owner, &recording_id).unwrap();
+
+        session
+            .complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("alice-artifact"),
+            )
+            .unwrap();
+        session.complete_by(&owner).unwrap();
+
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::HostForced)
+        );
+
+        session
+            .complete_recording_by(
+                &bob,
+                &recording_id,
+                RecordingArtifactId::new("bob-artifact"),
+            )
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Completed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::HostForced)
+        );
+    }
+
+    #[test]
+    fn timeout_closes_production_without_invalidating_pending_artifact() {
+        let (mut session, owner) = active_session();
+        let bob = ParticipantId::new("bob");
+        session
+            .add_participation_by(
+                &owner,
+                Participation::new(bob.clone(), ParticipantRole::Participant),
+            )
+            .unwrap();
+
+        let recording_id = RecordingId::new("recording-1");
+        session.ensure_recording_by(&owner, &recording_id).unwrap();
+        session
+            .begin_recording_by(&owner, &recording_id, [owner.clone(), bob.clone()])
+            .unwrap();
+        session
+            .mark_recording_ready_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .mark_recording_ready_by(&bob, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&owner, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&bob, &recording_id)
+            .unwrap();
+        session.start_recording_by(&owner, &recording_id).unwrap();
+
+        let stopped_at = std::time::UNIX_EPOCH + Duration::from_secs(100);
+        {
+            let recording = session
+                .recordings
+                .iter_mut()
+                .find(|recording| recording.id() == &recording_id)
+                .unwrap();
+            recording.stop_at(stopped_at).unwrap();
+        }
+
+        session
+            .complete_recording_by(
+                &owner,
+                &recording_id,
+                RecordingArtifactId::new("alice-artifact"),
+            )
+            .unwrap();
+
+        let changed = session
+            .complete_due_to_artifact_timeout(
+                stopped_at + Duration::from_secs(24 * 60 * 60),
+                Duration::from_secs(24 * 60 * 60),
+            )
+            .unwrap();
+
+        assert!(changed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
+        assert_eq!(
+            session.completion_reason(),
+            Some(ProductionCompletionReason::ArtifactCompletionTimeout)
+        );
+        assert!(session.recordings()[0].has_pending_artifacts());
+
+        session
+            .complete_recording_by(
+                &bob,
+                &recording_id,
+                RecordingArtifactId::new("bob-artifact"),
+            )
+            .unwrap();
+
+        assert_eq!(session.recordings()[0].status(), RecordingStatus::Completed);
+        assert_eq!(session.status(), ProductionStatus::Completed);
     }
 
     #[test]

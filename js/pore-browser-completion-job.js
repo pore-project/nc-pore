@@ -103,8 +103,14 @@
 		async markCompleted(captureId, details = {}) {
 			return this.updateTransportState(captureId, {
 				status: 'completed',
+				coreCompletionStatus: 'pending',
 				...details,
 			})
+		}
+
+		async removeCapture(captureId) {
+			if (!captureId) throw new Error('PoRE completion job requires a capture id for cleanup')
+			return this._store().removeCapture(captureId)
 		}
 
 		async recover() {
@@ -112,7 +118,26 @@
 			const captures = await store.listRecoverableCaptures()
 			for (const manifest of captures) {
 				if (manifest.status !== 'finalized') continue
-				if (manifest.completionJob?.status === 'completed') continue
+				const job = manifest.completionJob || {}
+				if (job.status === 'completed') {
+					if (job.coreCompletionStatus === 'completed') {
+						try { await this.removeCapture(manifest.captureId) } catch (error) {
+							window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } }))
+						}
+					} else if (job.coreCompletionStatus === 'pending' && job.artifactId) {
+						window.dispatchEvent(new CustomEvent('pore:recording-transport-completed', {
+							detail: {
+								captureId: manifest.captureId,
+								artifact_id: job.artifactId,
+								file_id: job.fileId,
+								path: job.path,
+								size: job.size,
+								sha256: job.sha256,
+							},
+						}))
+					}
+					continue
+				}
 				try {
 					await this.prepare(manifest.captureId)
 				} catch (error) {

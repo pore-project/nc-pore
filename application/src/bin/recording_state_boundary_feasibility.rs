@@ -186,6 +186,7 @@ fn phase_name(phase: ClientRecordingPhase) -> &'static str {
     match phase {
         ClientRecordingPhase::Preparing => "Preparing",
         ClientRecordingPhase::Ready => "Ready",
+        ClientRecordingPhase::Opening => "Opening",
         ClientRecordingPhase::Recording => "Recording",
         ClientRecordingPhase::Stopped => "Stopped",
         ClientRecordingPhase::Completed => "Completed",
@@ -247,14 +248,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn TEST_01_seeded_state_is_authoritative_preparing_state() {
+    fn TEST_01_seeded_state_is_authoritative_active_recording_state() {
         let mut repository = seeded_repository();
         let client = ClientSessionService::new(&mut repository);
         let state = client
             .read_recording_state(SESSION_ID, OWNER_ID, RECORDING_ID)
             .unwrap();
 
-        assert_eq!(state.phase, ClientRecordingPhase::Preparing);
+        assert_eq!(state.phase, ClientRecordingPhase::Recording);
         assert_eq!(state.role, ClientRecordingRole::Host);
         assert!(!state.confirmed);
         assert_eq!(state.recording_id, RECORDING_ID);
@@ -269,8 +270,11 @@ mod tests {
             participants: vec![ClientRecordingParticipant {
                 id: "guest-1".to_owned(),
                 ready: true,
+                opening_confirmed: false,
+                artifact_id: None,
             }],
             confirmed: false,
+            opening_triggered: false,
             artifact_id: None,
         };
 

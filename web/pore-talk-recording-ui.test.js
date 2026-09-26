@@ -1,4 +1,4 @@
-import './pore-talk-recording-ui.js'
+import '../js/pore-talk-recording-ui.js'
 
 describe('Talk recording UI', () => {
 	const Ui = window.PoRETalkRecordingUi
@@ -13,7 +13,9 @@ describe('Talk recording UI', () => {
 		expect(Ui.resolveStatus({ state: 'opening', ready: true })).toEqual(Ui.STATUS.opening)
 		expect(Ui.resolveStatus({ state: 'recording', ready: true })).toEqual(Ui.STATUS.recording)
 		expect(Ui.resolveStatus({ state: 'stopping' })).toEqual(Ui.STATUS.stopping)
-		expect(Ui.resolveStatus({ state: 'done', confirmed: true })).toEqual(Ui.STATUS.confirmed)
+		expect(Ui.resolveStatus({ state: 'stopped', productionStatus: 'active' })).toEqual(Ui.STATUS.stopped)
+		expect(Ui.resolveStatus({ state: 'completed', confirmed: true })).toEqual(Ui.STATUS.confirmed)
+		expect(Ui.resolveStatus({ state: 'stopped', confirmed: true, productionStatus: 'completed' })).toEqual(Ui.STATUS.productionClosed)
 		expect(Ui.resolveStatus({ state: 'error' })).toEqual(Ui.STATUS.error)
 	})
 
@@ -21,6 +23,11 @@ describe('Talk recording UI', () => {
 		expect(Ui.formatElapsed(0)).toBe('00:00')
 		expect(Ui.formatElapsed(65)).toBe('01:05')
 		expect(Ui.formatElapsed(3661)).toBe('61:01')
+	})
+
+	it('derives live elapsed time from the technical start timestamp', () => {
+		expect(Ui.elapsedSecondsFromStartedAt('2026-09-14T15:00:00.000Z', Date.parse('2026-09-14T15:01:05.900Z'))).toBe(65.9)
+		expect(Ui.elapsedSecondsFromStartedAt(null, Date.now(), 12)).toBe(12)
 	})
 
 	it('exposes the compact Talk-like control and host recording action', () => {

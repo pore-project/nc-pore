@@ -5,23 +5,28 @@ declare(strict_types=1);
 namespace OCA\PoRe\Controller;
 
 use OCA\PoRe\AppInfo\Application;
+use OCA\PoRe\BackgroundJob\CheckProductionArtifactTimeoutJob;
 use OCA\PoRe\Service\RecordingRuntimeService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
+use OCP\BackgroundJob\IJobList;
 use OCP\IRequest;
-use OCP\IUserSession;
+use OCA\PoRe\Service\TalkSessionAccessService;
 use RuntimeException;
 
 final class RecordingController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private readonly RecordingRuntimeService $runtime,
-		private readonly IUserSession $userSession,
+		private readonly TalkSessionAccessService $talkSessionAccess,
+		private readonly IJobList $jobList,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
 
+	#[PublicPage]
 	#[NoAdminRequired]
 	public function command(
 		string $sessionId,
@@ -32,12 +37,13 @@ final class RecordingController extends OCSController {
 		string $ownerId = '',
 		string $artifactId = '',
 	): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return $this->rejected('unauthorized', 401, $requestId);
+		try {
+			$actorId = $this->talkSessionAccess->resolve($sessionId)['actor_id'];
+		} catch (RuntimeException) {
+			return $this->rejected('talk_context_unauthorized', 403, $requestId);
 		}
 
-		$allowed = ['ensure', 'begin', 'ready', 'start', 'stop', 'acknowledge_stop', 'complete', 'snapshot'];
+		$allowed = ['ensure', 'begin', 'ready', 'trigger_opening', 'confirm_opening', 'start', 'stop', 'acknowledge_stop', 'complete', 'snapshot'];
 		if (!in_array($command, $allowed, true)) {
 			return $this->rejected('unsupported_command', 400, $requestId);
 		}
@@ -54,12 +60,14 @@ final class RecordingController extends OCSController {
 
 		try {
 			if ($command === 'ensure') {
-				$response = $this->execute($requestId, $sessionId, $recordingId, $user->getUID(), ['EnsureRecording' => null]);
+				$response = $this->execute($requestId, $sessionId, $recordingId, $actorId, ['EnsureRecording' => null]);
 			} else {
 				try {
 					$runtimeCommand = match ($command) {
 						'begin' => ['Begin' => ['participants' => array_values($participantIds)]],
 						'ready' => ['MarkReady' => null],
+						'trigger_opening' => ['TriggerOpening' => null],
+						'confirm_opening' => ['ConfirmOpening' => null],
 						'start' => ['Start' => null],
 						'stop' => ['RequestStop' => null],
 						'acknowledge_stop' => ['AcknowledgeStop' => null],
@@ -69,13 +77,22 @@ final class RecordingController extends OCSController {
 				} catch (RuntimeException) {
 					return $this->rejected('invalid_artifact', 400, $requestId);
 				}
-				$response = $this->execute($requestId, $sessionId, $recordingId, $user->getUID(), $runtimeCommand);
+				$response = $this->execute($requestId, $sessionId, $recordingId, $actorId, $runtimeCommand);
 			}
 		} catch (\Throwable) {
 			return $this->rejected('runtime_unavailable', 503, $requestId);
 		}
 
 		$status = ($response['status'] ?? null) === 'ok' ? 200 : 409;
+
+		if ($command === 'stop' && $status === 200) {
+			$this->jobList->scheduleAfter(
+				CheckProductionArtifactTimeoutJob::class,
+				time() + (24 * 60 * 60),
+				['production_id' => $sessionId],
+			);
+		}
+
 		return new DataResponse($response, $status);
 	}
 

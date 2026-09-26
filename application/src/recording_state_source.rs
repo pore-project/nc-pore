@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(state.recording_id, "recording-001");
         assert_eq!(
             state.phase,
-            crate::recording_state::ClientRecordingPhase::Preparing
+            crate::recording_state::ClientRecordingPhase::Recording
         );
         assert_eq!(
             state.role,

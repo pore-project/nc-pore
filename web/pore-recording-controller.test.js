@@ -17,8 +17,12 @@ describe('Browser recording controller', () => {
 			stop: jest.fn().mockResolvedValue({ kind: 'audio', format: 'audio/wav' }),
 		}
 		const controller = new Controller({ recorderFactory: () => recorder })
+		const track = createTrack()
 
-		await controller.start(createTrack(), {
+		const started = jest.fn()
+		window.addEventListener('pore:recording-started', started)
+
+		await controller.start(track, {
 			productionId: 'conversation-42',
 			recordingId: 'recording-17',
 			captureId: 'capture-17',
@@ -26,7 +30,12 @@ describe('Browser recording controller', () => {
 		})
 		const artifact = await controller.stop('host')
 
-		expect(recorder.start).toHaveBeenCalledWith(createTrack(), {
+		expect(started).toHaveBeenCalledTimes(1)
+		expect(started.mock.calls[0][0].detail.source.captureId).toBe('capture-17')
+		expect(started.mock.calls[0][0].detail.startedAt).toBeTruthy()
+		window.removeEventListener('pore:recording-started', started)
+
+		expect(recorder.start).toHaveBeenCalledWith(track, {
 			productionId: 'conversation-42',
 			recordingId: 'recording-17',
 			captureId: 'capture-17',
@@ -116,20 +125,84 @@ describe('Browser recording controller', () => {
 		const secondTrack = createTrack('pore-track-2', 'device-2')
 		const recorder = {
 			start: jest.fn().mockResolvedValue(undefined),
-			replaceTrack: jest.fn().mockResolvedValue(secondTrack),
+			replaceTrack: jest.fn(track => Promise.resolve(track)),
 			stop: jest.fn().mockResolvedValue({ kind: 'audio', format: 'audio/wav' }),
 		}
 		const controller = new Controller({ recorderFactory: () => recorder })
 
 		await controller.start(firstTrack, { productionId: 'conversation-42', recordingId: 'recording-17' })
-		await controller.replaceTrack(secondTrack)
+		const masterChanges = []
+		window.addEventListener('pore:recording-master-track-changed', event => masterChanges.push(event.detail))
 		controller.noteSourceChange(firstTrack, secondTrack, '2026-09-16T08:00:10.000Z', { from: { deviceId: 'device-1' }, to: { deviceId: 'device-2' } })
+		await controller.replaceTrack(secondTrack)
+		expect(masterChanges).toHaveLength(1)
+		expect(masterChanges[0].previousTrack).toBe(firstTrack)
+		expect(masterChanges[0].track).toBe(secondTrack)
+		expect(masterChanges[0].trackId).toBe('pore-track-2')
+
+		await controller.replaceTrack(firstTrack)
+		expect(masterChanges).toHaveLength(2)
+		expect(masterChanges[1].previousTrack).toBe(secondTrack)
+		expect(masterChanges[1].track).toBe(firstTrack)
+		expect(masterChanges[1].trackId).toBe('pore-track-1')
 
 		expect(controller.getState()).toBe('recording')
-		expect(recorder.replaceTrack).toHaveBeenCalledTimes(1)
+		expect(recorder.replaceTrack).toHaveBeenCalledTimes(2)
 		expect(recorder.stop).not.toHaveBeenCalled()
 		expect(controller.sourceChanges).toHaveLength(1)
 		expect(controller.sourceChanges[0].from.deviceId).toBe('device-1')
 		expect(controller.sourceChanges[0].to.deviceId).toBe('device-2')
 	})
+	it('keeps the active local microphone until the recorder accepts the replacement', async () => {
+		const firstStop = jest.fn()
+		const secondStop = jest.fn()
+		const thirdStop = jest.fn()
+		const firstTrack = {
+			kind: 'audio', id: 'pore-track-1', label: 'PoRE microphone 1', readyState: 'live',
+			getSettings: () => ({ deviceId: 'device-1' }), stop: firstStop,
+		}
+		const secondTrack = {
+			kind: 'audio', id: 'pore-track-2', label: 'PoRE microphone 2', readyState: 'live',
+			getSettings: () => ({ deviceId: 'device-2' }), stop: secondStop,
+		}
+		const thirdTrack = {
+			kind: 'audio', id: 'pore-track-3', label: 'PoRE microphone 3', readyState: 'live',
+			getSettings: () => ({ deviceId: 'device-2' }), stop: thirdStop,
+		}
+		let replacementCalls = 0
+		const firstStream = { getAudioTracks: () => [firstTrack], getTracks: () => [firstTrack] }
+		const secondStream = { getAudioTracks: () => [secondTrack], getTracks: () => [secondTrack] }
+		const thirdStream = { getAudioTracks: () => [thirdTrack], getTracks: () => [thirdTrack] }
+		const mediaDevices = {
+			getUserMedia: jest.fn(() => {
+				replacementCalls += 1
+				return Promise.resolve(
+					replacementCalls === 1 ? firstStream
+						: replacementCalls === 2 ? secondStream
+							: thirdStream
+				)
+			}),
+		}
+		const capture = new window.PoRELocalAudioCapture({ mediaDevices })
+
+		await capture.open('device-1')
+		const pending = await capture.replace('device-2')
+		expect(pending).toBe(secondTrack)
+		expect(capture.getCurrentTrack()).toBe(firstTrack)
+		expect(firstStop).not.toHaveBeenCalled()
+		expect(secondStop).not.toHaveBeenCalled()
+
+		capture.discardPendingReplacement()
+		expect(capture.getCurrentTrack()).toBe(firstTrack)
+		expect(secondStop).toHaveBeenCalledTimes(1)
+
+		const replacement = await capture.replace('device-2')
+		capture.commitReplacement(replacement)
+		expect(capture.getCurrentTrack()).toBe(thirdTrack)
+		expect(firstStop).toHaveBeenCalledTimes(1)
+		expect(secondStop).toHaveBeenCalledTimes(1)
+		capture.stop()
+		expect(thirdStop).toHaveBeenCalledTimes(1)
+	})
+
 })

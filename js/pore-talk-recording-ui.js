@@ -17,7 +17,9 @@
 		recording: { label: 'Aufnahme läuft', tone: 'recording', symbol: '●' },
 		opening: { label: 'Aufnahme wird geöffnet', tone: 'opening', symbol: '●' },
 		stopping: { label: 'Aufnahme wird übertragen', tone: 'transfer', symbol: '↗' },
+		stopped: { label: 'Aufnahme beendet', tone: 'stopped', symbol: '■' },
 		confirmed: { label: 'Aufnahme bestätigt', tone: 'confirmed', symbol: '✓' },
+		productionClosed: { label: 'Produktion geschlossen', tone: 'production-closed', symbol: '■' },
 	})
 
 	const SETTINGS_URL = '/ocs/v2.php/apps/pore/v1/settings'
@@ -30,13 +32,21 @@
 		return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
 	}
 
-	const resolveStatus = ({ state = 'preparing', listener = false, ready = false, confirmed = false }) => {
+	const elapsedSecondsFromStartedAt = (startedAt, now = Date.now(), fallback = 0) => {
+		const timestamp = Date.parse(startedAt || '')
+		if (!Number.isFinite(timestamp)) return Math.max(0, Number(fallback) || 0)
+		return Math.max(0, (now - timestamp) / 1000)
+	}
+
+	const resolveStatus = ({ state = 'preparing', listener = false, ready = false, confirmed = false, productionStatus = null }) => {
 		if (listener) return STATUS.listener
-		if (confirmed) return STATUS.confirmed
+		if (confirmed && state === 'completed') return STATUS.confirmed
+		if (productionStatus === 'completed' && state === 'stopped') return STATUS.productionClosed
 		if (state === 'error') return STATUS.error
+		if (state === 'stopped') return STATUS.stopped
 		if (state === 'stopping') return STATUS.stopping
-		if (state === 'recording' && ready) return STATUS.recording
-		if (state === 'opening' && ready) return STATUS.opening
+		if (state === 'opening') return STATUS.opening
+		if (state === 'recording') return STATUS.recording
 		if (ready) return STATUS.ready
 		return STATUS.preparing
 	}
@@ -95,7 +105,7 @@
 		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 		svg.setAttribute('viewBox', '0 0 24 24')
 		svg.setAttribute('aria-hidden', 'true')
-		svg.className.baseVal = 'pore-talk-recording__logo'
+		svg.setAttribute('class', 'pore-talk-recording__logo')
 		const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
 		path.setAttribute('fill', 'currentColor')
 		path.setAttribute('d', 'M12 .7a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.05c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.75.08-.74.08-.74 1.2.08 1.84 1.23 1.84 1.23 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6-.01c2.29-1.55 3.29-1.23 3.29-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .7Z')
@@ -107,7 +117,7 @@
 		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 		svg.setAttribute('viewBox', '0 0 24 24')
 		svg.setAttribute('aria-hidden', 'true')
-		svg.className.baseVal = 'pore-talk-recording__chevron'
+		svg.setAttribute('class', 'pore-talk-recording__chevron')
 		const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
 		path.setAttribute('fill', 'currentColor')
 		path.setAttribute('d', 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z')
@@ -177,6 +187,26 @@
 		action.type = 'button'
 		action.className = 'pore-talk-recording__button'
 		let actionHandler = null
+		let elapsedTimer = null
+
+		const stopElapsedTimer = () => {
+			if (elapsedTimer) window.clearInterval(elapsedTimer)
+			elapsedTimer = null
+		}
+
+		const updateElapsed = ({ startedAt = null, elapsedSeconds = 0 } = {}) => {
+			elapsed.textContent = formatElapsed(elapsedSecondsFromStartedAt(startedAt, Date.now(), elapsedSeconds))
+		}
+
+		const syncElapsedTimer = ({ state, listener, startedAt, elapsedSeconds }) => {
+			if (state !== 'recording' || listener || !startedAt) {
+				stopElapsedTimer()
+				return
+			}
+			updateElapsed({ startedAt, elapsedSeconds })
+			if (elapsedTimer) return
+			elapsedTimer = window.setInterval(() => updateElapsed({ startedAt, elapsedSeconds }), 500)
+		}
 		action.addEventListener('click', event => {
 			event.stopPropagation()
 			if (typeof actionHandler === 'function') void actionHandler(event)
@@ -188,6 +218,7 @@
 		settings.innerHTML = '<label for="pore-talk-storage-root">Speicherort</label><input id="pore-talk-storage-root" type="text" autocomplete="off" placeholder="audio"><p class="pore-talk-recording__settings-status" aria-live="polite"></p>'
 		const input = settings.querySelector('input')
 		const settingsStatus = settings.querySelector('.pore-talk-recording__settings-status')
+		let guestMode = false
 		input.addEventListener('blur', async () => {
 			const value = input.value.trim()
 			settingsStatus.textContent = ''
@@ -214,8 +245,12 @@
 			panel.hidden = !open
 			toggle.setAttribute('aria-expanded', String(open))
 			if (open) {
-				void requestSettings('GET').then(data => { input.value = data.storage_root || ''; input.placeholder = data.default_storage_root || DEFAULT_ROOT }).catch(() => {})
-				settings.hidden = false
+				if (!guestMode) {
+					void requestSettings('GET').then(data => { input.value = data.storage_root || ''; input.placeholder = data.default_storage_root || DEFAULT_ROOT }).catch(() => {})
+					settings.hidden = false
+				} else {
+					settings.hidden = true
+				}
 				requestAnimationFrame(positionPanel)
 			}
 		}
@@ -229,10 +264,13 @@
 
 		const renderPanel = context => {
 			const {
-				role = 'none', state = 'preparing', listener = false, ready = false, confirmed = false,
-				readyCount = 0, participantCount = 0, elapsedSeconds = 0, onStart = null, onStop = null,
+				role = 'none', state = 'preparing', listener = false, guest = false, ready = false, openingConfirmed = false, confirmed = false,
+				readyCount = 0, openingConfirmedCount = 0, participantCount = 0, elapsedSeconds = 0,
+				productionStatus = null, onStart = null, onStop = null, onForceClose = null,
 			} = context || {}
-			const status = resolveStatus({ state, listener, ready, confirmed })
+			guestMode = guest === true
+			settings.hidden = guestMode
+			const status = resolveStatus({ state, listener, ready, confirmed, productionStatus })
 			root.dataset.status = status.tone
 			root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
 
@@ -241,18 +279,24 @@
 
 			const showReadiness = role === 'host' && participantCount > 0 && !listener && !confirmed
 			readiness.hidden = !showReadiness
-			if (showReadiness) readiness.textContent = `${readyCount} / ${participantCount} bereit`
+			if (showReadiness) {
+				readiness.textContent = `${readyCount} / ${participantCount} bereit`
+				if (openingConfirmedCount < participantCount) readiness.textContent += ` · Opening ${openingConfirmedCount} / ${participantCount}`
+			}
 
 			const showElapsed = state === 'recording' && !listener
 			elapsed.hidden = !showElapsed
-			if (showElapsed) elapsed.textContent = formatElapsed(elapsedSeconds)
+			if (showElapsed) updateElapsed({ startedAt: context?.startedAt, elapsedSeconds })
+			syncElapsedTimer({ state, listener, startedAt: context?.startedAt, elapsedSeconds })
 
 			const canStart = role === 'host' && !listener && state === 'preparing' && !ready && typeof onStart === 'function'
 			const canStop = role === 'host' && !listener && state === 'recording' && typeof onStop === 'function'
-			actionHandler = canStart ? onStart : canStop ? onStop : null
+			const canForceClose = role === 'host' && !listener && state === 'stopped' && productionStatus === 'active' && !confirmed && typeof onForceClose === 'function'
+			actionHandler = canStart ? onStart : canStop ? onStop : canForceClose ? onForceClose : null
 			action.hidden = !actionHandler
 			if (canStart) action.textContent = 'Aufnahme starten'
 			if (canStop) action.textContent = 'Aufnahme beenden'
+			if (canForceClose) action.textContent = 'Production endgültig schließen'
 
 			if (wasOpen) setOpen(true)
 		}
@@ -295,5 +339,5 @@
 		window.__poreTalkRecordingUiGlobalListeners = true
 	}
 
-	window.PoRETalkRecordingUi = Object.freeze({ STATUS, formatElapsed, resolveStatus, create, mount })
+	window.PoRETalkRecordingUi = Object.freeze({ STATUS, formatElapsed, elapsedSecondsFromStartedAt, resolveStatus, create, mount })
 })()

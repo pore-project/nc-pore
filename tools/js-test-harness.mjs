@@ -16,8 +16,30 @@ class Element {
 		this.attributes = new Map()
 		this.textContent = ''
 		this.className = ''
+		this.dataset = {}
+		this._innerHTML = ''
+		this._textContent = ''
 	}
+	get textContent() { return this._textContent + this.children.map(child => child.textContent || '').join('') }
+	set textContent(value) { this._textContent = String(value) }
+	set innerHTML(value) {
+		this._innerHTML = String(value)
+		this.children = []
+		if (this._innerHTML.includes('pore-talk-storage-root')) {
+			const label = new Element('label')
+			label.setAttribute('for', 'pore-talk-storage-root')
+			this.appendChild(label)
+			const input = new Element('input')
+			input.setAttribute('id', 'pore-talk-storage-root')
+			this.appendChild(input)
+			const status = new Element('p')
+			status.setAttribute('class', 'pore-talk-recording__settings-status')
+			this.appendChild(status)
+		}
+	}
+	get innerHTML() { return this._innerHTML }
 	appendChild(child) { this.children.push(child); child.parentNode = this; return child }
+	append(...children) { children.forEach(child => this.appendChild(child)); }
 	removeChild(child) { const i = this.children.indexOf(child); if (i >= 0) this.children.splice(i, 1); child.parentNode = null; return child }
 	setAttribute(name, value) { this.attributes.set(name, String(value)); if (name === 'class') this.className = String(value); this[name] = String(value) }
 	getAttribute(name) { return this.attributes.get(name) ?? null }
@@ -95,6 +117,9 @@ function makeExpect(actual) {
 		toBeNull() { assert.strictEqual(actual, null) },
 		toContain(expected) { assert.ok(actual?.includes?.(expected)) },
 		toMatch(expected) { assert.match(actual, expected) },
+		resolves: {
+			toEqual(expected) { return Promise.resolve(actual).then(value => { expect(value).toEqual(expected) }) },
+		},
 		rejects: {
 			toThrow(expected) {
 				return Promise.resolve(actual).then(
@@ -142,15 +167,19 @@ globalThis.beforeEach = fn => beforeEachHooks.push(fn)
 globalThis.it = (name, fn) => tests.push({ name, fn })
 
 const files = [
-	'./web/pore-browser-completion-job.test.js',
-	'./web/pore-browser-pcm-recorder.test.js',
-	'./web/pore-browser-recording-lifecycle.test.js',
-	'./web/pore-browser-runtime-transport.test.js',
-	'./web/pore-recording-controller-persistence-safety.test.js',
-	'./web/pore-recording-controller.test.js',
-	'./web/pore-talk-recording-state-bridge.test.js',
-	'./web/pore-talk-recording-ui.test.js',
-	'./web/pore-talk-capture-init.test.js',
+	'../web/pore-browser-completion-job.test.js',
+	'../web/pore-browser-pcm-recorder.test.js',
+	'../web/pore-browser-recording-lifecycle.test.js',
+	'../web/pore-browser-runtime-transport.test.js',
+	'../web/pore-recording-coordination.test.js',
+	'../web/pore-recording-controller-persistence-safety.test.js',
+	'../web/pore-recording-controller.test.js',
+	'../web/pore-talk-recording-state-bridge.test.js',
+	'../web/pore-talk-recording-ui.test.js',
+	'../web/pore-talk-capture-init.test.js',
+	'../web/pore-talk-audio-adapter.test.js',
+	'../web/pore-talk-recording-init.test.js',
+	'../web/pore-talk-recording-host.test.js',
 ]
 
 for (const file of files) await import(new URL(file, import.meta.url))
@@ -159,7 +188,17 @@ let failed = 0
 for (const test of tests) {
 	try {
 		for (const hook of beforeEachHooks) await hook()
-		await test.fn()
+		let timer = null
+		try {
+			await Promise.race([
+				test.fn(),
+				new Promise((_, reject) => {
+					timer = setTimeout(() => reject(new Error('JavaScript test timed out after 5s')), 5000)
+				}),
+			])
+		} finally {
+			if (timer) clearTimeout(timer)
+		}
 		process.stdout.write(`PASS ${test.name}\n`)
 	} catch (error) {
 		failed += 1
@@ -168,5 +207,6 @@ for (const test of tests) {
 }
 
 if (failed) {
-	throw new Error(`${failed} JavaScript test(s) failed`)
+	process.exit(1)
 }
+process.exit(0)

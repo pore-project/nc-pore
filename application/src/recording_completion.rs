@@ -144,6 +144,18 @@ mod tests {
         session
             .add_recording_by(&actor, Recording::new(recording_id.value()))
             .unwrap();
+        session
+            .begin_recording_by(&actor, &recording_id, [actor.clone()])
+            .unwrap();
+        session
+            .mark_recording_ready_by(&actor, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&actor, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&actor, &recording_id)
+            .unwrap();
         session.start_recording_by(&actor, &recording_id).unwrap();
         session.stop_recording_by(&actor, &recording_id).unwrap();
 
@@ -196,7 +208,7 @@ mod tests {
         let recording = &session.recordings()[0];
         assert_eq!(recording.status(), RecordingStatus::Completed);
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording.artifact_for_participant(&actor).unwrap().value(),
             artifact.id.value()
         );
     }

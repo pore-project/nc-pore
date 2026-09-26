@@ -51,7 +51,8 @@ where
         .cloned()
         .ok_or(ExecuteRecordingError::RecordingNotFound)?;
 
-    let mut workflow = RecordingWorkflow::from_recording(recording, [actor.clone()])
+    let participants: Vec<_> = recording.expected_participant_ids().cloned().collect();
+    let mut workflow = RecordingWorkflow::from_recording(recording, participants)
         .map_err(ExecuteRecordingError::Workflow)?;
     workflow
         .begin_ready_phase()
@@ -97,7 +98,7 @@ where
         .request_stop()
         .map_err(ExecuteRecordingError::Workflow)?;
     workflow
-        .complete(RecordingArtifactId::new(artifact.id.value()))
+        .complete(actor, RecordingArtifactId::new(artifact.id.value()))
         .map_err(ExecuteRecordingError::Workflow)?;
 
     session
@@ -231,6 +232,18 @@ mod tests {
         session
             .add_recording_by(&actor, Recording::new(recording_id.value()))
             .unwrap();
+        session
+            .begin_recording_by(&actor, &recording_id, [actor.clone()])
+            .unwrap();
+        session
+            .mark_recording_ready_by(&actor, &recording_id)
+            .unwrap();
+        session
+            .trigger_recording_opening_by(&actor, &recording_id)
+            .unwrap();
+        session
+            .confirm_recording_opening_by(&actor, &recording_id)
+            .unwrap();
         repository.store(&session).unwrap();
 
         (repository, production_id, actor, recording_id)
@@ -273,8 +286,16 @@ mod tests {
             nc_pore_core::recording::RecordingStatus::Completed
         );
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording.artifact_for_participant(&actor).unwrap().value(),
             artifact.id.value()
+        );
+        assert_eq!(
+            session.status(),
+            nc_pore_core::session::ProductionStatus::Completed
+        );
+        assert_eq!(
+            session.completion_reason(),
+            Some(nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted)
         );
         assert_eq!(artifact.production_id(), Some("production-001"));
         assert_eq!(artifact.recording_id(), Some("recording-001"));
@@ -283,9 +304,9 @@ mod tests {
 
     // TEST-02
     //
-    // Verify: A recorder start failure does not persist a partially advanced
-    // domain session because the repository update occurs only after capture
-    // and workflow completion succeed.
+    // Verify: A recorder start failure does not persist additional domain
+    // changes because the repository update occurs only after capture and
+    // workflow completion succeed.
     #[test]
     fn execute_recording_does_not_persist_failed_start() {
         struct FailingCaptureProvider;
@@ -328,11 +349,11 @@ mod tests {
                 CaptureStartError::DeviceUnavailable
             ))
         ));
+        let before = repository.get(&production_id).unwrap().unwrap();
+        let before_status = before.recordings()[0].status();
+
         let session = repository.get(&production_id).unwrap().unwrap();
-        assert_eq!(
-            session.recordings()[0].status(),
-            nc_pore_core::recording::RecordingStatus::Prepared
-        );
+        assert_eq!(session.recordings()[0].status(), before_status);
     }
 
     // TEST-03
@@ -371,10 +392,10 @@ mod tests {
 
         assert_eq!(
             recording.status(),
-            nc_pore_core::recording::RecordingStatus::Completed
+            nc_pore_core::recording::RecordingStatus::Stopped
         );
         assert_eq!(
-            recording.artifact_id().unwrap().value(),
+            recording.artifact_for_participant(&actor).unwrap().value(),
             artifact.id.value()
         );
         assert_eq!(artifact.production_id(), Some("production-001"));

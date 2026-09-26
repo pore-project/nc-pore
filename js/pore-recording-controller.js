@@ -21,36 +21,73 @@
 			this._stream = null
 			this._track = null
 			this._deviceId = null
+			this._pendingStream = null
+			this._pendingTrack = null
+			this._pendingDeviceId = null
 		}
 
 		getCurrentTrack() { return this._track }
 		getCurrentDeviceId() { return this._deviceId }
 
-		async open(deviceId) {
-			if (!this._mediaDevices?.getUserMedia) throw new Error('PoRE local microphone capture is not available')
-			if (!deviceId) throw new Error('PoRE requires the currently selected Talk microphone')
-			const stream = await this._mediaDevices.getUserMedia({ audio: {
-				deviceId: { exact: deviceId },
-				echoCancellation: false,
-				noiseSuppression: false,
-				autoGainControl: false,
-			} })
-			const track = stream.getAudioTracks?.()[0] || null
-			if (!track) {
-				stream.getTracks?.().forEach(item => item.stop())
-				throw new Error('PoRE local microphone capture returned no audio track')
-			}
-			this._replaceStream(stream, deviceId, track)
+		async open(deviceId = null) {
+			const { stream, track, resolvedDeviceId } = await this._getStream(deviceId)
+			this._discardPendingReplacement()
+			this._replaceStream(stream, resolvedDeviceId, track)
 			return track
 		}
 
 		async replace(deviceId) {
 			if (!deviceId || deviceId === this._deviceId) return this._track
-			return this.open(deviceId)
+			const { stream, track } = await this._getStream(deviceId)
+			this._discardPendingReplacement()
+			this._pendingStream = stream
+			this._pendingTrack = track
+			this._pendingDeviceId = deviceId
+			return track
 		}
 
+		commitReplacement(track) {
+			if (!this._pendingStream || !this._pendingTrack || (track && this._pendingTrack !== track)) return this._track
+			const nextStream = this._pendingStream
+			const nextTrack = this._pendingTrack
+			const nextDeviceId = this._pendingDeviceId
+			this._pendingStream = null
+			this._pendingTrack = null
+			this._pendingDeviceId = null
+			this._replaceStream(nextStream, nextDeviceId, nextTrack)
+			return nextTrack
+		}
+
+		discardPendingReplacement() { this._discardPendingReplacement() }
+
 		stop() {
+			this._discardPendingReplacement()
 			this._replaceStream(null, null, null)
+		}
+
+		async _getStream(deviceId = null) {
+			if (!this._mediaDevices?.getUserMedia) throw new Error('PoRE local microphone capture is not available')
+			const audio = {
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false,
+			}
+			if (deviceId) audio.deviceId = { exact: deviceId }
+			const stream = await this._mediaDevices.getUserMedia({ audio })
+			const track = stream.getAudioTracks?.()[0] || null
+			if (!track) {
+				stream.getTracks?.().forEach(item => item.stop())
+				throw new Error('PoRE local microphone capture returned no audio track')
+			}
+			const resolvedDeviceId = deviceId || track.getSettings?.()?.deviceId || null
+			return { stream, track, resolvedDeviceId }
+		}
+
+		_discardPendingReplacement() {
+			this._pendingStream?.getTracks?.().forEach(item => item.stop())
+			this._pendingStream = null
+			this._pendingTrack = null
+			this._pendingDeviceId = null
 		}
 
 		_replaceStream(stream, deviceId, track) {
@@ -72,6 +109,7 @@
 			this.initialSource = null
 			this.captureId = null
 			this.recordingSessionId = null
+			this.currentTrack = null
 		}
 
 		getState() { return this.state }
@@ -105,22 +143,48 @@
 
 			try {
 				await this.recorder.start(track, { ...sourceMetadata, captureId: this.captureId, recordingSessionId: this.recordingSessionId })
+				this.currentTrack = track
 				this.state = 'recording'
-				window.dispatchEvent(new CustomEvent('pore:recording-started', { detail: { sequence: this.sequence, source: this.initialSource } }))
+				window.dispatchEvent(new CustomEvent('pore:recording-started', { detail: { sequence: this.sequence, startedAt: this.recorder.startedAt || this.initialSource.startedAt, source: this.initialSource } }))
 			} catch (error) {
-				this.state = 'error'; this.recorder = null; this.captureId = null; this.recordingSessionId = null; throw error
+				this.state = 'error'; this.recorder = null; this.currentTrack = null; this.captureId = null; this.recordingSessionId = null; throw error
 			}
 		}
 
 		async replaceTrack(track) {
 			if (!this.recorder || !this.isRecording()) throw new Error('PoRE microphone replacement requires an active local recording')
+			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
+			if (track.readyState !== 'live') throw new Error('PoRE cannot replace the active microphone with an ended audio track')
 			if (typeof this.recorder.replaceTrack !== 'function') throw new Error('PoRE PCM recorder cannot replace the active microphone')
-			return this.recorder.replaceTrack(track)
+			const previousTrack = this.currentTrack
+			const nextTrack = await this.recorder.replaceTrack(track) || track
+			this.currentTrack = nextTrack
+			window.dispatchEvent(new CustomEvent('pore:recording-master-track-changed', {
+				detail: { sequence: this.sequence, previousTrack, track: nextTrack, trackId: nextTrack.id, deviceId: nextTrack.getSettings?.()?.deviceId || null },
+			}))
+			return nextTrack
 		}
 
 		markOpeningSignet(at = new Date().toISOString()) {
 			if (!this.recorder || !this.isRecording()) throw new Error('PoRE opening signet requires an active local capture')
 			return this.recorder.markOpeningSignet(at)
+		}
+
+		async waitForOpeningSignet() {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE opening signet requires an active local capture')
+			if (typeof this.recorder.waitForOpeningSignet !== 'function') return true
+			return this.recorder.waitForOpeningSignet()
+		}
+
+		markClosingSignet(at = new Date().toISOString()) {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE closing signet requires an active local capture')
+			return this.recorder.markClosingSignet(at)
+		}
+
+		async waitForClosingSignet() {
+			if (!this.recorder || !this.isRecording()) throw new Error('PoRE closing signet requires an active local capture')
+			if (typeof this.recorder.waitForClosingSignet !== 'function') return true
+			return this.recorder.waitForClosingSignet()
 		}
 
 		noteSourceChange(previousTrack, nextTrack, occurredAt = new Date().toISOString(), metadata = {}) {
@@ -136,17 +200,18 @@
 			return change
 		}
 
-		async stop(reason = 'host') {
+		async stop(reason = 'host', { closingSignet = false } = {}) {
 			if (!this.recorder || !this.isRecording()) return null
 			this.state = 'stopping'
 			try {
+				if (closingSignet && typeof this.recorder.markClosingSignet === 'function') this.recorder.markClosingSignet()
 				const artifact = await this.recorder.stop(reason)
 				const enriched = artifact ? { ...artifact, sequence: this.sequence, source: { ...(this.initialSource || {}), ...(artifact.source || {}) }, sourceChanges: this.sourceChanges.slice() } : null
-				this.recorder = null; this.state = 'idle'
+				this.recorder = null; this.currentTrack = null; this.state = 'idle'
 				if (enriched) window.dispatchEvent(new CustomEvent('pore:recording-local-finalized', { detail: enriched }))
 				return enriched
 			} catch (error) {
-				this.recorder = null; this.state = 'error'; throw error
+				this.recorder = null; this.currentTrack = null; this.state = 'error'; throw error
 			} finally {
 				if (this.state === 'idle' || this.state === 'error') { this.captureId = null; this.recordingSessionId = null }
 			}
@@ -180,6 +245,7 @@
 				encoding: artifact.encoding || null, size: artifact.size || null, sequence: artifact.sequence || null,
 				startedAt: artifact.startedAt || source.startedAt || null, stoppedAt: artifact.stoppedAt || null,
 				stopReason: artifact.stopReason || null, openingSignet: artifact.openingSignet || source.openingSignet || null,
+				closingSignet: artifact.closingSignet || source.closingSignet || null,
 			}
 		}
 	}

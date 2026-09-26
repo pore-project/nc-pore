@@ -15,6 +15,7 @@ pub enum ActivityType {
     RecordingAdded,
     RecordingStarted,
     RecordingStopped,
+    RecordingArtifactCompleted,
     RecordingCompleted,
 }
 

@@ -7,6 +7,8 @@ pub enum RecordingCoordinationStatus {
     Preparing,
     WaitingForReady,
     Ready,
+    Opening,
+    Recording,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,10 +131,21 @@ impl RecordingCoordination {
         Ok(false)
     }
 
+    pub fn trigger_opening(&mut self) -> Result<(), RecordingCoordinationError> {
+        if self.status != RecordingCoordinationStatus::Ready {
+            return Err(RecordingCoordinationError::InvalidState);
+        }
+        self.status = RecordingCoordinationStatus::Opening;
+        Ok(())
+    }
+
     pub fn confirm_opening(
         &mut self,
         participant_id: &ParticipantId,
     ) -> Result<(), RecordingCoordinationError> {
+        if self.status != RecordingCoordinationStatus::Opening {
+            return Err(RecordingCoordinationError::InvalidState);
+        }
         if !self.participants.contains(participant_id) {
             return Err(RecordingCoordinationError::ParticipantNotSelected);
         }
@@ -140,6 +153,14 @@ impl RecordingCoordination {
             return Err(RecordingCoordinationError::AlreadyOpeningConfirmed);
         }
         self.opening_confirmed.push(participant_id.clone());
+
+        if self
+            .participants
+            .iter()
+            .all(|participant| self.opening_confirmed.contains(participant))
+        {
+            self.status = RecordingCoordinationStatus::Recording;
+        }
         Ok(())
     }
 
@@ -158,6 +179,28 @@ impl RecordingCoordination {
     }
 
     pub fn is_ready(&self) -> bool {
-        self.status == RecordingCoordinationStatus::Ready
+        matches!(
+            self.status,
+            RecordingCoordinationStatus::Ready
+                | RecordingCoordinationStatus::Opening
+                | RecordingCoordinationStatus::Recording
+        )
+    }
+
+    pub fn opening_triggered(&self) -> bool {
+        matches!(
+            self.status,
+            RecordingCoordinationStatus::Opening | RecordingCoordinationStatus::Recording
+        )
+    }
+
+    pub fn all_opening_confirmed(&self) -> bool {
+        matches!(
+            self.status,
+            RecordingCoordinationStatus::Opening | RecordingCoordinationStatus::Recording
+        ) && self
+            .participants
+            .iter()
+            .all(|participant| self.opening_confirmed.contains(participant))
     }
 }

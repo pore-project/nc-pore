@@ -11,6 +11,7 @@
 	'use strict'
 
 	const MICROPHONE_EVENT = 'pore:talk-microphone'
+	const AUDIO_PIPELINE_READY_EVENT = 'pore:talk-audio-pipeline-ready'
 
 	class TalkMicrophoneObserverSink {
 		constructor(onTrack) {
@@ -19,7 +20,7 @@
 			this._outputTrackId = null
 		}
 
-		connectTrackSource(inputTrackId, trackSource, outputTrackId = 'default') {
+		connectTrackSource(inputTrackId, trackSource, outputTrackId = 'audio') {
 			if (inputTrackId !== 'default' || this._source) throw new Error('PoRE Talk microphone observer can only be connected once')
 			this._source = trackSource
 			this._outputTrackId = outputTrackId
@@ -28,7 +29,7 @@
 			this._onTrack(trackSource.getOutputTrack(outputTrackId))
 		}
 
-		disconnectTrackSource(inputTrackId, trackSource, outputTrackId = 'default') {
+		disconnectTrackSource(inputTrackId, trackSource, outputTrackId = 'audio') {
 			if (inputTrackId !== 'default' || this._source !== trackSource || this._outputTrackId !== outputTrackId) return
 			trackSource.off('outputTrackSet', this._handleOutputTrackSet)
 			trackSource.off('outputTrackEnabled', this._handleOutputTrackEnabled)
@@ -56,18 +57,23 @@
 			const source = window.OCA?.Talk?.SimpleWebRTC?.webrtc?._mediaDevicesSource
 			if (!source || typeof source.connectTrackSink !== 'function' || typeof source.disconnectTrackSink !== 'function') return false
 			if (this._mediaDevicesSource === source) {
-				const track = source.getOutputTrack('audio')
-				this._observeTrack(track)
-				return Boolean(track?.getSettings?.()?.deviceId)
+				this._observeTrack(source.getOutputTrack('audio'))
+				return true
 			}
 			this._detachFromTalk()
 			const sink = new TalkMicrophoneObserverSink(track => this._observeTrack(track))
 			source.connectTrackSink('audio', sink)
 			this._mediaDevicesSource = source
 			this._trackSink = sink
-			const track = source.getOutputTrack('audio')
-			this._observeTrack(track)
-			return Boolean(track?.getSettings?.()?.deviceId)
+			this._observeTrack(source.getOutputTrack('audio'))
+			window.dispatchEvent(new CustomEvent(AUDIO_PIPELINE_READY_EVENT, { detail: { source } }))
+			return true
+		}
+
+		isAudioPipelineReady() {
+			const source = this._mediaDevicesSource || window.OCA?.Talk?.SimpleWebRTC?.webrtc?._mediaDevicesSource
+			const track = source?.getOutputTrack?.('audio')
+			return Boolean(track?.kind === 'audio' && track.readyState === 'live')
 		}
 
 		detachFromTalk() { this._detachFromTalk() }
@@ -100,5 +106,6 @@
 	}
 
 	window.PoRETalkAudioCaptureConnector = TalkMicrophoneObserver
+	window.PoRETalkAudioPipelineReadyEvent = AUDIO_PIPELINE_READY_EVENT
 	window.PoRETalkMicrophoneEvent = MICROPHONE_EVENT
 })()

@@ -1,6 +1,7 @@
 use crate::session::{
-    add_participation_to_production_session, complete_production_session,
+    add_participation_to_production_session, check_production_timeout, complete_production_session,
     create_production_session, get_production_session, start_production_session,
+    DEFAULT_ARTIFACT_COMPLETION_TIMEOUT,
 };
 use crate::session_context::{SessionContext, SessionContextProvider};
 use nc_pore_core::identity::ProductionId;
@@ -84,16 +85,44 @@ pub struct ClientParticipant {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientRecordingArtifactSlot {
+    pub participant_id: String,
+    pub artifact_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientRecording {
     pub id: String,
     pub status: ClientRecordingStatus,
-    pub artifact_id: Option<String>,
+    pub artifact_slots: Vec<ClientRecordingArtifactSlot>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientProductionCompletionReason {
+    AllRecordingsCompleted,
+    ArtifactCompletionTimeout,
+    HostForced,
+}
+
+impl From<nc_pore_core::session::ProductionCompletionReason> for ClientProductionCompletionReason {
+    fn from(reason: nc_pore_core::session::ProductionCompletionReason) -> Self {
+        match reason {
+            nc_pore_core::session::ProductionCompletionReason::AllRecordingsCompleted => {
+                Self::AllRecordingsCompleted
+            }
+            nc_pore_core::session::ProductionCompletionReason::ArtifactCompletionTimeout => {
+                Self::ArtifactCompletionTimeout
+            }
+            nc_pore_core::session::ProductionCompletionReason::HostForced => Self::HostForced,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientProductionSession {
     pub id: String,
     pub status: ClientProductionStatus,
+    pub completion_reason: Option<ClientProductionCompletionReason>,
     pub participants: Vec<ClientParticipant>,
     pub recordings: Vec<ClientRecording>,
 }
@@ -103,6 +132,7 @@ impl From<&ProductionSession> for ClientProductionSession {
         Self {
             id: session.id.value().to_owned(),
             status: session.status().into(),
+            completion_reason: session.completion_reason().map(Into::into),
             participants: session
                 .participations()
                 .iter()
@@ -122,9 +152,16 @@ impl From<&ProductionSession> for ClientProductionSession {
                 .map(|recording| ClientRecording {
                     id: recording.id().value().to_owned(),
                     status: recording.status().into(),
-                    artifact_id: recording
-                        .artifact_id()
-                        .map(|artifact_id| artifact_id.value().to_owned()),
+                    artifact_slots: recording
+                        .artifact_slots()
+                        .iter()
+                        .map(|slot| ClientRecordingArtifactSlot {
+                            participant_id: slot.participant_id().value().to_owned(),
+                            artifact_id: slot
+                                .artifact_id()
+                                .map(|artifact_id| artifact_id.value().to_owned()),
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -247,6 +284,33 @@ where
             })
     }
 
+    pub fn get_for_actor(
+        &self,
+        id: &str,
+        actor_id: &str,
+    ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
+        let id = ProductionId::new(id);
+        let session =
+            get_production_session(self.repository, &id).map_err(|error| match error {
+                crate::session::GetProductionSessionError::SessionNotFound => {
+                    ClientSessionError::SessionNotFound
+                }
+                crate::session::GetProductionSessionError::Repository(error) => {
+                    ClientSessionError::Repository(error)
+                }
+            })?;
+
+        if !session
+            .participations()
+            .iter()
+            .any(|participation| participation.participant_id.value() == actor_id)
+        {
+            return Err(ClientSessionError::Unauthorized);
+        }
+
+        Ok(ClientProductionSession::from(&session))
+    }
+
     pub fn create(
         &mut self,
         id: &str,
@@ -320,7 +384,8 @@ where
         })
     }
 
-    pub fn complete(
+    /// Explicit Host/Producer Force-Close of the Production.
+    pub fn force_close(
         &mut self,
         session_id: &str,
         actor: &str,
@@ -340,6 +405,38 @@ where
             }
             crate::session::CompleteProductionSessionError::Session(error) => error.into(),
         })
+    }
+
+    /// Legacy name retained as a Force-Close alias.
+    pub fn complete(
+        &mut self,
+        session_id: &str,
+        actor: &str,
+    ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
+        self.force_close(session_id, actor)
+    }
+
+    pub fn check_timeout(
+        &mut self,
+        session_id: &str,
+        now: std::time::SystemTime,
+    ) -> Result<ClientProductionSession, ClientSessionError<R::Error>> {
+        check_production_timeout(
+            self.repository,
+            &ProductionId::new(session_id),
+            now,
+            DEFAULT_ARTIFACT_COMPLETION_TIMEOUT,
+        )
+        .map_err(|error| match error {
+            crate::session::CheckProductionTimeoutError::SessionNotFound => {
+                ClientSessionError::SessionNotFound
+            }
+            crate::session::CheckProductionTimeoutError::Repository(error) => {
+                ClientSessionError::Repository(error)
+            }
+            crate::session::CheckProductionTimeoutError::Session(error) => error.into(),
+        })
+        .map(|session| ClientProductionSession::from(&session))
     }
 }
 
@@ -433,5 +530,24 @@ mod tests {
 
         let result = client.start("session-001", "guest-1");
         assert_eq!(result, Err(ClientSessionError::Unauthorized));
+    }
+
+    // TEST-04: A Production read is actor-authorized and does not expose
+    // session data to a non-member.
+    #[test]
+    fn TEST_04_client_can_read_only_an_authorized_production() {
+        let mut repository = InMemory { sessions: vec![] };
+        let mut client = ClientSessionService::new(&mut repository);
+
+        client.create("session-001", "owner-1").unwrap();
+        client
+            .add_participant("session-001", "owner-1", "guest-1", [ClientRole::Guest])
+            .unwrap();
+
+        assert!(client.get_for_actor("session-001", "guest-1").is_ok());
+        assert_eq!(
+            client.get_for_actor("session-001", "outsider"),
+            Err(ClientSessionError::Unauthorized)
+        );
     }
 }

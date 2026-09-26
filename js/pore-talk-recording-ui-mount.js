@@ -13,10 +13,8 @@
 	// between microphone and camera without modifying Talk itself.
 	const MOUNT_SELECTOR = '.bottom-bar .buttons-bar .local-audio-control-wrapper'
 	const ROOT_ATTRIBUTE = 'data-pore-talk-recording-ui'
-	const POLL_INTERVAL_MS = 500
 
 	let observer = null
-	let pollTimer = null
 	let mountedHost = null
 	let mountedRoot = null
 
@@ -59,18 +57,11 @@
 		}
 	}
 
-	function scheduleMount() {
-		if (pollTimer !== null) return
-		pollTimer = window.setTimeout(() => {
-			pollTimer = null
-			mount()
-		}, POLL_INTERVAL_MS)
-	}
 
 	function start() {
 		if (observer) return
 		mount()
-		observer = new MutationObserver(scheduleMount)
+		observer = new MutationObserver(mount)
 		observer.observe(document.body, { childList: true, subtree: true })
 	}
 
@@ -78,10 +69,6 @@
 		if (observer) {
 			observer.disconnect()
 			observer = null
-		}
-		if (pollTimer !== null) {
-			window.clearTimeout(pollTimer)
-			pollTimer = null
 		}
 		unmount()
 	}

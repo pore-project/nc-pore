@@ -3,7 +3,8 @@ name: V1 Talk Connector
 on:
   push:
     branches:
-      - feat/v1-nextcloud-runtime-adapter
+      - develop
+      - fix-v1-final
   pull_request:
 
 jobs:
@@ -11,22 +12,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Show Node version
+        run: node --version
       - name: Syntax check browser scripts
         run: |
           node --check js/init.js
           node --check js/pore-browser-completion-job.js
           node --check js/pore-browser-pcm-persistence.js
           node --check js/pore-browser-pcm-recorder.js
+          node --check js/pore-browser-pcm-worklet.js
           node --check js/pore-browser-runtime-transport.js
           node --check js/pore-recording-controller.js
+          node --check js/pore-recording-coordination.js
           node --check js/pore-talk-audio-connector.js
           node --check js/pore-talk-recording-ui.js
           node --check js/pore-talk-settings.js
       - name: Run browser JavaScript tests
-        run: node --experimental-default-type=module --input-type=module -e 'Object.defineProperty(globalThis, "navigator", { value: { mediaDevices: {} }, configurable: true, writable: true }); await import("./tools/js-test-harness.mjs")'
+        run: |
+          node --experimental-default-type=module --input-type=module -e 'Object.defineProperty(globalThis, "navigator", { value: { mediaDevices: {} }, configurable: true, writable: true }); await import("./tools/js-test-harness.mjs")'
 
   php:
     runs-on: ubuntu-latest
@@ -38,6 +41,9 @@ jobs:
         run: |
           php -l lib/AppInfo/Application.php
           php -l lib/Controller/RecordingTransportController.php
+          php -l lib/Controller/RecordingCoordinationController.php
+          php -l lib/Http/CoordinationEventStreamResponse.php
+          php -l lib/Service/RecordingCoordinationService.php
           php -l lib/Controller/SettingsController.php
           php -l lib/Service/NextcloudArtifactPath.php
           php -l lib/Service/NextcloudArtifactConnector.php

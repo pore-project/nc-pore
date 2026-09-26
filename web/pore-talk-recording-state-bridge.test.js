@@ -52,6 +52,28 @@ describe('Talk recording state bridge', () => {
 		expect(snapshot.listener).toBe(true)
 		expect(snapshot.state).toBe('recording')
 	})
+
+	it('preserves authoritative stopped state', () => {
+		const snapshot = window.PoRETalkRecordingStateNormalize({
+			role: 'participant',
+			state: 'stopped',
+			participants: [{ ready: true, opening_confirmed: true }],
+		})
+		expect(snapshot.state).toBe('stopped')
+		expect(snapshot.confirmed).toBe(false)
+	})
+
+	it('preserves authoritative completed state and confirmation', () => {
+		const snapshot = window.PoRETalkRecordingStateNormalize({
+			role: 'participant',
+			state: 'completed',
+			production_status: 'completed',
+			participants: [{ ready: true, opening_confirmed: true, artifact_id: 'artifact-1' }],
+		})
+		expect(snapshot.state).toBe('completed')
+		expect(snapshot.confirmed).toBe(true)
+		expect(snapshot.productionStatus).toBe('completed')
+	})
 })
 
 describe('PoRE local audio capture', () => {
@@ -85,8 +107,8 @@ describe('Talk microphone observer', () => {
 		const talkTrack = { id: 'talk-track-1', getSettings: () => ({ deviceId: 'mic-1' }) }
 		const replacementTrack = { id: 'talk-track-2', getSettings: () => ({ deviceId: 'mic-2' }) }
 		const source = {
-			connectTrackSink: jest.fn((input, sink) => sink.connectTrackSource(input, source, 'audio')),
-			disconnectTrackSink: jest.fn((input, sink) => sink.disconnectTrackSource(input, source, 'audio')),
+			connectTrackSink: jest.fn((outputTrackId, sink, inputTrackId = 'default') => sink.connectTrackSource(inputTrackId, source, outputTrackId)),
+			disconnectTrackSink: jest.fn((outputTrackId, sink, inputTrackId = 'default') => sink.disconnectTrackSource(inputTrackId, source, outputTrackId)),
 			getOutputTrack: jest.fn(() => talkTrack),
 			on: jest.fn((event, handler) => listeners.set(event, handler)),
 			off: jest.fn((event, handler) => {

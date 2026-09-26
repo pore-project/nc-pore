@@ -2,6 +2,16 @@
 (() => {
 	'use strict'
 
+	const TALK_SESSION_TAB_ID = 'x-nextcloud-talk-session-tab-id'
+	const getTalkSessionTabId = () => {
+		try {
+			const value = window.sessionStorage?.getItem(TALK_SESSION_TAB_ID) || ''
+			return /^[A-Za-z0-9]{64}$/.test(value) ? value : null
+		} catch (_) {
+			return null
+		}
+	}
+
 	class PoREBrowserRuntimeTransport {
 		constructor({ completionJob = window.__poreBrowserCompletionJob } = {}) {
 			this.completionJob = completionJob
@@ -58,9 +68,9 @@
 					try {
 						await this.upload(state.uploadUrl, state.uploadUsername, state.uploadPassword, state.filename, descriptor.blob)
 					} catch (error) {
-						if (!this.isUploadCollision(error) || uploadCollisionRetries >= 4) throw error
+						if ((!this.isUploadCollision(error) && !this.isUploadAuthorizationFailure(error)) || uploadCollisionRetries >= 4) throw error
 						uploadCollisionRetries += 1
-						await this.close(state.transferId).catch(() => {})
+						await this.close(state.transferId, descriptor.productionId).catch(() => {})
 						await this.prepare(descriptor)
 						continue
 					}
@@ -75,7 +85,7 @@
 				if (!state?.transferId) throw new Error('PoRE transport transfer handle is missing')
 
 				if (state.status === 'remote_present') {
-					const receipt = await this.verify(state.transferId)
+					const receipt = await this.verify(state.transferId, descriptor.productionId)
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'verified',
 						verifiedAt: new Date().toISOString(),
@@ -85,7 +95,7 @@
 
 				state = await this.completionJob.getTransportState(descriptor.captureId)
 				if (state.status === 'verified') {
-					await this.close(state.transferId)
+					await this.close(state.transferId, descriptor.productionId)
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'transport_closed',
 						transportClosedAt: new Date().toISOString(),
@@ -106,7 +116,7 @@
 					size: details.size,
 					sha256: details.sha256,
 				})
-				window.dispatchEvent(new CustomEvent('pore:recording-transport-completed', { detail: details }))
+				window.dispatchEvent(new CustomEvent('pore:recording-transport-completed', { detail: { ...details, captureId: descriptor.captureId } }))
 				return details
 			} catch (error) {
 				await this.completionJob?.updateTransportState?.(descriptor.captureId, {
@@ -144,24 +154,36 @@
 			return body
 		}
 
-		async verify(transferId) {
+		async verify(transferId, sessionId) {
 			const form = new URLSearchParams()
 			form.set('transfer_id', transferId)
+			form.set('session_id', sessionId)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/verify', form)
 			if (body?.status !== 'verified') throw new Error(body?.error_code || 'PoRE transport verification failed')
 			return body
 		}
 
-		async close(transferId) {
+		async close(transferId, sessionId) {
 			const form = new URLSearchParams()
 			form.set('transfer_id', transferId)
+			form.set('session_id', sessionId)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/close', form)
 			if (body?.status !== 'closed') throw new Error(body?.error_code || 'PoRE transport close failed')
 			return body
 		}
 
+		resolveUploadUrl(uploadUrl) {
+			if (uploadUrl.startsWith('http://') || uploadUrl.startsWith('https://')) return uploadUrl
+			if (uploadUrl.startsWith('/')) {
+				const rootPath = typeof window.OC?.getRootPath === 'function' ? window.OC.getRootPath() : ''
+				return String(rootPath).replace(/\/$/, '') + uploadUrl
+			}
+			return window.OC?.generateUrl ? window.OC.generateUrl(uploadUrl) : uploadUrl
+		}
+
 		async upload(uploadUrl, username, password, filename, blob) {
-			const url = window.OC?.generateUrl ? window.OC.generateUrl(uploadUrl) : uploadUrl
+			const url = this.resolveUploadUrl(uploadUrl)
+			const publicDav = url.includes('/public.php/dav/')
 			const response = await fetch(`${url.replace(/\/$/, '')}/${encodeURIComponent(filename)}`, {
 				method: 'PUT',
 				headers: {
@@ -170,7 +192,7 @@
 					Authorization: `Basic ${btoa(`${username}:${password}`)}`,
 					'If-None-Match': '*',
 				},
-				credentials: 'same-origin',
+				credentials: publicDav ? 'omit' : 'same-origin',
 				body: blob,
 			})
 			if (!response.ok) {
@@ -184,6 +206,10 @@
 			return [403, 409, 412].includes(error?.status)
 		}
 
+		isUploadAuthorizationFailure(error) {
+			return [401, 404, 410].includes(error?.status)
+		}
+
 		async control(path, form) {
 			const url = window.OC?.generateUrl ? window.OC.generateUrl(path) : path
 			const response = await fetch(url, {
@@ -192,6 +218,7 @@
 					Accept: 'application/json',
 					'OCS-APIRequest': 'true',
 					'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+					...(getTalkSessionTabId() ? { [TALK_SESSION_TAB_ID]: getTalkSessionTabId() } : {}),
 				},
 				credentials: 'same-origin',
 				body: form.toString(),

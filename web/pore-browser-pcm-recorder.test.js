@@ -7,6 +7,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 		jest.restoreAllMocks()
 	})
 
+	// TEST-01: transient persistence failure must not stop active capture.
 	it('keeps realtime capture active when a persistence chunk temporarily fails', async () => {
 		let attempts = 0
 		const store = {
@@ -23,26 +24,67 @@ describe('Browser PCM recorder persistence recovery', () => {
 		})
 		recorder.state = 'recording'
 		recorder.captureId = 'capture-1'
-		recorder.recordingSessionId = 'session-1'
-		recorder.sampleRate = 48000
+	recorder.recordingSessionId = 'session-1'
+	recorder.sampleRate = 48000
+	recorder.persistenceStore = store
 
-		recorder._acceptSamples(new Float32Array([0]))
-		await Promise.resolve()
-		await Promise.resolve()
-		recorder._acceptSamples(new Float32Array([0]))
+	recorder._acceptSamples(new Float32Array([0]))
+	await Promise.resolve()
+	await Promise.resolve()
+	recorder._acceptSamples(new Float32Array([0]))
 
-		expect(recorder.getState()).toBe('recording')
-		expect(recorder.persistenceQueue).toHaveLength(2)
-		expect(recorder.persistenceState).toBe('recovering')
+	expect(recorder.getState()).toBe('recording')
+	expect(recorder.persistenceQueue).toHaveLength(2)
+	expect(recorder.persistenceState).toBe('recovering')
 
-		recorder._clearPersistenceRetry()
-		await recorder._drainPersistenceQueue()
+	if (recorder.persistenceDrainPromise) await recorder.persistenceDrainPromise
+	recorder._clearPersistenceRetry()
+	await recorder._drainPersistenceQueue()
 
-		expect(recorder.getState()).toBe('recording')
-		expect(recorder.persistenceQueue).toHaveLength(0)
-		expect(store.appendChunk).toHaveBeenCalledTimes(3)
+	expect(recorder.getState()).toBe('recording')
+	expect(recorder.persistenceQueue).toHaveLength(0)
+	expect(store.appendChunk).toHaveBeenCalledTimes(3)
 	})
 
+	// TEST-02: safety cutoff is time-based below the hard backlog bound.
+	it('waits for sustained persistence failure before safety stop below the hard backlog bound', async () => {
+		const originalDateNow = Date.now
+		let now = 1000
+		Date.now = () => now
+		try {
+			const safetyStop = jest.fn()
+			const store = { appendChunk: jest.fn(async () => { throw new Error('persistence unavailable') }) }
+			const recorder = new Recorder({
+				AudioContextClass: null,
+				persistenceStoreFactory: () => store,
+				persistenceChunkBytes: 3,
+				maxPersistenceQueueBytes: 12,
+				onPersistenceSafetyStop: safetyStop,
+			})
+			recorder.state = 'recording'
+			recorder.captureId = 'capture-1'
+			recorder.recordingSessionId = 'session-1'
+			recorder.sampleRate = 48000
+			recorder.persistenceStore = store
+
+			recorder._acceptSamples(new Float32Array([0]))
+			await Promise.resolve()
+			await Promise.resolve()
+			expect(safetyStop).toHaveBeenCalledTimes(0)
+
+			now += 2 * 60 * 1000
+			recorder._clearPersistenceRetry()
+			await recorder._drainPersistenceQueue()
+
+			expect(recorder.getState()).toBe('recording')
+			expect(safetyStop).toHaveBeenCalledTimes(1)
+			expect(safetyStop.mock.calls[0][0].pendingBytes).toBe(3)
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
+	// TEST-03: a recovering queue must stop immediately at its hard backlog bound.
 	it('requests a controlled safety stop when persistence backlog reaches its bound', async () => {
 		const safetyStop = jest.fn()
 		const store = { appendChunk: jest.fn(async () => { throw new Error('persistence unavailable') }) }
@@ -62,8 +104,6 @@ describe('Browser PCM recorder persistence recovery', () => {
 		await Promise.resolve()
 		await Promise.resolve()
 		recorder._acceptSamples(new Float32Array([0]))
-		await Promise.resolve()
-		await Promise.resolve()
 
 		expect(recorder.getState()).toBe('recording')
 		expect(safetyStop).toHaveBeenCalledTimes(1)

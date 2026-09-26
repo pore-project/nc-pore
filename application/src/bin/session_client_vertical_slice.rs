@@ -351,6 +351,7 @@ fn capability_name(capability: SessionCapability) -> &'static str {
         SessionCapability::ManageParticipants => "ManageParticipants",
         SessionCapability::ManageRecordings => "ManageRecordings",
         SessionCapability::ParticipateInRecording => "ParticipateInRecording",
+        SessionCapability::CompleteRecordingArtifact => "CompleteRecordingArtifact",
     }
 }
 
