@@ -43,12 +43,11 @@ Core bleibt die autoritative Quelle der fachlichen Recording- und Production-Zus
 
 Implementiert:
 
-- host-neutrale Capture-Grenze
+- generische Capture-Grenze zwischen Recording-Workflow und konkreten CaptureProvidern
 - lokale Audioaufnahme
 - RecordingArtifact-Erzeugung
 - lokale Preservation und Recovery
 - Artefakt-Identität und Persistenzgrenzen
-- native Capture-Selection
 - Capture-/Artifact-Lifecycle
 - technische Quellenwechselbehandlung
 - Übergang von lokaler Preservation in die weitere Verarbeitung
@@ -135,7 +134,7 @@ Die aktuelle V1-Architektur folgt insbesondere diesen Prinzipien:
 - V1 Production Materialization
 - Recording Artifact Aggregation und Production Completion Semantics
 - aktuelle V1 Talk Recording UI
-
+- native Capture-Selection und der weitere host-neutrale Recorder-Ausbau in PR #228 / #232 bleiben separate Entwicklungsschritte
 ---
 
 # Nächste Arbeiten
@@ -149,6 +148,7 @@ Die nächsten Schritte sind bewusst in zwei Ebenen getrennt.
 - UI-Politur und konsistente Zustandsdarstellung
 - Fehler- und Recovery-Fälle im realen Lauf
 - Release-Package so bereinigen, dass Testdateien nicht unnötig in das Produktionsartefakt gelangen
+- die separaten Native-Capture-/host-neutralen Recorder-Arbeiten aus PR #228 / #232 weiterführen
 - Beta-/App-Store-Releasekriterien definieren und verifizieren
 
 ## Repository- und Dokumentationsbereinigung
@@ -318,6 +318,7 @@ The next work is deliberately separated into two levels.
 - UI polish and consistent state presentation
 - real-world error and recovery cases
 - clean the release package so test files are not unnecessarily shipped in the production artifact
+- continue the separate native-capture / host-neutral recorder work in PR #228 / #232
 - define and verify Beta/App-Store release criteria
 
 ## Repository and Documentation Cleanup
