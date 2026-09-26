@@ -125,12 +125,20 @@ final class ArtifactManifestStore {
 
 	public function remove(string $artifactId): void {
 		$path = $this->path($this->requiredString($artifactId, 'artifact_id'));
-		if (is_file($path) && !unlink($path)) {
+		$lockPath = $path . '.lock';
+		$lock = fopen($lockPath, 'c');
+		if ($lock === false || !flock($lock, LOCK_EX)) {
+			if (is_resource($lock)) fclose($lock);
 			throw new RuntimeException('artifact_manifest_storage_unavailable');
 		}
-		$lockPath = $path . '.lock';
-		if (is_file($lockPath) && !unlink($lockPath)) {
-			throw new RuntimeException('artifact_manifest_storage_unavailable');
+
+		try {
+			if (is_file($path) && !unlink($path)) {
+				throw new RuntimeException('artifact_manifest_storage_unavailable');
+			}
+		} finally {
+			flock($lock, LOCK_UN);
+			fclose($lock);
 		}
 	}
 

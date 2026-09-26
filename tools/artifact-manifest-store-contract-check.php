@@ -119,6 +119,7 @@ namespace {
 	check(($storedJson['manifest_hash'] ?? null) === $receipt['manifest_hash'], 'Persisted manifest hash must match the returned record.');
 
 	$store->remove('capture-1');
+	check(is_file($artifactPath . '.lock'), 'Artifact manifest lock sidecar must remain safe for subsequent writes.');
 	check($store->get('capture-1') === null, 'Artifact manifest removal must remove the persisted record.');
 
 	$store->stagePreparedArtifact([
