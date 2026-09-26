@@ -53,7 +53,19 @@ final class ArtifactManifestStore {
 	public function persistVerifiedArtifact(array $receipt): array {
 		$artifactId = $this->requiredString($receipt['artifact_id'] ?? null, 'artifact_id');
 		$existing = $this->read($artifactId);
-		$pending = $existing !== null && ($existing['status'] ?? null) !== 'verified' ? $existing : null;
+		if ($existing !== null && ($existing['status'] ?? null) === 'verified') {
+			$remote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
+			if (($remote['size'] ?? null) !== ($receipt['size'] ?? null)
+				|| strtolower((string)($remote['sha256'] ?? '')) !== strtolower((string)($receipt['sha256'] ?? ''))) {
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
+			$preservation = $this->normalizePreservation($receipt['preservation'] ?? null);
+			if ($this->canonicalJson($existing['preservation'] ?? null) !== $this->canonicalJson($preservation)) {
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
+			return $existing;
+		}
+		$pending = $existing !== null ? $existing : null;
 
 		$record = [
 			'schema_version' => self::SCHEMA_VERSION,
