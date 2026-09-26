@@ -4,7 +4,9 @@ Date: 2026-08-22
 
 ## Status
 
-The architectural foundation defined by **#66 — Distributed Recording & Synchronisation** is implemented through the completed work packages **#140, #143, #144, #145 and #146**.
+**Historical architecture snapshot.**
+
+The architectural foundation defined by **#66 — Distributed Recording & Synchronisation** was implemented through the completed work packages **#140, #143, #144, #145 and #146**. This document records that predecessor architecture and its verification history; it is not a description of the current V1 transport coordinator.
 
 ## Implemented boundaries
 
@@ -55,3 +57,27 @@ TransferResult
 ```
 
 Local recording therefore remains independent of network availability, while persisted synchronization work can be resumed deterministically after interruption or temporary remote unavailability.
+
+
+## Current V1 architecture note
+
+The former `SynchronizationWork` / `SynchronizationWorkStore` / `SynchronizationOrchestrator` transport architecture documented above is not part of the current `develop` line.
+
+Current V1 uses the durable browser completion/transport boundary defined by ADR-083:
+
+```text
+durable browser capture
+      |
+      v
+persisted completion/transport state
+      |
+      v
+prepare -> direct Nextcloud upload -> verify -> close
+      |
+      v
+Core Recording completion
+```
+
+The browser completion job persists transport progress in the durable browser capture manifest and reconstructs recoverable work after browser/application restart. The current V1 does not reintroduce the historical synchronization work queue as a second production transport coordinator.
+
+The historical real-provider tests documented above remain useful architectural evidence, but current V1 repeated-synchronization and restart-recovery behavior is deliberately tracked as real-world Beta validation in #287.
