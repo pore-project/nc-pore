@@ -16,7 +16,7 @@ NC-PoRe ermöglicht professionelle lokale Audioaufnahme und die anschließende, 
 
 ## Aktueller V1-Stand
 
-NC-PoRe befindet sich in der **V1-Härtungs- und Produktisierungsphase**.
+NC-PoRe befindet sich in einem **späten Alpha-Stand der V1-Härtungs- und Produktisierungsphase**. `0.1.0-dev.98` ist noch keine Beta- bzw. App-Store-Freigabe.
 
 Für V1 ist Nextcloud der Host und die autoritative Speicherinstanz. Der aktuelle technische Pfad ist bewusst einfach:
 
@@ -70,7 +70,7 @@ V1 verwendet die normale Nextcloud-App-Architektur. Es gibt keine Abhängigkeit 
 
 ## Projektstatus
 
-Die technische Grundlage für lokale Aufnahme, dauerhafte Browser-Recovery, Artefaktidentität und verifizierte Nextcloud-Speicherung ist implementiert. Der nächste wesentliche Schritt ist die reale Nextcloud/Talk-Integration in einer dafür bereitgestellten Testinstanz.
+Die technische Grundlage für lokale Aufnahme, dauerhafte Browser-Recovery, Artefaktidentität, verifizierte Nextcloud-Speicherung und die PoRE-eigene Recording Coordination ist implementiert. Der aktuelle Stand ist CI-verifiziert und als späte Alpha einzuordnen. Als nächstes stehen reale Runtime-Validierung, Produktpolitur, Packaging-Bereinigung, Dokumentationsbereinigung und weitere Beta-Härtung an.
 
 Für eine öffentliche V1-Freigabe gelten insbesondere:
 
@@ -83,9 +83,9 @@ Für eine öffentliche V1-Freigabe gelten insbesondere:
 
 Weitere Informationen:
 
-* `docs/architecture/` — Architektur und technische Grundlagen
-* `docs/implementation/` — Umsetzung und V1-Planung
-* `adr/` — Architecture Decision Records
+- `docs/architecture/` — Architektur und technische Grundlagen
+- `docs/implementation/` — Umsetzung und V1-Planung
+- `adr/` — Architecture Decision Records
 
 ---
 
@@ -95,11 +95,11 @@ NC-PoRe wird als Open-Source-Projekt unter der **AGPL-3.0 Lizenz** entwickelt.
 
 Grundprinzipien:
 
-* Open Source First
-* nachvollziehbare Entscheidungen
-* kleine vollständige Entwicklungsschritte
-* offene Standards
-* Qualität vor Geschwindigkeit
+- Open Source First
+- nachvollziehbare Entscheidungen
+- kleine vollständige Entwicklungsschritte
+- offene Standards
+- Qualität vor Geschwindigkeit
 
 ---
 
@@ -186,9 +186,9 @@ For a public V1 release, the following principles apply in particular:
 
 Further information:
 
-* `docs/architecture/` — architecture and technical foundations
-* `docs/implementation/` — implementation and V1 planning
-* `adr/` — Architecture Decision Records
+- `docs/architecture/` — architecture and technical foundations
+- `docs/implementation/` — implementation and V1 planning
+- `adr/` — Architecture Decision Records
 
 ---
 
@@ -198,8 +198,8 @@ NC-PoRe is developed as an open-source project under the **AGPL-3.0 license**.
 
 Core principles:
 
-* Open Source First
-* traceable decisions
-* small complete development steps
-* open standards
-* quality over speed
+- Open Source First
+- traceable decisions
+- small complete development steps
+- open standards
+- quality over speed
