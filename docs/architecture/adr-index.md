@@ -88,10 +88,15 @@ This document provides an overview and navigation entry.
 - ADR-070 Audio Delivery Format and FLAC Default
 - ADR-071 Recording Capture, Preservation and Transport Formats
 - ADR-072 Host-Integrated Local Audio Capture via Connector
-- ADR-074 Talk Capture Quality
+- ADR-073 Local Recording Safety Cutoff After Connectivity Loss
+- ADR-074 Talk Capture Quality Boundary
 - ADR-075 Local Capture Independence from Communication Pipeline
-- ADR-082 Browser-to-Application Artifact Transport Boundary — superseded
+- ADR-076 Event-Driven Recording Coordination
+- ADR-082 Browser-to-Application Artifact Transport Boundary — superseded by ADR-083
 - ADR-083 Verified Nextcloud Artifact Transport
+- ADR-084 Recording Artifact Aggregation and Completion Semantics
+- ADR-085 Production Completion, Exceptional Closure and Late Artifact Delivery
+- ADR-086 Talk Recording Control Surface V1
 
 ---
 
