@@ -47,9 +47,14 @@ jobs:
           php -l lib/Controller/SettingsController.php
           php -l lib/Service/NextcloudArtifactPath.php
           php -l lib/Service/NextcloudArtifactConnector.php
+          php -l lib/Service/ArtifactManifestStore.php
           php -l tools/nextcloud-v1-contract-check.php
+          php -l tools/artifact-manifest-store-contract-check.php
       - name: Run Nextcloud V1 path contract checks
-        run: php tools/nextcloud-v1-contract-check.php
+        run: |
+          php tools/nextcloud-v1-contract-check.php
+          php tools/nextcloud-artifact-connector-contract-check.php
+          php tools/artifact-manifest-store-contract-check.php
 
   rust:
     runs-on: ubuntu-latest
