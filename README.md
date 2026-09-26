@@ -24,13 +24,14 @@ Für V1 ist Nextcloud der Host und die autoritative Speicherinstanz. Der aktuell
 Nextcloud Talk
     → NC-PoRe Recorder
     → dauerhafter Browser-Artefaktstand
-    → authentifizierter Nextcloud-OCS-Endpunkt
-    → Nextcloud Files API
-    → Größenprüfung + SHA-256 Read-back
+    → Prepare: temporäre Nextcloud-Upload-Autorisierung
+    → direkter Upload über die begrenzte WebDAV-Autorisierung
+    → serverseitige Größenprüfung + SHA-256 Read-back
+    → Close der temporären Transport-Autorisierung
     → bestätigtes Artefakt in Nextcloud Files
 ```
 
-Der Browser hält die fertiggestellte WAV-Datei bereits dauerhaft vor, bevor die Übergabe an Nextcloud beginnt. Dadurch benötigt V1 keine zweite serverseitige Artefaktablage und keinen separaten PoRe-Transferdienst.
+Der Browser hält die fertiggestellte WAV-Datei bereits dauerhaft vor, bevor der Transport beginnt. V1 verwendet die PoRE-Anwendungsgrenze nur für die Transport-Steuerung; das eigentliche Payload wird über die temporäre begrenzte Nextcloud-Autorisierung übertragen.
 
 ### Speicherpfad
 
@@ -127,9 +128,10 @@ For V1, Nextcloud is the host and authoritative storage system. The technical pa
 Nextcloud Talk
     → NC-PoRe Recorder
     → durable browser artifact
-    → authenticated Nextcloud OCS endpoint
-    → Nextcloud Files API
-    → size check + SHA-256 read-back
+    → Prepare: temporary Nextcloud upload authorization
+    → direct upload through bounded WebDAV authorization
+    → server-side size check + SHA-256 read-back
+    → Close temporary transport authorization
     → confirmed artifact in Nextcloud Files
 ```
 
