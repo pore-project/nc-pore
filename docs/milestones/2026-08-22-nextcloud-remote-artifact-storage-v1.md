@@ -2,7 +2,7 @@
 
 ## Nextcloud Remote Artifact Storage v1
 
-**Status:** in Umsetzung abgeschlossen
+**Status:** historical implementation milestone — completed for the predecessor provider path
 
 **Scope:** Nextcloud als erster konkreter Remote-Storage-Provider für vollständige, bereits lokal persistierte `RecordingArtifact`s.
 
@@ -95,3 +95,10 @@ Recording time is reduced to minute precision. The artifact ID remains the techn
 ### Completion
 
 The concrete Nextcloud integration from #159 is implemented. Remaining work for later versions concerns additional providers, not a change to the vendor-neutral synchronization architecture.
+
+
+## Current V1 architecture note
+
+This milestone documents the predecessor Nextcloud remote-storage implementation. The current V1 finalized-artifact transport is defined by ADR-083 and uses the durable browser completion/transport boundary with temporary Nextcloud upload authorization, direct WebDAV payload upload, server-side verification and explicit authorization close.
+
+The historical synchronization queue remains architectural history and is not reintroduced as a second current V1 transport coordinator.
