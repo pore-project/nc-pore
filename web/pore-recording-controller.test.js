@@ -31,7 +31,7 @@ describe('Browser recording controller', () => {
 				noiseSuppression: false,
 				autoGainControl: false,
 				deviceId: { exact: 'mono-device' },
-				channelCount: { ideal: 1, max: 1 },
+				channelCount: { ideal: 1 },
 			},
 		})
 		expect(capture.getCurrentTrack()).toBe(track)
