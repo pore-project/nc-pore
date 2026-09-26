@@ -134,7 +134,6 @@ Die aktuelle V1-Architektur folgt insbesondere diesen Prinzipien:
 - V1 Production Materialization
 - Recording Artifact Aggregation und Production Completion Semantics
 - aktuelle V1 Talk Recording UI
-- native Capture-Selection und der weitere host-neutrale Recorder-Ausbau in PR #228 / #232 bleiben separate Entwicklungsschritte
 ---
 
 # Nächste Arbeiten
@@ -217,7 +216,6 @@ Implemented:
 - RecordingArtifact creation
 - local preservation and recovery
 - artifact identity and persistence boundaries
-- native capture selection
 - capture/artifact lifecycle
 - technical source-change handling
 - continuation from local preservation into further processing
