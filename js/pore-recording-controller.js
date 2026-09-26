@@ -228,6 +228,11 @@
 				sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
 				sampleSize: Number.isFinite(settings.sampleSize) ? settings.sampleSize : null,
 				channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,
+				processing: {
+					echoCancellation: typeof settings.echoCancellation === 'boolean' ? settings.echoCancellation : null,
+					noiseSuppression: typeof settings.noiseSuppression === 'boolean' ? settings.noiseSuppression : null,
+					autoGainControl: typeof settings.autoGainControl === 'boolean' ? settings.autoGainControl : null,
+				},
 				startedAt: metadata.startedAt || new Date().toISOString(),
 			}
 		}
@@ -237,6 +242,25 @@
 			const source = artifact.source || {}
 			const required = ['productionId', 'recordingId', 'captureId', 'recordingSessionId']
 			if (required.some(key => !source[key])) throw new Error('PoRE browser artifact is missing authoritative or technical identity')
+			const processing = source.processing || {
+				echoCancellation: null,
+				noiseSuppression: null,
+				autoGainControl: null,
+			}
+			const segmentFrom = (segment, startedAt) => ({
+				startedAt: segment?.startedAt || startedAt || null,
+				sampleRate: Number.isFinite(segment?.sampleRate) ? segment.sampleRate : null,
+				sampleSize: Number.isFinite(segment?.sampleSize) ? segment.sampleSize : null,
+				channelCount: Number.isFinite(segment?.channelCount) ? segment.channelCount : null,
+				processing: {
+					echoCancellation: typeof segment?.processing?.echoCancellation === 'boolean' ? segment.processing.echoCancellation : null,
+					noiseSuppression: typeof segment?.processing?.noiseSuppression === 'boolean' ? segment.processing.noiseSuppression : null,
+					autoGainControl: typeof segment?.processing?.autoGainControl === 'boolean' ? segment.processing.autoGainControl : null,
+				},
+			})
+			const capture = segmentFrom(source, artifact.startedAt || source.startedAt || null)
+			const sourceSegments = [capture]
+			for (const change of artifact.sourceChanges || []) sourceSegments.push(segmentFrom(change?.to || {}, change?.occurredAt || null))
 			return {
 				productionId: source.productionId, productionLabel: source.productionLabel || source.productionId,
 				recordingId: source.recordingId, captureId: source.captureId, recordingSessionId: source.recordingSessionId,
@@ -246,6 +270,11 @@
 				startedAt: artifact.startedAt || source.startedAt || null, stoppedAt: artifact.stoppedAt || null,
 				stopReason: artifact.stopReason || null, openingSignet: artifact.openingSignet || source.openingSignet || null,
 				closingSignet: artifact.closingSignet || source.closingSignet || null,
+				provenance: {
+					schemaVersion: 1,
+					capture,
+					sourceSegments,
+				},
 			}
 		}
 	}
