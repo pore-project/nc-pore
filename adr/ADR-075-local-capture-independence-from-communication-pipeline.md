@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Accepted
+
+2026-09-26
 
 ## Date
 
