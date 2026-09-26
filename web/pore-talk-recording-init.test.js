@@ -5,6 +5,7 @@ describe('Talk recording opening coordination', () => {
 		const commands = []
 		let mountedContext = null
 		let recording = false
+		const originalCoordinationChannel = window.__poreRecordingCoordinationChannel
 
 		const track = {
 			id: 'pore-track-host',
@@ -32,6 +33,9 @@ describe('Talk recording opening coordination', () => {
 
 		window.location = { pathname: '/call/room-42' }
 		window.OC = { currentUser: { uid: 'host-1' } }
+		window.__poreRecordingCoordinationChannel = {
+			waitUntilReady: jest.fn().mockResolvedValue(undefined),
+		}
 		window.PoRETalkRecordingStateNormalize = snapshot => snapshot
 
 		window.PoRETalkAudioCaptureConnector = class {
@@ -109,5 +113,6 @@ describe('Talk recording opening coordination', () => {
 
 		expect(commands.slice(-4)).toEqual(['begin', 'ready', 'trigger_opening', 'confirm_opening'])
 		expect(recording).toBe(true)
+		window.__poreRecordingCoordinationChannel = originalCoordinationChannel
 	})
 })
