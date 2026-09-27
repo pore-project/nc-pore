@@ -166,7 +166,7 @@ describe('Browser runtime transport', () => {
 		const receipt = await transport.transfer(descriptor)
 
 		expect(receipt.file_id).toBe(42)
-		expect(fetchMock).toHaveBeenCalledTimes(5)
+		expect(fetchMock).toHaveBeenCalledTimes(6)
 		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/verify')
 		expect(fetchMock.mock.calls[1][0]).toContain('/finalized-artifact/prepare')
 		expect(fetchMock.mock.calls[2][1].method).toBe('PUT')
@@ -191,7 +191,7 @@ describe('Browser runtime transport', () => {
 
 		const transport = new Transport({ completionJob: job })
 		await expect(transport.transfer(descriptor)).resolves.toEqual(expect.objectContaining({ file_id: 17 }))
-		expect(fetchMock).toHaveBeenCalledTimes(4)
+		expect(fetchMock).toHaveBeenCalledTimes(5)
 	})
 
 	it('does not close or complete when remote verification fails', async () => {
