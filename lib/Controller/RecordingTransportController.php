@@ -86,8 +86,6 @@ final class RecordingTransportController extends OCSController {
 			);
 
 			if (($staged['status'] ?? null) === 'verified') {
-				// Another request completed this Artifact while our prepare was
-				// in flight. Never upload a duplicate of the already verified file.
 				$verifiedRemote = is_array($staged['remote'] ?? null) ? $staged['remote'] : [];
 				$verifiedFileId = is_int($verifiedRemote['file_id'] ?? null) && $verifiedRemote['file_id'] > 0
 					? $verifiedRemote['file_id']
@@ -97,10 +95,12 @@ final class RecordingTransportController extends OCSController {
 					throw new RuntimeException('artifact_manifest_invalid');
 				}
 
-				if ($preferredFileId !== null && $prepared['upload_required'] === true) {
-					// The preferred file is no longer reachable. The connector has
-					// already selected a fresh collision-free filename. Keep this
-					// handle alive and replace the stale Record under its File-ID condition.
+				// A preferred File-ID can disappear while another request
+				// completes the same Artifact. Only the record that still points
+				// to our original preferred File-ID may be replaced here.
+				if ($preferredFileId !== null
+					&& $prepared['upload_required'] === true
+					&& $verifiedFileId === $preferredFileId) {
 					if (!$this->artifactManifestStore->removeIfVerifiedRemoteFileIdMatches($capture_id, $verifiedFileId)) {
 						try {
 							$this->connector->close($prepared['transfer_id'], $actorId);
@@ -109,7 +109,7 @@ final class RecordingTransportController extends OCSController {
 						throw new RuntimeException('artifact_manifest_conflict');
 					}
 
-					$staged = $this->stageArtifact(
+					$replacementStage = $this->stageArtifact(
 						$production_id,
 						$production_label,
 						$recording_id,
@@ -119,11 +119,45 @@ final class RecordingTransportController extends OCSController {
 						$prepared,
 						$provenance,
 					);
+
+					if (($replacementStage['status'] ?? null) === 'verified') {
+						// A concurrent request won the race after the stale record
+						// was removed. Do not upload through our now-superfluous
+						// handle; reuse the winner's verified File-ID instead.
+						try {
+							$this->connector->close($prepared['transfer_id'], $actorId);
+						} catch (\Throwable) {
+						}
+
+						$replacementRemote = is_array($replacementStage['remote'] ?? null) ? $replacementStage['remote'] : [];
+						$replacementFileId = is_int($replacementRemote['file_id'] ?? null) && $replacementRemote['file_id'] > 0
+							? $replacementRemote['file_id']
+							: null;
+						if ($replacementFileId === null) {
+							throw new RuntimeException('artifact_manifest_invalid');
+						}
+
+						$prepared = $this->connector->prepare(
+							$this->required($production_id, 'production_id'),
+							$this->required($production_label, 'production_label'),
+							$this->required($recording_id, 'recording_id'),
+							$this->required($capture_id, 'capture_id'),
+							$this->required($started_at, 'started_at'),
+							$participant_label,
+							$size,
+							$this->required($payload_sha256, 'payload_sha256'),
+							$actorId,
+							$replacementFileId,
+						);
+					}
 				} else {
+					// Another request has already established the canonical
+					// verified file, or no stale verified record existed to
+					// replace. Close our provisional handle and bind the
+					// transport to the current verified File-ID.
 					try {
 						$this->connector->close($prepared['transfer_id'], $actorId);
 					} catch (\Throwable) {
-						// The handle may already have expired or been cleaned up.
 					}
 
 					$prepared = $this->connector->prepare(
