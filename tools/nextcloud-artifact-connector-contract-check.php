@@ -51,6 +51,7 @@ namespace OCP\Files {
 	class Folder {
 		private array $children = [];
 		private array $filesById = [];
+		public int $fileIdLookupCalls = 0;
 
 		public function __construct(private string $path) {}
 
@@ -83,6 +84,7 @@ namespace OCP\Files {
 		}
 
 		public function getFirstNodeById(int $id): ?object {
+			$this->fileIdLookupCalls += 1;
 			if (isset($this->filesById[$id])) return $this->filesById[$id];
 			foreach ($this->children as $child) {
 				if ($child instanceof Folder) {
@@ -275,14 +277,16 @@ namespace {
 	$changed = wav("\x09\x09\x09");
 	$changedRoot = new FakeRootFolder();
 	$changedUserFolder = $changedRoot->getUserFolder('owner');
+	$changedUserFolder->fileIdLookupCalls = 0;
 	$changedUserFolder->add('Host.wav', new File(17, $changed, 'Host.wav'));
 	check($changedUserFolder->getFirstNodeById(17) instanceof File, 'Preferred File-ID fixture must be visible from the user folder.');
+	$changedUserFolder->fileIdLookupCalls = 0;
 	check(hash('sha256', $changed) !== hash('sha256', $wav), 'Preferred File-ID fixture payload must differ from the expected payload.');
 	$changedShares = new FakeShareManager();
 	$changedConnector = connector($changedRoot, $changedShares);
 	try {
 		$changedConnector->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
-		throw new \RuntimeException('Preferred File-ID payload change must be rejected.');
+		throw new \RuntimeException('Preferred File-ID payload change must be rejected. lookupCalls=' . $changedUserFolder->fileIdLookupCalls);
 	} catch (\RuntimeException $error) {
 		check($error->getMessage() === 'Nextcloud recorded artifact payload has changed.', 'Unexpected preferred File-ID conflict error: ' . $error->getMessage());
 	}
