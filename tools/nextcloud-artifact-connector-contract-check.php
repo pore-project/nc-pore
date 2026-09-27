@@ -267,6 +267,17 @@ namespace {
 	$changed = wav("\x09\x09\x09");
 	$moved->remove('Host-renamed.wav');
 	$moved->add('Host-renamed.wav', new File(17, $changed, 'Host-renamed.wav'));
+
+	// TEST-02b: A missing preferred File-ID must never fall back to an unrelated
+	// same-name/same-payload file.
+	$moved->remove('Host-renamed.wav');
+	$leaf->add('Host.wav', new File(22, $wav, 'Host.wav'));
+	$sharesBeforePreferredMissing = $shares->created;
+	$prepared = $c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
+	check($prepared['upload_required'] === true, 'A missing preferred File-ID must force a fresh upload instead of reusing a different file.');
+	check($prepared['filename'] !== 'Host.wav' || $prepared['upload_required'] === true, 'Preferred File-ID path must not silently bind to the unrelated same-name file.');
+	check($shares->created === $sharesBeforePreferredMissing + 1, 'A stale preferred File-ID must create exactly one replacement upload authorization.');
+	$c->close($prepared['transfer_id'], 'actor-1');
 	try {
 		$c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
 		throw new \RuntimeException('Preferred File-ID payload change must be rejected.');
