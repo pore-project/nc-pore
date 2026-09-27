@@ -104,23 +104,10 @@ final class RecordingTransportController extends OCSController {
 					throw new RuntimeException('artifact_manifest_invalid');
 				}
 
-				$prepared = $this->connector->prepare(
-					$this->required($production_id, 'production_id'),
-					$this->required($production_label, 'production_label'),
-					$this->required($recording_id, 'recording_id'),
-					$this->required($capture_id, 'capture_id'),
-					$this->required($started_at, 'started_at'),
-					$participant_label,
-					$size,
-					$this->required($payload_sha256, 'payload_sha256'),
-					$actorId,
-					$verifiedFileId,
-				);
-
-				if ($prepared['upload_required'] === true) {
-					// The old record points to a file that is no longer
-					// reachable. Remove only if it is still the same record we
-					// observed, then stage the replacement upload.
+				if ($preferredFileId !== null && $prepared['upload_required'] === true) {
+					// The preferred file is no longer reachable. The connector has
+					// already selected a fresh collision-free filename; preserve that
+					// handle and replace the stale Record under its File-ID condition.
 					if (!$this->artifactManifestStore->removeIfVerifiedRemoteFileIdMatches($capture_id, $verifiedFileId)) {
 						try {
 							$this->connector->close($prepared['transfer_id'], $actorId);
@@ -138,6 +125,19 @@ final class RecordingTransportController extends OCSController {
 						$participant_label,
 						$prepared,
 						$provenance,
+					);
+				} else {
+					$prepared = $this->connector->prepare(
+						$this->required($production_id, 'production_id'),
+						$this->required($production_label, 'production_label'),
+						$this->required($recording_id, 'recording_id'),
+						$this->required($capture_id, 'capture_id'),
+						$this->required($started_at, 'started_at'),
+						$participantLabel,
+						$size,
+						$this->required($payload_sha256, 'payload_sha256'),
+						$actorId,
+						$verifiedFileId,
 					);
 				}
 			}
