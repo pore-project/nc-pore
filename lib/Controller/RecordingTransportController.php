@@ -225,6 +225,10 @@ final class RecordingTransportController extends OCSController {
 				|| $exception->getMessage() === 'Nextcloud transport artifact SHA-256 does not match.') {
 				return $this->rejected('transport_artifact_mismatch', 422);
 			}
+			if ($exception->getMessage() === 'Nextcloud transport artifact is not a valid WAV container.'
+				|| $exception->getMessage() === 'Nextcloud transport artifact is not a supported PoRE PCM WAV.') {
+				return $this->rejected('artifact_preservation_invalid', 422);
+			}
 			if (str_starts_with($exception->getMessage(), 'Invalid transport handle.')
 				|| str_starts_with($exception->getMessage(), 'Invalid transport handle payload.')
 				|| $exception->getMessage() === 'Incomplete transport handle.') {
