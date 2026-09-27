@@ -266,6 +266,7 @@ final class RecordingTransportController extends OCSController {
 			'artifact_provenance_invalid' => $this->rejected('artifact_provenance_invalid', 400),
 			'artifact_manifest_invalid' => $this->rejected('artifact_manifest_invalid', 400),
 			'artifact_manifest_conflict' => $this->rejected('artifact_manifest_conflict', 409),
+			'Nextcloud recorded artifact payload has changed.' => $this->rejected('artifact_manifest_conflict', 409),
 			default => $this->rejected(),
 		};
 	}
