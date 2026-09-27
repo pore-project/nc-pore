@@ -114,4 +114,145 @@ describe('Browser PCM recorder persistence recovery', () => {
 		expect(recorder.pendingBytes).toBe(0)
 		expect(recorder.persistenceQueue).toHaveLength(2)
 	})
+	// TEST-04: preservation follows the actual reported capture rate and the worklet receives one mono channel.
+	it('binds the preservation context to the actual track rate and configures explicit mono downmix', async () => {
+		const previousMediaStream = globalThis.MediaStream
+		const previousAudioWorkletNode = globalThis.AudioWorkletNode
+
+		class FakeMediaStream {
+			constructor(tracks) { this.tracks = tracks }
+			getTracks() { return this.tracks.slice() }
+		}
+
+		class FakeAudioContext {
+			static instances = []
+			constructor(options = {}) {
+				this.options = options
+				this.sampleRate = options.sampleRate || 48000
+				this.state = 'running'
+				this.audioWorklet = { addModule: jest.fn().mockResolvedValue(undefined) }
+				this.destination = {}
+				FakeAudioContext.instances.push(this)
+			}
+			createMediaStreamTrackSource = track => ({ track, connect: jest.fn(), disconnect: jest.fn() })
+			createMediaStreamSource = stream => ({ stream, connect: jest.fn(), disconnect: jest.fn() })
+			createMediaStreamDestination = () => ({})
+			createGain = () => ({ gain: { value: 0 }, connect: jest.fn(), disconnect: jest.fn() })
+			resume = jest.fn(async () => { this.state = 'running' })
+			close = jest.fn(async () => { this.state = 'closed' })
+		}
+
+		class FakeAudioWorkletNode {
+			static instances = []
+			constructor(context, name, options) {
+				this.context = context
+				this.name = name
+				this.options = options
+				this.port = { onmessage: null }
+				this.connect = jest.fn()
+				this.disconnect = jest.fn()
+				FakeAudioWorkletNode.instances.push(this)
+			}
+		}
+
+		globalThis.MediaStream = FakeMediaStream
+		globalThis.AudioWorkletNode = FakeAudioWorkletNode
+
+		try {
+			const store = {
+				beginCapture: jest.fn().mockResolvedValue(undefined),
+			}
+			const recorder = new Recorder({
+				AudioContextClass: FakeAudioContext,
+				persistenceStoreFactory: () => store,
+			})
+			const track = {
+				id: 'pore-rate-44100',
+				kind: 'audio',
+				readyState: 'live',
+				getSettings: () => ({ sampleRate: 44100, channelCount: 2, echoCancellation: false, noiseSuppression: false, autoGainControl: false }),
+			}
+
+			await recorder.start(track, {
+				captureId: 'capture-rate-1',
+				recordingSessionId: 'session-rate-1',
+			})
+
+			expect(FakeAudioContext.instances).toHaveLength(1)
+			expect(FakeAudioContext.instances[0].options).toEqual({ sampleRate: 44100 })
+			expect(recorder.sampleRate).toBe(44100)
+			expect(FakeAudioWorkletNode.instances[0].options).toEqual({
+				numberOfInputs: 1,
+				numberOfOutputs: 1,
+				channelCount: 1,
+				channelCountMode: 'explicit',
+				channelInterpretation: 'speakers',
+			})
+		} finally {
+			if (previousMediaStream) globalThis.MediaStream = previousMediaStream
+			else delete globalThis.MediaStream
+			if (previousAudioWorkletNode) globalThis.AudioWorkletNode = previousAudioWorkletNode
+			else delete globalThis.AudioWorkletNode
+		}
+	})
+
+	// TEST-05: a source replacement with a different known rate is rejected instead of silently resampled.
+	it('rejects a source replacement with a different known sample rate', async () => {
+		const previousMediaStream = globalThis.MediaStream
+		const previousAudioWorkletNode = globalThis.AudioWorkletNode
+
+		class FakeMediaStream {
+			constructor(tracks) { this.tracks = tracks }
+			getTracks() { return this.tracks.slice() }
+		}
+		class FakeAudioContext {
+			constructor(options = {}) {
+				this.sampleRate = options.sampleRate || 48000
+				this.state = 'running'
+				this.audioWorklet = { addModule: jest.fn().mockResolvedValue(undefined) }
+				this.destination = {}
+			}
+			createMediaStreamTrackSource = track => ({ track, connect: jest.fn(), disconnect: jest.fn() })
+			createMediaStreamSource = stream => ({ stream, connect: jest.fn(), disconnect: jest.fn() })
+			createMediaStreamDestination = () => ({})
+			createGain = () => ({ gain: { value: 0 }, connect: jest.fn(), disconnect: jest.fn() })
+			resume = jest.fn(async () => {})
+			close = jest.fn(async () => {})
+		}
+		class FakeAudioWorkletNode {
+			constructor() {
+				this.port = { onmessage: null }
+				this.connect = jest.fn()
+				this.disconnect = jest.fn()
+			}
+		}
+		globalThis.MediaStream = FakeMediaStream
+		globalThis.AudioWorkletNode = FakeAudioWorkletNode
+
+		try {
+			const store = { beginCapture: jest.fn().mockResolvedValue(undefined) }
+			const recorder = new Recorder({ AudioContextClass: FakeAudioContext, persistenceStoreFactory: () => store })
+			const firstTrack = {
+				id: 'pore-rate-48000',
+				kind: 'audio',
+				readyState: 'live',
+				getSettings: () => ({ sampleRate: 48000 }),
+			}
+			const secondTrack = {
+				id: 'pore-rate-44100',
+				kind: 'audio',
+				readyState: 'live',
+				getSettings: () => ({ sampleRate: 44100 }),
+			}
+
+			await recorder.start(firstTrack, { captureId: 'capture-rate-2', recordingSessionId: 'session-rate-2' })
+			await expect(recorder.replaceTrack(secondTrack)).rejects.toThrow(/44100 Hz while preserving 48000 Hz/)
+		} finally {
+			if (previousMediaStream) globalThis.MediaStream = previousMediaStream
+			else delete globalThis.MediaStream
+			if (previousAudioWorkletNode) globalThis.AudioWorkletNode = previousAudioWorkletNode
+			else delete globalThis.AudioWorkletNode
+		}
+	})
+
 })
