@@ -6,8 +6,7 @@
 
 ---
 
-# Deutsch
-
+# Deutsch ([English version below](#english-version))
 ## Kontext
 
 NC-PoRe verwendet derzeit Entwicklungsstände in der Form `0.1.0-dev.N`. Die `dev.N`-Kennung wurde bewusst eingeführt, um testbare und eindeutig unterscheidbare Entwicklungsstände zu markieren.
@@ -224,8 +223,7 @@ Diese Entscheidung ist angenommen und gilt ab sofort als Grundlage für die kün
 
 ---
 
-# English
-
+# English Version ([Deutsche Version oben](#deutsch))
 ## Context
 
 NC-PoRe currently uses development versions in the form `0.1.0-dev.N`. The `dev.N` suffix was intentionally introduced to identify concrete, testable development states.
