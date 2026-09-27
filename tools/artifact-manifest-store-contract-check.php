@@ -125,6 +125,8 @@ namespace {
 	check($store->removeIfVerifiedRemoteFileIdMatches('capture-1', 42) === false, 'Stale reconciliation must not remove a record with a different File-ID.');
 	check($store->get('capture-1') !== null, 'Stale reconciliation must preserve the current record.');
 	check($store->removeIfVerifiedRemoteFileIdMatches('capture-1', 99) === true, 'Matching reconciliation must remove the verified record.');
+	$artifactPathAfterRemoval = $directory . '/appdata_instance-1/pore/artifacts/' . hash('sha256', 'capture-1') . '.json';
+	check(is_file($artifactPathAfterRemoval . '.lock'), 'Artifact manifest lock sidecar must survive record removal.');
 	check($store->get('capture-1') === null, 'Matching reconciliation must remove the record.');
 
 	$store->stagePreparedArtifact([
