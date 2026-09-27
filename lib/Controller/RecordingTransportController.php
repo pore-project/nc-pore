@@ -47,9 +47,20 @@ final class RecordingTransportController extends OCSController {
 			return $this->rejected('talk_context_unauthorized', 403);
 		}
 
+		$prepared = null;
 		try {
 			$this->authorizeRecordingTransport($actorId, $production_id, $recording_id);
 			$provenance = $this->decodeProvenance($capture_provenance);
+
+			$preferredFileId = null;
+			$existing = $this->artifactManifestStore->get($capture_id);
+			if (($existing['status'] ?? null) === 'verified') {
+				$remote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
+				if (is_int($remote['file_id'] ?? null) && $remote['file_id'] > 0) {
+					$preferredFileId = $remote['file_id'];
+				}
+			}
+
 			$prepared = $this->connector->prepare(
 				$this->required($production_id, 'production_id'),
 				$this->required($production_label, 'production_label'),
@@ -60,38 +71,99 @@ final class RecordingTransportController extends OCSController {
 				$size,
 				$this->required($payload_sha256, 'payload_sha256'),
 				$actorId,
+				$preferredFileId,
 			);
-			try {
-				$this->artifactManifestStore->stagePreparedArtifact([
-					'artifact_id' => $capture_id,
-					'production_id' => $production_id,
-					'production_label' => $production_label,
-					'recording_id' => $recording_id,
-					'recording_session_id' => $this->required($recording_session_id, 'recording_session_id'),
-					'participant_label' => $participant_label,
-					'filename' => $prepared['filename'] ?? null,
-					'size' => $prepared['size'] ?? $size,
-					'payload_sha256' => $prepared['sha256'] ?? $payload_sha256,
-					'capture_provenance' => $provenance,
-				]);
-			} catch (\Throwable $exception) {
-				try { $this->connector->close($prepared['transfer_id'], $actorId); } catch (\Throwable) {
-					// The transport handle may already have been absent/expired.
+
+			$staged = $this->stageArtifact(
+				$production_id,
+				$production_label,
+				$recording_id,
+				$capture_id,
+				$recording_session_id,
+				$participant_label,
+				$prepared,
+				$provenance,
+			);
+
+			if (($staged['status'] ?? null) === 'verified') {
+				// Another request completed this Artifact while our prepare was
+				// in flight. Never leave our newly-created upload authorization
+				// behind and never upload a duplicate of the already verified file.
+				try {
+					$this->connector->close($prepared['transfer_id'], $actorId);
+				} catch (\Throwable) {
+					// The handle may already have expired or been cleaned up.
 				}
-				throw $exception;
+
+				$verifiedRemote = is_array($staged['remote'] ?? null) ? $staged['remote'] : [];
+				$verifiedFileId = is_int($verifiedRemote['file_id'] ?? null) && $verifiedRemote['file_id'] > 0
+					? $verifiedRemote['file_id']
+					: null;
+
+				if ($verifiedFileId === null) {
+					throw new RuntimeException('artifact_manifest_invalid');
+				}
+
+				$prepared = $this->connector->prepare(
+					$this->required($production_id, 'production_id'),
+					$this->required($production_label, 'production_label'),
+					$this->required($recording_id, 'recording_id'),
+					$this->required($capture_id, 'capture_id'),
+					$this->required($started_at, 'started_at'),
+					$participant_label,
+					$size,
+					$this->required($payload_sha256, 'payload_sha256'),
+					$actorId,
+					$verifiedFileId,
+				);
+
+				if ($prepared['upload_required'] === true) {
+					// The old record points to a file that is no longer
+					// reachable. Remove only if it is still the same record we
+					// observed, then stage the replacement upload.
+					if (!$this->artifactManifestStore->removeIfVerifiedRemoteFileIdMatches($capture_id, $verifiedFileId)) {
+						try {
+							$this->connector->close($prepared['transfer_id'], $actorId);
+						} catch (\Throwable) {
+						}
+						throw new RuntimeException('artifact_manifest_conflict');
+					}
+
+					$staged = $this->stageArtifact(
+						$production_id,
+						$production_label,
+						$recording_id,
+						$capture_id,
+						$recording_session_id,
+						$participant_label,
+						$prepared,
+						$provenance,
+					);
+				}
 			}
+
 			return new DataResponse([
 				'protocol_version' => 2,
 				'status' => 'prepared',
-				...$prepared,
+				'transfer_id' => $prepared['transfer_id'],
+				'upload_url' => $prepared['upload_url'],
+				'upload_username' => $prepared['upload_username'],
+				'upload_password' => $prepared['upload_password'],
+				'filename' => $prepared['filename'],
+				'size' => $prepared['size'],
+				'sha256' => $prepared['sha256'],
+				'upload_required' => $prepared['upload_required'],
 				'error_code' => null,
 			]);
 		} catch (\Throwable $exception) {
-			if ($exception->getMessage() === 'PoRE transport authorization is not available.') return $this->rejected('runtime_unavailable', 503);
-			if ($exception->getMessage() === 'PoRE transport authorization is not permitted for this recording') return $this->rejected('transport_unauthorized', 403);
-			if ($exception->getMessage() === 'artifact_provenance_invalid') return $this->rejected('artifact_provenance_invalid', 400);
-			if ($exception->getMessage() === 'artifact_manifest_conflict') return $this->rejected('artifact_manifest_conflict', 409);
-			return $this->rejected();
+			if ($prepared !== null) {
+				try {
+					$this->connector->close($prepared['transfer_id'], $actorId);
+				} catch (\Throwable) {
+				}
+			}
+
+			return $this->mapPrepareError($exception);
 		}
 	}
 
@@ -115,6 +187,16 @@ final class RecordingTransportController extends OCSController {
 			if ($exception->getMessage() === 'artifact_manifest_context_missing') return $this->rejected('artifact_manifest_context_missing', 409);
 			if ($exception->getMessage() === 'artifact_manifest_storage_unavailable') return $this->rejected('artifact_manifest_storage_unavailable', 503);
 			if ($exception->getMessage() === 'artifact_preservation_invalid') return $this->rejected('artifact_preservation_invalid', 422);
+			if ($exception->getMessage() === 'Nextcloud transport artifact has not arrived.') return $this->rejected('transport_artifact_missing', 409);
+			if ($exception->getMessage() === 'Nextcloud transport artifact size does not match.'
+				|| $exception->getMessage() === 'Nextcloud transport artifact SHA-256 does not match.') {
+				return $this->rejected('transport_artifact_mismatch', 422);
+			}
+			if (str_starts_with($exception->getMessage(), 'Invalid transport handle.')
+				|| str_starts_with($exception->getMessage(), 'Invalid transport handle payload.')
+				|| $exception->getMessage() === 'Incomplete transport handle.') {
+				return $this->rejected('transport_handle_invalid', 409);
+			}
 			return $this->rejected();
 		}
 	}
@@ -135,8 +217,39 @@ final class RecordingTransportController extends OCSController {
 		}
 	}
 
+	/**
+	 * @param array<string, mixed> $prepared
+	 * @param array<string, mixed> $provenance
+	 * @return array<string, mixed>
+	 */
+	private function stageArtifact(
+		string $productionId,
+		string $productionLabel,
+		string $recordingId,
+		string $captureId,
+		string $recordingSessionId,
+		string $participantLabel,
+		array $prepared,
+		array $provenance,
+	): array {
+		return $this->artifactManifestStore->stagePreparedArtifact([
+			'artifact_id' => $captureId,
+			'production_id' => $productionId,
+			'production_label' => $productionLabel,
+			'recording_id' => $recordingId,
+			'recording_session_id' => $this->required($recordingSessionId, 'recording_session_id'),
+			'participant_label' => $participantLabel,
+			'target_user_id' => $prepared['target_user_id'] ?? null,
+			'filename' => $prepared['filename'] ?? null,
+			'size' => $prepared['size'] ?? null,
+			'payload_sha256' => $prepared['sha256'] ?? null,
+			'capture_provenance' => $provenance,
+		]);
+	}
 
 	private function decodeProvenance(string $json): array {
+		if (strlen($json) > 65536) throw new RuntimeException('artifact_provenance_invalid');
+
 		try {
 			$decoded = json_decode($json === '' ? '{}' : $json, true, 512, JSON_THROW_ON_ERROR);
 		} catch (\JsonException) {
@@ -144,6 +257,17 @@ final class RecordingTransportController extends OCSController {
 		}
 		if (!is_array($decoded)) throw new RuntimeException('artifact_provenance_invalid');
 		return $decoded;
+	}
+
+	private function mapPrepareError(\Throwable $exception): DataResponse {
+		return match ($exception->getMessage()) {
+			'PoRE transport authorization is not available.' => $this->rejected('runtime_unavailable', 503),
+			'PoRE transport authorization is not permitted for this recording' => $this->rejected('transport_unauthorized', 403),
+			'artifact_provenance_invalid' => $this->rejected('artifact_provenance_invalid', 400),
+			'artifact_manifest_invalid' => $this->rejected('artifact_manifest_invalid', 400),
+			'artifact_manifest_conflict' => $this->rejected('artifact_manifest_conflict', 409),
+			default => $this->rejected(),
+		};
 	}
 
 	private function required(string $value, string $name): string {
