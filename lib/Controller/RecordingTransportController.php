@@ -133,7 +133,7 @@ final class RecordingTransportController extends OCSController {
 						$this->required($recording_id, 'recording_id'),
 						$this->required($capture_id, 'capture_id'),
 						$this->required($started_at, 'started_at'),
-						$participantLabel,
+						$participant_label,
 						$size,
 						$this->required($payload_sha256, 'payload_sha256'),
 						$actorId,
