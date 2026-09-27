@@ -196,6 +196,14 @@ namespace {
 	check($connector->closed === [['stale-provisional', 'actor-1']], 'Stale provisional handle must be closed.');
 	check($store->removedIds === [], 'A newer verified File-ID must never be removed by the stale request.');
 
+	// TEST-03: Invalid remote preservation is a client-side validation error.
+	$store = new FakeStore();
+	$connector = new FakeConnector();
+	$connector->prepareException = new \RuntimeException('Nextcloud transport artifact is not a supported PoRE PCM WAV.');
+	$response = runPrepare(controller($store, $connector));
+	check($response->status === 422, 'Invalid V1 preservation must map to HTTP 422.');
+	check($response->data['error_code'] === 'artifact_preservation_invalid', 'Invalid V1 preservation must use the artifact preservation error code.');
+
 
 	echo "Recording transport controller contract checks passed.\n";
 }
