@@ -98,6 +98,7 @@
 						receipt = await this.verify(state.transferId, descriptor.productionId)
 					} catch (error) {
 						if (recoveryAttempt === 0 && this.isRecoverableVerificationFailure(error)) {
+							await this.close(state.transferId, descriptor.productionId).catch(() => {})
 							await this.prepare(descriptor)
 							return this._transferOnce(descriptor, 1)
 						}
