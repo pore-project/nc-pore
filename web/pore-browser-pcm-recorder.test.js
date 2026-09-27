@@ -180,6 +180,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 			await recorder.start(track, {
 				captureId: 'capture-rate-1',
 				recordingSessionId: 'session-rate-1',
+				persistenceStore: store,
 			})
 
 			expect(FakeAudioContext.instances).toHaveLength(2)
@@ -252,7 +253,7 @@ describe('Browser PCM recorder persistence recovery', () => {
 				getSettings: () => ({ sampleRate: 44100 }),
 			}
 
-			await recorder.start(firstTrack, { captureId: 'capture-rate-2', recordingSessionId: 'session-rate-2' })
+			await recorder.start(firstTrack, { captureId: 'capture-rate-2', recordingSessionId: 'session-rate-2', persistenceStore: store })
 			await expect(recorder.replaceTrack(secondTrack)).rejects.toThrow(/44100 Hz while preserving 48000 Hz/)
 		} finally {
 			if (previousMediaStream) globalThis.MediaStream = previousMediaStream
