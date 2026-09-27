@@ -251,7 +251,7 @@
 			const envelope = await response.json()
 			const body = envelope?.ocs?.data || envelope?.data || envelope
 			if (!response.ok) {
-				const error = new Error(body?.error_code || `PoRE transport control failed (\${response.status})`)
+				const error = new Error(body?.error_code || `PoRE transport control failed (${response.status})`)
 				error.status = response.status
 				error.code = body?.error_code || null
 				error.error_code = body?.error_code || null
