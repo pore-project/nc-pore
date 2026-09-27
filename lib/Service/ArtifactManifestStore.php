@@ -27,24 +27,27 @@ final class ArtifactManifestStore {
 	 *
 	 * @param array<string, mixed> $submission
 	 */
-	public function stagePreparedArtifact(array $submission): ?array {
+	public function stagePreparedArtifact(array $submission): array {
 		$record = $this->normalizePendingRecord($submission);
-		$existing = $this->read($record['artifact_id']);
 
-		if ($existing !== null) {
-			$this->assertStableIdentityMatches($existing, $record);
-			if (($existing['status'] ?? null) === 'verified') {
-				// A previously verified immutable Artifact record wins over a
-				// repeated preparation. Do not downgrade or mutate it.
+		return $this->withArtifactLock($record['artifact_id'], LOCK_EX, function (string $path) use ($record): array {
+			$existing = $this->readPath($path);
+
+			if ($existing !== null) {
+				$this->assertStableIdentityMatches($existing, $record);
 				$this->assertExpectedPayloadMatches($existing, $record);
-				return $existing;
-			}
-			$this->assertExpectedPayloadMatches($existing, $record);
-		}
 
-		$record['prepared_at'] = $existing['prepared_at'] ?? gmdate('c');
-		$this->write($record);
-		return $record;
+				if (($existing['status'] ?? null) === 'verified') {
+					// A previously verified immutable Artifact record wins over a
+					// repeated preparation. Do not downgrade or mutate it.
+					return $existing;
+				}
+			}
+
+			$record['prepared_at'] = $existing['prepared_at'] ?? gmdate('c');
+			$this->writeLocked($path, $record);
+			return $record;
+		});
 	}
 
 	/**
@@ -54,58 +57,88 @@ final class ArtifactManifestStore {
 	 */
 	public function persistVerifiedArtifact(array $receipt): array {
 		$artifactId = $this->requiredString($receipt['artifact_id'] ?? null, 'artifact_id');
-		$existing = $this->read($artifactId);
-		if ($existing !== null && ($existing['status'] ?? null) === 'verified') {
-			$remote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
-			if (($remote['size'] ?? null) !== ($receipt['size'] ?? null)
-				|| strtolower((string)($remote['sha256'] ?? '')) !== strtolower((string)($receipt['sha256'] ?? ''))) {
-				throw new RuntimeException('artifact_manifest_conflict');
+
+		return $this->withArtifactLock($artifactId, LOCK_EX, function (string $path) use ($receipt, $artifactId): array {
+			$existing = $this->readPath($path);
+
+			if ($existing !== null && ($existing['status'] ?? null) === 'verified') {
+				$remote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
+				$receiptSize = $this->requiredNonNegativeInt($receipt['size'] ?? null, 'size');
+				$receiptHash = $this->requiredSha256($receipt['sha256'] ?? null);
+
+				if (($remote['size'] ?? null) !== $receiptSize
+					|| strtolower((string)($remote['sha256'] ?? '')) !== $receiptHash) {
+					throw new RuntimeException('artifact_manifest_conflict');
+				}
+
+				$preservation = $this->normalizePreservation($receipt['preservation'] ?? null);
+				if ($this->canonicalJson($existing['preservation'] ?? null) !== $this->canonicalJson($preservation)) {
+					throw new RuntimeException('artifact_manifest_conflict');
+				}
+
+				$updated = $existing;
+				$updated['remote'] = [
+					'target_user_id' => $this->nullableString($receipt['target_user_id'] ?? ($remote['target_user_id'] ?? null)),
+					'filename' => $this->nullableString($receipt['filename'] ?? ($remote['filename'] ?? null)),
+					'file_id' => $this->requiredPositiveInt($receipt['file_id'] ?? ($remote['file_id'] ?? null), 'file_id'),
+					'path' => $this->nullableString($receipt['path'] ?? ($remote['path'] ?? null)),
+					'size' => $receiptSize,
+					'sha256' => $receiptHash,
+				];
+
+				if ($this->canonicalJson($existing) !== $this->canonicalJson($updated)) {
+					$this->writeLocked($path, $updated);
+				}
+				return $updated;
 			}
-			$preservation = $this->normalizePreservation($receipt['preservation'] ?? null);
-			if ($this->canonicalJson($existing['preservation'] ?? null) !== $this->canonicalJson($preservation)) {
-				throw new RuntimeException('artifact_manifest_conflict');
+
+			if ($existing === null) {
+				throw new RuntimeException('artifact_manifest_context_missing');
 			}
-			return $existing;
-		}
-		if ($existing === null) {
-			throw new RuntimeException('artifact_manifest_context_missing');
-		}
-		$pending = $existing;
 
-		$record = [
-			'schema_version' => self::SCHEMA_VERSION,
-			'status' => 'verified',
-			'production_id' => $pending['production_id'] ?? null,
-			'production_label' => $pending['production_label'] ?? null,
-			'recording_id' => $pending['recording_id'] ?? null,
-			'recording_session_id' => $pending['recording_session_id'] ?? null,
-			'artifact_id' => $artifactId,
-			'participant_label' => $pending['participant_label'] ?? null,
-			'remote' => [
-				'filename' => $receipt['filename'] ?? ($pending['remote']['filename'] ?? null),
-				'file_id' => $this->requiredInt($receipt['file_id'] ?? null, 'file_id'),
-				'path' => $this->nullableString($receipt['path'] ?? null),
-				'size' => $this->requiredInt($receipt['size'] ?? null, 'size'),
-				'sha256' => $this->requiredSha256($receipt['sha256'] ?? null),
-			],
-			'preservation' => $this->normalizePreservation($receipt['preservation'] ?? null),
-			'capture' => $pending['capture'] ?? null,
-			'sourceSegments' => $pending['sourceSegments'] ?? [],
-			'verified_at' => gmdate('c'),
-		];
+			$pending = $existing;
+			$fileId = $this->requiredPositiveInt($receipt['file_id'] ?? null, 'file_id');
+			$size = $this->requiredNonNegativeInt($receipt['size'] ?? null, 'size');
+			$sha256 = $this->requiredSha256($receipt['sha256'] ?? null);
 
-		$this->assertExpectedPayloadMatches($existing, $record, true);
+			$record = [
+				'schema_version' => self::SCHEMA_VERSION,
+				'status' => 'verified',
+				'production_id' => $pending['production_id'] ?? null,
+				'production_label' => $pending['production_label'] ?? null,
+				'recording_id' => $pending['recording_id'] ?? null,
+				'recording_session_id' => $pending['recording_session_id'] ?? null,
+				'artifact_id' => $artifactId,
+				'participant_label' => $pending['participant_label'] ?? null,
+				'remote' => [
+					'target_user_id' => $this->nullableString($receipt['target_user_id'] ?? ($pending['remote']['target_user_id'] ?? null)),
+					'filename' => $this->nullableString($receipt['filename'] ?? ($pending['remote']['filename'] ?? null)),
+					'file_id' => $fileId,
+					'path' => $this->nullableString($receipt['path'] ?? null),
+					'size' => $size,
+					'sha256' => $sha256,
+				],
+				'preservation' => $this->normalizePreservation($receipt['preservation'] ?? null),
+				'capture' => $pending['capture'] ?? null,
+				'sourceSegments' => $pending['sourceSegments'] ?? [],
+				'verified_at' => gmdate('c'),
+			];
 
-		$record['manifest_hash'] = $this->manifestHash($record);
-		$this->write($record);
-		return $record;
+			$this->assertExpectedPayloadMatches($existing, $record, true);
+
+			$record['manifest_hash'] = $this->manifestHash($record);
+			$this->writeLocked($path, $record);
+			return $record;
+		});
 	}
 
 	/**
 	 * @return array<string, mixed>|null
 	 */
 	public function get(string $artifactId): ?array {
-		return $this->read($artifactId);
+		return $this->withArtifactLock($artifactId, LOCK_SH, function (string $path): ?array {
+			return $this->readPath($path);
+		});
 	}
 
 	/**
@@ -114,32 +147,73 @@ final class ArtifactManifestStore {
 	public function list(): array {
 		$records = [];
 		foreach (glob($this->directory() . '/*.json') ?: [] as $path) {
-			$content = file_get_contents($path);
-			if ($content === false) throw new RuntimeException('artifact_manifest_storage_unavailable');
-			$decoded = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
-			if (!is_array($decoded)) throw new RuntimeException('artifact_manifest_storage_invalid');
-			$records[] = $decoded;
+			$record = $this->withPathLock($path, LOCK_SH, function (string $lockedPath): ?array {
+				if (!is_file($lockedPath)) {
+					return null;
+				}
+				return $this->readPath($lockedPath);
+			});
+			if ($record !== null) {
+				$records[] = $record;
+			}
 		}
 		return $records;
 	}
 
 	public function remove(string $artifactId): void {
-		$path = $this->path($this->requiredString($artifactId, 'artifact_id'));
-		$lockPath = $path . '.lock';
-		$lock = fopen($lockPath, 'c');
-		if ($lock === false || !flock($lock, LOCK_EX)) {
-			if (is_resource($lock)) fclose($lock);
-			throw new RuntimeException('artifact_manifest_storage_unavailable');
-		}
-
-		try {
+		$this->withArtifactLock($artifactId, LOCK_EX, function (string $path): void {
 			if (is_file($path) && !unlink($path)) {
 				throw new RuntimeException('artifact_manifest_storage_unavailable');
 			}
-		} finally {
-			flock($lock, LOCK_UN);
-			fclose($lock);
-		}
+		});
+	}
+
+	public function removeIfVerifiedRemoteFileIdMatches(string $artifactId, int $expectedFileId): bool {
+		return $this->withArtifactLock($artifactId, LOCK_EX, function (string $path) use ($expectedFileId): bool {
+			$record = $this->readPath($path);
+			if ($record === null || ($record['status'] ?? null) !== 'verified') {
+				return false;
+			}
+
+			$remote = is_array($record['remote'] ?? null) ? $record['remote'] : [];
+			if (($remote['file_id'] ?? null) !== $expectedFileId) {
+				return false;
+			}
+
+			if (!unlink($path)) {
+				throw new RuntimeException('artifact_manifest_storage_unavailable');
+			}
+			return true;
+		});
+	}
+
+	private function removeIfPendingExpired(string $artifactId, int $threshold): bool {
+		return $this->withArtifactLock($artifactId, LOCK_EX, function (string $path) use ($threshold): bool {
+			$record = $this->readPath($path);
+			if ($record === null || ($record['status'] ?? null) !== 'pending_verification') {
+				return false;
+			}
+
+			$preparedAt = $record['prepared_at'] ?? null;
+			if (!is_string($preparedAt) || trim($preparedAt) === '') {
+				return false;
+			}
+
+			try {
+				$timestamp = new \DateTimeImmutable($preparedAt);
+			} catch (\Exception) {
+				return false;
+			}
+
+			if ($timestamp->getTimestamp() > $threshold) {
+				return false;
+			}
+
+			if (!unlink($path)) {
+				throw new RuntimeException('artifact_manifest_storage_unavailable');
+			}
+			return true;
+		});
 	}
 
 	public function cleanupExpiredPending(?\DateTimeImmutable $now = null): int {
@@ -148,17 +222,16 @@ final class ArtifactManifestStore {
 		$removed = 0;
 
 		foreach ($this->list() as $record) {
-			if (($record['status'] ?? null) !== 'pending_verification') continue;
-			$preparedAt = $record['prepared_at'] ?? null;
-			if (!is_string($preparedAt) || trim($preparedAt) === '') continue;
-			try {
-				$timestamp = new \DateTimeImmutable($preparedAt);
-			} catch (\Exception) {
+			if (($record['status'] ?? null) !== 'pending_verification') {
 				continue;
 			}
-			if ($timestamp->getTimestamp() > $threshold) continue;
-			$this->remove($this->requiredString($record['artifact_id'] ?? null, 'artifact_id'));
-			$removed++;
+			$artifactId = $record['artifact_id'] ?? null;
+			if (!is_string($artifactId) || trim($artifactId) === '') {
+				continue;
+			}
+			if ($this->removeIfPendingExpired($artifactId, $threshold)) {
+				$removed++;
+			}
 		}
 
 		return $removed;
@@ -175,6 +248,7 @@ final class ArtifactManifestStore {
 		$recordingSessionId = $this->requiredString($submission['recording_session_id'] ?? null, 'recording_session_id');
 
 		$provenance = $this->normalizeCaptureProvenance($submission['capture_provenance'] ?? null);
+		$size = $this->requiredNonNegativeInt($submission['size'] ?? null, 'size');
 
 		return [
 			'schema_version' => self::SCHEMA_VERSION,
@@ -186,10 +260,11 @@ final class ArtifactManifestStore {
 			'artifact_id' => $artifactId,
 			'participant_label' => $this->nullableString($submission['participant_label'] ?? null),
 			'remote' => [
+				'target_user_id' => $this->nullableString($submission['target_user_id'] ?? null),
 				'filename' => $this->nullableString($submission['filename'] ?? null),
 				'file_id' => null,
 				'path' => null,
-				'size' => $this->requiredInt($submission['size'] ?? null, 'size'),
+				'size' => $size,
 				'sha256' => $this->requiredSha256($submission['payload_sha256'] ?? null),
 			],
 			'capture' => $provenance['capture'] ?? null,
@@ -255,20 +330,38 @@ final class ArtifactManifestStore {
 		return [
 			'format' => $this->requiredString($value['format'] ?? null, 'preservation.format'),
 			'encoding' => $this->requiredString($value['encoding'] ?? null, 'preservation.encoding'),
-			'sampleRate' => $this->requiredInt($value['sampleRate'] ?? null, 'preservation.sampleRate'),
-			'channels' => $this->requiredInt($value['channels'] ?? null, 'preservation.channels'),
-			'bitsPerSample' => $this->requiredInt($value['bitsPerSample'] ?? null, 'preservation.bitsPerSample'),
+			'sampleRate' => $this->requiredPositiveInt($value['sampleRate'] ?? null, 'preservation.sampleRate'),
+			'channels' => $this->requiredPositiveInt($value['channels'] ?? null, 'preservation.channels'),
+			'bitsPerSample' => $this->requiredPositiveInt($value['bitsPerSample'] ?? null, 'preservation.bitsPerSample'),
 		];
 	}
 
 	private function assertStableIdentityMatches(?array $existing, array $candidate): void {
 		if ($existing === null) return;
-		foreach (['production_id', 'recording_id', 'recording_session_id'] as $field) {
+
+		foreach (['production_id', 'recording_id', 'recording_session_id', 'participant_label'] as $field) {
 			$existingValue = $existing[$field] ?? null;
 			$candidateValue = $candidate[$field] ?? null;
 			if ($existingValue !== null && $candidateValue !== null && $existingValue !== $candidateValue) {
 				throw new RuntimeException('artifact_manifest_conflict');
 			}
+		}
+
+		$existingRemote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
+		$candidateRemote = is_array($candidate['remote'] ?? null) ? $candidate['remote'] : [];
+		$existingTargetUserId = $existingRemote['target_user_id'] ?? null;
+		$candidateTargetUserId = $candidateRemote['target_user_id'] ?? null;
+		if ($existingTargetUserId !== null && $candidateTargetUserId !== null && $existingTargetUserId !== $candidateTargetUserId) {
+			throw new RuntimeException('artifact_manifest_conflict');
+		}
+
+		if (($existing['capture'] ?? null) !== null && ($candidate['capture'] ?? null) !== null
+			&& $this->canonicalJson($existing['capture']) !== $this->canonicalJson($candidate['capture'])) {
+			throw new RuntimeException('artifact_manifest_conflict');
+		}
+
+		if ($this->canonicalJson($existing['sourceSegments'] ?? []) !== $this->canonicalJson($candidate['sourceSegments'] ?? [])) {
+			throw new RuntimeException('artifact_manifest_conflict');
 		}
 	}
 
@@ -292,13 +385,6 @@ final class ArtifactManifestStore {
 		}
 		if ($existingSize !== null && $candidateSize !== null && (int)$existingSize !== (int)$candidateSize) {
 			throw new RuntimeException('artifact_manifest_conflict');
-		}
-
-		if (($existing['status'] ?? null) === 'pending_verification' && ($candidate['status'] ?? null) === 'pending_verification') {
-			if ($this->canonicalJson($existing['capture'] ?? null) !== $this->canonicalJson($candidate['capture'] ?? null)
-				|| $this->canonicalJson($existing['sourceSegments'] ?? []) !== $this->canonicalJson($candidate['sourceSegments'] ?? [])) {
-				throw new RuntimeException('artifact_manifest_conflict');
-			}
 		}
 
 		if ($final && ($existing['status'] ?? null) === 'verified') {
@@ -340,7 +426,10 @@ final class ArtifactManifestStore {
 	 * @param mixed $value
 	 */
 	private function canonicalJson(mixed $value): string {
-		return json_encode($this->sortMap($value), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+		return json_encode(
+			$this->sortMap($value),
+			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR
+		);
 	}
 
 	/**
@@ -384,11 +473,23 @@ final class ArtifactManifestStore {
 		return $value;
 	}
 
+	private function requiredNonNegativeInt(mixed $value, string $field): int {
+		$value = $this->requiredInt($value, $field);
+		if ($value < 0) throw new RuntimeException('artifact_manifest_invalid');
+		return $value;
+	}
+
+	private function requiredPositiveInt(mixed $value, string $field): int {
+		$value = $this->requiredInt($value, $field);
+		if ($value <= 0) throw new RuntimeException('artifact_manifest_invalid');
+		return $value;
+	}
+
 	private function nullableInt(mixed $value): ?int {
 		if ($value === null || $value === '') return null;
 		if (is_int($value)) return $value;
 		if (is_float($value) && is_finite($value) && (int)$value === $value) return (int)$value;
-		if (is_string($value) && ctype_digit($value)) return (int)$value;
+		if (is_string($value) && preg_match('/^\d+$/', $value) === 1) return (int)$value;
 		throw new RuntimeException('artifact_manifest_invalid');
 	}
 
@@ -407,6 +508,7 @@ final class ArtifactManifestStore {
 		$dataDirectory = trim((string)$this->config->getSystemValue('datadirectory', ''));
 		$instanceId = trim((string)$this->config->getSystemValue('instanceid', ''));
 		if ($dataDirectory === '' || $instanceId === '') throw new RuntimeException('artifact_manifest_storage_unavailable');
+
 		$directory = rtrim($dataDirectory, '/') . '/appdata_' . $instanceId . '/pore/artifacts';
 		if (!is_dir($directory) && !mkdir($directory, self::DIRECTORY_MODE, true) && !is_dir($directory)) {
 			throw new RuntimeException('artifact_manifest_storage_unavailable');
@@ -421,44 +523,60 @@ final class ArtifactManifestStore {
 	/**
 	 * @return array<string, mixed>|null
 	 */
-	private function read(string $artifactId): ?array {
-		$path = $this->path($artifactId);
+	private function readPath(string $path): ?array {
 		if (!is_file($path)) return null;
 		$content = file_get_contents($path);
 		if ($content === false) throw new RuntimeException('artifact_manifest_storage_unavailable');
+
 		$decoded = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 		if (!is_array($decoded)) throw new RuntimeException('artifact_manifest_storage_invalid');
 		return $decoded;
 	}
 
 	/**
-	 * @param array<string, mixed> $record
+	 * @param callable(string): mixed $callback
 	 */
-	private function write(array $record): void {
-		$path = $this->path((string)$record['artifact_id']);
+	private function withArtifactLock(string $artifactId, int $lockMode, callable $callback): mixed {
+		$path = $this->path($this->requiredString($artifactId, 'artifact_id'));
+		return $this->withPathLock($path, $lockMode, $callback);
+	}
+
+	/**
+	 * @param callable(string): mixed $callback
+	 */
+	private function withPathLock(string $path, int $lockMode, callable $callback): mixed {
 		$lockPath = $path . '.lock';
 		$lock = fopen($lockPath, 'c');
-		if ($lock === false || !flock($lock, LOCK_EX)) {
+		if ($lock === false || !flock($lock, $lockMode)) {
 			if (is_resource($lock)) fclose($lock);
 			throw new RuntimeException('artifact_manifest_storage_unavailable');
 		}
 
 		try {
-			$json = $this->canonicalJson($record);
-			$tmp = $path . '.tmp-' . bin2hex(random_bytes(8));
-			if (file_put_contents($tmp, $json . "\n", LOCK_EX) === false) {
-				@unlink($tmp);
-				throw new RuntimeException('artifact_manifest_storage_unavailable');
-			}
-			@chmod($tmp, self::FILE_MODE);
-			if (!rename($tmp, $path)) {
-				@unlink($tmp);
-				throw new RuntimeException('artifact_manifest_storage_unavailable');
-			}
-			@chmod($path, self::FILE_MODE);
+			return $callback($path);
 		} finally {
 			flock($lock, LOCK_UN);
 			fclose($lock);
 		}
+	}
+
+	/**
+	 * @param array<string, mixed> $record
+	 */
+	private function writeLocked(string $path, array $record): void {
+		$json = $this->canonicalJson($record);
+		$tmp = $path . '.tmp-' . bin2hex(random_bytes(8));
+
+		if (file_put_contents($tmp, $json . "\n", LOCK_EX) === false) {
+			@unlink($tmp);
+			throw new RuntimeException('artifact_manifest_storage_unavailable');
+		}
+
+		@chmod($tmp, self::FILE_MODE);
+		if (!rename($tmp, $path)) {
+			@unlink($tmp);
+			throw new RuntimeException('artifact_manifest_storage_unavailable');
+		}
+		@chmod($path, self::FILE_MODE);
 	}
 }
