@@ -50,6 +50,7 @@ jobs:
           php -l lib/Service/ArtifactManifestStore.php
           php -l lib/BackgroundJob/ArtifactManifestMaintenanceJob.php
           php -l tools/artifact-manifest-maintenance-contract-check.php
+          php -l tools/recording-transport-controller-contract-check.php
           php -l tools/nextcloud-v1-contract-check.php
           php -l tools/artifact-manifest-store-contract-check.php
       - name: Run Nextcloud V1 path contract checks
@@ -58,6 +59,7 @@ jobs:
           php tools/nextcloud-artifact-connector-contract-check.php
           php tools/artifact-manifest-store-contract-check.php
           php tools/artifact-manifest-maintenance-contract-check.php
+          php tools/recording-transport-controller-contract-check.php
 
   rust:
     runs-on: ubuntu-latest
