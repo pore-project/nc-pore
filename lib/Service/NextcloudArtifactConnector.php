@@ -103,9 +103,11 @@ final class NextcloudArtifactConnector {
 		$folder = $this->ensureFolder($folder, $path['month']);
 		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		$existing = $allowFilenameReuse ? $this->findFile($folder, $path['filename']) : null;
+		$existing = $this->findFile($folder, $path['filename']);
 		if ($existing !== null) {
-			if ($existing->getSize() === $size && hash_equals(strtolower($sha256), $this->hashFile($existing))) {
+			if ($allowFilenameReuse
+				&& $existing->getSize() === $size
+				&& hash_equals(strtolower($sha256), $this->hashFile($existing))) {
 				return $this->prepareExistingFileHandle(
 					$existing,
 					$targetUserId,
