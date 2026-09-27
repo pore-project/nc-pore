@@ -69,6 +69,7 @@ final class NextcloudArtifactConnector {
 		if ($targetUserId === '') throw new RuntimeException('No storage target is registered for this production.');
 
 		$userFolder = $this->rootFolder->getUserFolder($targetUserId);
+		$allowFilenameReuse = $preferredFileId === null;
 
 		if ($preferredFileId !== null) {
 			$preferred = $this->findFileById($userFolder, $preferredFileId);
@@ -102,7 +103,7 @@ final class NextcloudArtifactConnector {
 		$folder = $this->ensureFolder($folder, $path['month']);
 		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		$existing = $this->findFile($folder, $path['filename']);
+		$existing = $allowFilenameReuse ? $this->findFile($folder, $path['filename']) : null;
 		if ($existing !== null) {
 			if ($existing->getSize() === $size && hash_equals(strtolower($sha256), $this->hashFile($existing))) {
 				return $this->prepareExistingFileHandle(
