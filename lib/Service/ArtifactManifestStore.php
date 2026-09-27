@@ -44,7 +44,7 @@ final class ArtifactManifestStore {
 				}
 			}
 
-			$record['prepared_at'] = $existing['prepared_at'] ?? gmdate('c');
+			$record['prepared_at'] = gmdate('c');
 			$this->writeLocked($path, $record);
 			return $record;
 		});
