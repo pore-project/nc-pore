@@ -266,8 +266,8 @@ namespace {
 	// silently reused after its payload was changed.
 	$changed = wav("\x09\x09\x09");
 	$changedRoot = new FakeRootFolder();
-	$changedLeaf = $changedRoot->targetFolder();
-	$changedLeaf->add('Host.wav', new File(17, $changed, 'Host.wav'));
+	$changedUserFolder = $changedRoot->getUserFolder('owner');
+	$changedUserFolder->add('Host.wav', new File(17, $changed, 'Host.wav'));
 	$changedShares = new FakeShareManager();
 	$changedConnector = connector($changedRoot, $changedShares);
 	try {
