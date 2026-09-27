@@ -50,6 +50,7 @@ namespace OCP\Files {
 
 	class Folder {
 		private array $children = [];
+		private array $filesById = [];
 
 		public function __construct(private string $path) {}
 
@@ -66,17 +67,24 @@ namespace OCP\Files {
 
 		public function add(string $name, object $node): void {
 			$this->children[$name] = $node;
-			if ($node instanceof File) $node->setParent($this, $name);
+			if ($node instanceof File) {
+				$node->setParent($this, $name);
+				$this->filesById[$node->getId()] = $node;
+			}
 		}
 
 		public function remove(string $name): void {
 			if (!array_key_exists($name, $this->children)) throw new NotFoundException($name);
+			$node = $this->children[$name];
 			unset($this->children[$name]);
+			if ($node instanceof File && ($this->filesById[$node->getId()] ?? null) === $node) {
+				unset($this->filesById[$node->getId()]);
+			}
 		}
 
 		public function getFirstNodeById(int $id): ?object {
+			if (isset($this->filesById[$id])) return $this->filesById[$id];
 			foreach ($this->children as $child) {
-				if ($child instanceof File && $child->getId() === $id) return $child;
 				if ($child instanceof Folder) {
 					$found = $child->getFirstNodeById($id);
 					if ($found !== null) return $found;
