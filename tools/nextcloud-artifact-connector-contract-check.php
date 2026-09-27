@@ -275,7 +275,7 @@ namespace {
 	$sharesBeforePreferredMissing = $shares->created;
 	$prepared = $c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
 	check($prepared['upload_required'] === true, 'A missing preferred File-ID must force a fresh upload instead of reusing a different file.');
-	check($prepared['filename'] !== 'Host.wav' || $prepared['upload_required'] === true, 'Preferred File-ID path must not silently bind to the unrelated same-name file.');
+	check($prepared['filename'] === 'Host (2).wav', 'A stale preferred File-ID must use a fresh collision-free filename.');
 	check($shares->created === $sharesBeforePreferredMissing + 1, 'A stale preferred File-ID must create exactly one replacement upload authorization.');
 	$c->close($prepared['transfer_id'], 'actor-1');
 	try {
