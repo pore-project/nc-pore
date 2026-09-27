@@ -32,12 +32,14 @@ namespace OCP\AppFramework\Http {
 	class DataResponse {
 		public function __construct(public readonly array $data, public readonly int $status = 200) {}
 	}
-	namespace Attribute {
-		#[\Attribute(\Attribute::TARGET_METHOD)]
-		class PublicPage {}
-		#[\Attribute(\Attribute::TARGET_METHOD)]
-		class NoAdminRequired {}
-	}
+}
+
+namespace OCP\AppFramework\Http\Attribute {
+	#[\Attribute(\Attribute::TARGET_METHOD)]
+	class PublicPage {}
+
+	#[\Attribute(\Attribute::TARGET_METHOD)]
+	class NoAdminRequired {}
 }
 
 namespace OCP\AppFramework {
