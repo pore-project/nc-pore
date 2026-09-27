@@ -59,6 +59,9 @@ jobs:
       - name: Server-side artifact manifest checks
         run: php tools/artifact-manifest-store-contract-check.php
 
+      - name: Artifact maintenance contract checks
+        run: php tools/artifact-manifest-maintenance-contract-check.php
+
       - name: Architecture checks
         run: ./tools/architecture-checks/run-all.sh
 
