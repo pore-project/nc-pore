@@ -282,7 +282,7 @@ namespace {
 		$c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
 		throw new \RuntimeException('Preferred File-ID payload change must be rejected.');
 	} catch (\RuntimeException $error) {
-		check($error->getMessage() === 'Nextcloud recorded artifact payload has changed.', 'Unexpected preferred File-ID conflict error.');
+		check($error->getMessage() === 'Nextcloud recorded artifact payload has changed.', 'Unexpected preferred File-ID conflict error: ' . $error->getMessage());
 	}
 
 	$moved->remove('Host-renamed.wav');
