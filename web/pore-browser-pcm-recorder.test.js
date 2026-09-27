@@ -186,6 +186,8 @@ describe('Browser PCM recorder persistence recovery', () => {
 			expect(FakeAudioContext.instances[0].close).toHaveBeenCalledTimes(1)
 			expect(FakeAudioContext.instances[1].options).toEqual({ sampleRate: 44100 })
 			expect(recorder.sampleRate).toBe(44100)
+			expect(store.beginCapture.mock.calls[0][0].sampleRate).toBe(44100)
+			expect(store.beginCapture.mock.calls[0][0].channels).toBe(1)
 			expect(FakeAudioWorkletNode.instances[0].options).toEqual({
 				numberOfInputs: 1,
 				numberOfOutputs: 1,
