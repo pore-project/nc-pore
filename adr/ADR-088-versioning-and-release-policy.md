@@ -15,8 +15,8 @@ Der feste Präfix `0.1.0` ist dagegen keine fachliche Aussage über den jeweilig
 
 Für NC-PoRe sollen damit zwei unterschiedliche Informationen sauber getrennt werden:
 
-1. die **Release-Version**, die die Kompatibilitäts- und Änderungsart ausdrückt;
-2. die **Pre-Release-/Development-Kennung**, die einen konkreten Entwicklungsstand innerhalb einer Release-Linie bezeichnet.
+- die **Release-Version**, die die Kompatibilitäts- und Änderungsart ausdrückt;
+- die **Pre-Release-/Development-Kennung**, die einen konkreten Entwicklungsstand innerhalb einer Release-Linie bezeichnet.
 
 ## Entscheidung
 
@@ -232,8 +232,8 @@ The fixed `0.1.0` prefix, however, does not describe the semantic meaning of the
 
 NC-PoRe should keep two distinct pieces of information separate:
 
-1. the **release version**, which describes compatibility and the type of change;
-2. the **pre-release/development identifier**, which identifies a concrete state within a release line.
+- the **release version**, which describes compatibility and the type of change;
+- the **pre-release/development identifier**, which identifies a concrete state within a release line.
 
 ## Decision
 
