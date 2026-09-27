@@ -62,6 +62,9 @@ jobs:
       - name: Artifact maintenance contract checks
         run: php tools/artifact-manifest-maintenance-contract-check.php
 
+      - name: Recording transport controller contract checks
+        run: php tools/recording-transport-controller-contract-check.php
+
       - name: Architecture checks
         run: ./tools/architecture-checks/run-all.sh
 
