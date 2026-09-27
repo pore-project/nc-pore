@@ -173,13 +173,18 @@ describe('Browser PCM recorder persistence recovery', () => {
 				getSettings: () => ({ sampleRate: 44100, channelCount: 2, echoCancellation: false, noiseSuppression: false, autoGainControl: false }),
 			}
 
+			await recorder.primeAudioContext()
+			expect(FakeAudioContext.instances).toHaveLength(1)
+			expect(FakeAudioContext.instances[0].sampleRate).toBe(48000)
+
 			await recorder.start(track, {
 				captureId: 'capture-rate-1',
 				recordingSessionId: 'session-rate-1',
 			})
 
-			expect(FakeAudioContext.instances).toHaveLength(1)
-			expect(FakeAudioContext.instances[0].options).toEqual({ sampleRate: 44100 })
+			expect(FakeAudioContext.instances).toHaveLength(2)
+			expect(FakeAudioContext.instances[0].close).toHaveBeenCalledTimes(1)
+			expect(FakeAudioContext.instances[1].options).toEqual({ sampleRate: 44100 })
 			expect(recorder.sampleRate).toBe(44100)
 			expect(FakeAudioWorkletNode.instances[0].options).toEqual({
 				numberOfInputs: 1,
