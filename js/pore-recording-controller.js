@@ -132,10 +132,10 @@
 			})
 		}
 
-		async primeAudioContext() {
+		async primeAudioContext(sampleRate = null) {
 			if (!this.recorder) this.recorder = this._createRecorder()
 			if (typeof this.recorder.primeAudioContext !== 'function') throw new Error('PoRE PCM recorder cannot prime Web Audio')
-			await this.recorder.primeAudioContext()
+			await this.recorder.primeAudioContext(sampleRate)
 		}
 
 		async start(track, sourceMetadata = {}) {
@@ -270,7 +270,9 @@
 		if (!(target instanceof Element) || !target.closest('.pore-talk-recording__button')) return
 		const controller = window.__poreTalkRecordingController
 		if (!controller?.primeAudioContext) return
-		void controller.primeAudioContext().catch(error => {
+		const track = window.__poreLocalAudioCapture?.getCurrentTrack?.()
+		const sampleRate = track?.getSettings?.()?.sampleRate
+		void controller.primeAudioContext(sampleRate).catch(error => {
 			window.dispatchEvent(new CustomEvent('pore:recording-error', { detail: { error } }))
 		})
 	}, true)
