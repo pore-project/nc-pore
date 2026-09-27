@@ -87,14 +87,7 @@ final class RecordingTransportController extends OCSController {
 
 			if (($staged['status'] ?? null) === 'verified') {
 				// Another request completed this Artifact while our prepare was
-				// in flight. Never leave our newly-created upload authorization
-				// behind and never upload a duplicate of the already verified file.
-				try {
-					$this->connector->close($prepared['transfer_id'], $actorId);
-				} catch (\Throwable) {
-					// The handle may already have expired or been cleaned up.
-				}
-
+				// in flight. Never upload a duplicate of the already verified file.
 				$verifiedRemote = is_array($staged['remote'] ?? null) ? $staged['remote'] : [];
 				$verifiedFileId = is_int($verifiedRemote['file_id'] ?? null) && $verifiedRemote['file_id'] > 0
 					? $verifiedRemote['file_id']
@@ -106,8 +99,8 @@ final class RecordingTransportController extends OCSController {
 
 				if ($preferredFileId !== null && $prepared['upload_required'] === true) {
 					// The preferred file is no longer reachable. The connector has
-					// already selected a fresh collision-free filename; preserve that
-					// handle and replace the stale Record under its File-ID condition.
+					// already selected a fresh collision-free filename. Keep this
+					// handle alive and replace the stale Record under its File-ID condition.
 					if (!$this->artifactManifestStore->removeIfVerifiedRemoteFileIdMatches($capture_id, $verifiedFileId)) {
 						try {
 							$this->connector->close($prepared['transfer_id'], $actorId);
@@ -127,6 +120,12 @@ final class RecordingTransportController extends OCSController {
 						$provenance,
 					);
 				} else {
+					try {
+						$this->connector->close($prepared['transfer_id'], $actorId);
+					} catch (\Throwable) {
+						// The handle may already have expired or been cleaned up.
+					}
+
 					$prepared = $this->connector->prepare(
 						$this->required($production_id, 'production_id'),
 						$this->required($production_label, 'production_label'),
