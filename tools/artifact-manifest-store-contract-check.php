@@ -219,6 +219,30 @@ namespace {
 	$pendingStored['prepared_at'] = '2026-09-26T12:30:00+00:00';
 	file_put_contents($pendingPath, json_encode($pendingStored) . "\n");
 
+	$firstPending = $store->get($pendingRecordId);
+	check(is_string($firstPending['prepared_at'] ?? null), 'Pending record must carry its preparation timestamp.');
+	$oldPreparedAt = $firstPending['prepared_at'];
+
+	// Rewrite the stored timestamp to an old value, then prepare again. The
+	// repeated prepare must refresh the retention clock under the artifact lock.
+	$pendingStored['prepared_at'] = '2026-09-26T12:30:00+00:00';
+	file_put_contents($pendingPath, json_encode($pendingStored) . "\n");
+	$store->stagePreparedArtifact([
+		'artifact_id' => $pendingRecordId,
+		'production_id' => 'production-1',
+		'production_label' => 'Interview',
+		'recording_id' => 'recording-1',
+		'recording_session_id' => 'session-1',
+		'participant_label' => 'Guest',
+		'target_user_id' => 'owner',
+		'filename' => 'Guest.wav',
+		'size' => 47,
+		'payload_sha256' => hash('sha256', 'payload'),
+		'capture_provenance' => $provenance,
+	]);
+	$renewedPending = $store->get($pendingRecordId);
+	check(($renewedPending['prepared_at'] ?? null) !== '2026-09-26T12:30:00+00:00', 'Repeated prepare must refresh the pending retention clock.');
+	check($store->cleanupExpiredPending(new DateTimeImmutable('2026-09-26T12:31:00+00:00')) === 0, 'A renewed pending record must not be removed according to the stale timestamp.');
 	$store->stagePreparedArtifact([
 		'artifact_id' => $pendingRecordId,
 		'production_id' => 'production-1',
