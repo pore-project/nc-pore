@@ -268,6 +268,8 @@ namespace {
 	$changedRoot = new FakeRootFolder();
 	$changedUserFolder = $changedRoot->getUserFolder('owner');
 	$changedUserFolder->add('Host.wav', new File(17, $changed, 'Host.wav'));
+	check($changedUserFolder->getFirstNodeById(17) instanceof File, 'Preferred File-ID fixture must be visible from the user folder.');
+	check(hash('sha256', $changed) !== hash('sha256', $wav), 'Preferred File-ID fixture payload must differ from the expected payload.');
 	$changedShares = new FakeShareManager();
 	$changedConnector = connector($changedRoot, $changedShares);
 	try {
