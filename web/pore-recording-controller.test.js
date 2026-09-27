@@ -11,6 +11,56 @@ describe('Browser recording controller', () => {
 		getSettings: () => ({ deviceId, sampleRate: 48000, channelCount: 1 }),
 	})
 
+
+	// TEST-01: Local capture requests a single channel at the host-neutral boundary.
+	it('requests mono capture at the local capture boundary', async () => {
+		const track = {
+			id: 'pore-mono-track',
+			kind: 'audio',
+			getSettings: jest.fn(() => ({ deviceId: 'mono-device', channelCount: 1 })),
+		}
+		const stream = { getAudioTracks: () => [track], getTracks: () => [track] }
+		const getUserMedia = jest.fn().mockResolvedValue(stream)
+		const capture = new window.PoRELocalAudioCapture({ mediaDevices: { getUserMedia } })
+
+		await capture.open('mono-device')
+
+		expect(getUserMedia).toHaveBeenCalledWith({
+			audio: {
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false,
+				deviceId: { exact: 'mono-device' },
+				channelCount: { ideal: 1 },
+				sampleRate: { ideal: 48000 },
+			},
+		})
+		expect(capture.getCurrentTrack()).toBe(track)
+		expect(capture.getCurrentDeviceId()).toBe('mono-device')
+	})
+
+	it('rejects a microphone whose actual processing settings remain active', async () => {
+		const stop = jest.fn()
+		const track = {
+			id: 'pore-processed-track',
+			kind: 'audio',
+			getSettings: jest.fn(() => ({
+				deviceId: 'processed-device',
+				echoCancellation: true,
+				noiseSuppression: false,
+				autoGainControl: false,
+			})),
+			stop,
+		}
+		const stream = { getAudioTracks: () => [track], getTracks: () => [track] }
+		const getUserMedia = jest.fn().mockResolvedValue(stream)
+		const capture = new window.PoRELocalAudioCapture({ mediaDevices: { getUserMedia } })
+
+		await expect(capture.open('processed-device')).rejects.toThrow(/echoCancellation is active/)
+		expect(stop).toHaveBeenCalledTimes(1)
+		expect(capture.getCurrentTrack()).toBeNull()
+	})
+
 	it('preserves production, recording and technical identities in source metadata', async () => {
 		const recorder = {
 			start: jest.fn().mockResolvedValue(undefined),
