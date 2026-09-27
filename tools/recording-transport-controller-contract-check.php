@@ -171,6 +171,7 @@ namespace {
 	];
 	$store->stageQueue = [
 		['status' => 'verified', 'remote' => ['file_id' => 22]],
+		['status' => 'verified', 'remote' => ['file_id' => 22]],
 	];
 	$connector = new FakeConnector();
 	$connector->preparedQueue[] = [
