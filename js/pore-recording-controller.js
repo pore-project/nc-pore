@@ -242,11 +242,6 @@
 			const source = artifact.source || {}
 			const required = ['productionId', 'recordingId', 'captureId', 'recordingSessionId']
 			if (required.some(key => !source[key])) throw new Error('PoRE browser artifact is missing authoritative or technical identity')
-			const processing = source.processing || {
-				echoCancellation: null,
-				noiseSuppression: null,
-				autoGainControl: null,
-			}
 			const segmentFrom = (segment, startedAt) => ({
 				startedAt: segment?.startedAt || startedAt || null,
 				sampleRate: Number.isFinite(segment?.sampleRate) ? segment.sampleRate : null,
