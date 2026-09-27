@@ -294,6 +294,7 @@ namespace {
 		check($error->getMessage() === 'Nextcloud transport artifact is not a supported PoRE PCM WAV.', 'Unsupported WAV sample rate must be rejected server-side.');
 	}
 
+	$leaf->add('Host.wav', new File(21, 'occupied', 'Host.wav'));
 	$leaf->add('Host (2).wav', new File(18, 'occupied', 'Host (2).wav'));
 	$payload = wav("\x01\x02\x03");
 	$prepared = $c->prepare('prod-1', 'Interview', 'recording-2', 'capture-2', '2026-09-05T15:42:31+02:00', 'Host', strlen($payload), hash('sha256', $payload), 'actor-1');
