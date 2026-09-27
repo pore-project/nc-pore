@@ -151,6 +151,7 @@ describe('Browser runtime transport', () => {
 		const fetchMock = jest.fn()
 		fetchMock
 			.mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ ocs: { data: { status: 'rejected', error_code: 'artifact_manifest_context_missing' } } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: { status: 'closed' } } }) })
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
 				status: 'prepared', transfer_id: 'fresh-handle', upload_url: '/public.php/dav/files/fresh-token', upload_username: 'anonymous', upload_password: 'secret', filename: 'Host.wav', upload_required: true,
 			} } }) })
@@ -178,6 +179,7 @@ describe('Browser runtime transport', () => {
 		const fetchMock = jest.fn()
 		fetchMock
 			.mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ ocs: { data: { status: 'rejected', error_code: 'transport_handle_invalid' } } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: { status: 'closed' } } }) })
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
 				status: 'prepared', transfer_id: 'fresh-handle', upload_url: '', upload_username: '', upload_password: '', filename: 'Host.wav', upload_required: false,
 			} } }) })
