@@ -103,6 +103,24 @@ namespace {
 	]);
 	check($again['manifest_hash'] === $receipt['manifest_hash'], 'Repeated verification must be idempotent.');
 
+	// TEST-00: The remote storage owner is part of the immutable Artifact
+	// relation and may not silently change during repeated verification.
+	try {
+		$store->persistVerifiedArtifact([
+			'artifact_id' => 'capture-1',
+			'target_user_id' => 'another-owner',
+			'file_id' => 42,
+			'path' => 'audio/Interview/Host.wav',
+			'filename' => 'Host.wav',
+			'size' => 47,
+			'sha256' => hash('sha256', 'payload'),
+			'preservation' => $receipt['preservation'],
+		]);
+		throw new \RuntimeException('Expected storage owner conflict.');
+	} catch (\RuntimeException $error) {
+		check($error->getMessage() === 'artifact_manifest_conflict', 'Changing the storage owner must be rejected.');
+	}
+
 	// TEST-01: Mutable remote locator changes update the record but do not
 	// change the immutable manifest hash.
 	$relocated = $store->persistVerifiedArtifact([
