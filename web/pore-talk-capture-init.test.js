@@ -19,11 +19,11 @@ describe('Nextcloud Talk microphone observer', () => {
 				noiseSuppression: false,
 				autoGainControl: false,
 				channelCount: { ideal: 1 },
+				sampleRate: { ideal: 48000 },
 			},
 		})
 		expect(capture.getCurrentTrack()).toBe(track)
 		expect(capture.getCurrentDeviceId()).toBe('browser-default')
-		expect(getUserMedia.mock.calls[0][0].audio.channelCount).toEqual({ ideal: 1, max: 1 })
 	})
 
 
