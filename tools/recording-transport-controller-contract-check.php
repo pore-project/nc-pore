@@ -69,8 +69,9 @@ namespace {
 		public function get(string $artifactId): ?array { return $this->existing; }
 		public function stagePreparedArtifact(array $submission): array {
 			$this->staged[] = $submission;
-			return $this->nextStage;
+			return $this->stageQueue !== [] ? array_shift($this->stageQueue) : $this->nextStage;
 		}
+		public array $stageQueue = [];
 		public array $nextStage = [];
 		public function removeIfVerifiedRemoteFileIdMatches(string $artifactId, int $expectedFileId): bool {
 			$this->removedIds[] = [$artifactId, $expectedFileId];
@@ -132,7 +133,10 @@ namespace {
 		'participant_label' => 'Host',
 		'remote' => ['file_id' => 17],
 	];
-	$store->nextStage = ['status' => 'pending_verification'];
+	$store->stageQueue = [
+		['status' => 'verified', 'remote' => ['file_id' => 17]],
+		['status' => 'pending_verification'],
+	];
 	$connector = new FakeConnector();
 	$connector->preparedQueue[] = [
 		'transfer_id' => 'replacement-handle',
@@ -165,7 +169,9 @@ namespace {
 		'participant_label' => 'Host',
 		'remote' => ['file_id' => 22],
 	];
-	$store->nextStage = ['status' => 'verified', 'remote' => ['file_id' => 22]];
+	$store->stageQueue = [
+		['status' => 'verified', 'remote' => ['file_id' => 22]],
+	];
 	$connector = new FakeConnector();
 	$connector->preparedQueue[] = [
 		'transfer_id' => 'stale-provisional',
