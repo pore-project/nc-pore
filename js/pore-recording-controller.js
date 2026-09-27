@@ -72,6 +72,7 @@
 				noiseSuppression: false,
 				autoGainControl: false,
 				channelCount: { ideal: 1 },
+				sampleRate: { ideal: 48000 },
 			}
 			if (deviceId) audio.deviceId = { exact: deviceId }
 			const stream = await this._mediaDevices.getUserMedia({ audio })
@@ -80,7 +81,14 @@
 				stream.getTracks?.().forEach(item => item.stop())
 				throw new Error('PoRE local microphone capture returned no audio track')
 			}
-			const resolvedDeviceId = deviceId || track.getSettings?.()?.deviceId || null
+			const settings = track.getSettings?.() || {}
+			const activeProcessing = ['echoCancellation', 'noiseSuppression', 'autoGainControl']
+				.find(property => settings[property] === true)
+			if (activeProcessing) {
+				stream.getTracks?.().forEach(item => item.stop())
+				throw new Error(`PoRE cannot use the local microphone as a preservation master while ${activeProcessing} is active`)
+			}
+			const resolvedDeviceId = deviceId || settings.deviceId || null
 			return { stream, track, resolvedDeviceId }
 		}
 
@@ -229,6 +237,9 @@
 				sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
 				sampleSize: Number.isFinite(settings.sampleSize) ? settings.sampleSize : null,
 				channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,
+				echoCancellation: typeof settings.echoCancellation === 'boolean' ? settings.echoCancellation : null,
+				noiseSuppression: typeof settings.noiseSuppression === 'boolean' ? settings.noiseSuppression : null,
+				autoGainControl: typeof settings.autoGainControl === 'boolean' ? settings.autoGainControl : null,
 				startedAt: metadata.startedAt || new Date().toISOString(),
 			}
 		}
