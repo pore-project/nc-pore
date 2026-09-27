@@ -265,8 +265,17 @@ namespace {
 	// TEST-02: A file referenced by an existing verified record must not be
 	// silently reused after its payload was changed.
 	$changed = wav("\x09\x09\x09");
-	$moved->remove('Host-renamed.wav');
-	$moved->add('Host-renamed.wav', new File(17, $changed, 'Host-renamed.wav'));
+	$changedRoot = new FakeRootFolder();
+	$changedLeaf = $changedRoot->targetFolder();
+	$changedLeaf->add('Host.wav', new File(17, $changed, 'Host.wav'));
+	$changedShares = new FakeShareManager();
+	$changedConnector = connector($changedRoot, $changedShares);
+	try {
+		$changedConnector->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
+		throw new \RuntimeException('Preferred File-ID payload change must be rejected.');
+	} catch (\RuntimeException $error) {
+		check($error->getMessage() === 'Nextcloud recorded artifact payload has changed.', 'Unexpected preferred File-ID conflict error: ' . $error->getMessage());
+	}
 
 	// TEST-02b: A missing preferred File-ID must never fall back to an unrelated
 	// same-name/same-payload file.
