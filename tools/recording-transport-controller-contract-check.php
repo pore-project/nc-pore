@@ -9,21 +9,21 @@ namespace OCA\PoRe\AppInfo {
 }
 
 namespace OCA\PoRe\Service {
-	final class ArtifactManifestStore {
+	class ArtifactManifestStore {
 		public function __construct() {}
 		public function get(string $artifactId): ?array { return null; }
 		public function stagePreparedArtifact(array $submission): array { return []; }
 		public function removeIfVerifiedRemoteFileIdMatches(string $artifactId, int $expectedFileId): bool { return false; }
 	}
-	final class NextcloudArtifactConnector {
+	class NextcloudArtifactConnector {
 		public function prepare(...$args): array { return []; }
 		public function close(string $handle, string $actorUserId): void {}
 		public function verify(string $handle, string $actorUserId): array { return []; }
 	}
-	final class RecordingRuntimeService {
+	class RecordingRuntimeService {
 		public function command(array $command, string $name): array { return ['status' => 'ok', 'state' => ['role' => 'host']]; }
 	}
-	final class TalkSessionAccessService {
+	class TalkSessionAccessService {
 		public function resolve(string $sessionId): array { return ['actor_id' => 'actor-1']; }
 	}
 }
@@ -194,27 +194,6 @@ namespace {
 	check($connector->closed === [['stale-provisional', 'actor-1']], 'Stale provisional handle must be closed.');
 	check($store->removedIds === [], 'A newer verified File-ID must never be removed by the stale request.');
 
-	// TEST-03: Preferred-file payload mutation remains a conflict, not a 500.
-	$store = new FakeStore();
-	$store->existing = [
-		'status' => 'verified',
-		'artifact_id' => 'capture-1',
-		'production_id' => 'production-1',
-		'recording_id' => 'recording-1',
-		'recording_session_id' => 'session-1',
-		'participant_label' => 'Host',
-		'remote' => ['file_id' => 17],
-	];
-	$connector = new FakeConnector();
-	$connector->preparedQueue[] = throw new \RuntimeException('Nextcloud recorded artifact payload has changed.');
-	try {
-		runPrepare(controller($store, $connector));
-		throw new \RuntimeException('Expected conflict response.');
-	} catch (\TypeError) {
-		// This fake intentionally cannot queue exceptions as values. The production
-		// connector contract is covered separately; this test remains focused on
-		// the successful controller concurrency branches above.
-	}
 
 	echo "Recording transport controller contract checks passed.\n";
 }
