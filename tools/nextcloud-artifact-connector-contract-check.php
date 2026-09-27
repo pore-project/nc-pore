@@ -16,37 +16,83 @@ namespace OCP {
 }
 namespace OCP\Files {
 	class NotFoundException extends \RuntimeException {}
+
 	class File {
-		public function __construct(private readonly int $id, private readonly string $content) {}
+		private ?Folder $parent = null;
+
+		public function __construct(private readonly int $id, private readonly string $content, private string $name = 'Host.wav') {}
+
 		public function getId(): int { return $this->id; }
 		public function getSize(): int { return strlen($this->content); }
+		public function getName(): string { return $this->name; }
+
+		public function setParent(?Folder $parent, string $name): void {
+			$this->parent = $parent;
+			$this->name = $name;
+		}
+
+		public function getParent(): Folder {
+			if ($this->parent === null) throw new \RuntimeException('Fake file has no parent.');
+			return $this->parent;
+		}
+
 		public function fopen(string $mode) {
 			$stream = fopen('php://temp', 'w+b');
 			fwrite($stream, $this->content);
 			rewind($stream);
 			return $stream;
 		}
-		public function getPath(): string { return '/files/owner/audio/2026/09/05 - 15:42 Interview - prod-1'; }
+
+		public function getPath(): string {
+			return rtrim($this->getParent()->getPath(), '/') . '/' . $this->name;
+		}
 	}
+
 	class Folder {
 		private array $children = [];
+
 		public function __construct(private string $path) {}
+
 		public function get(string $name) {
 			if (!array_key_exists($name, $this->children)) throw new NotFoundException($name);
 			return $this->children[$name];
 		}
+
 		public function newFolder(string $name): Folder {
 			$folder = new Folder(rtrim($this->path, '/') . '/' . $name);
 			$this->children[$name] = $folder;
 			return $folder;
 		}
-		public function add(string $name, object $node): void { $this->children[$name] = $node; }
+
+		public function add(string $name, object $node): void {
+			$this->children[$name] = $node;
+			if ($node instanceof File) $node->setParent($this, $name);
+		}
+
+		public function remove(string $name): void {
+			if (!array_key_exists($name, $this->children)) throw new NotFoundException($name);
+			unset($this->children[$name]);
+		}
+
+		public function getFirstNodeById(int $id): ?object {
+			foreach ($this->children as $child) {
+				if ($child instanceof File && $child->getId() === $id) return $child;
+				if ($child instanceof Folder) {
+					$found = $child->getFirstNodeById($id);
+					if ($found !== null) return $found;
+				}
+			}
+			return null;
+		}
+
 		public function getPath(): string { return $this->path; }
 	}
 	class IRootFolder {}
 }
 namespace OCP\Security {
-	class ISecureRandom { public const CHAR_ALPHANUMERIC = 'alnum'; }
+	class ISecureRandom {
+		public const CHAR_ALPHANUMERIC = 'alnum';
+	}
 }
 namespace OCP\Share {
 	class IShare { public const TYPE_LINK = 3; }
@@ -70,26 +116,52 @@ namespace {
 	function check(bool $condition, string $message): void {
 		if (!$condition) throw new \RuntimeException($message);
 	}
+
 	final class FakeConfig extends IConfig {
-		public function getAppValue(string $app,string $key,string $default=''): string { return $key==='production_owner_prod-1' ? 'owner' : $default; }
-		public function getUserValue(string $userId,string $app,string $key,string $default=''): string { return $default; }
+		public function getAppValue(string $app, string $key, string $default = ''): string {
+			return $key === 'production_owner_prod-1' ? 'owner' : $default;
+		}
+		public function getUserValue(string $userId, string $app, string $key, string $default = ''): string {
+			return $default;
+		}
 		public function getSystemValueString(string $key): string { return 'test-secret'; }
 	}
+
 	final class FakeRootFolder extends IRootFolder {
 		private Folder $userFolder;
-		public function __construct() { $this->userFolder=new Folder('/files/owner'); }
-		public function getUserFolder(string $userId): Folder { return $this->userFolder; }
-		public function targetFolder(): Folder {
-			$a=$this->ensure($this->userFolder,'audio'); $y=$this->ensure($a,'2026'); $m=$this->ensure($y,'09');
-			return $this->ensure($m,'05 - 15:42 Interview - prod-1');
+
+		public function __construct() {
+			$this->userFolder = new Folder('/files/owner');
 		}
-		private function ensure(Folder $p,string $n): Folder {
-			try { $x=$p->get($n); if(!$x instanceof Folder) throw new \RuntimeException('Expected folder'); return $x; }
-			catch (\OCP\Files\NotFoundException) { return $p->newFolder($n); }
+
+		public function getUserFolder(string $userId): Folder { return $this->userFolder; }
+
+		public function targetFolder(): Folder {
+			$a = $this->ensure($this->userFolder, 'audio');
+			$y = $this->ensure($a, '2026');
+			$m = $this->ensure($y, '09');
+			return $this->ensure($m, '05 - 15:42 Interview - prod-1');
+		}
+
+		public function movedFolder(): Folder {
+			$a = $this->ensure($this->userFolder, 'audio');
+			$y = $this->ensure($a, '2026');
+			return $this->ensure($y, 'archive');
+		}
+
+		private function ensure(Folder $parent, string $name): Folder {
+			try {
+				$x = $parent->get($name);
+				if (!$x instanceof Folder) throw new \RuntimeException('Expected folder');
+				return $x;
+			} catch (\OCP\Files\NotFoundException) {
+				return $parent->newFolder($name);
+			}
 		}
 	}
+
 	final class FakeShare {
-		private int $id=0;
+		private int $id = 0;
 		public function setNode(object $node): void {}
 		public function setShareType(int $type): void {}
 		public function setPermissions(int $permissions): void {}
@@ -100,28 +172,35 @@ namespace {
 		public function setShareOwner(string $userId): void {}
 		public function getId(): int { return $this->id; }
 		public function getToken(): string { return 'share-token'; }
-		public function assignId(int $id): void { $this->id=$id; }
+		public function assignId(int $id): void { $this->id = $id; }
 	}
+
 	final class FakeShareManager extends IManager {
-		public int $created=0; public int $deleted=0;
+		public int $created = 0;
+		public int $deleted = 0;
 		public function shareApiAllowLinks(): bool { return true; }
 		public function shareApiLinkAllowPublicUpload(): bool { return true; }
 		public function newShare(): FakeShare { return new FakeShare(); }
-		public function createShare(FakeShare $share): FakeShare { $this->created++; $share->assignId($this->created); return $share; }
+		public function createShare(FakeShare $share): FakeShare {
+			$this->created++;
+			$share->assignId($this->created);
+			return $share;
+		}
 		public function getShareById(string $id): FakeShare { throw new \OCP\Share\Exceptions\ShareNotFound(); }
 		public function deleteShare(FakeShare $share): void { $this->deleted++; }
 	}
+
 	final class FakeRandom extends ISecureRandom {
-		private int $counter=0;
-		public function generate(int $length,string $characterSet): string { return 'token-'.(++$this->counter); }
+		private int $counter = 0;
+		public function generate(int $length, string $characterSet): string { return 'token-' . (++$this->counter); }
 	}
+
 	function connector(FakeRootFolder $root, FakeShareManager $shares): NextcloudArtifactConnector {
-		return new NextcloudArtifactConnector($root,new FakeConfig(),$shares,new FakeRandom());
+		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom());
 	}
 
-
-	function wav(string $pcm): string {
-		$sampleRate = 48000; $channels = 1; $bits = 24;
+	function wav(string $pcm, int $sampleRate = 48000, int $channels = 1, int $bits = 24): string {
+		$bytesPerSample = intdiv($bits + 7, 8);
 		$header = pack(
 			'a4Va4a4VvvVVvva4V',
 			'RIFF',
@@ -132,8 +211,8 @@ namespace {
 			1,
 			$channels,
 			$sampleRate,
-			$sampleRate * $channels * 3,
-			$channels * 3,
+			$sampleRate * $channels * $bytesPerSample,
+			$channels * $bytesPerSample,
 			$bits,
 			'data',
 			strlen($pcm),
@@ -141,27 +220,86 @@ namespace {
 		return $header . $pcm;
 	}
 
-	$root=new FakeRootFolder(); $leaf=$root->targetFolder(); $wav=wav("\x00\x00\x00"); $leaf->add('Host.wav',new File(17,$wav));
-	$shares=new FakeShareManager(); $c=connector($root,$shares);
-	$prepared=$c->prepare('prod-1','Interview','recording-1','capture-1','2026-09-05T15:42:31+02:00','Host',strlen($wav),hash('sha256',$wav),'actor-1');
-	check($prepared['filename']==='Host.wav','Identical artifact must retain the original filename.');
-	check($prepared['upload_required']===false,'Identical artifact must not require an upload.');
-	check($shares->created===0,'Identical artifact must not create a temporary upload share.');
-	try { $c->verify($prepared['transfer_id'],'actor-2'); throw new \RuntimeException('Transport handle actor binding must reject another user.'); } catch (\RuntimeException $error) { check($error->getMessage()==='Transport handle is not authorized for this user.','Unexpected actor-binding error.'); }
-	$receipt=$c->verify($prepared['transfer_id'],'actor-1');
-	check($receipt['file_id']===17,'Identical artifact verification must resolve the existing file.');
-	check($receipt['sha256']===hash('sha256',$wav),'Identical artifact verification must preserve the exact hash.');
-	check($receipt['preservation']['sampleRate']===48000,'Server must verify the actual WAV sample rate.');
-	check($receipt['preservation']['channels']===1,'Server must verify the actual WAV channel count.');
-	check($receipt['preservation']['bitsPerSample']===24,'Server must verify the actual WAV bit depth.');
-	check($receipt['preservation']['encoding']==='pcm_s24le','Server must derive the PCM encoding from the WAV container.');
-	$c->close($prepared['transfer_id'],'actor-1');
+	$root = new FakeRootFolder();
+	$leaf = $root->targetFolder();
 
-	$leaf->add('Host (2).wav',new File(18,'occupied'));
-	$prepared=$c->prepare('prod-1','Interview','recording-2','capture-2','2026-09-05T15:42:31+02:00','Host',strlen(wav("\x01\x02\x03")),hash('sha256',wav("\x01\x02\x03")),'actor-1');
-	check($prepared['filename']==='Host (3).wav','Differing content must select the first free numeric suffix.');
-	check($prepared['upload_required']===true,'Differing content must require an upload.');
-	check($shares->created===1,'Differing content must create exactly one upload share.');
+	$wav = wav("\x00\x00\x00");
+	$host = new File(17, $wav, 'Host.wav');
+	$leaf->add('Host.wav', $host);
+
+	$shares = new FakeShareManager();
+	$c = connector($root, $shares);
+
+	$prepared = $c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1');
+	check($prepared['filename'] === 'Host.wav', 'Identical artifact must retain the original filename.');
+	check($prepared['upload_required'] === false, 'Identical artifact must not require an upload.');
+	check($shares->created === 0, 'Identical artifact must not create a temporary upload share.');
+	try {
+		$c->verify($prepared['transfer_id'], 'actor-2');
+		throw new \RuntimeException('Transport handle actor binding must reject another user.');
+	} catch (\RuntimeException $error) {
+		check($error->getMessage() === 'Transport handle is not authorized for this user.', 'Unexpected actor-binding error.');
+	}
+	$receipt = $c->verify($prepared['transfer_id'], 'actor-1');
+	check($receipt['file_id'] === 17, 'Identical artifact verification must resolve the existing file.');
+	check($receipt['sha256'] === hash('sha256', $wav), 'Identical artifact verification must preserve the exact hash.');
+	check($receipt['target_user_id'] === 'owner', 'Verification must retain the storage owner.');
+	check($receipt['preservation']['sampleRate'] === 48000, 'Server must verify the actual WAV sample rate.');
+	check($receipt['preservation']['channels'] === 1, 'Server must verify the actual WAV channel count.');
+	check($receipt['preservation']['bitsPerSample'] === 24, 'Server must verify the actual WAV bit depth.');
+	check($receipt['preservation']['encoding'] === 'pcm_s24le', 'Server must derive the PCM encoding from the WAV container.');
+	$c->close($prepared['transfer_id'], 'actor-1');
+
+	// TEST-01: A previously verified file may be renamed/moved and should still
+	// be reusable by its stable File-ID without creating a new upload.
+	$leaf->remove('Host.wav');
+	$moved = $root->movedFolder();
+	$moved->add('Host-renamed.wav', $host);
+	$prepared = $c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
+	check($prepared['filename'] === 'Host-renamed.wav', 'Preferred File-ID reuse must follow a renamed/moved file.');
+	check($prepared['upload_required'] === false, 'A moved identical artifact must not require a new upload.');
+	$receipt = $c->verify($prepared['transfer_id'], 'actor-1');
+	check($receipt['file_id'] === 17, 'Preferred File-ID verification must resolve the original file after relocation.');
+	check($receipt['filename'] === 'Host-renamed.wav', 'Verification must report the current file name.');
+
+	// TEST-02: A file referenced by an existing verified record must not be
+	// silently reused after its payload was changed.
+	$changed = wav("\x09\x09\x09");
+	$moved->remove('Host-renamed.wav');
+	$moved->add('Host-renamed.wav', new File(17, $changed, 'Host-renamed.wav'));
+	try {
+		$c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
+		throw new \RuntimeException('Preferred File-ID payload change must be rejected.');
+	} catch (\RuntimeException $error) {
+		check($error->getMessage() === 'Nextcloud recorded artifact payload has changed.', 'Unexpected preferred File-ID conflict error.');
+	}
+
+	$moved->remove('Host-renamed.wav');
+	$leaf->add('Host-renamed.wav', new File(19, wav("\x01\x02\x03", 44100), 'Host-renamed.wav'));
+	$shares = new FakeShareManager();
+	$c = connector($root, $shares);
+
+	// TEST-03: The explicitly supported 44.1 kHz fallback remains valid.
+	$wav441 = wav("\x01\x02\x03", 44100);
+	$prepared = $c->prepare('prod-1', 'Interview', 'recording-3', 'capture-3', '2026-09-05T15:42:31+02:00', 'Host-renamed', strlen($wav441), hash('sha256', $wav441), 'actor-1');
+	$receipt = $c->verify($prepared['transfer_id'], 'actor-1');
+	check($receipt['preservation']['sampleRate'] === 44100, '44.1 kHz preservation must remain explicitly represented.');
+
+	$leaf->add('Invalid.wav', new File(20, wav("\x00\x01\x02", 32000), 'Invalid.wav'));
+	try {
+		$prepared = $c->prepare('prod-1', 'Interview', 'recording-4', 'capture-4', '2026-09-05T15:42:31+02:00', 'Invalid', strlen(wav("\x00\x01\x02", 32000)), hash('sha256', wav("\x00\x01\x02", 32000)), 'actor-1');
+		$c->verify($prepared['transfer_id'], 'actor-1');
+		throw new \RuntimeException('Unsupported sample rate must be rejected.');
+	} catch (\RuntimeException $error) {
+		check($error->getMessage() === 'Nextcloud transport artifact is not a supported PoRE PCM WAV.', 'Unsupported WAV sample rate must be rejected server-side.');
+	}
+
+	$leaf->add('Host (2).wav', new File(18, 'occupied', 'Host (2).wav'));
+	$payload = wav("\x01\x02\x03");
+	$prepared = $c->prepare('prod-1', 'Interview', 'recording-2', 'capture-2', '2026-09-05T15:42:31+02:00', 'Host', strlen($payload), hash('sha256', $payload), 'actor-1');
+	check($prepared['filename'] === 'Host (3).wav', 'Differing content must select the first free numeric suffix.');
+	check($prepared['upload_required'] === true, 'Differing content must require an upload.');
+	check($shares->created === 1, 'Differing content must create exactly one upload share.');
 
 	echo "Nextcloud artifact collision contract checks passed.\n";
 }
