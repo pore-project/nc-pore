@@ -42,8 +42,13 @@ namespace OCP\Files {
 			public function __construct(private readonly string $path, private readonly ?Folder $parent = null) {}
 
 			public function get(string $name): object {
-				if (!array_key_exists($name, $this->children)) throw new NotFoundException($name);
-				return $this->children[$name];
+				$segments = array_values(array_filter(explode('/', trim($name, '/')), static fn (string $segment): bool => $segment !== ''));
+				$node = $this;
+				foreach ($segments as $segment) {
+					if (!$node instanceof Folder || !array_key_exists($segment, $node->children)) throw new NotFoundException($name);
+					$node = $node->children[$segment];
+				}
+				return $node;
 			}
 
 			public function add(string $name, object $node): void { $this->children[$name] = $node; }
