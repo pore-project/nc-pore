@@ -167,7 +167,7 @@ namespace {
 		'recording_id' => 'recording-1',
 		'recording_session_id' => 'session-1',
 		'participant_label' => 'Host',
-		'remote' => ['file_id' => 22],
+		'remote' => ['file_id' => 17],
 	];
 	$store->stageQueue = [
 		['status' => 'verified', 'remote' => ['file_id' => 22]],
