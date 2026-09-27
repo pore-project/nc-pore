@@ -23,6 +23,7 @@ namespace OCP\BackgroundJob {
 		public function setAllowParallelRuns(bool $allow): void { $this->allowParallelRuns = $allow; }
 		public function getIntervalForTest(): int { return $this->interval; }
 		public function getAllowParallelRunsForTest(): bool { return $this->allowParallelRuns; }
+		protected function run(mixed $argument): void {}
 	}
 }
 
