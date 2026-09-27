@@ -168,10 +168,11 @@ describe('Browser runtime transport', () => {
 		expect(receipt.file_id).toBe(42)
 		expect(fetchMock).toHaveBeenCalledTimes(6)
 		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/verify')
-		expect(fetchMock.mock.calls[1][0]).toContain('/finalized-artifact/prepare')
-		expect(fetchMock.mock.calls[2][1].method).toBe('PUT')
-		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/verify')
-		expect(fetchMock.mock.calls[4][0]).toContain('/finalized-artifact/close')
+		expect(fetchMock.mock.calls[1][0]).toContain('/finalized-artifact/close')
+		expect(fetchMock.mock.calls[2][0]).toContain('/finalized-artifact/prepare')
+		expect(fetchMock.mock.calls[3][1].method).toBe('PUT')
+		expect(fetchMock.mock.calls[4][0]).toContain('/finalized-artifact/verify')
+		expect(fetchMock.mock.calls[5][0]).toContain('/finalized-artifact/close')
 	})
 
 	it('re-prepares after an invalid transport handle but not after an artifact mismatch', async () => {
