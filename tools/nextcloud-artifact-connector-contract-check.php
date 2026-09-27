@@ -284,12 +284,14 @@ namespace {
 	check(hash('sha256', $changed) !== hash('sha256', $wav), 'Preferred File-ID fixture payload must differ from the expected payload.');
 	$changedShares = new FakeShareManager();
 	$changedConnector = connector($changedRoot, $changedShares);
+	$rejected = false;
 	try {
 		$changedConnector->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
-		throw new \RuntimeException('Preferred File-ID payload change must be rejected. lookupCalls=' . $changedUserFolder->fileIdLookupCalls);
 	} catch (\RuntimeException $error) {
+		$rejected = true;
 		check($error->getMessage() === 'Nextcloud recorded artifact payload has changed.', 'Unexpected preferred File-ID conflict error: ' . $error->getMessage());
 	}
+	check($rejected, 'Preferred File-ID payload change must be rejected. lookupCalls=' . $changedUserFolder->fileIdLookupCalls);
 
 	// TEST-02b: A missing preferred File-ID must never fall back to an unrelated
 	// same-name/same-payload file.
@@ -301,12 +303,6 @@ namespace {
 	check($prepared['filename'] === 'Host (2).wav', 'A stale preferred File-ID must use a fresh collision-free filename.');
 	check($shares->created === $sharesBeforePreferredMissing + 1, 'A stale preferred File-ID must create exactly one replacement upload authorization.');
 	$c->close($prepared['transfer_id'], 'actor-1');
-	try {
-		$c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1', 17);
-		throw new \RuntimeException('Preferred File-ID payload change must be rejected.');
-	} catch (\RuntimeException $error) {
-		check($error->getMessage() === 'Nextcloud recorded artifact payload has changed.', 'Unexpected preferred File-ID conflict error: ' . $error->getMessage());
-	}
 
 	$moved->remove('Host-renamed.wav');
 	$leaf->add('Host-renamed.wav', new File(19, wav("\x01\x02\x03", 44100), 'Host-renamed.wav'));
