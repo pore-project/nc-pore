@@ -7,10 +7,14 @@ namespace OCP {
 		public function getSystemValueString(string $key): string { return ''; }
 		public function getSystemValue(string $key, mixed $default = null): mixed { return $default; }
 	}
+}
 
-	class \OCP\AppFramework\Utility\ITimeFactory {}
+namespace OCP\AppFramework\Utility {
+	class ITimeFactory {}
+}
 
-	class \OCP\BackgroundJob\TimedJob {
+namespace OCP\BackgroundJob {
+	class TimedJob {
 		private int $interval = 0;
 		private bool $allowParallelRuns = true;
 
@@ -20,8 +24,9 @@ namespace OCP {
 		public function getIntervalForTest(): int { return $this->interval; }
 		public function getAllowParallelRunsForTest(): bool { return $this->allowParallelRuns; }
 	}
+}
 
-	namespace Files {
+namespace OCP\Files {
 		class NotFoundException extends \RuntimeException {}
 
 		class File {
