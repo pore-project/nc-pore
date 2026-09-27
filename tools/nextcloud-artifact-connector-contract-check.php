@@ -304,7 +304,6 @@ namespace {
 	check($shares->created === $sharesBeforePreferredMissing + 1, 'A stale preferred File-ID must create exactly one replacement upload authorization.');
 	$c->close($prepared['transfer_id'], 'actor-1');
 
-	$moved->remove('Host-renamed.wav');
 	$leaf->add('Host-renamed.wav', new File(19, wav("\x01\x02\x03", 44100), 'Host-renamed.wav'));
 	$shares = new FakeShareManager();
 	$c = connector($root, $shares);
