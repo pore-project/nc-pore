@@ -63,6 +63,11 @@ final class ArtifactManifestStore {
 
 			if ($existing !== null && ($existing['status'] ?? null) === 'verified') {
 				$remote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
+				$receiptTargetUserId = $this->nullableString($receipt['target_user_id'] ?? null);
+				$existingTargetUserId = $this->nullableString($remote['target_user_id'] ?? null);
+				if ($existingTargetUserId !== null && $receiptTargetUserId !== null && $existingTargetUserId !== $receiptTargetUserId) {
+					throw new RuntimeException('artifact_manifest_conflict');
+				}
 				$receiptSize = $this->requiredNonNegativeInt($receipt['size'] ?? null, 'size');
 				$receiptHash = $this->requiredSha256($receipt['sha256'] ?? null);
 
@@ -97,6 +102,12 @@ final class ArtifactManifestStore {
 			}
 
 			$pending = $existing;
+			$pendingRemote = is_array($pending['remote'] ?? null) ? $pending['remote'] : [];
+			$pendingTargetUserId = $this->nullableString($pendingRemote['target_user_id'] ?? null);
+			$receiptTargetUserId = $this->nullableString($receipt['target_user_id'] ?? null);
+			if ($pendingTargetUserId !== null && $receiptTargetUserId !== null && $pendingTargetUserId !== $receiptTargetUserId) {
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
 			$fileId = $this->requiredPositiveInt($receipt['file_id'] ?? null, 'file_id');
 			$size = $this->requiredNonNegativeInt($receipt['size'] ?? null, 'size');
 			$sha256 = $this->requiredSha256($receipt['sha256'] ?? null);
