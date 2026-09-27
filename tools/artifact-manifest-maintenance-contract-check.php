@@ -66,7 +66,6 @@ namespace OCP\Files {
 
 		class IRootFolder {}
 	}
-}
 
 namespace Psr\Log {
 	interface LoggerInterface {
