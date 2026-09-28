@@ -363,8 +363,8 @@ namespace {
 
 	// TEST-04: FLAC is transport-only; the uploaded FLAC is verified by its
 	// transport hash and then converted into the canonical WAV Artifact.
-	$canonicalWav = wav("   ");
-	OCAPoReServiceRecordingRuntimeService::$convertedPayload = $canonicalWav;
+	$canonicalWav = wav("\x00\x00\x00");
+	\OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = $canonicalWav;
 	$flacPayload = base64_decode('ZkxhQwAAACIQABAAAAATAAATC7gBcAAAAAMhBpBwZIs2WggRQqoY7t/kAwAAEgAAAAAAAAAAAAAAAAAAAAAAA4QAACggAAAAcmVmZXJlbmNlIGxpYkZMQUMgMS41LjAgMjAyNTAyMTEAAAAA//hqDAACggIAAAB///+AAAC3fA==', true);
 	check($flacPayload !== false, 'FLAC fixture must decode from base64.');
 	$prepared = $c->prepare(
