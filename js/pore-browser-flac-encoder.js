@@ -19,14 +19,15 @@
 			this.encoder = this.Flac.create_libflac_encoder(sampleRate, channels, 24, compression, totalSamples, false, 0)
 			if (!this.encoder) throw new Error('PoRE FLAC encoder creation failed')
 			this.pendingOutput = []
-			this.firstOutput = null
+			this.headerBuffer = new Uint8Array(0)
+			this.headerReady = false
 			this.streamInfo = null
 			this.finished = false
 			const status = this.Flac.init_encoder_stream(
 				this.encoder,
 				data => this._write(data),
 				summary => { this.streamInfo = summary },
-				false,
+				0,
 			)
 			if (status !== 0) {
 				this._destroy()
@@ -81,24 +82,39 @@
 		}
 
 		_drain(final) {
-			if (!this.pendingOutput.length) return []
-			const output = this.pendingOutput
+			let output = this.pendingOutput
 			this.pendingOutput = []
-			if (!this.firstOutput) {
-				this.firstOutput = output.shift()
-				if (!output.length && !final) return []
+
+			if (!this.headerReady) {
+				while (output.length && this.headerBuffer.length < HEADER_BYTES) {
+					const next = output.shift()
+					const combined = new Uint8Array(this.headerBuffer.length + next.length)
+					combined.set(this.headerBuffer)
+					combined.set(next, this.headerBuffer.length)
+					this.headerBuffer = combined
+				}
+				if (this.headerBuffer.length < HEADER_BYTES) {
+					if (final) throw new Error('PoRE FLAC encoder did not produce a complete STREAMINFO header')
+					return []
+				}
+				const header = this.headerBuffer.slice(0, HEADER_BYTES)
+				const remainder = this.headerBuffer.slice(HEADER_BYTES)
+				this.headerBuffer = header
+				this.headerReady = true
+				if (remainder.length) output.unshift(remainder)
 			}
+
 			if (final) {
-				if (!this.streamInfo || this.firstOutput.length < HEADER_BYTES) throw new Error('PoRE FLAC encoder did not produce complete STREAMINFO')
+				if (!this.streamInfo) throw new Error('PoRE FLAC encoder did not provide final STREAMINFO')
 				this._patchStreamInfo()
-				return [this.firstOutput, ...output]
+				return [this.headerBuffer, ...output]
 			}
 			return output
 		}
 
 		_patchStreamInfo() {
 			const info = this.streamInfo
-			const data = this.firstOutput
+			const data = this.headerBuffer
 			const view = new DataView(data.buffer, data.byteOffset + 8)
 			view.setUint16(0, info.min_blocksize)
 			view.setUint16(2, info.max_blocksize)
