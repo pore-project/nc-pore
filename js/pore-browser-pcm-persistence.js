@@ -172,6 +172,40 @@
 			})
 		}
 
+		async replaceFinalizedChunk(captureId, index, payload) {
+			if (!captureId) throw new Error('PoRE finalized chunk requires captureId')
+			if (!Number.isInteger(index) || index < 0) throw new Error('PoRE finalized chunk requires a non-negative index')
+			const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'application/octet-stream' })
+			const sha256 = await this._sha256(blob)
+			const db = await this._database()
+			await this._transaction(db, [MANIFEST_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const chunkStore = transaction.objectStore(FINALIZED_CHUNK_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest || manifest.status !== 'finalized') {
+						abort(new Error(`PoRE finalized payload requires finalized capture: ${captureId}`))
+						return
+					}
+					if (manifest.storageFormat === 'flac') {
+						abort(new Error(`PoRE finalized payload is already committed: ${captureId}`))
+						return
+					}
+					const existingRequest = chunkStore.get([captureId, index])
+					existingRequest.onsuccess = () => {
+						if (!existingRequest.result) {
+							abort(new Error(`PoRE finalized chunk to replace was not found: ${captureId}/${index}`))
+							return
+						}
+						chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
+						manifest.updatedAt = new Date().toISOString()
+						manifestStore.put(manifest)
+					}
+				}
+			})
+		}
+
 		async appendFinalizedChunk(captureId, index, payload) {
 			if (!captureId) throw new Error('PoRE finalized chunk requires captureId')
 			if (!Number.isInteger(index) || index < 0) throw new Error('PoRE finalized chunk requires a non-negative index')

@@ -22,6 +22,7 @@
 			this.pendingOutput = []
 			this.headerBuffer = new Uint8Array(0)
 			this.headerReady = false
+			this.headerEmitted = false
 			this.streamInfo = null
 			this.finished = false
 			const status = this.Flac.init_encoder_stream(
@@ -98,9 +99,8 @@
 					if (final) throw new Error('PoRE FLAC encoder did not produce a complete STREAMINFO header')
 					return []
 				}
-				const header = this.headerBuffer.slice(0, HEADER_BYTES)
 				const remainder = this.headerBuffer.slice(HEADER_BYTES)
-				this.headerBuffer = header
+				this.headerBuffer = this.headerBuffer.slice(0, HEADER_BYTES)
 				this.headerReady = true
 				if (remainder.length) output.unshift(remainder)
 			}
@@ -108,9 +108,19 @@
 			if (final) {
 				if (!this.streamInfo) throw new Error('PoRE FLAC encoder did not provide final STREAMINFO')
 				this._patchStreamInfo()
-				return [this.headerBuffer, ...output]
 			}
+
+			if (!this.headerEmitted) {
+				this.headerEmitted = true
+				return [this.headerBuffer.slice(), ...output]
+			}
+
 			return output
+		}
+
+		getFinalizedHeader() {
+			if (!this.finished || !this.headerReady || !this.streamInfo) throw new Error('PoRE FLAC encoder is not finalized')
+			return this.headerBuffer.slice()
 		}
 
 		_patchStreamInfo() {

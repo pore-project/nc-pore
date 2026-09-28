@@ -18,7 +18,9 @@ describe('Browser FLAC encoder real-library smoke test', () => {
 				0x00, 0x00, 0x80,
 			])
 			const encoder = new Encoder({ sampleRate: 48000, channels: 1, totalSamples: 3, compression: 5 })
-			const output = [...encoder.encodePcm24Bytes(pcm), ...encoder.finish()]
+			const encoded = encoder.encodePcm24Bytes(pcm)
+			const trailing = encoder.finish()
+			const output = [encoder.getFinalizedHeader(), ...encoded.slice(1), ...trailing]
 			const bytes = new Uint8Array(output.reduce((total, chunk) => total + chunk.length, 0))
 			let offset = 0
 			for (const chunk of output) {

@@ -124,6 +124,7 @@
 				for (const output of encoder.finish()) {
 					if (output.length) await store.appendFinalizedChunk(captureId, index++, output)
 				}
+				await store.replaceFinalizedChunk(captureId, 0, encoder.getFinalizedHeader())
 			} finally {
 				encoder.free?.()
 			}

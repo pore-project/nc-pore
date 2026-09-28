@@ -55,4 +55,26 @@ describe('Browser FLAC encoder boundary', () => {
 		expect([...encoder.headerBuffer.slice(22,26)]).toEqual([0,0,0,1])
 		expect([...encoder.headerBuffer.slice(26,42)]).toEqual([0,17,34,51,68,85,102,119,136,153,170,187,204,221,238,255])
 	})
+	it('emits the FLAC header before frame output and exposes its final patched copy', () => {
+		const encoder = Object.create(Encoder.prototype)
+		encoder.pendingOutput = [
+			new Uint8Array([0x66,0x4c,0x61,0x43, ...new Uint8Array(38)]),
+			new Uint8Array([0xff,0xf8,0x00]),
+		]
+		encoder.headerBuffer = new Uint8Array(0)
+		encoder.headerReady = false
+		encoder.headerEmitted = false
+		encoder.streamInfo = null
+		const output = encoder._drain(false)
+		expect([...output[0].slice(0,4)]).toEqual([0x66,0x4c,0x61,0x43])
+		expect([...output[1]]).toEqual([0xff,0xf8,0x00])
+		expect(encoder.headerEmitted).toBe(true)
+		encoder.finished = true
+		encoder.streamInfo = { min_framesize: 1, max_framesize: 3, md5sum: '00112233445566778899aabbccddeeff' }
+		encoder._patchStreamInfo()
+		const finalHeader = encoder.getFinalizedHeader()
+		expect([...finalHeader.slice(0,4)]).toEqual([0x66,0x4c,0x61,0x43])
+		expect(finalHeader).not.toBe(output[0])
+	})
+
 })

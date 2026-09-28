@@ -118,8 +118,9 @@ describe('Browser completion job', () => {
 		const awaitedOutput = [0x66, 0x4c, 0x61, 0x43, 0x01]
 		function MockEncoder(options) {
 			MockEncoder.mock.calls.push([options])
-			this.encodePcm24Bytes = jest.fn(() => [new Uint8Array([])])
+			this.encodePcm24Bytes = jest.fn(() => [new Uint8Array([0x66, 0x4c, 0x61, 0x43]), new Uint8Array([0x01])])
 			this.finish = jest.fn(() => [new Uint8Array(awaitedOutput)])
+			this.getFinalizedHeader = jest.fn(() => new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0x02]))
 			this.free = jest.fn()
 		}
 		MockEncoder.mock = { calls: [] }
@@ -143,6 +144,7 @@ describe('Browser completion job', () => {
 			})),
 			clearFinalizedPayload: jest.fn(async () => finalized.splice(0)),
 			appendFinalizedChunk: jest.fn(async (_captureId, index, payload) => finalized[index] = payload),
+			replaceFinalizedChunk: jest.fn(async (_captureId, index, payload) => finalized[index] = payload),
 			getFinalizedPayload: jest.fn(async () => ({ manifest: { status: 'finalized', storageFormat: 'pcm' }, chunks: finalized.filter(Boolean) })),
 			commitFinalizedPayload: jest.fn(async (captureId, patch) => {
 				committed.push({ captureId, patch })
@@ -154,13 +156,16 @@ describe('Browser completion job', () => {
 
 		expect(window.PoREBrowserFlacEncoder).toHaveBeenCalledWith({ sampleRate: 48000, channels: 1, totalSamples: 3, compression: 5 })
 		expect(store.clearFinalizedPayload).toHaveBeenCalledWith('capture-1')
-		expect(store.appendFinalizedChunk).toHaveBeenCalledTimes(1)
+		expect(store.appendFinalizedChunk).toHaveBeenCalledTimes(2)
 		const appended = store.appendFinalizedChunk.mock.calls[0]
 		expect(appended[0]).toBe('capture-1')
 		expect(appended[1]).toBe(0)
 		expect(appended[2]).toBeInstanceOf(Uint8Array)
+		expect(store.replaceFinalizedChunk).toHaveBeenCalledTimes(1)
+		expect(store.replaceFinalizedChunk.mock.calls[0][1]).toBe(0)
+		expect(store.replaceFinalizedChunk.mock.calls[0][2]).toBeInstanceOf(Uint8Array)
 		expect(store.commitFinalizedPayload).toHaveBeenCalledTimes(1)
-		expect(committed[0].patch.size).toBe(5)
+		expect(committed[0].patch.size).toBe(7)
 		expect(committed[0].patch.sampleCount).toBe(3)
 		expect(typeof committed[0].patch.payloadSha256).toBe('string')
 		expect(descriptor.format).toBe('audio/flac')

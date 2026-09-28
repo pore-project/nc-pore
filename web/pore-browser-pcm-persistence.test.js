@@ -143,4 +143,28 @@ describe('Browser FLAC finalization persistence', () => {
 		expect(manifestPut.finalizedChunkCount).toBe(0)
 		expect(deletes).toEqual([['capture-1', 0], ['capture-1', 1]])
 	})
+	it('replaces an existing staged FLAC chunk without changing its index', async () => {
+		const persistence = new Store()
+		const original = new Blob([new Uint8Array([0x66,0x4c,0x61,0x43])])
+		const replacement = new Blob([new Uint8Array([0x66,0x4c,0x61,0x43,0x00])])
+		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 1 }
+		const putCalls = []
+		persistence._database = jest.fn(async () => ({}))
+		persistence._sha256 = jest.fn(async blob => blob === replacement ? 'b'.repeat(64) : 'a'.repeat(64))
+		persistence._transaction = jest.fn(async (_db, _stores, _mode, configure) => {
+			const request = { result: manifest, onsuccess: null }
+			const existingRequest = { result: { captureId: 'capture-1', index: 0, payload: original, size: original.size, sha256: 'a'.repeat(64) }, onsuccess: null }
+			const stores = new Map([
+				['manifests', { get: () => request, put: value => putCalls.push(value) }],
+				['finalizedChunks', { get: () => existingRequest, put: value => putCalls.push(value) }],
+			])
+			configure({ objectStore: name => stores.get(name) })
+			request.onsuccess?.()
+			existingRequest.onsuccess?.()
+		})
+		await persistence.replaceFinalizedChunk('capture-1', 0, replacement)
+		expect(putCalls.some(value => value.index === 0 && value.payload === replacement)).toBe(true)
+		expect(putCalls.some(value => value.captureId === 'capture-1' && value.updatedAt)).toBe(true)
+	})
+
 })
