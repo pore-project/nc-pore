@@ -185,7 +185,10 @@
 						abort(new Error(`PoRE finalized chunk gap detected: ${captureId}/${index}`))
 						return
 					}
+					if (index === expectedIndex) manifest.finalizedChunkCount = expectedIndex + 1
+					manifest.updatedAt = new Date().toISOString()
 					chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
+					manifestStore.put(manifest)
 				}
 			})
 		}
@@ -207,7 +210,7 @@
 			if (actualSize !== expectedSize) throw new Error(`PoRE finalized payload size mismatch: ${captureId}`)
 			const actualSha256 = await this._sha256(new Blob(chunks.map(chunk => chunk.payload)))
 			if (actualSha256 !== expectedSha256.toLowerCase()) throw new Error(`PoRE finalized payload SHA-256 mismatch: ${captureId}`)
-			const finalized = { ...manifest, ...patch, storageFormat: 'flac', format: 'audio/flac', encoding: 'flac', finalizedChunkCount: chunks.length, updatedAt: new Date().toISOString() }
+			const finalized = { ...manifest, ...patch, storageFormat: 'flac', format: 'audio/flac', encoding: 'flac', chunkCount: chunks.length, lastChunkIndex: chunks.length - 1, finalizedChunkCount: chunks.length, updatedAt: new Date().toISOString() }
 			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE, FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
 				transaction.objectStore(MANIFEST_STORE).put(finalized)
 				for (const chunk of chunks) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])

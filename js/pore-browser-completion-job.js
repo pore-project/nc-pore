@@ -28,19 +28,24 @@
 
 		async prepare(captureId) {
 			const store = this._store()
-			const stored = await store.getCapture(captureId)
-			if (!stored) throw new Error(`PoRE completion job capture not found: ${captureId}`)
-			if (stored.manifest.status !== 'finalized') throw new Error(`PoRE completion job requires finalized capture: ${captureId}`)
+			let stored = await store.getCapture(captureId)
+			if (!stored) throw new Error('PoRE completion job capture not found: ' + captureId)
+			if (stored.manifest.status !== 'finalized') throw new Error('PoRE completion job requires finalized capture: ' + captureId)
 			const job = stored.manifest.completionJob || {}
 			if (job.status === 'completed') return null
 
 			try {
-				const pcm = new Blob(stored.chunks, { type: 'application/octet-stream' })
+				if (stored.manifest.storageFormat !== 'flac') {
+					await this._ensureFinalizedFlac(stored)
+					stored = await store.getCapture(captureId)
+				}
+				if (!stored || stored.manifest.storageFormat !== 'flac') throw new Error('PoRE completion job did not produce finalized FLAC persistence')
 				const sampleRate = stored.manifest.sampleRate
 				const channels = stored.manifest.channels
 				if (!Number.isFinite(sampleRate) || !Number.isFinite(channels)) throw new Error('PoRE completion job requires sample rate and channel count')
-				const blob = new Blob([createWavHeader(pcm.size, sampleRate, channels), pcm], { type: 'audio/wav' })
-				const payloadSha256 = await sha256(blob)
+				if (channels !== 1) throw new Error('PoRE V1 FLAC transport requires mono audio')
+				const blob = new Blob(stored.chunks, { type: 'audio/flac' })
+				const payloadSha256 = stored.manifest.payloadSha256 || await sha256(blob)
 				const descriptor = {
 					captureId: stored.manifest.captureId,
 					recordingSessionId: stored.manifest.recordingSessionId,
@@ -49,27 +54,42 @@
 					participantLabel: stored.manifest.participantLabel || null,
 					recordingId: stored.manifest.recordingId,
 					startedAt: stored.manifest.startedAt || stored.manifest.createdAt || new Date().toISOString(),
-					format: 'audio/wav',
-					encoding: 'pcm_s24le',
+					format: 'audio/flac',
+					encoding: 'flac',
 					sampleRate,
 					channels,
 					size: blob.size,
 					payloadSha256,
 					chunkCount: stored.chunks.length,
-					provenance: stored.manifest.provenance || null,
 					manifest: stored.manifest,
 					blob,
 					completionJob: job,
 				}
-				await store.finalizeCapture(captureId, {
-					completionJob: {
-						...job,
-						status: job.status === 'authorized' || job.status === 'remote_present' || job.status === 'verified' || job.status === 'transport_closed' ? job.status : 'prepared',
-						preparedAt: job.preparedAt || new Date().toISOString(),
+				if (stored.manifest.payloadSha256 !== payloadSha256 || stored.manifest.size !== blob.size) {
+					await store.finalizeCapture(captureId, {
 						payloadSha256,
 						size: blob.size,
-					},
-				})
+						format: 'audio/flac',
+						encoding: 'flac',
+						completionJob: {
+							...job,
+							status: job.status === 'authorized' || job.status === 'remote_present' || job.status === 'verified' || job.status === 'transport_closed' ? job.status : 'prepared',
+							preparedAt: job.preparedAt || new Date().toISOString(),
+							payloadSha256,
+							size: blob.size,
+						},
+					})
+				} else {
+					await store.finalizeCapture(captureId, {
+						completionJob: {
+							...job,
+							status: job.status === 'authorized' || job.status === 'remote_present' || job.status === 'verified' || job.status === 'transport_closed' ? job.status : 'prepared',
+							preparedAt: job.preparedAt || new Date().toISOString(),
+							payloadSha256,
+							size: blob.size,
+						},
+					})
+				}
 				window.dispatchEvent(new CustomEvent('pore:recording-transport-ready', { detail: descriptor }))
 				return descriptor
 			} catch (error) {
@@ -83,6 +103,44 @@
 				})
 				throw error
 			}
+		}
+
+		async _ensureFinalizedFlac(stored) {
+			const store = this._store()
+			const captureId = stored.manifest.captureId
+			const sampleRate = stored.manifest.sampleRate
+			const channels = stored.manifest.channels
+			if (!Number.isFinite(sampleRate) || !Number.isFinite(channels)) throw new Error('PoRE FLAC conversion requires sample rate and channel count')
+			if (channels !== 1) throw new Error('PoRE V1 FLAC conversion requires mono audio')
+			if (stored.manifest.encoding && stored.manifest.encoding !== 'pcm_s24le' && stored.manifest.storageFormat !== 'flac') throw new Error('PoRE FLAC conversion requires packed PCM24 input')
+			const pcmSize = stored.chunks.reduce((total, chunk) => total + chunk.size, 0)
+			if (pcmSize === 0 || pcmSize % 3 !== 0) throw new Error('PoRE FLAC conversion requires sample-aligned PCM24 data')
+			await store.clearFinalizedPayload(captureId)
+			const encoder = new window.PoREBrowserFlacEncoder({
+				sampleRate,
+				channels,
+				totalSamples: pcmSize / 3,
+				compression: 5,
+			})
+			let index = 0
+			try {
+				for (const chunk of stored.chunks) {
+					const bytes = new Uint8Array(await chunk.arrayBuffer())
+					for (const output of encoder.encodePcm24Bytes(bytes)) {
+						if (output.length) await store.appendFinalizedChunk(captureId, index++, output)
+					}
+				}
+				for (const output of encoder.finish()) {
+					if (output.length) await store.appendFinalizedChunk(captureId, index++, output)
+				}
+			} finally {
+				encoder.free?.()
+			}
+			const finalized = await store.getFinalizedPayload(captureId)
+			if (!finalized || !Array.isArray(finalized.chunks) || finalized.chunks.length === 0) throw new Error('PoRE FLAC conversion produced no payload')
+			const blob = new Blob(finalized.chunks, { type: 'audio/flac' })
+			const payloadSha256 = await sha256(blob)
+			await store.commitFinalizedPayload(captureId, { size: blob.size, payloadSha256, sampleCount: pcmSize / 3 })
 		}
 
 		async updateTransportState(captureId, patch) {
