@@ -20,6 +20,8 @@ jobs:
           node --check js/pore-browser-completion-job.js
           node --check js/pore-browser-pcm-persistence.js
           node --check js/pore-browser-pcm-recorder.js
+          node --check js/pore-browser-flac-encoder.js
+          node --check js/vendor/libflac.js
           node --check js/pore-browser-pcm-worklet.js
           node --check js/pore-browser-runtime-transport.js
           node --check js/pore-recording-controller.js
