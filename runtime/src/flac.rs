@@ -45,13 +45,22 @@ pub fn handle_convert_flac_to_wav(request: &ConvertFlacToWavRequest) -> ConvertF
     };
 
     if request.protocol_version != 1 {
-        return ConvertFlacToWavResponse { error_code: Some("unsupported_protocol_version".to_owned()), ..response };
+        return ConvertFlacToWavResponse {
+            error_code: Some("unsupported_protocol_version".to_owned()),
+            ..response
+        };
     }
     if request.operation != OPERATION_CONVERT_FLAC_TO_WAV {
-        return ConvertFlacToWavResponse { error_code: Some("unsupported_operation".to_owned()), ..response };
+        return ConvertFlacToWavResponse {
+            error_code: Some("unsupported_operation".to_owned()),
+            ..response
+        };
     }
     if request.input_path.trim().is_empty() || request.output_path.trim().is_empty() {
-        return ConvertFlacToWavResponse { error_code: Some("invalid_path".to_owned()), ..response };
+        return ConvertFlacToWavResponse {
+            error_code: Some("invalid_path".to_owned()),
+            ..response
+        };
     }
 
     match convert_flac_to_wav(
@@ -107,16 +116,21 @@ pub fn convert_flac_to_wav(
         return Err("flac_output_profile_unsupported".to_owned());
     }
     if expected_sample_rate_hz != 0
-        && !matches!(expected_sample_rate_hz, V1_SAMPLE_RATE | V1_FALLBACK_SAMPLE_RATE)
+        && !matches!(
+            expected_sample_rate_hz,
+            V1_SAMPLE_RATE | V1_FALLBACK_SAMPLE_RATE
+        )
     {
         return Err("flac_sample_rate_unsupported".to_owned());
     }
 
-    let mut reader = FlacReader::open(input_path)
-        .map_err(|error| format!("flac_decode_open:{error}"))?;
+    let mut reader =
+        FlacReader::open(input_path).map_err(|error| format!("flac_decode_open:{error}"))?;
     let info = reader.streaminfo();
-    let channels = u16::try_from(info.channels).map_err(|_| "flac_channel_count_invalid".to_string())?;
-    let bits_per_sample = u16::try_from(info.bits_per_sample).map_err(|_| "flac_bit_depth_invalid".to_string())?;
+    let channels =
+        u16::try_from(info.channels).map_err(|_| "flac_channel_count_invalid".to_string())?;
+    let bits_per_sample =
+        u16::try_from(info.bits_per_sample).map_err(|_| "flac_bit_depth_invalid".to_string())?;
     if channels != expected_channels
         || bits_per_sample != expected_bits_per_sample
         || !matches!(info.sample_rate, V1_SAMPLE_RATE | V1_FALLBACK_SAMPLE_RATE)
@@ -275,10 +289,8 @@ mod tests {
 
     #[test]
     fn converts_real_v1_flac_fixture_to_canonical_wav() {
-        let root = std::env::temp_dir().join(format!(
-            "pore-flac-test-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("pore-flac-test-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let input = root.join("fixture.flac");
         let output = root.join("fixture.wav");
@@ -312,8 +324,14 @@ mod tests {
         assert_eq!(u32::from_le_bytes(bytes[16..20].try_into().unwrap()), 16);
         assert_eq!(u16::from_le_bytes(bytes[20..22].try_into().unwrap()), 1);
         assert_eq!(u16::from_le_bytes(bytes[22..24].try_into().unwrap()), 1);
-        assert_eq!(u32::from_le_bytes(bytes[24..28].try_into().unwrap()), 48_000);
-        assert_eq!(u32::from_le_bytes(bytes[28..32].try_into().unwrap()), 144_000);
+        assert_eq!(
+            u32::from_le_bytes(bytes[24..28].try_into().unwrap()),
+            48_000
+        );
+        assert_eq!(
+            u32::from_le_bytes(bytes[28..32].try_into().unwrap()),
+            144_000
+        );
         assert_eq!(u16::from_le_bytes(bytes[32..34].try_into().unwrap()), 3);
         assert_eq!(u16::from_le_bytes(bytes[34..36].try_into().unwrap()), 24);
         assert_eq!(&bytes[36..40], b"data");
