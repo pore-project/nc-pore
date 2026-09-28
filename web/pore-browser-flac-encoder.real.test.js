@@ -42,7 +42,7 @@ describe('Browser FLAC encoder real-library smoke test', () => {
 			expect(channels).toBe(1)
 			expect(bitsPerSample).toBe(24)
 			expect(totalSamples).toBe(3)
-			expect(bytes.length).toBeGreaterThan(42)
+			expect(bytes.length > 42).toBe(true)
 		} finally {
 			window.Flac = previous
 		}
