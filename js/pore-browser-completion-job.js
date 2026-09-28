@@ -136,7 +136,7 @@
 				encoder.free?.()
 				throw error
 			}
-			const finalized = await store.getFinalizedCapture(captureId)
+			const finalized = await store.getFinalizedPayload(captureId)
 			if (!finalized || !finalized.length) throw new Error('PoRE FLAC conversion produced no payload')
 			const blob = new Blob(finalized, { type: 'audio/flac' })
 			const payloadSha256 = await sha256(blob)
