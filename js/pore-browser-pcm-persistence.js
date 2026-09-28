@@ -3,9 +3,10 @@
 	'use strict'
 
 	const DB_NAME = 'nc-pore-recordings'
-	const DB_VERSION = 2
+	const DB_VERSION = 3
 	const MANIFEST_STORE = 'manifests'
 	const CHUNK_STORE = 'chunks'
+	const FINALIZED_CHUNK_STORE = 'finalizedChunks'
 
 	class PoREBrowserPcmPersistenceStore {
 		constructor({ indexedDBFactory = window.indexedDB, dbName = DB_NAME, keyRangeFactory = window.IDBKeyRange } = {}) {
@@ -30,10 +31,17 @@
 						chunks = db.createObjectStore(CHUNK_STORE, { keyPath: ['captureId', 'index'] })
 					}
 					if (!chunks.indexNames.contains('captureId')) chunks.createIndex('captureId', 'captureId', { unique: false })
+					let finalizedChunks
+					if (db.objectStoreNames.contains(FINALIZED_CHUNK_STORE)) {
+						finalizedChunks = request.transaction.objectStore(FINALIZED_CHUNK_STORE)
+					} else {
+						finalizedChunks = db.createObjectStore(FINALIZED_CHUNK_STORE, { keyPath: ['captureId', 'index'] })
+					}
+					if (!finalizedChunks.indexNames.contains('captureId')) finalizedChunks.createIndex('captureId', 'captureId', { unique: false })
 				}
 				request.onsuccess = () => {
 					const db = request.result
-					if (!db.objectStoreNames.contains(MANIFEST_STORE) || !db.objectStoreNames.contains(CHUNK_STORE)) {
+					if (!db.objectStoreNames.contains(MANIFEST_STORE) || !db.objectStoreNames.contains(CHUNK_STORE) || !db.objectStoreNames.contains(FINALIZED_CHUNK_STORE)) {
 						db.close()
 						reject(new Error('PoRE IndexedDB schema is incomplete'))
 						return
@@ -54,6 +62,7 @@
 				chunkCount: 0,
 				lastChunkIndex: -1,
 				chunks: [],
+				storageFormat: 'pcm_s24le',
 				updatedAt: new Date().toISOString(),
 			}
 			const db = await this._database()
@@ -108,7 +117,8 @@
 			const db = await this._database()
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
 			if (!manifest) return null
-			const chunks = await this._getChunks(db, captureId)
+			const storeName = manifest.storageFormat === 'flac' ? FINALIZED_CHUNK_STORE : CHUNK_STORE
+			const chunks = await this._getChunks(db, captureId, storeName)
 			const expectedIndexes = Array.from({ length: Math.max(0, manifest.lastChunkIndex + 1) }, (_, index) => index)
 			const actualIndexes = chunks.map(chunk => chunk.index)
 			if (actualIndexes.length !== expectedIndexes.length || actualIndexes.some((index, position) => index !== expectedIndexes[position])) {
@@ -122,6 +132,63 @@
 			return { manifest, chunks: chunks.map(chunk => chunk.payload) }
 		}
 
+		async getFinalizedPayload(captureId) {
+			const db = await this._database()
+			const manifest = await this._get(db, MANIFEST_STORE, captureId)
+			if (!manifest || manifest.storageFormat !== 'flac') return null
+			const chunks = await this._getChunks(db, captureId, FINALIZED_CHUNK_STORE)
+			return { manifest, chunks: chunks.map(chunk => chunk.payload) }
+		}
+
+		async clearFinalizedPayload(captureId) {
+			const db = await this._database()
+			const chunks = await this._getChunks(db, captureId, FINALIZED_CHUNK_STORE)
+			if (!chunks.length) return
+			await this._transaction(db, [FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
+				for (const chunk of chunks) transaction.objectStore(FINALIZED_CHUNK_STORE).delete([captureId, chunk.index])
+			})
+		}
+
+		async appendFinalizedChunk(captureId, index, payload) {
+			if (!captureId) throw new Error('PoRE finalized chunk requires captureId')
+			if (!Number.isInteger(index) || index < 0) throw new Error('PoRE finalized chunk requires a non-negative index')
+			const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'application/octet-stream' })
+			const sha256 = await this._sha256(blob)
+			const db = await this._database()
+			await this._transaction(db, [FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
+				transaction.objectStore(FINALIZED_CHUNK_STORE).put({ captureId, index, payload: blob, size: blob.size, sha256 })
+			})
+		}
+
+		async commitFinalizedPayload(captureId, metadata = {}) {
+			const db = await this._database()
+			const finalized = await this._getChunks(db, captureId, FINALIZED_CHUNK_STORE)
+			if (!finalized.length) throw new Error('PoRE finalized payload is empty: ' + captureId)
+			const pcm = await this._getChunks(db, captureId, CHUNK_STORE)
+			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest || manifest.status !== 'finalized') {
+						abort(new Error('PoRE capture manifest is not finalized: ' + captureId))
+						return
+					}
+					for (const chunk of pcm) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])
+					manifest.storageFormat = 'flac'
+					manifest.format = 'audio/flac'
+					manifest.encoding = 'flac'
+					manifest.size = metadata.size ?? finalized.reduce((total, chunk) => total + chunk.size, 0)
+					manifest.payloadSha256 = metadata.payloadSha256 || null
+					manifest.chunkCount = finalized.length
+					manifest.lastChunkIndex = finalized.length - 1
+					manifest.updatedAt = new Date().toISOString()
+					manifestStore.put(manifest)
+				}
+			})
+			return this._get(db, MANIFEST_STORE, captureId)
+		}
+
 		async listRecoverableCaptures() {
 			const db = await this._database()
 			const manifests = await this._getAll(db, MANIFEST_STORE)
@@ -130,10 +197,12 @@
 
 		async removeCapture(captureId) {
 			const db = await this._database()
-			const chunks = await this._getChunks(db, captureId)
-			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE], 'readwrite', transaction => {
+			const chunks = await this._getChunks(db, captureId, CHUNK_STORE)
+			const finalized = await this._getChunks(db, captureId, FINALIZED_CHUNK_STORE)
+			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE, FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
 				transaction.objectStore(MANIFEST_STORE).delete(captureId)
 				for (const chunk of chunks) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])
+				for (const chunk of finalized) transaction.objectStore(FINALIZED_CHUNK_STORE).delete([captureId, chunk.index])
 			})
 		}
 
@@ -147,8 +216,8 @@
 		_get(db, storeName, key) { return this._request(db, storeName, 'readonly', store => store.get(key)) }
 		_getAll(db, storeName) { return this._request(db, storeName, 'readonly', store => store.getAll()) }
 
-		_getChunks(db, captureId) {
-			return this._request(db, CHUNK_STORE, 'readonly', store => {
+		_getChunks(db, captureId, storeName = CHUNK_STORE) {
+			return this._request(db, storeName, 'readonly', store => {
 				const index = store.index('captureId')
 				return index.getAll(this.keyRangeFactory.only(captureId))
 			}).then(chunks => chunks.sort((a, b) => a.index - b.index))
