@@ -157,6 +157,7 @@
 			form.set('capture_provenance', JSON.stringify(descriptor.provenance || {}))
 			form.set('size', String(descriptor.size))
 			form.set('payload_sha256', descriptor.payloadSha256)
+			form.set('payload_format', descriptor.format || 'audio/wav')
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare', form)
 			if (body?.status !== 'prepared') throw new Error(body?.error_code || 'PoRE transport preparation failed')
 			await this.completionJob.updateTransportState(descriptor.captureId, {
@@ -166,6 +167,8 @@
 				uploadUsername: body.upload_username,
 				uploadPassword: body.upload_password,
 				filename: body.filename,
+				canonicalFilename: body.canonical_filename || body.filename,
+				payloadFormat: body.payload_format || descriptor.format || 'audio/wav',
 				uploadRequired: body.upload_required !== false,
 				preparedAt: new Date().toISOString(),
 			})
