@@ -69,6 +69,11 @@
 			return output
 		}
 
+		free() {
+			this.finished = true
+			this._destroy()
+		}
+
 		_write(data) {
 			const copy = new Uint8Array(data.length)
 			copy.set(data)
