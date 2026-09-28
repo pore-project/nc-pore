@@ -1,7 +1,7 @@
 # ADR-088 Versioning and Release Policy
 
 - Status: Accepted
-- Date: 2026-09-27
+- Date: 2026-09-28
 - Decision Type: Project / Release Policy
 
 ---
@@ -36,24 +36,39 @@ veröffentlicht.
 
 Die bestehende frühe Entwicklungsreihe `0.1.0-dev.N` wird nicht rückwirkend umbenannt.
 
-Beim Eintritt der V1 in den definierten Beta-/Release-Zyklus beginnt die V1-Pre-Release-Linie auf Basis von `1.0.0`.
+Beim Übergang von der bisherigen Entwicklungsreihe in die V1-Release-Linie wird der **erste Alpha-Stand mit dem nächsten Development-Zähler** bezeichnet. Damit wird die Entwicklungsgeschichte nicht auf einen neuen Zähler zurückgesetzt.
 
-Der vorgesehene Ablauf ist damit:
+Beispiel:
 
 ```text
-0.1.0-dev.N
+0.1.0-dev.115
       |
-      | V1 tritt in den Beta-/Release-Zyklus ein
+      | Übergang in die V1-Alpha-Phase
+      v
+1.0.0-alpha.116
+1.0.0-alpha.117
+1.0.0-alpha.118
+      |
+      | Übergang in die Beta-Phase
       v
 1.0.0-beta.1
 1.0.0-beta.2
 ...
 1.0.0-rc.1
+1.0.0-rc.2
 ...
 1.0.0
 ```
 
-Eine `alpha`-Linie ist nach derselben SemVer-Systematik möglich, wird für den aktuellen Übergang jedoch nicht künstlich eingeführt.
+Die Nummerierung wird dabei **innerhalb jeder Pre-Release-Stufe neu gezählt**:
+
+- Der erste V1-Alpha-Stand übernimmt einmalig den nächsten Zähler der bisherigen `dev.N`-Reihe.
+- Weitere Alpha-Stände erhöhen ausschließlich den Alpha-Zähler.
+- Beim Übergang von Alpha zu Beta beginnt der Beta-Zähler bei `1`.
+- Beim Übergang von Beta zu Release Candidate beginnt der RC-Zähler bei `1`.
+- Die stabile Release-Version trägt keinen Pre-Release-Zähler.
+
+Damit bedeutet beispielsweise `1.0.0-beta.1` nicht, dass nur ein einziger Entwicklungsstand seit `0.1.0-dev.115` existiert. Die `1` ist der erste **Beta-Stand**, nicht der globale Entwicklungszähler.
 
 ### 2. Development-Stände verwenden weiterhin `dev.N`
 
@@ -132,10 +147,14 @@ Für einen Release-Zyklus gelten die folgenden möglichen Stufen:
 <release>
 ```
 
+Die Zähler `N` gehören jeweils zur konkreten Pre-Release-Stufe und werden beim Wechsel in die nächste Stufe auf `1` zurückgesetzt.
+
 Beispiel:
 
 ```text
-1.0.0-alpha.1
+1.0.0-alpha.116
+1.0.0-alpha.117
+1.0.0-alpha.118
 1.0.0-beta.1
 1.0.0-beta.2
 1.0.0-rc.1
@@ -148,7 +167,7 @@ Nach SemVer hat eine Pre-Release-Version eine niedrigere Versionspriorität als 
 
 ### 5. Development und Release-Zähler werden nicht vermischt
 
-Die folgenden Zähler haben unterschiedliche Bedeutungen und werden daher nicht gegeneinander fortgeschrieben:
+Die folgenden Zähler haben unterschiedliche Bedeutungen:
 
 ```text
 1.2.0-dev.17
@@ -158,9 +177,29 @@ Die folgenden Zähler haben unterschiedliche Bedeutungen und werden daher nicht 
 └────────── MAJOR
 ```
 
-Wenn aus einer Entwicklungsreihe `1.2.0-dev.N` ein stabiles Release wird, lautet die stabile Version `1.2.0`; der `dev.N`-Zähler wird nicht Bestandteil der Release-Version.
+`dev.N` ist die bisherige Kennzeichnung der frühen Entwicklungs-/Review-Stände.
 
-Ebenso bedeutet ein neuer `dev.N`-Stand nicht automatisch eine MINOR- oder PATCH-Erhöhung. Die Release-Klassifikation wird nach der Art der enthaltenen Änderungen festgelegt.
+Mit dem Übergang der V1 in die Alpha-Phase wird diese Kennzeichnung durch die Alpha-Stufe ersetzt. Der erste Alpha-Stand übernimmt dabei einmalig den nächsten `dev.N`-Zähler:
+
+```text
+0.1.0-dev.115
+→ 1.0.0-alpha.116
+```
+
+Danach laufen die Zähler der Pre-Release-Stufen unabhängig voneinander:
+
+```text
+alpha.116
+alpha.117
+alpha.118
+→ beta.1
+beta.2
+→ rc.1
+```
+
+Wenn aus einer Entwicklungs- oder Pre-Release-Reihe ein stabiles Release wird, ist der Pre-Release-Zähler nicht Bestandteil der stabilen Versionsnummer.
+
+Eine neue Development-/Review-Runde innerhalb einer bestehenden Pre-Release-Stufe erhöht deren jeweiligen Zähler. Die Wahl zwischen Alpha, Beta, RC und stabiler Version richtet sich dagegen nach dem erreichten Release-Reifegrad.
 
 ### 6. Examples für die NC-PoRE-Entwicklung
 
@@ -251,24 +290,39 @@ The first stable public V1 of NC-PoRe will be released as:
 
 The existing early-development series `0.1.0-dev.N` is not renamed retroactively.
 
-When V1 enters the defined beta/release cycle, the V1 pre-release line starts from the `1.0.0` baseline.
+When V1 moves into its release line, the **first alpha state uses the next Development counter**. This preserves development history instead of resetting the counter.
 
-The intended flow is:
+Example:
 
 ```text
-0.1.0-dev.N
+0.1.0-dev.115
       |
-      | V1 enters the beta/release cycle
+      | transition into V1 alpha
+      v
+1.0.0-alpha.116
+1.0.0-alpha.117
+1.0.0-alpha.118
+      |
+      | transition into beta
       v
 1.0.0-beta.1
 1.0.0-beta.2
 ...
 1.0.0-rc.1
+1.0.0-rc.2
 ...
 1.0.0
 ```
 
-An `alpha` line is possible under the same SemVer system, but is not introduced artificially for the current transition.
+The counter is **reset within each pre-release stage**:
+
+- the first V1 alpha state inherits the next counter from the previous `dev.N` series once;
+- subsequent alpha states increment the alpha counter;
+- beta starts at `1` when the release enters beta;
+- release candidates start at `1` when the release enters RC;
+- the stable release has no pre-release counter.
+
+Thus `1.0.0-beta.1` means the first **beta state**, not the first development state since `0.1.0-dev.115`.
 
 ### 2. Development states continue to use `dev.N`
 
@@ -347,10 +401,14 @@ The possible stages of a release cycle are:
 <release>
 ```
 
+The counter `N` belongs to the specific pre-release stage and resets to `1` when moving to the next stage.
+
 Example:
 
 ```text
-1.0.0-alpha.1
+1.0.0-alpha.116
+1.0.0-alpha.117
+1.0.0-alpha.118
 1.0.0-beta.1
 1.0.0-beta.2
 1.0.0-rc.1
@@ -363,7 +421,7 @@ Under SemVer, a pre-release version has lower precedence than its corresponding 
 
 ### 5. Development and release counters are not mixed
 
-The following counters have different meanings and therefore are not advanced as one sequence:
+The following counters have different meanings:
 
 ```text
 1.2.0-dev.17
@@ -373,25 +431,55 @@ The following counters have different meanings and therefore are not advanced as
 └────────── MAJOR
 ```
 
-When a development series `1.2.0-dev.N` becomes a stable release, the stable version is `1.2.0`; the `dev.N` identifier is not part of the release version.
+`dev.N` is the existing identifier for early development/review states.
 
-Likewise, a new `dev.N` state does not automatically imply a MINOR or PATCH increase. Release classification is based on the nature of the included changes.
+When V1 enters alpha, this identifier is replaced by the alpha stage. The first alpha state inherits the next `dev.N` counter once:
+
+```text
+0.1.0-dev.115
+→ 1.0.0-alpha.116
+```
+
+After that, the pre-release stage counters run independently:
+
+```text
+alpha.116
+alpha.117
+alpha.118
+→ beta.1
+beta.2
+→ rc.1
+```
+
+When a development or pre-release series becomes stable, its pre-release counter is not part of the stable version.
+
+A new development/review round within an existing pre-release stage increments that stage's counter. The choice between alpha, beta, RC and stable is based on release maturity.
 
 ### 6. NC-PoRE development example
 
-A typical evolution within a compatible feature line may look like:
+A typical V1 evolution may look like:
 
 ```text
+0.1.0-dev.115
+1.0.0-alpha.116
+1.0.0-alpha.117
+1.0.0-beta.1
+1.0.0-beta.2
+1.0.0-rc.1
 1.0.0
 1.0.1
-1.0.2
+1.1.0
+```
+
+A later compatible feature line may then develop independently, for example:
+
+```text
 1.1.0
 1.1.0-dev.1
 1.1.0-dev.2
 1.1.0-beta.1
 1.1.0-rc.1
 1.1.0
-1.1.1
 ```
 
 A new incompatible generation begins accordingly with:
