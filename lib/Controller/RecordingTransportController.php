@@ -150,6 +150,7 @@ final class RecordingTransportController extends OCSController {
 							$this->required($payload_sha256, 'payload_sha256'),
 							$actorId,
 							$replacementFileId,
+							$payload_format,
 						);
 					}
 				} else {

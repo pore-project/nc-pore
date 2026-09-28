@@ -536,7 +536,7 @@ final class NextcloudArtifactConnector {
 						'target_user_id' => $state['target_user_id'],
 						'file_id' => $existing->getId(),
 						'path' => $this->relativeUserPath($existing, $state['target_user_id']),
-					'size' => $existing->getSize(),
+						'size' => $existing->getSize(),
 						'sha256' => $this->hashFile($existing),
 						'filename' => $existing->getName(),
 						'preservation' => $preservation,
@@ -591,123 +591,6 @@ final class NextcloudArtifactConnector {
 		}
 	}
 
-	private function convertFlacToCanonicalWav(File $flacFile, array $state): array {
-		$inputPath = tempnam(sys_get_temp_dir(), 'pore-flac-input-');
-		$outputPath = tempnam(sys_get_temp_dir(), 'pore-flac-output-');
-		if ($inputPath === false || $outputPath === false) {
-			if ($inputPath !== false) @unlink($inputPath);
-			if ($outputPath !== false) @unlink($outputPath);
-			throw new RuntimeException('artifact_preservation_invalid');
-		}
-
-		$canonicalFile = null;
-		try {
-			$input = $flacFile->fopen('r');
-			$localInput = fopen($inputPath, 'wb');
-			if ($input === false || $localInput === false) throw new RuntimeException('artifact_preservation_invalid');
-			try {
-				if (stream_copy_to_stream($input, $localInput) === false) throw new RuntimeException('artifact_preservation_invalid');
-			} finally {
-				fclose($input);
-				fclose($localInput);
-			}
-
-			$response = $this->runtime->command([
-				'request_id' => bin2hex(random_bytes(16)),
-				'input_path' => $inputPath,
-				'output_path' => $outputPath,
-				'expected_sample_rate_hz' => 0,
-				'expected_channels' => self::V1_CHANNELS,
-				'expected_bits_per_sample' => self::V1_BITS_PER_SAMPLE,
-			], 'artifact.convert_flac_to_wav');
-
-			if (($response['status'] ?? null) !== 'converted'
-				|| !is_int($response['sample_rate_hz'] ?? null)
-				|| !is_int($response['channels'] ?? null)
-				|| !is_int($response['bits_per_sample'] ?? null)
-				|| !is_int($response['sample_count'] ?? null)
-				|| !is_int($response['payload_length'] ?? null)) {
-				throw new RuntimeException('artifact_preservation_invalid');
-			}
-
-			$localSize = filesize($outputPath);
-			if ($localSize === false || $localSize !== $response['payload_length']) {
-				throw new RuntimeException('artifact_preservation_invalid');
-			}
-			$localHash = hash_file('sha256', $outputPath);
-			if ($localHash === false) throw new RuntimeException('artifact_preservation_invalid');
-
-			$expectedDataBytes = $response['sample_count'] * 3;
-			if ($expectedDataBytes + 44 !== $localSize) {
-				throw new RuntimeException('artifact_preservation_invalid');
-			}
-
-			$folder = $this->folderForState($state);
-			$canonicalFilename = $state['canonical_filename'];
-			$existing = $this->findFile($folder, $canonicalFilename);
-			if ($existing !== null) {
-				if ($existing->getSize() === $localSize && hash_equals($localHash, $this->hashFile($existing))) {
-					try { $flacFile->delete(); } catch (\Throwable) {}
-					$preservation = $this->inspectWav($existing, $existing->getSize());
-					return [
-						'artifact_id' => $state['capture_id'],
-						'target_user_id' => $state['target_user_id'],
-						'file_id' => $existing->getId(),
-						'path' => $this->relativeUserPath($existing, $state['target_user_id']),
-					'size' => $existing->getSize(),
-						'sha256' => $this->hashFile($existing),
-						'filename' => $existing->getName(),
-						'preservation' => $preservation,
-					];
-				}
-				throw new RuntimeException('artifact_manifest_conflict');
-			}
-
-			$canonicalFile = $folder->newFile($canonicalFilename);
-			$source = fopen($outputPath, 'rb');
-			$destination = $canonicalFile->fopen('w');
-			if ($source === false || $destination === false) throw new RuntimeException('artifact_preservation_invalid');
-			try {
-				if (stream_copy_to_stream($source, $destination) === false) throw new RuntimeException('artifact_preservation_invalid');
-			} finally {
-				fclose($source);
-				fclose($destination);
-			}
-
-			$canonicalSize = $canonicalFile->getSize();
-			$canonicalHash = $this->hashFile($canonicalFile);
-			$preservation = $this->inspectWav($canonicalFile, $canonicalSize);
-			if ($canonicalSize !== $localSize || !hash_equals($localHash, $canonicalHash)) {
-				try { $canonicalFile->delete(); } catch (\Throwable) {}
-				throw new RuntimeException('artifact_preservation_invalid');
-			}
-
-			try { $flacFile->delete(); } catch (\Throwable) {}
-			return [
-				'artifact_id' => $state['capture_id'],
-				'target_user_id' => $state['target_user_id'],
-				'file_id' => $canonicalFile->getId(),
-				'path' => $this->relativeUserPath($canonicalFile, $state['target_user_id']),
-				'size' => $canonicalSize,
-				'sha256' => $canonicalHash,
-				'filename' => $canonicalFile->getName(),
-				'preservation' => $preservation,
-			];
-		} catch (RuntimeException $error) {
-			if ($canonicalFile !== null) {
-				try { $canonicalFile->delete(); } catch (\Throwable) {}
-			}
-			throw new RuntimeException($error->getMessage() === 'artifact_manifest_conflict' ? 'artifact_manifest_conflict' : 'artifact_preservation_invalid', 0, $error);
-		} catch (\Throwable $error) {
-			if ($canonicalFile !== null) {
-				try { $canonicalFile->delete(); } catch (\Throwable) {}
-			}
-			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
-		} finally {
-			@unlink($inputPath);
-			@unlink($outputPath);
-		}
-	}
 
 	private function hashFile(File $file): string {
 		$input = $file->fopen('r');
