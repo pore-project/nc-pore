@@ -115,16 +115,20 @@
 		_patchStreamInfo() {
 			const info = this.streamInfo
 			const data = this.headerBuffer
-			const view = new DataView(data.buffer, data.byteOffset + 8)
-			view.setUint16(0, info.min_blocksize)
-			view.setUint16(2, info.max_blocksize)
-			view.setUint16(4, info.min_framesize >>> 8)
-			view.setUint8(6, info.min_framesize & 0xff)
-			view.setUint16(7, info.max_framesize >>> 8)
-			view.setUint8(9, info.max_framesize & 0xff)
-			view.setUint8(13, (view.getUint8(13) & 0xf0) | (Math.floor(this.totalSamples / 0x100000000) & 0x0f))
-			view.setUint32(14, this.totalSamples >>> 0)
-			for (let i = 0; i < 16; i += 1) view.setUint8(18 + i, parseInt(info.md5sum.slice(i * 2, i * 2 + 2), 16) || 0)
+			if (data.length < HEADER_BYTES) throw new Error('PoRE FLAC STREAMINFO header is incomplete')
+			const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+			view.setUint8(12, (info.min_framesize >>> 16) & 0xff)
+			view.setUint8(13, (info.min_framesize >>> 8) & 0xff)
+			view.setUint8(14, info.min_framesize & 0xff)
+			view.setUint8(15, (info.max_framesize >>> 16) & 0xff)
+			view.setUint8(16, (info.max_framesize >>> 8) & 0xff)
+			view.setUint8(17, info.max_framesize & 0xff)
+			const highSamples = Math.floor(this.totalSamples / 0x100000000) & 0x0f
+			view.setUint8(21, (view.getUint8(21) & 0xf0) | highSamples)
+			view.setUint32(22, this.totalSamples >>> 0, false)
+			for (let i = 0; i < 16; i += 1) {
+				view.setUint8(26 + i, parseInt(info.md5sum.slice(i * 2, i * 2 + 2), 16) || 0)
+			}
 		}
 
 		_destroy() {
