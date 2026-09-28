@@ -7,6 +7,10 @@ use pore_runtime::{
     RecordingCommandRequest, RecordingCommandResponse, SubmitFinalizedArtifactRequest,
     handle_recording_command, handle_submit, write_response,
 };
+use pore_runtime::flac::{
+    ConvertFlacToWavRequest, ConvertFlacToWavResponse, OPERATION_CONVERT_FLAC_TO_WAV,
+    handle_convert_flac_to_wav,
+};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 
 fn main() {
@@ -35,6 +39,20 @@ fn main() {
     };
 
     match operation.as_deref() {
+        Some(OPERATION_CONVERT_FLAC_TO_WAV) => {
+            let request: ConvertFlacToWavRequest = match serde_json::from_slice(&frame) {
+                Ok(request) => request,
+                Err(error) => {
+                    eprintln!("FLAC conversion request JSON error: {error}");
+                    std::process::exit(3);
+                }
+            };
+            let response: ConvertFlacToWavResponse = handle_convert_flac_to_wav(&request);
+            if let Err(error) = write_json_frame(&mut output, &response) {
+                eprintln!("FLAC conversion response error: {error}");
+                std::process::exit(4);
+            }
+        }
         Some(OPERATION_PRODUCTION_COMMAND) => {
             let request: ProductionCommandRequest = match serde_json::from_slice(&frame) {
                 Ok(request) => request,
