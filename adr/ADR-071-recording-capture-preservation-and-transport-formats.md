@@ -47,6 +47,10 @@ Host-/Connector-spezifische Darstellung für die Synchronisation
 
 ---
 
+# V1-Einschränkung
+
+Die in dieser ADR beschriebene allgemeine Plattformoffenheit ist ein Architekturprinzip. **Für V1 gilt jedoch der konkret beschlossene Browser-Preservation-Pfad aus ADR-087:** Mono, 24-Bit-Integer-PCM, 48 kHz bevorzugt bzw. 44,1 kHz als zulässiger Fallback. F32 wird in V1 nicht als Preservation- oder FLAC-Eingangsformat unterstützt; dies bleibt einer späteren Erweiterung vorbehalten.
+
 # Capture Format
 
 Die Capture-Schicht verwendet das **beste Aufnahmeformat, das die jeweilige Aufnahmeumgebung zuverlässig bereitstellen kann**.
@@ -161,7 +165,7 @@ Die Entscheidung definiert die Grenze, auf der der V1-Browserclient aufsetzt. Ne
 
 Folgende Fragen werden bewusst erst beim Entwurf des Client-Vertrags und der Browserimplementierung entschieden:
 
-* Welche Browser-Capture-APIs und Formate werden in V1 unterstützt?
+* Welche Browser-Capture-APIs und Formate werden in V1 unterstützt (der beschlossene V1-Pfad ist in ADR-087 konkretisiert)?
 * Wird Browser-Capture vor der Artifact-Erzeugung als Raw PCM, verlustfrei kodierte Darstellung oder in einer anderen Form bewahrt?
 * Welche Transportformate werden in V1 neben FLAC unterstützt?
 * Wie wird die Transportformat-Konfiguration im Host-/Connector-Vertrag dargestellt?
@@ -177,6 +181,8 @@ Diese Fragen dürfen nicht dadurch beantwortet werden, dass der Browserclient vo
 Diese Entscheidung definiert die Formatgrenzen zwischen plattformspezifischer Audioaufnahme, lokaler Preservation und hostabhängigem Transport.
 
 Die konkrete Browser- und Connector-Implementierung erfolgt innerhalb dieser Architekturgrenzen.
+
+Für V1 wird die lokale PCM-Capture-Persistence nach abgeschlossener Aufnahme verlustfrei in FLAC überführt; FLAC ist damit die V1-Persistence-/Transportrepräsentation. Die serverseitige Remote-Kanonisierung darf diese Repräsentation vorerst wieder verlustfrei in das bestehende WAV-Format überführen.
 
 ---
 
@@ -336,7 +342,7 @@ The decision defines the boundary on which the V1 browser client is built. Nextc
 The following questions are deliberately deferred until the client contract and browser implementation are designed:
 
 * Which browser capture APIs and formats are supported in V1?
-* Whether browser capture is preserved as raw PCM, a lossless encoded representation, or another representation before artifact creation.
+* Whether browser capture is preserved as raw PCM, a lossless encoded representation, or another representation before artifact creation; the V1 profile itself is constrained by ADR-087 and does not include F32.
 * Which transport formats are supported in V1 besides FLAC?
 * How transport-format configuration is represented in the host/connector contract.
 * Whether transport conversion is performed client-side, at the application boundary, or by a connector.
@@ -351,3 +357,5 @@ These questions must not be resolved by making the browser client dependent on N
 This decision defines the format boundaries between platform-specific audio capture, local preservation and host-dependent transport.
 
 Concrete browser and connector implementation follows these architectural boundaries.
+
+For V1, locally persisted PCM capture is losslessly converted to FLAC after capture finalization; FLAC is therefore the V1 persistence/transport representation. The server-side canonical remote artifact may, for now, losslessly convert that representation back to the existing WAV format.
