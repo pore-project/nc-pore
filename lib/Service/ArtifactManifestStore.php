@@ -35,13 +35,15 @@ final class ArtifactManifestStore {
 
 			if ($existing !== null) {
 				$this->assertStableIdentityMatches($existing, $record);
-				$this->assertExpectedPayloadMatches($existing, $record);
 
 				if (($existing['status'] ?? null) === 'verified') {
 					// A previously verified immutable Artifact record wins over a
-					// repeated preparation. Do not downgrade or mutate it.
+					// repeated preparation. Transport representation may vary
+					// independently from the canonical remote Artifact.
 					return $existing;
 				}
+
+				$this->assertExpectedPayloadMatches($existing, $record);
 			}
 
 			$record['prepared_at'] = gmdate('c');
