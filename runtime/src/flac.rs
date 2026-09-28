@@ -106,7 +106,9 @@ pub fn convert_flac_to_wav(
     if expected_channels != V1_CHANNELS || expected_bits_per_sample != V1_BITS_PER_SAMPLE {
         return Err("flac_output_profile_unsupported".to_owned());
     }
-    if !matches!(expected_sample_rate_hz, V1_SAMPLE_RATE | V1_FALLBACK_SAMPLE_RATE) {
+    if expected_sample_rate_hz != 0
+        && !matches!(expected_sample_rate_hz, V1_SAMPLE_RATE | V1_FALLBACK_SAMPLE_RATE)
+    {
         return Err("flac_sample_rate_unsupported".to_owned());
     }
 
@@ -117,7 +119,8 @@ pub fn convert_flac_to_wav(
     let bits_per_sample = u16::from(info.bits_per_sample);
     if channels != expected_channels
         || bits_per_sample != expected_bits_per_sample
-        || info.sample_rate != expected_sample_rate_hz
+        || !matches!(info.sample_rate, V1_SAMPLE_RATE | V1_FALLBACK_SAMPLE_RATE)
+        || (expected_sample_rate_hz != 0 && info.sample_rate != expected_sample_rate_hz)
     {
         return Err("flac_streaminfo_mismatch".to_owned());
     }
