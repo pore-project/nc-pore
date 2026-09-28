@@ -82,6 +82,7 @@ final class ArtifactManifestStore {
 				}
 
 				$updated = $existing;
+				if (array_key_exists('transport', $receipt)) $updated['transport'] = $this->normalizeTransport($receipt['transport']);
 				$updated['remote'] = [
 					'target_user_id' => $this->nullableString($receipt['target_user_id'] ?? ($remote['target_user_id'] ?? null)),
 					'filename' => $this->nullableString($receipt['filename'] ?? ($remote['filename'] ?? null)),
@@ -132,6 +133,7 @@ final class ArtifactManifestStore {
 				'preservation' => $this->normalizePreservation($receipt['preservation'] ?? null),
 				'capture' => $pending['capture'] ?? null,
 				'sourceSegments' => $pending['sourceSegments'] ?? [],
+				'transport' => $this->normalizeTransport($receipt['transport'] ?? ($pending['transport'] ?? null)),
 				'verified_at' => gmdate('c'),
 			];
 
@@ -257,10 +259,11 @@ final class ArtifactManifestStore {
 		$productionId = $this->requiredString($submission['production_id'] ?? null, 'production_id');
 		$recordingId = $this->requiredString($submission['recording_id'] ?? null, 'recording_id');
 		$recordingSessionId = $this->requiredString($submission['recording_session_id'] ?? null, 'recording_session_id');
-
 		$provenance = $this->normalizeCaptureProvenance($submission['capture_provenance'] ?? null);
-		$size = $this->requiredNonNegativeInt($submission['size'] ?? null, 'size');
-
+		$payloadFormat = $this->requiredPayloadFormat($submission['payload_format'] ?? 'audio/wav');
+		$size = $this->requiredNonNegativeInt($submission['transport_size'] ?? ($submission['size'] ?? null), 'transport_size');
+		$transportSha256 = $this->requiredSha256($submission['transport_sha256'] ?? ($submission['payload_sha256'] ?? null));
+		$canonicalFilename = $this->nullableString($submission['canonical_filename'] ?? ($submission['filename'] ?? null));
 		return [
 			'schema_version' => self::SCHEMA_VERSION,
 			'status' => 'pending_verification',
@@ -272,11 +275,16 @@ final class ArtifactManifestStore {
 			'participant_label' => $this->nullableString($submission['participant_label'] ?? null),
 			'remote' => [
 				'target_user_id' => $this->nullableString($submission['target_user_id'] ?? null),
-				'filename' => $this->nullableString($submission['filename'] ?? null),
+				'filename' => $canonicalFilename,
 				'file_id' => null,
 				'path' => null,
+				'size' => $payloadFormat === 'audio/wav' ? $size : null,
+				'sha256' => $payloadFormat === 'audio/wav' ? $transportSha256 : null,
+			],
+			'transport' => [
+				'format' => $payloadFormat,
 				'size' => $size,
-				'sha256' => $this->requiredSha256($submission['payload_sha256'] ?? null),
+				'sha256' => $transportSha256,
 			],
 			'capture' => $provenance['capture'] ?? null,
 			'sourceSegments' => $provenance['sourceSegments'] ?? [],
@@ -382,28 +390,28 @@ final class ArtifactManifestStore {
 	 */
 	private function assertExpectedPayloadMatches(?array $existing, array $candidate, bool $final = false): void {
 		if ($existing === null) return;
-
-		$existingRemote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
-		$candidateRemote = is_array($candidate['remote'] ?? null) ? $candidate['remote'] : [];
-
-		$existingHash = $existingRemote['sha256'] ?? null;
-		$candidateHash = $candidateRemote['sha256'] ?? null;
-		$existingSize = $existingRemote['size'] ?? null;
-		$candidateSize = $candidateRemote['size'] ?? null;
-
-		if ($existingHash !== null && $candidateHash !== null && strtolower((string)$existingHash) !== strtolower((string)$candidateHash)) {
-			throw new RuntimeException('artifact_manifest_conflict');
+		$existingTransport = is_array($existing['transport'] ?? null) ? $existing['transport'] : null;
+		$candidateTransport = is_array($candidate['transport'] ?? null) ? $candidate['transport'] : null;
+		if ($existingTransport !== null && $candidateTransport !== null) {
+			if (($existingTransport['format'] ?? null) !== ($candidateTransport['format'] ?? null)
+				|| (int)($existingTransport['size'] ?? -1) !== (int)($candidateTransport['size'] ?? -2)
+				|| strtolower((string)($existingTransport['sha256'] ?? '')) !== strtolower((string)($candidateTransport['sha256'] ?? ''))) {
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
+		} else {
+			$existingRemote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
+			$candidateRemote = is_array($candidate['remote'] ?? null) ? $candidate['remote'] : [];
+			$existingHash = $existingRemote['sha256'] ?? null;
+			$candidateHash = $candidateRemote['sha256'] ?? null;
+			$existingSize = $existingRemote['size'] ?? null;
+			$candidateSize = $candidateRemote['size'] ?? null;
+			if ($existingHash !== null && $candidateHash !== null && strtolower((string)$existingHash) !== strtolower((string)$candidateHash)) throw new RuntimeException('artifact_manifest_conflict');
+			if ($existingSize !== null && $candidateSize !== null && (int)$existingSize !== (int)$candidateSize) throw new RuntimeException('artifact_manifest_conflict');
 		}
-		if ($existingSize !== null && $candidateSize !== null && (int)$existingSize !== (int)$candidateSize) {
-			throw new RuntimeException('artifact_manifest_conflict');
-		}
-
 		if ($final && ($existing['status'] ?? null) === 'verified') {
 			$existingHash = $existing['manifest_hash'] ?? null;
 			$candidateHash = $this->manifestHash($candidate);
-			if ($existingHash !== null && $existingHash !== $candidateHash) {
-				throw new RuntimeException('artifact_manifest_conflict');
-			}
+			if ($existingHash !== null && $existingHash !== $candidateHash) throw new RuntimeException('artifact_manifest_conflict');
 		}
 	}
 
@@ -463,6 +471,24 @@ final class ArtifactManifestStore {
 	private function isList(array $value): bool {
 		$expected = range(0, count($value) - 1);
 		return $value === [] || array_keys($value) === $expected;
+	}
+
+	private function requiredPayloadFormat(mixed $value): string {
+		if (!is_string($value) || !in_array($value, ['audio/wav', 'audio/flac'], true)) throw new RuntimeException('artifact_manifest_invalid');
+		return $value;
+	}
+
+	/**
+	 * @param mixed $value
+	 * @return array{format:string,size:int,sha256:string}
+	 */
+	private function normalizeTransport(mixed $value): array {
+		if (!is_array($value)) throw new RuntimeException('artifact_manifest_invalid');
+		return [
+			'format' => $this->requiredPayloadFormat($value['format'] ?? null),
+			'size' => $this->requiredNonNegativeInt($value['size'] ?? null, 'transport.size'),
+			'sha256' => $this->requiredSha256($value['sha256'] ?? null),
+		];
 	}
 
 	private function requiredString(mixed $value, string $field): string {
