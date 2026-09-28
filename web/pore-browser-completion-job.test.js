@@ -109,6 +109,7 @@ describe('Browser completion job', () => {
 	})
 
 	it('finalizes packed PCM24 into a durable FLAC payload before transport', async () => {
+		const previousEncoder = window.PoREBrowserFlacEncoder
 		const committed = []
 		const finalized = []
 		const pcm = new Blob([new Uint8Array([0, 0, 0, 0xff, 0xff, 0x7f, 0, 0, 0x80])], { type: 'application/octet-stream' })
@@ -160,6 +161,7 @@ describe('Browser completion job', () => {
 		expect(committed[0].patch.sampleCount).toBe(3)
 		expect(typeof committed[0].patch.payloadSha256).toBe('string')
 		expect(descriptor.format).toBe('audio/flac')
+		window.PoREBrowserFlacEncoder = previousEncoder
 	})
 
 	it('persists transport state without losing existing completion-job fields', async () => {
