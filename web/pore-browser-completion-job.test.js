@@ -61,51 +61,77 @@ describe('Browser completion job', () => {
 		expect(store.removeCapture).toHaveBeenCalledWith('capture-1')
 	})
 
-	it('prepares a finalized durable capture for transport without uploading it', async () => {
-		const persisted = []
+	it('finalizes durable PCM as FLAC before transport', async () => {
+		const previousEncoder = window.PoREBrowserFlacEncoder
+		const finalized = []
+		let committed = false
 		const provenance = { schemaVersion: 1, capture: { sampleRate: 48000, sampleSize: 24, channelCount: 1, processing: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }, sourceSegments: [] }
+		const pcmChunk = new Blob([new Uint8Array([0, 0, 0])])
 		const store = {
-			finalizeCapture: jest.fn(async (captureId, patch) => {
-				persisted.push({ captureId, patch })
+			finalizeCapture: jest.fn(async () => {}),
+			getCapture: jest.fn(async captureId => committed
+				? { manifest: { captureId, status: 'finalized', storageFormat: 'flac', format: 'audio/flac', encoding: 'flac', sampleRate: 48000, channels: 1, productionId: 'production-1', recordingId: 'recording-1', recordingSessionId: 'session-1', provenance }, chunks: finalized.slice() }
+				: { manifest: { captureId, status: 'finalized', storageFormat: 'pcm_s24le', encoding: 'pcm_s24le', sampleRate: 48000, channels: 1, productionId: 'production-1', recordingId: 'recording-1', recordingSessionId: 'session-1', provenance }, chunks: [pcmChunk] }),
+			clearFinalizedPayload: jest.fn(async () => { finalized.length = 0 }),
+			appendFinalizedChunk: jest.fn(async (_captureId, index, payload) => { finalized[index] = payload }),
+			getFinalizedPayload: jest.fn(async captureId => ({ manifest: { captureId, status: 'finalized', storageFormat: 'pcm_s24le' }, chunks: finalized.slice() })),
+			commitFinalizedPayload: jest.fn(async captureId => {
+				committed = true
+				return { captureId, storageFormat: 'flac', status: 'finalized' }
 			}),
-			getCapture: jest.fn(async captureId => ({
-				manifest: {
-					captureId,
-					status: 'finalized',
-					productionId: 'production-1',
-					recordingId: 'recording-1',
-					recordingSessionId: 'session-1',
-					sampleRate: 48000,
-					channels: 1,
-					provenance,
-				},
-				chunks: [new Blob([new Uint8Array([0, 0, 0])])],
-			})),
 		}
-		const job = new Job({ persistenceStoreFactory: () => store })
-		const handler = jest.fn()
-		window.addEventListener('pore:recording-transport-ready', handler)
+		window.PoREBrowserFlacEncoder = class {
+			constructor(options) { this.options = options }
+			encodePcm24Bytes(bytes) { return [new Uint8Array([0x66, 0x4c, 0x61, 0x43, bytes.length])] }
+			finish() { return [new Uint8Array([0x80])] }
+			free() {}
+		}
+		try {
+			const job = new Job({ persistenceStoreFactory: () => store })
+			const handler = jest.fn()
+			window.addEventListener('pore:recording-transport-ready', handler)
+			const descriptor = await job.enqueue({ productionId: 'production-1', recordingId: 'recording-1', captureId: 'capture-1', recordingSessionId: 'session-1', provenance })
+			expect(store.appendFinalizedChunk).toHaveBeenCalled()
+			expect(store.commitFinalizedPayload).toHaveBeenCalledWith('capture-1', expect.objectContaining({ payloadSha256: expect.any(String) }))
+			expect(committed).toBe(true)
+			expect(descriptor.format).toBe('audio/flac')
+			expect(descriptor.encoding).toBe('flac')
+			expect(descriptor.sampleRate).toBe(48000)
+			expect(descriptor.channels).toBe(1)
+			expect(descriptor.provenance).toEqual(provenance)
+			expect(descriptor.blob).toBeInstanceOf(Blob)
+			expect(handler).toHaveBeenCalledTimes(1)
+			window.removeEventListener('pore:recording-transport-ready', handler)
+		} finally {
+			window.PoREBrowserFlacEncoder = previousEncoder
+		}
+	})
 
-		const descriptor = await job.enqueue({
-			productionId: 'production-1',
-			recordingId: 'recording-1',
-			captureId: 'capture-1',
-			recordingSessionId: 'session-1',
-			provenance,
-		})
-
-		expect(store.finalizeCapture).toHaveBeenCalledTimes(2)
-		expect(descriptor.captureId).toBe('capture-1')
-		expect(descriptor.productionId).toBe('production-1')
-		expect(descriptor.recordingId).toBe('recording-1')
-		expect(descriptor.recordingSessionId).toBe('session-1')
-		expect(descriptor.format).toBe('audio/wav')
-		expect(descriptor.encoding).toBe('pcm_s24le')
-		expect(descriptor.provenance).toEqual(provenance)
-		expect(descriptor.blob).toBeInstanceOf(Blob)
-		expect(handler).toHaveBeenCalledTimes(1)
-
-		window.removeEventListener('pore:recording-transport-ready', handler)
+	it('does not discard PCM persistence when FLAC finalization fails', async () => {
+		const previousEncoder = window.PoREBrowserFlacEncoder
+		let committed = false
+		const store = {
+			finalizeCapture: jest.fn(async () => {}),
+			getCapture: jest.fn(async () => ({ manifest: { captureId: 'capture-2', status: 'finalized', storageFormat: 'pcm_s24le', encoding: 'pcm_s24le', sampleRate: 48000, channels: 1 }, chunks: [new Blob([new Uint8Array([0, 0, 0])])] })),
+			clearFinalizedPayload: jest.fn(async () => {}),
+			appendFinalizedChunk: jest.fn(async () => {}),
+			getFinalizedPayload: jest.fn(async () => ({ manifest: { captureId: 'capture-2', status: 'finalized' }, chunks: [] })),
+			commitFinalizedPayload: jest.fn(async () => { committed = true }),
+		}
+		window.PoREBrowserFlacEncoder = class {
+			constructor() {}
+			encodePcm24Bytes() { throw new Error('synthetic FLAC encoder failure') }
+			finish() { return [] }
+			free() {}
+		}
+		try {
+			const job = new Job({ persistenceStoreFactory: () => store })
+			await expect(job.enqueue({ productionId: 'production-1', recordingId: 'recording-1', captureId: 'capture-2', recordingSessionId: 'session-1' })).rejects.toThrow('synthetic FLAC encoder failure')
+			expect(store.commitFinalizedPayload).not.toHaveBeenCalled()
+			expect(committed).toBe(false)
+		} finally {
+			window.PoREBrowserFlacEncoder = previousEncoder
+		}
 	})
 
 	it('persists transport state without losing existing completion-job fields', async () => {
