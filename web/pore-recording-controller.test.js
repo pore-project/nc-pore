@@ -168,6 +168,10 @@ describe('Browser recording controller', () => {
 		expect(handoff.blob).toBeUndefined()
 		expect(handoff.format).toBe('audio/wav')
 		expect(handoff.encoding).toBe('pcm_s24le')
+		expect(handoff.provenance.schemaVersion).toBe(1)
+		expect(handoff.provenance.capture.sampleRate).toBe(48000)
+		expect(handoff.provenance.capture.channelCount).toBe(1)
+		expect(handoff.provenance.sourceSegments).toHaveLength(1)
 	})
 
 	it('replaces the microphone without ending the technical capture', async () => {
