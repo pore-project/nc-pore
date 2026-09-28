@@ -114,11 +114,6 @@ describe('Browser completion job', () => {
 		const pcm = new Blob([new Uint8Array([0, 0, 0, 0xff, 0xff, 0x7f, 0, 0, 0x80])], { type: 'application/octet-stream' })
 		const flac = new Blob([new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0x01])], { type: 'audio/flac' })
 		let isFlac = false
-		window.PoREBrowserFlacEncoder = jest.fn(() => ({
-			encodePcm24Bytes: jest.fn(() => []),
-			finish: jest.fn(() => [new Uint8Array(awaitedOutput)]),
-			free: jest.fn(),
-		}))
 		const awaitedOutput = [0x66, 0x4c, 0x61, 0x43, 0x01]
 		window.PoREBrowserFlacEncoder = jest.fn(() => ({
 			encodePcm24Bytes: jest.fn(() => [new Uint8Array([])]),
@@ -155,7 +150,11 @@ describe('Browser completion job', () => {
 
 		expect(window.PoREBrowserFlacEncoder).toHaveBeenCalledWith({ sampleRate: 48000, channels: 1, totalSamples: 3, compression: 5 })
 		expect(store.clearFinalizedPayload).toHaveBeenCalledWith('capture-1')
-		expect(store.appendFinalizedChunk).toHaveBeenCalledWith('capture-1', 0, expect.any(Uint8Array))
+		expect(store.appendFinalizedChunk).toHaveBeenCalledTimes(1)
+		const appended = store.appendFinalizedChunk.mock.calls[0]
+		expect(appended[0]).toBe('capture-1')
+		expect(appended[1]).toBe(0)
+		expect(appended[2]).toBeInstanceOf(Uint8Array)
 		expect(store.commitFinalizedPayload).toHaveBeenCalledTimes(1)
 		expect(committed[0].patch.size).toBe(5)
 		expect(committed[0].patch.sampleCount).toBe(3)
