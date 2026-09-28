@@ -121,6 +121,7 @@ final class NextcloudArtifactConnector {
 		$canonicalFilename = $path['filename'];
 		$transportFilename = $canonicalFilename;
 		if ($payloadFormat === self::PAYLOAD_FORMAT_FLAC) {
+			$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
 			while ($this->findFile($folder, $canonicalFilename) !== null || $this->findFile($folder, $transportFilename) !== null) {
 				$canonicalFilename = $this->nextFreeFilename($folder, $canonicalFilename);
 				$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
