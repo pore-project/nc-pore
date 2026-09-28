@@ -249,16 +249,34 @@
 			const source = artifact.source || {}
 			const required = ['productionId', 'recordingId', 'captureId', 'recordingSessionId']
 			if (required.some(key => !source[key])) throw new Error('PoRE browser artifact is missing authoritative or technical identity')
-			return {
-				productionId: source.productionId, productionLabel: source.productionLabel || source.productionId,
-				recordingId: source.recordingId, captureId: source.captureId, recordingSessionId: source.recordingSessionId,
-				trackId: source.trackId || 'browser-track', sampleRate: artifact.sampleRate || source.sampleRate || null,
-				channels: artifact.channels || source.channelCount || null, format: artifact.format || null,
-				encoding: artifact.encoding || null, size: artifact.size || null, sequence: artifact.sequence || null,
-				startedAt: artifact.startedAt || source.startedAt || null, stoppedAt: artifact.stoppedAt || null,
-				stopReason: artifact.stopReason || null, openingSignet: artifact.openingSignet || source.openingSignet || null,
-				closingSignet: artifact.closingSignet || source.closingSignet || null,
-			}
+			const sourceSegment = item => ({
+				startedAt: item?.startedAt || null,
+				sampleRate: Number.isFinite(item?.sampleRate) ? item.sampleRate : null,
+				sampleSize: Number.isFinite(item?.sampleSize) ? item.sampleSize : null,
+				channelCount: Number.isFinite(item?.channelCount) ? item.channelCount : null,
+				processing: {
+					echoCancellation: typeof item?.echoCancellation === 'boolean' ? item.echoCancellation : null,
+					noiseSuppression: typeof item?.noiseSuppression === 'boolean' ? item.noiseSuppression : null,
+					autoGainControl: typeof item?.autoGainControl === 'boolean' ? item.autoGainControl : null,
+				},
+			})
+		const sourceSegments = [sourceSegment(source)]
+		for (const change of artifact.sourceChanges || []) sourceSegments.push(sourceSegment(change?.to || {}))
+		return {
+			productionId: source.productionId, productionLabel: source.productionLabel || source.productionId,
+			recordingId: source.recordingId, captureId: source.captureId, recordingSessionId: source.recordingSessionId,
+			trackId: source.trackId || 'browser-track', sampleRate: artifact.sampleRate || source.sampleRate || null,
+			channels: artifact.channels || source.channelCount || null, format: artifact.format || null,
+			encoding: artifact.encoding || null, size: artifact.size || null, sequence: artifact.sequence || null,
+			startedAt: artifact.startedAt || source.startedAt || null, stoppedAt: artifact.stoppedAt || null,
+			stopReason: artifact.stopReason || null, openingSignet: artifact.openingSignet || source.openingSignet || null,
+			closingSignet: artifact.closingSignet || source.closingSignet || null,
+			provenance: {
+				schemaVersion: 1,
+				capture: sourceSegment(source),
+				sourceSegments,
+			},
+		}
 		}
 	}
 
