@@ -11,10 +11,12 @@ describe('Browser runtime transport', () => {
 		productionLabel: 'Interview',
 		participantLabel: 'Host',
 		startedAt: '2026-09-14T15:00:00+02:00',
-		size: 44,
+		size: 4,
+		format: 'audio/flac',
+		encoding: 'flac',
 		payloadSha256: 'a'.repeat(64),
 		provenance: { schemaVersion: 1, capture: { sampleRate: 48000, sampleSize: 24, channelCount: 1, processing: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }, sourceSegments: [] },
-		blob: new Blob([new Uint8Array(44)], { type: 'audio/wav' }),
+		blob: new Blob([new Uint8Array([0x66, 0x4c, 0x61, 0x43])], { type: 'audio/flac' }),
 	}
 
 	function completionJob(initialState = null) {
@@ -44,7 +46,7 @@ describe('Browser runtime transport', () => {
 				upload_url: '/public.php/dav/files/share-token',
 				upload_username: 'anonymous',
 				upload_password: 'secret',
-				filename: 'Host.wav',
+				filename: 'Host.flac', payload_format: 'audio/flac',
 			} } }) })
 			.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
@@ -66,8 +68,9 @@ describe('Browser runtime transport', () => {
 		expect(fetchMock.mock.calls[0][0]).toContain('/finalized-artifact/prepare')
 		expect(fetchMock.mock.calls[0][1].body).toContain('recording_session_id=session-1')
 		expect(fetchMock.mock.calls[0][1].body).toContain('capture_provenance=')
+		expect(fetchMock.mock.calls[0][1].body).toContain('payload_format=audio%2Fflac')
 		expect(fetchMock.mock.calls[1][1].method).toBe('PUT')
-		expect(fetchMock.mock.calls[1][0]).toContain('/public.php/dav/files/share-token/Host.wav')
+		expect(fetchMock.mock.calls[1][0]).toContain('/public.php/dav/files/share-token/Host.flac')
 		expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe(`Basic ${btoa('anonymous:secret')}`)
 		expect(fetchMock.mock.calls[1][1].headers['If-None-Match']).toBe('*')
 		expect(fetchMock.mock.calls[2][0]).toContain('/finalized-artifact/verify')
