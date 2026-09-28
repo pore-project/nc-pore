@@ -116,11 +116,14 @@ describe('Browser completion job', () => {
 		const flac = new Blob([new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0x01])], { type: 'audio/flac' })
 		let isFlac = false
 		const awaitedOutput = [0x66, 0x4c, 0x61, 0x43, 0x01]
-		window.PoREBrowserFlacEncoder = jest.fn(() => ({
-			encodePcm24Bytes: jest.fn(() => [new Uint8Array([])]),
-			finish: jest.fn(() => [new Uint8Array(awaitedOutput)]),
-			free: jest.fn(),
-		}))
+		function MockEncoder(options) {
+			MockEncoder.mock.calls.push([options])
+			this.encodePcm24Bytes = jest.fn(() => [new Uint8Array([])])
+			this.finish = jest.fn(() => [new Uint8Array(awaitedOutput)])
+			this.free = jest.fn()
+		}
+		MockEncoder.mock = { calls: [] }
+		window.PoREBrowserFlacEncoder = MockEncoder
 		const store = {
 			finalizeCapture: jest.fn(async () => {}),
 			getCapture: jest.fn(async captureId => isFlac ? ({
