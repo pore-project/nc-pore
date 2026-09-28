@@ -146,7 +146,11 @@ Sie ist kein Nachweis, dass Mikrofon, Betriebssystem oder Browser tatsächlich m
 
 Die technischen Capture-Eigenschaften und die Preservation-Eigenschaften bleiben daher getrennte Fakten.
 
-## Konsequenzen
+### V1-Formatgrenze
+
+Der konkrete V1-Preservation-Pfad unterstützt ausschließlich die in dieser ADR beschriebenen 24-Bit-Integer-PCM-Daten. **F32 ist für V1 ausdrücklich nicht vorgesehen.** Eine spätere Unterstützung von F32 oder anderer Preservation-Formate ist eine neue Architekturentscheidung und wird nicht aus dieser ADR abgeleitet.
+
+# Konsequenzen
 
 - Der PoRE-Master bleibt unabhängig von der Host-Kommunikationspipeline.
 - Mono wird nicht durch stilles Verwerfen des rechten Kanals erzeugt.
@@ -321,7 +325,11 @@ It is not evidence that the microphone, operating system or browser delivered na
 
 Capture properties and preservation properties therefore remain separate facts.
 
-## Consequences
+## V1 Format Boundary
+
+The concrete V1 preservation path supports only the 24-bit integer PCM representation defined by this ADR. **F32 is explicitly not part of V1.** Future support for F32 or other preservation formats requires a separate architecture decision and must not be inferred from this ADR.
+
+# Consequences
 
 - The PoRE master remains independent of the host communication pipeline.
 - Mono is not produced by silently discarding the right channel.
