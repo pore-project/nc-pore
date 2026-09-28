@@ -32,12 +32,15 @@ final class NextcloudArtifactConnector {
 	private const V1_FALLBACK_SAMPLE_RATE = 44100;
 	private const V1_CHANNELS = 1;
 	private const V1_BITS_PER_SAMPLE = 24;
+	private const PAYLOAD_FORMAT_WAV = 'audio/wav';
+	private const PAYLOAD_FORMAT_FLAC = 'audio/flac';
 
 	public function __construct(
 		private readonly IRootFolder $rootFolder,
 		private readonly IConfig $config,
 		private readonly IManager $shareManager,
 		private readonly ISecureRandom $secureRandom,
+		private readonly RecordingRuntimeService $runtime,
 	) {
 	}
 
@@ -54,11 +57,15 @@ final class NextcloudArtifactConnector {
 		int $size,
 		string $sha256,
 		string $actorUserId,
+		string $payloadFormat = self::PAYLOAD_FORMAT_WAV,
 		?int $preferredFileId = null,
 	): array {
 		$this->validateHash($sha256);
 		if (trim($actorUserId) === '') throw new RuntimeException('Transport actor is required.');
 		if ($size < 0) throw new RuntimeException('Transport payload size must not be negative.');
+		if (!in_array($payloadFormat, [self::PAYLOAD_FORMAT_FLAC, self::PAYLOAD_FORMAT_WAV], true)) {
+			throw new RuntimeException('artifact_payload_format_invalid');
+		}
 		if ($preferredFileId !== null && $preferredFileId <= 0) throw new RuntimeException('Preferred artifact file id must be positive.');
 
 		$targetUserId = trim($this->config->getAppValue(
@@ -74,18 +81,13 @@ final class NextcloudArtifactConnector {
 		if ($preferredFileId !== null) {
 			$preferred = $this->findFileById($userFolder, $preferredFileId);
 			if ($preferred !== null) {
-				if ($preferred->getSize() !== $size || !hash_equals(strtolower($sha256), $this->hashFile($preferred))) {
+				$remoteSize = $preferred->getSize();
+				$remoteSha256 = $this->hashFile($preferred);
+				if ($payloadFormat === self::PAYLOAD_FORMAT_WAV && ($remoteSize !== $size || !hash_equals(strtolower($sha256), $remoteSha256))) {
 					throw new RuntimeException('Nextcloud recorded artifact payload has changed.');
 				}
-
-				return $this->prepareExistingFileHandle(
-					$preferred,
-					$targetUserId,
-					$captureId,
-					$size,
-					$sha256,
-					$actorUserId,
-				);
+				if ($payloadFormat === self::PAYLOAD_FORMAT_FLAC) $this->inspectWav($preferred, $remoteSize);
+				return $this->prepareExistingFileHandle($preferred, $targetUserId, $captureId, $size, $sha256, $actorUserId, $payloadFormat, $preferred->getName(), $remoteSize, $remoteSha256);
 			}
 		}
 
@@ -103,21 +105,36 @@ final class NextcloudArtifactConnector {
 		$folder = $this->ensureFolder($folder, $path['month']);
 		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		$existing = $this->findFile($folder, $path['filename']);
-		if ($existing !== null) {
-			if ($allowFilenameReuse
-				&& $existing->getSize() === $size
-				&& hash_equals(strtolower($sha256), $this->hashFile($existing))) {
-				return $this->prepareExistingFileHandle(
-					$existing,
-					$targetUserId,
-					$captureId,
-					$size,
-					$sha256,
-					$actorUserId,
-				);
+		$canonicalFilename = $path['filename'];
+		$transportFilename = $canonicalFilename;
+		if ($payloadFormat === self::PAYLOAD_FORMAT_FLAC) {
+			while (true) {
+				$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
+				$canonicalExists = $this->findFile($folder, $canonicalFilename) !== null;
+				$transportExists = $this->findFile($folder, $transportFilename) !== null;
+				if (!$canonicalExists && !$transportExists) break;
+				$canonicalFilename = $this->nextFreeFilename($folder, $canonicalFilename);
 			}
-			$path['filename'] = $this->nextFreeFilename($folder, $path['filename']);
+		} else {
+			$existing = $this->findFile($folder, $transportFilename);
+			if ($existing !== null) {
+				if ($allowFilenameReuse
+					&& $existing->getSize() === $size
+					&& hash_equals(strtolower($sha256), $this->hashFile($existing))) {
+					return $this->prepareExistingFileHandle(
+						$existing,
+						$targetUserId,
+						$captureId,
+						$size,
+						$sha256,
+						$actorUserId,
+						$payloadFormat,
+						$existing->getName(),
+					);
+				}
+				$transportFilename = $this->nextFreeFilename($folder, $transportFilename);
+				$canonicalFilename = $transportFilename;
+			}
 		}
 
 		if (!$this->shareManager->shareApiAllowLinks() || !$this->shareManager->shareApiLinkAllowPublicUpload()) {
@@ -145,7 +162,9 @@ final class NextcloudArtifactConnector {
 			'share_id' => $share->getId(),
 			'target_user_id' => $targetUserId,
 			'folder_path' => $this->relativeUserPath($folder, $targetUserId),
-			'filename' => $path['filename'],
+			'filename' => $transportFilename,
+			'canonical_filename' => $canonicalFilename,
+			'payload_format' => $payloadFormat,
 			'capture_id' => $captureId,
 			'file_id' => null,
 			'size' => $size,
@@ -160,7 +179,9 @@ final class NextcloudArtifactConnector {
 			'upload_url' => '/public.php/dav/files/' . rawurlencode($share->getToken()),
 			'upload_username' => 'anonymous',
 			'upload_password' => $password,
-			'filename' => $path['filename'],
+			'filename' => $transportFilename,
+			'canonical_filename' => $canonicalFilename,
+			'payload_format' => $payloadFormat,
 			'size' => $size,
 			'sha256' => strtolower($sha256),
 			'upload_required' => true,
@@ -175,27 +196,45 @@ final class NextcloudArtifactConnector {
 		$state = $this->decodeHandle($handle);
 		$this->assertHandleActor($state, $actorUserId);
 
+		$userFolder = $this->rootFolder->getUserFolder($state['target_user_id']);
 		$file = null;
 		if ($state['file_id'] !== null) {
-			$userFolder = $this->rootFolder->getUserFolder($state['target_user_id']);
 			$file = $this->findFileById($userFolder, $state['file_id']);
-			if ($file === null) {
-				throw new RuntimeException('Nextcloud transport artifact has not arrived.');
-			}
+			if ($file === null) throw new RuntimeException('Nextcloud transport artifact has not arrived.');
 		} else {
 			$folder = $this->folderForState($state);
 			$file = $this->findFile($folder, $state['filename']);
 			if ($file === null) throw new RuntimeException('Nextcloud transport artifact has not arrived.');
 		}
 
+		if ($state['upload_required'] === false) {
+			$size = $file->getSize();
+			$expectedSize = $state['remote_size'] ?? $state['size'];
+			$expectedHash = $state['remote_sha256'] ?? $state['sha256'];
+			$hash = $this->hashFile($file);
+			if ($size !== $expectedSize || !hash_equals($expectedHash, $hash)) throw new RuntimeException('Nextcloud transport artifact SHA-256 does not match.');
+			$preservation = $this->inspectWav($file, $size);
+			return [
+				'artifact_id' => $state['capture_id'],
+				'target_user_id' => $state['target_user_id'],
+				'file_id' => $file->getId(),
+				'path' => $this->relativeUserPath($file, $state['target_user_id']),
+				'size' => $size,
+				'sha256' => $hash,
+				'filename' => $file->getName(),
+				'preservation' => $preservation,
+			];
+		}
 		$size = $file->getSize();
 		if ($size !== $state['size']) throw new RuntimeException('Nextcloud transport artifact size does not match.');
-
 		$hash = $this->hashFile($file);
 		if (!hash_equals($state['sha256'], $hash)) throw new RuntimeException('Nextcloud transport artifact SHA-256 does not match.');
 
-		$preservation = $this->inspectWav($file, $size);
+		if ($state['payload_format'] === self::PAYLOAD_FORMAT_FLAC) {
+			return $this->convertFlacToCanonicalWav($file, $state);
+		}
 
+		$preservation = $this->inspectWav($file, $size);
 		return [
 			'artifact_id' => $state['capture_id'],
 			'target_user_id' => $state['target_user_id'],
@@ -228,6 +267,10 @@ final class NextcloudArtifactConnector {
 		int $size,
 		string $sha256,
 		string $actorUserId,
+		string $payloadFormat,
+		string $canonicalFilename,
+		int $remoteSize,
+		string $remoteSha256,
 	): array {
 		$transferId = $this->secureRandom->generate(32, ISecureRandom::CHAR_ALPHANUMERIC);
 		$parent = $file->getParent();
@@ -237,10 +280,14 @@ final class NextcloudArtifactConnector {
 			'target_user_id' => $targetUserId,
 			'folder_path' => $this->relativeUserPath($parent, $targetUserId),
 			'filename' => $file->getName(),
+			'canonical_filename' => $canonicalFilename,
+			'payload_format' => $payloadFormat,
 			'capture_id' => $captureId,
 			'file_id' => $file->getId(),
 			'size' => $size,
 			'sha256' => strtolower($sha256),
+			'remote_size' => $remoteSize,
+			'remote_sha256' => strtolower($remoteSha256),
 			'actor_user_id' => $actorUserId,
 			'upload_required' => false,
 		];
@@ -250,8 +297,52 @@ final class NextcloudArtifactConnector {
 			'upload_username' => '',
 			'upload_password' => '',
 			'filename' => $file->getName(),
+			'canonical_filename' => $canonicalFilename,
+			'payload_format' => $payloadFormat,
 			'size' => $size,
 			'sha256' => strtolower($sha256),
+			'upload_required' => false,
+			'target_user_id' => $targetUserId,
+		];
+	}
+
+	public function prepareCanonicalFileHandle(string $targetUserId, int $fileId, string $captureId, string $actorUserId): array {
+		if ($targetUserId === '' || $fileId <= 0 || $captureId === '' || $actorUserId === '') {
+			throw new RuntimeException('artifact_manifest_invalid');
+		}
+		$userFolder = $this->rootFolder->getUserFolder($targetUserId);
+		$file = $this->findFileById($userFolder, $fileId);
+		if ($file === null) throw new RuntimeException('Nextcloud transport artifact has not arrived.');
+
+		$sha256 = $this->hashFile($file);
+		$size = $file->getSize();
+		$this->inspectWav($file, $size);
+		$parent = $file->getParent();
+		$state = [
+			'transfer_id' => $this->secureRandom->generate(32, ISecureRandom::CHAR_ALPHANUMERIC),
+			'share_id' => null,
+			'target_user_id' => $targetUserId,
+			'folder_path' => $this->relativeUserPath($parent, $targetUserId),
+			'filename' => $file->getName(),
+			'canonical_filename' => $file->getName(),
+			'payload_format' => self::PAYLOAD_FORMAT_WAV,
+			'capture_id' => $captureId,
+			'file_id' => $file->getId(),
+			'size' => $size,
+			'sha256' => $sha256,
+			'actor_user_id' => $actorUserId,
+			'upload_required' => false,
+		];
+		return [
+			'transfer_id' => $this->encodeHandle($state),
+			'upload_url' => '',
+			'upload_username' => '',
+			'upload_password' => '',
+			'filename' => $file->getName(),
+			'canonical_filename' => $file->getName(),
+			'payload_format' => self::PAYLOAD_FORMAT_WAV,
+			'size' => $size,
+			'sha256' => $sha256,
 			'upload_required' => false,
 			'target_user_id' => $targetUserId,
 		];
@@ -264,40 +355,45 @@ final class NextcloudArtifactConnector {
 		return $payload . '.' . $signature;
 	}
 
-	/** @return array{transfer_id:string,share_id:string|null,target_user_id:string,folder_path:string,filename:string,capture_id:string,file_id:int|null,size:int,sha256:string,actor_user_id:string,upload_required:bool} */
+	/** @return array{transfer_id:string,share_id:string|null,target_user_id:string,folder_path:string,filename:string,canonical_filename:string,payload_format:string,capture_id:string,file_id:int|null,size:int,sha256:string,actor_user_id:string,upload_required:bool} */
 	private function decodeHandle(string $handle): array {
 		$parts = explode('.', $handle, 2);
 		if (count($parts) !== 2) throw new RuntimeException('Invalid transport handle.');
 		[$payload, $signature] = $parts;
 		$expected = hash_hmac('sha256', $payload, $this->config->getSystemValueString('secret'));
 		if (!hash_equals($expected, $signature)) throw new RuntimeException('Invalid transport handle signature.');
-
 		$decoded = json_decode($this->base64UrlDecode($payload), true, 512, JSON_THROW_ON_ERROR);
 		if (!is_array($decoded)) throw new RuntimeException('Invalid transport handle payload.');
-		foreach (['transfer_id', 'share_id', 'target_user_id', 'folder_path', 'filename', 'capture_id', 'file_id', 'size', 'sha256', 'actor_user_id', 'upload_required'] as $key) {
+		foreach (['transfer_id','share_id','target_user_id','folder_path','filename','capture_id','file_id','size','sha256','actor_user_id','upload_required'] as $key) {
 			if (!array_key_exists($key, $decoded)) throw new RuntimeException('Incomplete transport handle.');
 		}
-
 		$size = $decoded['size'];
 		$fileId = $decoded['file_id'];
-		if ((!is_int($size) && !is_float($size) && !is_string($size)) || (int)$size < 0) {
-			throw new RuntimeException('Invalid transport handle payload.');
-		}
-		if ($fileId !== null && (!is_int($fileId) || $fileId <= 0)) {
-			throw new RuntimeException('Invalid transport handle payload.');
-		}
+		if ((!is_int($size) && !is_float($size) && !is_string($size)) || (int)$size < 0) throw new RuntimeException('Invalid transport handle payload.');
+		if ($fileId !== null && (!is_int($fileId) || $fileId <= 0)) throw new RuntimeException('Invalid transport handle payload.');
 		if (!is_bool($decoded['upload_required'])) throw new RuntimeException('Invalid transport handle payload.');
-
+		$payloadFormat = $decoded['payload_format'] ?? self::PAYLOAD_FORMAT_WAV;
+		$canonicalFilename = $decoded['canonical_filename'] ?? $decoded['filename'];
+		if (!is_string($payloadFormat) || !in_array($payloadFormat, [self::PAYLOAD_FORMAT_WAV, self::PAYLOAD_FORMAT_FLAC], true)) throw new RuntimeException('Invalid transport handle payload.');
+		if (!is_string($canonicalFilename) || trim($canonicalFilename) === '') throw new RuntimeException('Invalid transport handle payload.');
+		$remoteSize = $decoded['remote_size'] ?? ($decoded['upload_required'] ? null : (int)$size);
+		$remoteSha256 = $decoded['remote_sha256'] ?? ($decoded['upload_required'] ? null : strtolower((string)$decoded['sha256']));
+		if ($remoteSize !== null && (int)$remoteSize < 0) throw new RuntimeException('Invalid transport handle payload.');
+		if ($remoteSha256 !== null && !preg_match('/^[a-f0-9]{64}$/i', (string)$remoteSha256)) throw new RuntimeException('Invalid transport handle payload.');
 		return [
 			'transfer_id' => (string)$decoded['transfer_id'],
 			'share_id' => $decoded['share_id'] === null ? null : (string)$decoded['share_id'],
 			'target_user_id' => (string)$decoded['target_user_id'],
 			'folder_path' => (string)$decoded['folder_path'],
 			'filename' => (string)$decoded['filename'],
+			'canonical_filename' => $canonicalFilename,
+			'payload_format' => $payloadFormat,
 			'capture_id' => (string)$decoded['capture_id'],
 			'file_id' => $fileId,
 			'size' => (int)$size,
 			'sha256' => strtolower((string)$decoded['sha256']),
+			'remote_size' => $remoteSize === null ? null : (int)$remoteSize,
+			'remote_sha256' => $remoteSha256 === null ? null : strtolower((string)$remoteSha256),
 			'actor_user_id' => (string)$decoded['actor_user_id'],
 			'upload_required' => $decoded['upload_required'],
 		];
@@ -372,6 +468,242 @@ final class NextcloudArtifactConnector {
 			return $node instanceof File ? $node : null;
 		} catch (NotFoundException) {
 			return null;
+		}
+	}
+
+	private function convertFlacToCanonicalWav(File $flacFile, array $state): array {
+		$inputPath = tempnam(sys_get_temp_dir(), 'pore-flac-input-');
+		$outputPath = tempnam(sys_get_temp_dir(), 'pore-flac-output-');
+		if ($inputPath === false || $outputPath === false) {
+			if ($inputPath !== false) @unlink($inputPath);
+			if ($outputPath !== false) @unlink($outputPath);
+			throw new RuntimeException('artifact_preservation_invalid');
+		}
+
+		$canonicalFile = null;
+		try {
+			$input = $flacFile->fopen('r');
+			$localInput = fopen($inputPath, 'wb');
+			if ($input === false || $localInput === false) throw new RuntimeException('artifact_preservation_invalid');
+			try {
+				if (stream_copy_to_stream($input, $localInput) === false) throw new RuntimeException('artifact_preservation_invalid');
+			} finally {
+				fclose($input);
+				fclose($localInput);
+			}
+
+			$response = $this->runtime->command([
+				'request_id' => bin2hex(random_bytes(16)),
+				'input_path' => $inputPath,
+				'output_path' => $outputPath,
+				'expected_sample_rate_hz' => 0,
+				'expected_channels' => self::V1_CHANNELS,
+				'expected_bits_per_sample' => self::V1_BITS_PER_SAMPLE,
+			], 'artifact.convert_flac_to_wav');
+
+			if (($response['status'] ?? null) !== 'converted'
+				|| !is_int($response['sample_rate_hz'] ?? null)
+				|| !is_int($response['channels'] ?? null)
+				|| !is_int($response['bits_per_sample'] ?? null)
+				|| !is_int($response['sample_count'] ?? null)
+				|| !is_int($response['payload_length'] ?? null)) {
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+
+			$localSize = filesize($outputPath);
+			if ($localSize === false || $localSize !== $response['payload_length']) {
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+			$localHash = hash_file('sha256', $outputPath);
+			if ($localHash === false) throw new RuntimeException('artifact_preservation_invalid');
+
+			$expectedDataBytes = $response['sample_count'] * 3;
+			if ($expectedDataBytes + 44 !== $localSize) {
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+
+			$folder = $this->folderForState($state);
+			$canonicalFilename = $state['canonical_filename'];
+			$existing = $this->findFile($folder, $canonicalFilename);
+			if ($existing !== null) {
+				if ($existing->getSize() === $localSize && hash_equals($localHash, $this->hashFile($existing))) {
+					try { $flacFile->delete(); } catch (\Throwable) {}
+					$preservation = $this->inspectWav($existing, $existing->getSize());
+					return [
+						'artifact_id' => $state['capture_id'],
+						'target_user_id' => $state['target_user_id'],
+						'file_id' => $existing->getId(),
+						'path' => $this->relativeUserPath($existing, $state['target_user_id']),
+					'size' => $existing->getSize(),
+						'sha256' => $this->hashFile($existing),
+						'filename' => $existing->getName(),
+						'preservation' => $preservation,
+					];
+				}
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
+
+			$canonicalFile = $folder->newFile($canonicalFilename);
+			$source = fopen($outputPath, 'rb');
+			$destination = $canonicalFile->fopen('w');
+			if ($source === false || $destination === false) throw new RuntimeException('artifact_preservation_invalid');
+			try {
+				if (stream_copy_to_stream($source, $destination) === false) throw new RuntimeException('artifact_preservation_invalid');
+			} finally {
+				fclose($source);
+				fclose($destination);
+			}
+
+			$canonicalSize = $canonicalFile->getSize();
+			$canonicalHash = $this->hashFile($canonicalFile);
+			$preservation = $this->inspectWav($canonicalFile, $canonicalSize);
+			if ($canonicalSize !== $localSize || !hash_equals($localHash, $canonicalHash)) {
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+
+			try { $flacFile->delete(); } catch (\Throwable) {}
+			return [
+				'artifact_id' => $state['capture_id'],
+				'target_user_id' => $state['target_user_id'],
+				'file_id' => $canonicalFile->getId(),
+				'path' => $this->relativeUserPath($canonicalFile, $state['target_user_id']),
+				'size' => $canonicalSize,
+				'sha256' => $canonicalHash,
+				'filename' => $canonicalFile->getName(),
+				'preservation' => $preservation,
+			];
+		} catch (RuntimeException $error) {
+			if ($canonicalFile !== null) {
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
+			}
+			throw new RuntimeException($error->getMessage() === 'artifact_manifest_conflict' ? 'artifact_manifest_conflict' : 'artifact_preservation_invalid', 0, $error);
+		} catch (\Throwable $error) {
+			if ($canonicalFile !== null) {
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
+			}
+			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
+		} finally {
+			@unlink($inputPath);
+			@unlink($outputPath);
+		}
+	}
+
+	private function convertFlacToCanonicalWav(File $flacFile, array $state): array {
+		$inputPath = tempnam(sys_get_temp_dir(), 'pore-flac-input-');
+		$outputPath = tempnam(sys_get_temp_dir(), 'pore-flac-output-');
+		if ($inputPath === false || $outputPath === false) {
+			if ($inputPath !== false) @unlink($inputPath);
+			if ($outputPath !== false) @unlink($outputPath);
+			throw new RuntimeException('artifact_preservation_invalid');
+		}
+
+		$canonicalFile = null;
+		try {
+			$input = $flacFile->fopen('r');
+			$localInput = fopen($inputPath, 'wb');
+			if ($input === false || $localInput === false) throw new RuntimeException('artifact_preservation_invalid');
+			try {
+				if (stream_copy_to_stream($input, $localInput) === false) throw new RuntimeException('artifact_preservation_invalid');
+			} finally {
+				fclose($input);
+				fclose($localInput);
+			}
+
+			$response = $this->runtime->command([
+				'request_id' => bin2hex(random_bytes(16)),
+				'input_path' => $inputPath,
+				'output_path' => $outputPath,
+				'expected_sample_rate_hz' => 0,
+				'expected_channels' => self::V1_CHANNELS,
+				'expected_bits_per_sample' => self::V1_BITS_PER_SAMPLE,
+			], 'artifact.convert_flac_to_wav');
+
+			if (($response['status'] ?? null) !== 'converted'
+				|| !is_int($response['sample_rate_hz'] ?? null)
+				|| !is_int($response['channels'] ?? null)
+				|| !is_int($response['bits_per_sample'] ?? null)
+				|| !is_int($response['sample_count'] ?? null)
+				|| !is_int($response['payload_length'] ?? null)) {
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+
+			$localSize = filesize($outputPath);
+			if ($localSize === false || $localSize !== $response['payload_length']) {
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+			$localHash = hash_file('sha256', $outputPath);
+			if ($localHash === false) throw new RuntimeException('artifact_preservation_invalid');
+
+			$expectedDataBytes = $response['sample_count'] * 3;
+			if ($expectedDataBytes + 44 !== $localSize) {
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+
+			$folder = $this->folderForState($state);
+			$canonicalFilename = $state['canonical_filename'];
+			$existing = $this->findFile($folder, $canonicalFilename);
+			if ($existing !== null) {
+				if ($existing->getSize() === $localSize && hash_equals($localHash, $this->hashFile($existing))) {
+					try { $flacFile->delete(); } catch (\Throwable) {}
+					$preservation = $this->inspectWav($existing, $existing->getSize());
+					return [
+						'artifact_id' => $state['capture_id'],
+						'target_user_id' => $state['target_user_id'],
+						'file_id' => $existing->getId(),
+						'path' => $this->relativeUserPath($existing, $state['target_user_id']),
+					'size' => $existing->getSize(),
+						'sha256' => $this->hashFile($existing),
+						'filename' => $existing->getName(),
+						'preservation' => $preservation,
+					];
+				}
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
+
+			$canonicalFile = $folder->newFile($canonicalFilename);
+			$source = fopen($outputPath, 'rb');
+			$destination = $canonicalFile->fopen('w');
+			if ($source === false || $destination === false) throw new RuntimeException('artifact_preservation_invalid');
+			try {
+				if (stream_copy_to_stream($source, $destination) === false) throw new RuntimeException('artifact_preservation_invalid');
+			} finally {
+				fclose($source);
+				fclose($destination);
+			}
+
+			$canonicalSize = $canonicalFile->getSize();
+			$canonicalHash = $this->hashFile($canonicalFile);
+			$preservation = $this->inspectWav($canonicalFile, $canonicalSize);
+			if ($canonicalSize !== $localSize || !hash_equals($localHash, $canonicalHash)) {
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+
+			try { $flacFile->delete(); } catch (\Throwable) {}
+			return [
+				'artifact_id' => $state['capture_id'],
+				'target_user_id' => $state['target_user_id'],
+				'file_id' => $canonicalFile->getId(),
+				'path' => $this->relativeUserPath($canonicalFile, $state['target_user_id']),
+				'size' => $canonicalSize,
+				'sha256' => $canonicalHash,
+				'filename' => $canonicalFile->getName(),
+				'preservation' => $preservation,
+			];
+		} catch (RuntimeException $error) {
+			if ($canonicalFile !== null) {
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
+			}
+			throw new RuntimeException($error->getMessage() === 'artifact_manifest_conflict' ? 'artifact_manifest_conflict' : 'artifact_preservation_invalid', 0, $error);
+		} catch (\Throwable $error) {
+			if ($canonicalFile !== null) {
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
+			}
+			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
+		} finally {
+			@unlink($inputPath);
+			@unlink($outputPath);
 		}
 	}
 
