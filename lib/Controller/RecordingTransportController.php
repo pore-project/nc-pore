@@ -99,6 +99,17 @@ final class RecordingTransportController extends OCSController {
 					throw new RuntimeException('artifact_manifest_invalid');
 				}
 
+				if ($payload_format === 'audio/flac') {
+					try { $this->connector->close($prepared['transfer_id'], $actorId); } catch (\\Throwable) {}
+					$prepared = $this->connector->prepareCanonicalFileHandle(
+						$this->required((string)($verifiedRemote['target_user_id'] ?? ''), 'target_user_id'),
+						$verifiedFileId,
+					$capture_id,
+					$actorId,
+					);
+					return $this->preparedResponse($prepared);
+				}
+
 				// A preferred File-ID can disappear while another request
 				// completes the same Artifact. Only the record that still points
 				// to our original preferred File-ID may be replaced here.
