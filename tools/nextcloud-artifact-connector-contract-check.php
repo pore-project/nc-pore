@@ -242,7 +242,7 @@ namespace {
 	}
 
 	function connector(FakeRootFolder $root, FakeShareManager $shares): NextcloudArtifactConnector {
-		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom(), new OCAPoReServiceRecordingRuntimeService());
+		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom(), new \OCA\PoRe\Service\RecordingRuntimeService());
 	}
 
 	function wav(string $pcm, int $sampleRate = 48000, int $channels = 1, int $bits = 24): string {
