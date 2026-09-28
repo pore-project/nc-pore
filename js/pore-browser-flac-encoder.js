@@ -8,7 +8,7 @@
 
 	class PoREBrowserFlacEncoder {
 		constructor({ sampleRate, channels = 1, totalSamples = 0, compression = 5 } = {}) {
-			if (![48000, 44100].includes(sampleRate) throw new Error('PoRE FLAC encoder requires a valid sample rate')
+			if (![48000, 44100].includes(sampleRate)) throw new Error('PoRE FLAC encoder requires a valid sample rate')
 			if (channels !== 1) throw new Error('PoRE V1 FLAC encoder supports mono only')
 			if (!window.Flac) throw new Error('PoRE FLAC encoder library is not available')
 			this.Flac = window.Flac
