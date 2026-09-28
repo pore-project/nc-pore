@@ -17,6 +17,7 @@
 			this._validateHandoff(handoff)
 			const store = this._store()
 			await store.finalizeCapture(handoff.captureId, {
+				provenance: handoff.provenance || null,
 				completionJob: {
 					status: 'pending',
 					enqueuedAt: new Date().toISOString(),
