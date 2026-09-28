@@ -45,9 +45,6 @@ final class NextcloudArtifactConnector {
 	}
 
 	/**
-	 * @return array{transfer_id:string, upload_url:string, upload_username:string, upload_password:string, filename:string, size:int, sha256:string, upload_required:bool, target_user_id:string}
-	 */
-	/**
 	 * @return array{transfer_id:string, upload_url:string, upload_username:string, upload_password:string, filename:string, canonical_filename:string, payload_format:string, size:int, sha256:string, upload_required:bool, target_user_id:string}
 	 */
 	public function prepare(
