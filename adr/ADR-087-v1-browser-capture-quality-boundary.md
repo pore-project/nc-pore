@@ -6,8 +6,7 @@
 
 ---
 
-# Deutsch
-
+# Deutsch ([English version below](#english-version))
 ## Kontext
 
 NC-PoRe soll die lokale Aufnahmequalität unabhängig von der Kommunikations- oder Host-Pipeline bewahren. Der Browser stellt dafür die konkrete Capture-Quelle bereit. Diese Quelle kann sich hinsichtlich Sample-Rate, Kanalzahl und Audio-Processing je nach Browser, Betriebssystem, Gerät und Laufzeitumgebung unterscheiden.
@@ -186,8 +185,7 @@ Diese Entscheidung gilt für den V1-Browser-Capturepfad als angenommen.
 
 ---
 
-# English
-
+# English Version ([Deutsche Version oben](#deutsch))
 ## Context
 
 NC-PoRe must preserve local recording quality independently of the communication or host pipeline. The browser provides the concrete capture source, whose sample rate, channel count and audio-processing settings may vary across browsers, operating systems, devices and runtime environments.

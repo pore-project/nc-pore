@@ -97,6 +97,8 @@ This document provides an overview and navigation entry.
 - ADR-084 Recording Artifact Aggregation and Completion Semantics
 - ADR-085 Production Completion, Exceptional Closure and Late Artifact Delivery
 - ADR-086 Talk Recording Control Surface V1
+- ADR-087 V1 Browser Capture Quality Boundary
+- ADR-088 Versioning and Release Policy
 
 ---
 
