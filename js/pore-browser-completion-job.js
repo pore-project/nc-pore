@@ -17,7 +17,6 @@
 			this._validateHandoff(handoff)
 			const store = this._store()
 			await store.finalizeCapture(handoff.captureId, {
-				provenance: handoff.provenance || null,
 				completionJob: {
 					status: 'pending',
 					enqueuedAt: new Date().toISOString(),
@@ -56,7 +55,6 @@
 					size: blob.size,
 					payloadSha256,
 					chunkCount: stored.chunks.length,
-					provenance: stored.manifest.provenance || null,
 					manifest: stored.manifest,
 					blob,
 					completionJob: job,
