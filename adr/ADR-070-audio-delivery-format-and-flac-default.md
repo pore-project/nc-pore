@@ -32,6 +32,10 @@ The central requirement is that the host remains in control of the required deli
 
 ## Entscheidung
 
+## V1-Umfang
+
+Für V1 ist ausschließlich der in den einschlägigen V1-Entscheidungen festgelegte Integer-PCM-Pfad vorgesehen. Insbesondere ist eine F32-basierte FLAC-Preservation oder ein F32-Transport **keine V1-Funktion**. F32 bleibt eine mögliche spätere Erweiterung und darf nicht als heutige V1-Anforderung verstanden werden.
+
 1. Das **Audio-Delivery-Format ist Bestandteil der Host-/Session-Konfiguration**.
 2. Gibt der Host ein konkretes Delivery-Format oder Qualitätsprofil vor, ist diese Vorgabe maßgeblich für die zu erzeugende Delivery-Repräsentation.
 3. Gibt der Host kein konkretes Delivery-Format vor, verwendet NC-PoRE **FLAC als Default**.
