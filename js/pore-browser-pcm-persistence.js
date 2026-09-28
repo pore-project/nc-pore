@@ -3,9 +3,10 @@
 	'use strict'
 
 	const DB_NAME = 'nc-pore-recordings'
-	const DB_VERSION = 2
+	const DB_VERSION = 3
 	const MANIFEST_STORE = 'manifests'
 	const CHUNK_STORE = 'chunks'
+	const FINALIZED_CHUNK_STORE = 'finalizedChunks'
 
 	class PoREBrowserPcmPersistenceStore {
 		constructor({ indexedDBFactory = window.indexedDB, dbName = DB_NAME, keyRangeFactory = window.IDBKeyRange } = {}) {
@@ -30,10 +31,13 @@
 						chunks = db.createObjectStore(CHUNK_STORE, { keyPath: ['captureId', 'index'] })
 					}
 					if (!chunks.indexNames.contains('captureId')) chunks.createIndex('captureId', 'captureId', { unique: false })
+					if (!db.objectStoreNames.contains(FINALIZED_CHUNK_STORE)) db.createObjectStore(FINALIZED_CHUNK_STORE, { keyPath: ['captureId', 'index'] })
+					const finalizedChunks = request.transaction.objectStore(FINALIZED_CHUNK_STORE)
+					if (!finalizedChunks.indexNames.contains('captureId')) finalizedChunks.createIndex('captureId', 'captureId', { unique: false })
 				}
 				request.onsuccess = () => {
 					const db = request.result
-					if (!db.objectStoreNames.contains(MANIFEST_STORE) || !db.objectStoreNames.contains(CHUNK_STORE)) {
+					if (!db.objectStoreNames.contains(MANIFEST_STORE) || !db.objectStoreNames.contains(CHUNK_STORE) || !db.objectStoreNames.contains(FINALIZED_CHUNK_STORE)) {
 						db.close()
 						reject(new Error('PoRE IndexedDB schema is incomplete'))
 						return
@@ -108,7 +112,8 @@
 			const db = await this._database()
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
 			if (!manifest) return null
-			const chunks = await this._getChunks(db, captureId)
+			const chunkStore = manifest.storageFormat === 'flac' ? FINALIZED_CHUNK_STORE : CHUNK_STORE
+			const chunks = await this._getChunks(db, chunkStore, captureId)
 			const expectedIndexes = Array.from({ length: Math.max(0, manifest.lastChunkIndex + 1) }, (_, index) => index)
 			const actualIndexes = chunks.map(chunk => chunk.index)
 			if (actualIndexes.length !== expectedIndexes.length || actualIndexes.some((index, position) => index !== expectedIndexes[position])) {
@@ -130,11 +135,84 @@
 
 		async removeCapture(captureId) {
 			const db = await this._database()
-			const chunks = await this._getChunks(db, captureId)
-			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE], 'readwrite', transaction => {
+			const [pcmChunks, finalizedChunks] = await Promise.all([
+				this._getChunks(db, CHUNK_STORE, captureId),
+				this._getChunks(db, FINALIZED_CHUNK_STORE, captureId),
+			])
+			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE, FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
 				transaction.objectStore(MANIFEST_STORE).delete(captureId)
+				for (const chunk of pcmChunks) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])
+				for (const chunk of finalizedChunks) transaction.objectStore(FINALIZED_CHUNK_STORE).delete([captureId, chunk.index])
+			})
+		}
+
+		async getFinalizedPayload(captureId) {
+			const db = await this._database()
+			const manifest = await this._get(db, MANIFEST_STORE, captureId)
+			if (!manifest || manifest.status !== 'finalized') return null
+			if (manifest.storageFormat !== 'flac') return null
+			const chunks = await this._getChunks(db, FINALIZED_CHUNK_STORE, captureId)
+			await this._assertFinalizedChunkIntegrity(manifest, chunks, captureId)
+			return { manifest, chunks: chunks.map(chunk => chunk.payload) }
+		}
+
+		async clearFinalizedPayload(captureId) {
+			const db = await this._database()
+			const chunks = await this._getChunks(db, FINALIZED_CHUNK_STORE, captureId)
+			await this._transaction(db, [FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
+				for (const chunk of chunks) transaction.objectStore(FINALIZED_CHUNK_STORE).delete([captureId, chunk.index])
+			})
+		}
+
+		async appendFinalizedChunk(captureId, index, payload) {
+			if (!captureId) throw new Error('PoRE finalized chunk requires captureId')
+			if (!Number.isInteger(index) || index < 0) throw new Error('PoRE finalized chunk requires a non-negative index')
+			const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'application/octet-stream' })
+			const sha256 = await this._sha256(blob)
+			const db = await this._database()
+			await this._transaction(db, [MANIFEST_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const chunkStore = transaction.objectStore(FINALIZED_CHUNK_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest || manifest.status !== 'finalized') {
+						abort(new Error(`PoRE finalized payload requires finalized capture: ${captureId}`))
+						return
+					}
+					const expectedIndex = Number.isInteger(manifest.finalizedChunkCount) ? manifest.finalizedChunkCount : 0
+					if (index > expectedIndex) {
+						abort(new Error(`PoRE finalized chunk gap detected: ${captureId}/${index}`))
+						return
+					}
+					chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
+				}
+			})
+		}
+
+		async commitFinalizedPayload(captureId, patch = {}) {
+			const db = await this._database()
+			const [manifest, chunks] = await Promise.all([
+				this._get(db, MANIFEST_STORE, captureId),
+				this._getChunks(db, FINALIZED_CHUNK_STORE, captureId),
+			])
+			if (!manifest) throw new Error(`PoRE capture manifest not found: ${captureId}`)
+			if (manifest.status !== 'finalized') throw new Error(`PoRE finalized payload requires finalized capture: ${captureId}`)
+			if (manifest.storageFormat === 'flac') return manifest
+			await this._assertFinalizedChunkIntegrity(manifest, chunks, captureId)
+			const expectedSize = Number(patch.size)
+			const expectedSha256 = patch.payloadSha256
+			if (!Number.isInteger(expectedSize) || expectedSize <= 0 || typeof expectedSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(expectedSha256)) throw new Error('PoRE finalized payload commit requires exact size and SHA-256')
+			const actualSize = chunks.reduce((total, chunk) => total + chunk.size, 0)
+			if (actualSize !== expectedSize) throw new Error(`PoRE finalized payload size mismatch: ${captureId}`)
+			const actualSha256 = await this._sha256(new Blob(chunks.map(chunk => chunk.payload)))
+			if (actualSha256 !== expectedSha256.toLowerCase()) throw new Error(`PoRE finalized payload SHA-256 mismatch: ${captureId}`)
+			const finalized = { ...manifest, ...patch, storageFormat: 'flac', format: 'audio/flac', encoding: 'flac', finalizedChunkCount: chunks.length, updatedAt: new Date().toISOString() }
+			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE, FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
+				transaction.objectStore(MANIFEST_STORE).put(finalized)
 				for (const chunk of chunks) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])
 			})
+			return finalized
 		}
 
 		async _sha256(blob) {
@@ -147,11 +225,22 @@
 		_get(db, storeName, key) { return this._request(db, storeName, 'readonly', store => store.get(key)) }
 		_getAll(db, storeName) { return this._request(db, storeName, 'readonly', store => store.getAll()) }
 
-		_getChunks(db, captureId) {
-			return this._request(db, CHUNK_STORE, 'readonly', store => {
+		_getChunks(db, storeName, captureId) {
+			return this._request(db, storeName, 'readonly', store => {
 				const index = store.index('captureId')
 				return index.getAll(this.keyRangeFactory.only(captureId))
 			}).then(chunks => chunks.sort((a, b) => a.index - b.index))
+		}
+
+		async _assertFinalizedChunkIntegrity(manifest, chunks, captureId) {
+			const expectedCount = Number.isInteger(manifest.finalizedChunkCount) ? manifest.finalizedChunkCount : chunks.length
+			const expectedIndexes = Array.from({ length: Math.max(0, expectedCount) }, (_, index) => index)
+			const actualIndexes = chunks.map(chunk => chunk.index)
+			if (actualIndexes.length !== expectedIndexes.length || actualIndexes.some((index, position) => index !== expectedIndexes[position])) throw new Error(`PoRE finalized chunk continuity check failed: ${captureId}`)
+			for (const chunk of chunks) {
+				const actual = await this._sha256(chunk.payload)
+				if (actual !== chunk.sha256) throw new Error(`PoRE finalized chunk payload integrity check failed: ${captureId}/${chunk.index}`)
+			}
 		}
 
 		_request(db, storeName, mode, operation) {
