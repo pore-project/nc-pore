@@ -156,7 +156,7 @@ describe('Browser completion job', () => {
 
 		expect(window.PoREBrowserFlacEncoder).toHaveBeenCalledWith({ sampleRate: 48000, channels: 1, totalSamples: 3, compression: 5 })
 		expect(store.clearFinalizedPayload).toHaveBeenCalledWith('capture-1')
-		expect(store.appendFinalizedChunk).toHaveBeenCalledTimes(2)
+		expect(store.appendFinalizedChunk).toHaveBeenCalledTimes(3)
 		const appended = store.appendFinalizedChunk.mock.calls[0]
 		expect(appended[0]).toBe('capture-1')
 		expect(appended[1]).toBe(0)
@@ -165,7 +165,7 @@ describe('Browser completion job', () => {
 		expect(store.replaceFinalizedChunk.mock.calls[0][1]).toBe(0)
 		expect(store.replaceFinalizedChunk.mock.calls[0][2]).toBeInstanceOf(Uint8Array)
 		expect(store.commitFinalizedPayload).toHaveBeenCalledTimes(1)
-		expect(committed[0].patch.size).toBe(7)
+		expect(committed[0].patch.size).toBe(11)
 		expect(committed[0].patch.sampleCount).toBe(3)
 		expect(typeof committed[0].patch.payloadSha256).toBe('string')
 		expect(descriptor.format).toBe('audio/flac')

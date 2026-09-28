@@ -65,6 +65,7 @@ describe('Browser FLAC encoder boundary', () => {
 		encoder.headerReady = false
 		encoder.headerEmitted = false
 		encoder.streamInfo = null
+		encoder.totalSamples = 1
 		const output = encoder._drain(false)
 		expect([...output[0].slice(0,4)]).toEqual([0x66,0x4c,0x61,0x43])
 		expect([...output[1]]).toEqual([0xff,0xf8,0x00])

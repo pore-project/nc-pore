@@ -29,7 +29,7 @@
 				this.encoder,
 				data => this._write(data),
 				summary => { this.streamInfo = summary },
-				0,
+				false,
 			)
 			if (status !== 0) {
 				this._destroy()
