@@ -242,7 +242,7 @@ final class NextcloudArtifactConnector {
 		if (!hash_equals($state['sha256'], $hash)) throw new RuntimeException('Nextcloud transport artifact SHA-256 does not match.');
 
 		if ($state['payload_format'] === self::PAYLOAD_FORMAT_FLAC) {
-			return $this->convertFlacToCanonicalWav($file, $userFolder, $state);
+			return $this->convertFlacToCanonicalWav($file, $state);
 		}
 
 		$preservation = $this->inspectWav($file, $size);
@@ -475,7 +475,7 @@ final class NextcloudArtifactConnector {
 		}
 	}
 
-	private function convertFlacToCanonicalWav(File $flacFile, \\OCP\\Files\\Folder $userFolder, array $state): array {
+	private function convertFlacToCanonicalWav(File $flacFile, array $state): array {
 		$inputPath = tempnam(sys_get_temp_dir(), 'pore-flac-input-');
 		$outputPath = tempnam(sys_get_temp_dir(), 'pore-flac-output-');
 		if ($inputPath === false || $outputPath === false) {
@@ -531,7 +531,7 @@ final class NextcloudArtifactConnector {
 			$existing = $this->findFile($folder, $canonicalFilename);
 			if ($existing !== null) {
 				if ($existing->getSize() === $localSize && hash_equals($localHash, $this->hashFile($existing))) {
-					try { $flacFile->delete(); } catch (\\Throwable) {}
+					try { $flacFile->delete(); } catch (\Throwable) {}
 					$preservation = $this->inspectWav($existing, $existing->getSize());
 					return [
 						'artifact_id' => $state['capture_id'],
@@ -562,11 +562,11 @@ final class NextcloudArtifactConnector {
 			$canonicalHash = $this->hashFile($canonicalFile);
 			$preservation = $this->inspectWav($canonicalFile, $canonicalSize);
 			if ($canonicalSize !== $localSize || !hash_equals($localHash, $canonicalHash)) {
-				try { $canonicalFile->delete(); } catch (\\Throwable) {}
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
 				throw new RuntimeException('artifact_preservation_invalid');
 			}
 
-			try { $flacFile->delete(); } catch (\\Throwable) {}
+			try { $flacFile->delete(); } catch (\Throwable) {}
 			return [
 				'artifact_id' => $state['capture_id'],
 				'target_user_id' => $state['target_user_id'],
@@ -579,12 +579,12 @@ final class NextcloudArtifactConnector {
 			];
 		} catch (RuntimeException $error) {
 			if ($canonicalFile !== null) {
-				try { $canonicalFile->delete(); } catch (\\Throwable) {}
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
 			}
 			throw new RuntimeException($error->getMessage() === 'artifact_manifest_conflict' ? 'artifact_manifest_conflict' : 'artifact_preservation_invalid', 0, $error);
-		} catch (\\Throwable $error) {
+		} catch (\Throwable $error) {
 			if ($canonicalFile !== null) {
-				try { $canonicalFile->delete(); } catch (\\Throwable) {}
+				try { $canonicalFile->delete(); } catch (\Throwable) {}
 			}
 			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
 		} finally {
