@@ -1,7 +1,83 @@
 use claxon::FlacReader;
+use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::{self, BufWriter, Seek, SeekFrom, Write};
 use std::path::Path;
+
+pub const OPERATION_CONVERT_FLAC_TO_WAV: &str = "artifact.convert_flac_to_wav";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConvertFlacToWavRequest {
+    pub protocol_version: u16,
+    pub operation: String,
+    pub request_id: String,
+    pub input_path: String,
+    pub output_path: String,
+    pub expected_sample_rate_hz: u32,
+    pub expected_channels: u16,
+    pub expected_bits_per_sample: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConvertFlacToWavResponse {
+    pub protocol_version: u16,
+    pub request_id: String,
+    pub status: String,
+    pub sample_rate_hz: Option<u32>,
+    pub channels: Option<u16>,
+    pub bits_per_sample: Option<u16>,
+    pub sample_count: Option<u64>,
+    pub payload_length: Option<u64>,
+    pub error_code: Option<String>,
+}
+
+pub fn handle_convert_flac_to_wav(request: &ConvertFlacToWavRequest) -> ConvertFlacToWavResponse {
+    let response = ConvertFlacToWavResponse {
+        protocol_version: 1,
+        request_id: request.request_id.clone(),
+        status: "rejected".to_owned(),
+        sample_rate_hz: None,
+        channels: None,
+        bits_per_sample: None,
+        sample_count: None,
+        payload_length: None,
+        error_code: None,
+    };
+
+    if request.protocol_version != 1 {
+        return ConvertFlacToWavResponse { error_code: Some("unsupported_protocol_version".to_owned()), ..response };
+    }
+    if request.operation != OPERATION_CONVERT_FLAC_TO_WAV {
+        return ConvertFlacToWavResponse { error_code: Some("unsupported_operation".to_owned()), ..response };
+    }
+    if request.input_path.trim().is_empty() || request.output_path.trim().is_empty() {
+        return ConvertFlacToWavResponse { error_code: Some("invalid_path".to_owned()), ..response };
+    }
+
+    match convert_flac_to_wav(
+        Path::new(&request.input_path),
+        Path::new(&request.output_path),
+        request.expected_sample_rate_hz,
+        request.expected_channels,
+        request.expected_bits_per_sample,
+    ) {
+        Ok(result) => ConvertFlacToWavResponse {
+            protocol_version: 1,
+            request_id: request.request_id.clone(),
+            status: "converted".to_owned(),
+            sample_rate_hz: Some(result.sample_rate_hz),
+            channels: Some(result.channels),
+            bits_per_sample: Some(result.bits_per_sample),
+            sample_count: Some(result.sample_count),
+            payload_length: Some(result.payload_length),
+            error_code: None,
+        },
+        Err(error) => ConvertFlacToWavResponse {
+            error_code: Some(error),
+            ..response
+        },
+    }
+}
 
 pub const V1_BITS_PER_SAMPLE: u16 = 24;
 pub const V1_CHANNELS: u16 = 1;
