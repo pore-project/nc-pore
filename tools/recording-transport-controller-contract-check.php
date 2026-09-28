@@ -111,7 +111,7 @@ namespace {
 		);
 	}
 
-	function runPrepare(RecordingTransportController $controller): \OCP\AppFramework\Http\DataResponse {
+	function runPrepare(RecordingTransportController $controller, string $payloadFormat = 'audio/wav'): \OCP\AppFramework\Http\DataResponse {
 		return $controller->prepareFinalizedArtifact(
 			'production-1',
 			'Interview',
