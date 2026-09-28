@@ -73,7 +73,7 @@ final class NextcloudArtifactConnector {
 
 		$targetUserId = trim($this->config->getAppValue(
 			Application::APP_ID,
-			OCAPoReControllerProductionController::ownerKey($productionId),
+			\OCA\PoRe\Controller\ProductionController::ownerKey($productionId),
 			'',
 		));
 		if ($targetUserId === '') throw new RuntimeException('No storage target is registered for this production.');
@@ -159,7 +159,7 @@ final class NextcloudArtifactConnector {
 		}
 
 		$password = $this->secureRandom->generate(32, ISecureRandom::CHAR_ALPHANUMERIC);
-		$expiration = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+		$expiration = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 		$expiration = $expiration->modify('+' . self::SHARE_LIFETIME_SECONDS . ' seconds');
 
 		$share = $this->shareManager->newShare();
@@ -167,7 +167,7 @@ final class NextcloudArtifactConnector {
 		$share->setShareType(IShare::TYPE_LINK);
 		$share->setPermissions(Constants::PERMISSION_CREATE);
 		$share->setPassword($password);
-		$share->setExpirationDate(DateTime::createFromImmutable($expiration));
+		$share->setExpirationDate(\DateTime::createFromImmutable($expiration));
 		$share->setLabel('PoRE transport ' . $captureId);
 		$share->setSharedBy($targetUserId);
 		$share->setShareOwner($targetUserId);
@@ -278,8 +278,7 @@ final class NextcloudArtifactConnector {
 		}
 	}
 
-	/** @param File $file */
-	/** @param File $file */
+ 	/** @param File $file */
 	private function prepareExistingFileHandle(
 		File $file,
 		string $targetUserId,
