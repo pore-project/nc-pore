@@ -413,6 +413,35 @@ namespace {
 	$canonicalId = $receipt['file_id'];
 	$c->close($prepared['transfer_id'], 'actor-1');
 
+	// TEST-FLAC-02: A canonical collision must reject the transport and remove
+	// the temporary uploaded FLAC rather than leaving an orphaned remote file.
+	$conflictPrepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-6',
+		'capture-6',
+		'2026-09-05T15:42:31+00:00',
+		'Guest',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	$leaf->add('Guest.flac', new File(31, $flacPayload, 'Guest.flac'));
+	$leaf->add('Guest.wav', new File(32, wav("\x09\x09\x09"), 'Guest.wav'));
+	try {
+		$c->verify($conflictPrepared['transfer_id'], 'actor-1');
+		throw new \RuntimeException('Canonical collision must be rejected.');
+	} catch (\RuntimeException $error) {
+		check($error->getMessage() === 'artifact_manifest_conflict', 'Unexpected canonical collision error: ' . $error->getMessage());
+	}
+	try {
+		$leaf->get('Guest.flac');
+		throw new \RuntimeException('Failed FLAC canonicalization must not leave the uploaded transport file behind.');
+	} catch (\OCP\Files\NotFoundException) {
+	}
+
 	$prepared = $c->prepare(
 		'prod-1',
 		'Interview',

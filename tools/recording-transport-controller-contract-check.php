@@ -84,6 +84,7 @@ namespace {
 		public array $preparedQueue = [];
 		public array $prepareCalls = [];
 		public array $closed = [];
+		public ?\Throwable $prepareException = null;
 		public ?\Throwable $verifyException = null;
 		public function verify(string $handle, string $actorUserId): array {
 			if ($this->verifyException !== null) throw $this->verifyException;
@@ -91,6 +92,7 @@ namespace {
 		}
 		public function prepare(...$args): array {
 			$this->prepareCalls[] = $args;
+			if ($this->prepareException !== null) throw $this->prepareException;
 			if ($this->preparedQueue === []) throw new \RuntimeException('no prepared result');
 			return array_shift($this->preparedQueue);
 		}
@@ -239,6 +241,14 @@ namespace {
 	check($response->data['payload_format'] === 'audio/flac', 'Controller response must expose the requested FLAC transport format.');
 	check($response->data['canonical_filename'] === 'Host.wav', 'Controller response must expose the canonical WAV filename.');
 	check(($connector->prepareCalls[0][10] ?? null) === 'audio/flac', 'Controller must pass the explicit FLAC payload format to the connector.');
+
+	// TEST-FLAC-02: Unsupported transport formats are client errors, not generic server failures.
+	$store = new FakeStore();
+	$connector = new FakeConnector();
+	$connector->prepareException = new \RuntimeException('artifact_payload_format_invalid');
+	$response = runPrepare(controller($store, $connector), 'audio/ogg');
+	check($response->status === 400, 'Unsupported transport format must map to HTTP 400.');
+	check($response->data['error_code'] === 'artifact_payload_format_invalid', 'Unsupported transport format must preserve its error code.');
 
 	echo "Recording transport controller contract checks passed.\n";
 }

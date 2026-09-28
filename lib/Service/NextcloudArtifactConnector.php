@@ -566,11 +566,17 @@ final class NextcloudArtifactConnector {
 			if ($canonicalFile !== null) {
 				try { $canonicalFile->delete(); } catch (\Throwable) {}
 			}
+			// A FLAC transport file is temporary and must never survive a
+			// failed canonicalization attempt as an orphaned remote artifact.
+			try { $flacFile->delete(); } catch (\Throwable) {}
 			throw new RuntimeException($error->getMessage() === 'artifact_manifest_conflict' ? 'artifact_manifest_conflict' : 'artifact_preservation_invalid', 0, $error);
 		} catch (\Throwable $error) {
 			if ($canonicalFile !== null) {
 				try { $canonicalFile->delete(); } catch (\Throwable) {}
 			}
+			// The uploaded FLAC is only a temporary transport representation;
+			// remove it when conversion cannot establish the canonical artifact.
+			try { $flacFile->delete(); } catch (\Throwable) {}
 			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
 		} finally {
 			@unlink($inputPath);
