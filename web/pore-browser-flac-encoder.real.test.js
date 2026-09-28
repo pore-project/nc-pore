@@ -26,7 +26,8 @@ describe('Browser FLAC encoder real-library smoke test', () => {
 				offset += chunk.length
 			}
 
-			expect([...bytes.slice(0, 4)]).toEqual([0x66, 0x4c, 0x61, 0x43])
+			const prefix = [...bytes.slice(0, 4)]
+		if (prefix.join(',') !== '102,76,97,67') throw new Error('Real libFLAC output does not start with fLaC: [' + prefix.join(',') + ']')
 			expect([...bytes.slice(4, 8)]).toEqual([0x00, 0x00, 0x00, 0x22])
 
 			const streamInfo = bytes.slice(8, 42)
