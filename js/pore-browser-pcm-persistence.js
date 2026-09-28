@@ -150,7 +150,6 @@
 			const db = await this._database()
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
 			if (!manifest || manifest.status !== 'finalized') return null
-			if (manifest.storageFormat !== 'flac') return null
 			const chunks = await this._getChunks(db, FINALIZED_CHUNK_STORE, captureId)
 			await this._assertFinalizedChunkIntegrity(manifest, chunks, captureId)
 			return { manifest, chunks: chunks.map(chunk => chunk.payload) }
@@ -159,7 +158,16 @@
 		async clearFinalizedPayload(captureId) {
 			const db = await this._database()
 			const chunks = await this._getChunks(db, FINALIZED_CHUNK_STORE, captureId)
-			await this._transaction(db, [FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
+			await this._transaction(db, [MANIFEST_STORE, FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest) return
+					manifest.finalizedChunkCount = 0
+					manifest.updatedAt = new Date().toISOString()
+					manifestStore.put(manifest)
+				}
 				for (const chunk of chunks) transaction.objectStore(FINALIZED_CHUNK_STORE).delete([captureId, chunk.index])
 			})
 		}
