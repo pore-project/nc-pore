@@ -26,6 +26,10 @@ namespace OCP\Files {
 		public function getSize(): int { return strlen($this->content); }
 		public function getName(): string { return $this->name; }
 
+		public function delete(): void {
+			$this->getParent()->remove($this->name);
+		}
+
 		public function setParent(?Folder $parent, string $name): void {
 			$this->parent = $parent;
 			$this->name = $name;
@@ -66,6 +70,12 @@ namespace OCP\Files {
 			return $folder;
 		}
 
+		public function newFile(string $name): File {
+			$file = new WritableFile(1000 + count($this->children), $name);
+			$this->add($name, $file);
+			return $file;
+		}
+
 		public function add(string $name, object $node): void {
 			$this->children[$name] = $node;
 			if ($node instanceof File) {
@@ -97,6 +107,32 @@ namespace OCP\Files {
 
 		public function getPath(): string { return $this->path; }
 	}
+
+	class WritableFile extends File {
+		private string $path;
+
+		public function __construct(int $id, string $name) {
+			parent::__construct($id, '', $name);
+			$this->path = tempnam(sys_get_temp_dir(), 'pore-contract-file-');
+		}
+
+		public function getSize(): int {
+			clearstatcache(true, $this->path);
+			return (int)(filesize($this->path) ?: 0);
+		}
+
+		public function fopen(string $mode) {
+			$normalized = str_starts_with($mode, 'w') ? 'w+b' : 'rb';
+			$stream = fopen($this->path, $normalized);
+			if ($stream === false) throw new RuntimeException('Unable to open fake writable file.');
+			return $stream;
+		}
+
+		public function __destruct() {
+			@unlink($this->path);
+		}
+	}
+
 	class IRootFolder {}
 }
 namespace OCP\Security {
@@ -206,7 +242,7 @@ namespace {
 	}
 
 	function connector(FakeRootFolder $root, FakeShareManager $shares): NextcloudArtifactConnector {
-		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom());
+		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom(), new OCAPoReServiceRecordingRuntimeService());
 	}
 
 	function wav(string $pcm, int $sampleRate = 48000, int $channels = 1, int $bits = 24): string {
@@ -324,6 +360,59 @@ namespace {
 	}
 
 	$leaf->add('Host.wav', new File(21, 'occupied', 'Host.wav'));
+
+	// TEST-04: FLAC is transport-only; the uploaded FLAC is verified by its
+	// transport hash and then converted into the canonical WAV Artifact.
+	$canonicalWav = wav("   ");
+	OCAPoReServiceRecordingRuntimeService::$convertedPayload = $canonicalWav;
+	$flacPayload = base64_decode('ZkxhQwAAACIQABAAAAATAAATC7gBcAAAAAMhBpBwZIs2WggRQqoY7t/kAwAAEgAAAAAAAAAAAAAAAAAAAAAAA4QAACggAAAAcmVmZXJlbmNlIGxpYkZMQUMgMS41LjAgMjAyNTAyMTEAAAAA//hqDAACggIAAAB///+AAAC3fA==', true);
+	check($flacPayload !== false, 'FLAC fixture must decode from base64.');
+	$prepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	check($prepared['payload_format'] === 'audio/flac', 'FLAC prepare must expose the transport payload format.');
+	check($prepared['filename'] === 'Host (2).flac', 'FLAC transport must use a distinct .flac filename.');
+	check($prepared['canonical_filename'] === 'Host (2).wav', 'FLAC transport must retain the canonical .wav filename.');
+	check($prepared['upload_required'] === true, 'Fresh FLAC transport must require an upload.');
+
+	$uploadedFlac = new File(30, $flacPayload, 'Host (2).flac');
+	$leaf->add('Host (2).flac', $uploadedFlac);
+	$receipt = $c->verify($prepared['transfer_id'], 'actor-1');
+	check($receipt['filename'] === 'Host (2).wav', 'FLAC verification must return the canonical WAV artifact.');
+	check($receipt['size'] === strlen($canonicalWav), 'Canonical WAV size must come from the converted artifact.');
+	check($receipt['sha256'] === hash('sha256', $canonicalWav), 'Canonical WAV hash must be distinct from the FLAC transport hash.');
+	check($receipt['preservation']['encoding'] === 'pcm_s24le', 'Converted canonical artifact must satisfy the V1 PCM preservation contract.');
+	$canonicalId = $receipt['file_id'];
+	$c->close($prepared['transfer_id'], 'actor-1');
+
+	$prepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload) + 7,
+		hash('sha256', $flacPayload . 'changed'),
+		'actor-1',
+		$canonicalId,
+		'audio/flac',
+	);
+	check($prepared['upload_required'] === false, 'An existing canonical WAV must be reusable without re-upload for FLAC transport.');
+	check($prepared['filename'] === 'Host (2).wav', 'Canonical File-ID reuse must retain the current WAV filename.');
+	check($prepared['canonical_filename'] === 'Host (2).wav', 'Existing canonical reuse must expose the WAV canonical name.');
+	check($prepared['payload_format'] === 'audio/flac', 'Canonical reuse must retain the requested FLAC transport format.');
+
 	$leaf->add('Host (2).wav', new File(18, 'occupied', 'Host (2).wav'));
 	$payload = wav("\x01\x02\x03");
 	$prepared = $c->prepare('prod-1', 'Interview', 'recording-2', 'capture-2', '2026-09-05T15:42:31+02:00', 'Host', strlen($payload), hash('sha256', $payload), 'actor-1');
