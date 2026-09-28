@@ -135,10 +135,11 @@
 		async getFinalizedPayload(captureId) {
 			const db = await this._database()
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
-			if (!manifest || manifest.storageFormat !== 'flac') return null
+			if (!manifest) return null
 			const chunks = await this._getChunks(db, captureId, FINALIZED_CHUNK_STORE)
+			if (!chunks.length) return null
 			return { manifest, chunks: chunks.map(chunk => chunk.payload) }
-		}
+	}
 
 		async clearFinalizedPayload(captureId) {
 			const db = await this._database()
