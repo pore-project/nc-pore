@@ -188,12 +188,26 @@
 						abort(new Error(`PoRE finalized payload requires finalized capture: ${captureId}`))
 						return
 					}
+					if (manifest.storageFormat === 'flac') {
+						abort(new Error(`PoRE finalized payload is already committed: ${captureId}`))
+						return
+					}
 					const expectedIndex = Number.isInteger(manifest.finalizedChunkCount) ? manifest.finalizedChunkCount : 0
 					if (index > expectedIndex) {
 						abort(new Error(`PoRE finalized chunk gap detected: ${captureId}/${index}`))
 						return
 					}
-					if (index === expectedIndex) manifest.finalizedChunkCount = expectedIndex + 1
+					if (index < expectedIndex) {
+						const existingRequest = chunkStore.get([captureId, index])
+						existingRequest.onsuccess = () => {
+							const existing = existingRequest.result
+							if (!existing || existing.size !== blob.size || existing.sha256 !== sha256) {
+								abort(new Error(`PoRE finalized chunk conflict detected: ${captureId}/${index}`))
+							}
+						}
+						return
+					}
+					manifest.finalizedChunkCount = expectedIndex + 1
 					manifest.updatedAt = new Date().toISOString()
 					chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
 					manifestStore.put(manifest)
