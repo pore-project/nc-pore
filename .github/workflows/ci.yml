@@ -56,6 +56,15 @@ jobs:
       - name: Nextcloud artifact collision checks
         run: php tools/nextcloud-artifact-connector-contract-check.php
 
+      - name: Server-side artifact manifest checks
+        run: php tools/artifact-manifest-store-contract-check.php
+
+      - name: Artifact maintenance contract checks
+        run: php tools/artifact-manifest-maintenance-contract-check.php
+
+      - name: Recording transport controller contract checks
+        run: php tools/recording-transport-controller-contract-check.php
+
       - name: Architecture checks
         run: ./tools/architecture-checks/run-all.sh
 

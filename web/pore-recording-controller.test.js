@@ -8,7 +8,7 @@ describe('Browser recording controller', () => {
 		id,
 		label: 'PoRE microphone',
 		readyState: 'live',
-		getSettings: () => ({ deviceId, sampleRate: 48000, channelCount: 1 }),
+		getSettings: () => ({ deviceId, sampleRate: 48000, sampleSize: 24, channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false }),
 	})
 
 
@@ -96,6 +96,9 @@ describe('Browser recording controller', () => {
 		expect(artifact.source.recordingId).toBe('recording-17')
 		expect(artifact.source.captureId).toBe('capture-17')
 		expect(artifact.source.recordingSessionId).toBe('recorder-session-17')
+		expect(artifact.source.echoCancellation).toBe(false)
+		expect(artifact.source.noiseSuppression).toBe(false)
+		expect(artifact.source.autoGainControl).toBe(false)
 	})
 
 	it('generates distinct technical identities when the host does not provide them', async () => {
@@ -168,6 +171,12 @@ describe('Browser recording controller', () => {
 		expect(handoff.blob).toBeUndefined()
 		expect(handoff.format).toBe('audio/wav')
 		expect(handoff.encoding).toBe('pcm_s24le')
+		expect(handoff.provenance.schemaVersion).toBe(1)
+		expect(handoff.provenance.capture.sampleRate).toBe(48000)
+		expect(handoff.provenance.capture.sampleSize).toBe(24)
+		expect(handoff.provenance.capture.channelCount).toBe(1)
+		expect(handoff.provenance.capture.processing).toEqual({ echoCancellation: false, noiseSuppression: false, autoGainControl: false })
+		expect(handoff.provenance.sourceSegments).toHaveLength(1)
 	})
 
 	it('replaces the microphone without ending the technical capture', async () => {

@@ -32,6 +32,14 @@
 			this.active.add(descriptor.captureId)
 
 			try {
+				return await this._transferOnce(descriptor, 0)
+			} finally {
+				this.active.delete(descriptor.captureId)
+			}
+		}
+
+		async _transferOnce(descriptor, recoveryAttempt) {
+			try {
 				let state = await this.completionJob?.getTransportState?.(descriptor.captureId)
 
 				// A replay after durable completion must be a no-op: do not upload,
@@ -85,7 +93,17 @@
 				if (!state?.transferId) throw new Error('PoRE transport transfer handle is missing')
 
 				if (state.status === 'remote_present') {
-					const receipt = await this.verify(state.transferId, descriptor.productionId)
+					let receipt
+					try {
+						receipt = await this.verify(state.transferId, descriptor.productionId)
+					} catch (error) {
+						if (recoveryAttempt === 0 && this.isRecoverableVerificationFailure(error)) {
+							await this.close(state.transferId, descriptor.productionId).catch(() => {})
+							await this.prepare(descriptor)
+							return this._transferOnce(descriptor, 1)
+						}
+						throw error
+					}
 					await this.completionJob.updateTransportState(descriptor.captureId, {
 						status: 'verified',
 						verifiedAt: new Date().toISOString(),
@@ -124,8 +142,6 @@
 					lastError: String(error?.message || error),
 				}).catch(() => {})
 				throw error
-			} finally {
-				this.active.delete(descriptor.captureId)
 			}
 		}
 
@@ -137,6 +153,8 @@
 			form.set('capture_id', descriptor.captureId)
 			form.set('started_at', descriptor.startedAt)
 			form.set('participant_label', descriptor.participantLabel || '')
+			form.set('recording_session_id', descriptor.recordingSessionId)
+			form.set('capture_provenance', JSON.stringify(descriptor.provenance || {}))
 			form.set('size', String(descriptor.size))
 			form.set('payload_sha256', descriptor.payloadSha256)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare', form)
@@ -203,11 +221,19 @@
 		}
 
 		isUploadCollision(error) {
-			return [403, 409, 412].includes(error?.status)
+			return [409, 412].includes(error?.status)
 		}
 
 		isUploadAuthorizationFailure(error) {
-			return [401, 404, 410].includes(error?.status)
+			return [401, 403, 404, 410].includes(error?.status)
+		}
+
+		isRecoverableVerificationFailure(error) {
+			return [
+				'artifact_manifest_context_missing',
+				'transport_artifact_missing',
+				'transport_handle_invalid',
+			].includes(error?.code || error?.error_code)
 		}
 
 		async control(path, form) {
@@ -225,7 +251,13 @@
 			})
 			const envelope = await response.json()
 			const body = envelope?.ocs?.data || envelope?.data || envelope
-			if (!response.ok) throw new Error(body?.error_code || `PoRE transport control failed (${response.status})`)
+			if (!response.ok) {
+				const error = new Error(body?.error_code || `PoRE transport control failed (${response.status})`)
+				error.status = response.status
+				error.code = body?.error_code || null
+				error.error_code = body?.error_code || null
+				throw error
+			}
 			return body
 		}
 	}
