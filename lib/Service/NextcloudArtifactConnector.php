@@ -57,8 +57,8 @@ final class NextcloudArtifactConnector {
 		int $size,
 		string $sha256,
 		string $actorUserId,
-		string $payloadFormat = self::PAYLOAD_FORMAT_WAV,
 		?int $preferredFileId = null,
+		string $payloadFormat = self::PAYLOAD_FORMAT_WAV,
 	): array {
 		$this->validateHash($sha256);
 		if (trim($actorUserId) === '') throw new RuntimeException('Transport actor is required.');
