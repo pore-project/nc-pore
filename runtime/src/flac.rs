@@ -289,8 +289,7 @@ mod tests {
 
     #[test]
     fn converts_real_v1_flac_fixture_to_canonical_wav() {
-        let root =
-            std::env::temp_dir().join(format!("pore-flac-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("pore-flac-test-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let input = root.join("fixture.flac");
         let output = root.join("fixture.wav");
