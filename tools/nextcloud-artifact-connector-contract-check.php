@@ -431,12 +431,13 @@ namespace {
 	check($prepared['canonical_filename'] === 'Host (2).wav', 'Existing canonical reuse must expose the WAV canonical name.');
 	check($prepared['payload_format'] === 'audio/flac', 'Canonical reuse must retain the requested FLAC transport format.');
 
+	$sharesCreatedBeforeCollision = $shares->created;
 	$leaf->add('Host (2).wav', new File(18, 'occupied', 'Host (2).wav'));
 	$payload = wav("\x01\x02\x03");
 	$prepared = $c->prepare('prod-1', 'Interview', 'recording-2', 'capture-2', '2026-09-05T15:42:31+02:00', 'Host', strlen($payload), hash('sha256', $payload), 'actor-1');
 	check($prepared['filename'] === 'Host (3).wav', 'Differing content must select the first free numeric suffix.');
 	check($prepared['upload_required'] === true, 'Differing content must require an upload.');
-	check($shares->created === 1, 'Differing content must create exactly one upload share.');
+	check($shares->created === $sharesCreatedBeforeCollision + 1, 'Differing content must create exactly one additional upload share.');
 
 	echo "Nextcloud artifact collision contract checks passed.\n";
 }
