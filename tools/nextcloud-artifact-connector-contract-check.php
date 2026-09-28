@@ -5,6 +5,24 @@ declare(strict_types=1);
 namespace OCA\PoRe\AppInfo {
 	final class Application { public const APP_ID = 'pore'; }
 }
+namespace OCA\PoRe\Service {
+	class RecordingRuntimeService {
+		public static string $convertedPayload = '';
+		public function command(array $command, string $operation): array {
+			if ($operation !== 'artifact.convert_flac_to_wav') throw new \RuntimeException('Unexpected runtime operation.');
+			if (!isset($command['output_path'])) throw new \RuntimeException('Missing output path.');
+			if (file_put_contents($command['output_path'], self::$convertedPayload) === false) throw new \RuntimeException('Unable to write fake runtime output.');
+			return [
+				'status' => 'converted',
+				'sample_rate_hz' => 48000,
+				'channels' => 1,
+				'bits_per_sample' => 24,
+				'sample_count' => intdiv(max(0, strlen(self::$convertedPayload) - 44), 3),
+				'payload_length' => strlen(self::$convertedPayload),
+			];
+		}
+	}
+}
 namespace OCA\PoRe\Controller {
 	final class ProductionController {
 		public static function ownerKey(string $productionId): string { return 'production_owner_' . $productionId; }

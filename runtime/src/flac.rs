@@ -115,8 +115,8 @@ pub fn convert_flac_to_wav(
     let mut reader = FlacReader::open(input_path)
         .map_err(|error| format!("flac_decode_open:{error}"))?;
     let info = reader.streaminfo();
-    let channels = u16::from(info.channels);
-    let bits_per_sample = u16::from(info.bits_per_sample);
+    let channels = u16::try_from(info.channels).map_err(|_| "flac_channel_count_invalid".to_string())?;
+    let bits_per_sample = u16::try_from(info.bits_per_sample).map_err(|_| "flac_bit_depth_invalid".to_string())?;
     if channels != expected_channels
         || bits_per_sample != expected_bits_per_sample
         || !matches!(info.sample_rate, V1_SAMPLE_RATE | V1_FALLBACK_SAMPLE_RATE)

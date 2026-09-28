@@ -26,8 +26,14 @@ describe('Browser FLAC encoder boundary', () => {
 		const previous = window.Flac
 		try {
 			window.Flac = { create_libflac_encoder: jest.fn() }
-			expect(() => new Encoder({ sampleRate: 32000, channels: 1, totalSamples: 1 })).toThrow(/sample rate/)
-			expect(() => new Encoder({ sampleRate: 48000, channels: 2, totalSamples: 1 })).toThrow(/mono only/)
+			let error = null
+		try { new Encoder({ sampleRate: 32000, channels: 1, totalSamples: 1 }) } catch (caught) { error = caught }
+		expect(error).toBeTruthy()
+		expect(String(error.message)).toContain('sample rate')
+			let error = null
+		try { new Encoder({ sampleRate: 48000, channels: 2, totalSamples: 1 }) } catch (caught) { error = caught }
+		expect(error).toBeTruthy()
+		expect(String(error.message)).toContain('mono only')
 			expect(window.Flac.create_libflac_encoder).not.toHaveBeenCalled()
 		} finally { window.Flac = previous }
 	})

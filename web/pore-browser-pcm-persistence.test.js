@@ -38,7 +38,8 @@ describe('Browser PCM persistence store transactions', () => {
 		expect(settled).toBe(false)
 
 		transaction.oncomplete()
-		await expect(promise).resolves.toBe('capture-1')
+		const result = await promise
+		expect(result).toBe('capture-1')
 	})
 
 	it('rejects when the transaction is aborted after the request succeeds', async () => {
