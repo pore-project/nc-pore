@@ -18,11 +18,14 @@ describe('Nextcloud Talk microphone observer', () => {
 				echoCancellation: false,
 				noiseSuppression: false,
 				autoGainControl: false,
+				channelCount: { ideal: 1 },
+				sampleRate: { ideal: 48000 },
 			},
 		})
 		expect(capture.getCurrentTrack()).toBe(track)
 		expect(capture.getCurrentDeviceId()).toBe('browser-default')
 	})
+
 
 
 	const Connector = window.PoRETalkAudioCaptureConnector
