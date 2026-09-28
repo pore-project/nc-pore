@@ -9,6 +9,7 @@ nc-pore-infrastructure = { path = "../infrastructure" }
 nc-pore-core = { package = "core", path = "../core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+claxon = "0.4.3"
 
 [[bin]]
 name = "pore-runtime"
