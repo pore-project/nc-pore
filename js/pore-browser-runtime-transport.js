@@ -139,7 +139,7 @@
 			form.set('participant_label', descriptor.participantLabel || '')
 			form.set('recording_session_id', descriptor.recordingSessionId)
 			form.set('payload_format', descriptor.format || 'audio/flac')
-			form.set('capture_provenance', JSON.stringify(descriptor.manifest?.captureProvenance || descriptor.manifest?.capture || { schemaVersion: 1, capture: null, sourceSegments: [] }))
+			form.set('capture_provenance', JSON.stringify(descriptor.manifest?.provenance || descriptor.manifest?.captureProvenance || descriptor.manifest?.capture || { schemaVersion: 1, capture: null, sourceSegments: [] }))
 			form.set('size', String(descriptor.size))
 			form.set('payload_sha256', descriptor.payloadSha256)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare', form)
