@@ -238,7 +238,7 @@ Die Versionsnummer eines konkreten Entwicklungsstands muss vor CI-/Review-Abschl
 
 - `1.0.0` ist die stabile öffentliche V1 von NC-PoRe.
 - `0.1.0-dev.N` bleibt die bestehende frühe Entwicklungsreihe und wird nicht rückwirkend umgeschrieben.
-- Die V1-Beta-/Release-Linie verwendet `1.0.0-beta.N`, danach `1.0.0-rc.N` und schließlich `1.0.0`.
+- Die V1-Release-Linie verwendet `1.0.0-alpha.N`, danach `1.0.0-beta.N` und `1.0.0-rc.N`, und schließlich `1.0.0`.
 - PATCH beschreibt kompatible Fehlerkorrekturen.
 - MINOR beschreibt kompatible Funktionserweiterungen.
 - MAJOR beschreibt inkompatible Änderungen an unterstützten Schnittstellen.
@@ -474,12 +474,13 @@ A typical V1 evolution may look like:
 A later compatible feature line may then develop independently, for example:
 
 ```text
-1.1.0
+1.0.1
 1.1.0-dev.1
-1.1.0-dev.2
+1.1.0-alpha.1
 1.1.0-beta.1
 1.1.0-rc.1
 1.1.0
+1.1.1
 ```
 
 A new incompatible generation begins accordingly with:
@@ -502,7 +503,7 @@ The version of a concrete development state must be unambiguous before CI/review
 
 - `1.0.0` is the stable public V1 of NC-PoRE.
 - `0.1.0-dev.N` remains the historical early-development line and is not rewritten retroactively.
-- The V1 beta/release line uses `1.0.0-beta.N`, then `1.0.0-rc.N`, and finally `1.0.0`.
+- The V1 release line uses `1.0.0-alpha.N`, then `1.0.0-beta.N` and `1.0.0-rc.N`, and finally `1.0.0`.
 - PATCH represents compatible bug fixes.
 - MINOR represents compatible feature additions.
 - MAJOR represents incompatible changes to supported interfaces.
