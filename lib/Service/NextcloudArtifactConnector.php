@@ -130,6 +130,8 @@ final class NextcloudArtifactConnector {
 						$actorUserId,
 						$payloadFormat,
 						$existing->getName(),
+						$existing->getSize(),
+						strtolower($this->hashFile($existing)),
 					);
 				}
 				$transportFilename = $this->nextFreeFilename($folder, $transportFilename);
