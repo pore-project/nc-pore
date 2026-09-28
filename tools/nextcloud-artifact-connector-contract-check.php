@@ -428,8 +428,8 @@ namespace {
 		null,
 		'audio/flac',
 	);
-	$leaf->add('Guest.flac', new File(31, $flacPayload, 'Guest.flac'));
-	$leaf->add('Guest.wav', new File(32, wav("\x09\x09\x09"), 'Guest.wav'));
+	$leaf->add($conflictPrepared['filename'], new File(31, $flacPayload, $conflictPrepared['filename']));
+	$leaf->add($conflictPrepared['canonical_filename'], new File(32, wav("\x09\x09\x09"), $conflictPrepared['canonical_filename']));
 	try {
 		$c->verify($conflictPrepared['transfer_id'], 'actor-1');
 		throw new \RuntimeException('Canonical collision must be rejected.');
@@ -437,7 +437,7 @@ namespace {
 		check($error->getMessage() === 'artifact_manifest_conflict', 'Unexpected canonical collision error: ' . $error->getMessage());
 	}
 	try {
-		$leaf->get('Guest.flac');
+		$leaf->get($conflictPrepared['filename']);
 		throw new \RuntimeException('Failed FLAC canonicalization must not leave the uploaded transport file behind.');
 	} catch (\OCP\Files\NotFoundException) {
 	}
