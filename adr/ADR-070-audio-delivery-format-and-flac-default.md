@@ -20,7 +20,7 @@ The track concept and other architectural aspects of ADR-002 remain valid unless
 
 ---
 
-# Deutsch
+# Deutsch ([English version below](#english-version))
 
 ## Kontext
 
@@ -40,6 +40,9 @@ The central requirement is that the host remains in control of the required deli
 6. Eine spätere Konvertierung eines bereits verlustbehafteten Formats in ein unkomprimiertes oder höherwertig erscheinendes Containerformat stellt entfernte Informationen nicht wieder her.
 7. **Capture-Format und Delivery-Format sind getrennte Architekturbegriffe.** Das technische Capture-Format wird durch diese ADR nicht festgelegt und darf von der gewünschten Delivery-Repräsentation abweichen.
 8. Das tatsächlich erzeugte Delivery-Format wird eindeutig in den technischen Recording-/Artifact-Metadaten beschrieben.
+9. **Für NC-PoRe V1 ist diese Entscheidung konkretisiert:** Die V1-Browseraufnahme wird als 24-Bit-PCM-Mono-Preservation erzeugt. Nach abgeschlossener lokaler PCM-Persistence wird daraus FLAC erzeugt; FLAC ist damit die tatsächlich verwendete verlustfreie Delivery-Repräsentation und der Transport-Payload der V1.
+10. Der serverseitige Transport darf die V1-FLAC-Repräsentation verlustfrei in das weiterhin kanonisch gespeicherte WAV-Artefakt überführen. Das WAV ist damit zunächst das langlebige Remote-Artefakt, FLAC die effiziente lokale Final- und Transportrepräsentation.
+11. Die früher nur als allgemeine Zukunftsfähigkeit genannten alternativen Capture-Repräsentationen, insbesondere F32, sind **nicht Bestandteil von V1**. Eine solche Unterstützung ist ausschließlich für eine spätere Audio-/Capture-Profile-Erweiterung vorgemerkt.
 
 ## Warum FLAC als Default
 
@@ -86,7 +89,7 @@ Die in ADR-002 definierte Trennung von Capture, Transport und Persistenz sowie d
 
 ---
 
-# English Version
+# English Version ([Deutsche Version oben](#deutsch))
 
 ## Context
 
@@ -106,6 +109,9 @@ The central requirement is that the host remains in control of the required deli
 6. Converting an already lossy representation into an uncompressed or apparently higher-grade container does not restore information removed by the earlier lossy encoding.
 7. **Capture format and delivery format are separate architectural concepts.** This ADR does not define the technical capture format, which may differ from the desired delivery representation.
 8. The actual delivery format must be explicitly represented in the technical recording/artifact metadata.
+9. **For NC-PoRe V1 this decision is now concrete:** Browser recording uses a 24-bit PCM mono preservation representation. After durable local PCM persistence is finalized, the capture is encoded to FLAC; FLAC is therefore the actual lossless V1 delivery representation and transport payload.
+10. The server-side transport may losslessly convert the V1 FLAC representation into the WAV artifact that remains canonical on the server for the time being. WAV is therefore the durable remote artifact, while FLAC is the efficient finalized local and transport representation.
+11. Alternative capture representations previously described only as general future capability, in particular F32, are **not part of V1**. Such support is reserved exclusively for a later audio/capture-profile extension.
 
 ## Why FLAC as Default
 
