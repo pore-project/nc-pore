@@ -96,6 +96,9 @@ describe('Browser recording controller', () => {
 		expect(artifact.source.recordingId).toBe('recording-17')
 		expect(artifact.source.captureId).toBe('capture-17')
 		expect(artifact.source.recordingSessionId).toBe('recorder-session-17')
+		expect(artifact.source.echoCancellation).toBe(false)
+		expect(artifact.source.noiseSuppression).toBe(false)
+		expect(artifact.source.autoGainControl).toBe(false)
 	})
 
 	it('generates distinct technical identities when the host does not provide them', async () => {

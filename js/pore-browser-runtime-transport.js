@@ -23,7 +23,7 @@
 			})
 		}
 
-	async transfer(descriptor) {
+		async transfer(descriptor) {
 			if (!descriptor?.blob) throw new Error('PoRE transport requires a finalized payload')
 			if (!descriptor.captureId || !descriptor.recordingSessionId || !descriptor.productionId || !descriptor.recordingId || !descriptor.startedAt) {
 				throw new Error('PoRE transport requires authoritative identity and recording start time')
