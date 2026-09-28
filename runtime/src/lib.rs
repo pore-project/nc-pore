@@ -4,6 +4,7 @@
 //! through this protocol; lifecycle orchestration belongs to Application and
 //! lifecycle truth belongs to Core.
 
+pub mod flac;
 pub mod production;
 
 use nc_pore_application::recording_coordinator::RecordingCoordinator;
