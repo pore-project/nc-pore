@@ -50,6 +50,73 @@ namespace {
 		'sourceSegments' => [],
 	];
 
+	// TEST-FLAC-01: Transport representation is separate from the canonical
+	// remote Artifact. A FLAC transport hash/size must not become the manifest
+	// identity or the canonical remote hash/size.
+	$flacArtifact = 'capture-flac';
+	$flacHash = hash('sha256', 'flac-transport');
+	$store->stagePreparedArtifact([
+		'artifact_id' => $flacArtifact,
+		'production_id' => 'production-1',
+		'production_label' => 'Interview',
+		'recording_id' => 'recording-flac',
+		'recording_session_id' => 'session-flac',
+		'participant_label' => 'Host',
+		'target_user_id' => 'owner',
+		'filename' => 'Host.wav',
+		'canonical_filename' => 'Host.wav',
+		'payload_format' => 'audio/flac',
+		'transport_size' => 123,
+		'transport_sha256' => $flacHash,
+		'capture_provenance' => $provenance,
+	]);
+	$flacPending = $store->get($flacArtifact);
+	check(($flacPending['transport']['format'] ?? null) === 'audio/flac', 'Pending FLAC record must store the transport format.');
+	check(($flacPending['transport']['size'] ?? null) === 123, 'Pending FLAC record must store the transport size.');
+	check(($flacPending['transport']['sha256'] ?? null) === $flacHash, 'Pending FLAC record must store the transport hash.');
+	check(($flacPending['remote']['size'] ?? null) === null, 'Pending FLAC record must not pretend transport size is canonical remote WAV size.');
+	check(($flacPending['remote']['sha256'] ?? null) === null, 'Pending FLAC record must not pretend transport hash is canonical remote WAV hash.');
+
+	$flacVerified = $store->persistVerifiedArtifact([
+		'artifact_id' => $flacArtifact,
+		'target_user_id' => 'owner',
+		'file_id' => 77,
+		'path' => 'audio/Interview/Host.wav',
+		'filename' => 'Host.wav',
+		'size' => 47,
+		'sha256' => hash('sha256', 'canonical-wav'),
+		'preservation' => [
+			'format' => 'audio/wav',
+			'encoding' => 'pcm_s24le',
+			'sampleRate' => 48000,
+			'channels' => 1,
+			'bitsPerSample' => 24,
+		],
+	]);
+	check($flacVerified['remote']['size'] === 47, 'Verified FLAC transport must record canonical WAV size remotely.');
+	check($flacVerified['remote']['sha256'] === hash('sha256', 'canonical-wav'), 'Verified FLAC transport must record canonical WAV hash remotely.');
+	check($flacVerified['transport']['format'] === 'audio/flac', 'Verified FLAC transport format must remain persisted.');
+	check($flacVerified['transport']['size'] === 123, 'Verified FLAC transport size must remain separate from canonical WAV size.');
+	check($flacVerified['manifest_hash'] === $store->get($flacArtifact)['manifest_hash'], 'Persisted FLAC manifest hash must be stable.');
+
+	$repreparedFlac = $store->stagePreparedArtifact([
+		'artifact_id' => $flacArtifact,
+		'production_id' => 'production-1',
+		'production_label' => 'Interview',
+		'recording_id' => 'recording-flac',
+		'recording_session_id' => 'session-flac',
+		'participant_label' => 'Host',
+		'target_user_id' => 'owner',
+		'filename' => 'Host.wav',
+		'canonical_filename' => 'Host.wav',
+		'payload_format' => 'audio/flac',
+		'transport_size' => 456,
+		'transport_sha256' => hash('sha256', 'second-flac-transport'),
+		'capture_provenance' => $provenance,
+	]);
+	check($repreparedFlac['status'] === 'verified', 'Repeated prepare must reuse an immutable verified Artifact even when transport bytes differ.');
+	check($repreparedFlac['manifest_hash'] === $flacVerified['manifest_hash'], 'Changing only transport bytes must not change the verified manifest identity.');
+
 	$store->stagePreparedArtifact([
 		'artifact_id' => 'capture-1',
 		'production_id' => 'production-1',
