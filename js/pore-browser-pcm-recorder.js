@@ -28,9 +28,16 @@
 		getState() { return this.state }
 		isRecording() { return this.state === 'recording' }
 
-		async primeAudioContext() {
+		async primeAudioContext(sampleRate = null) {
 			if (!this.AudioContextClass) throw new Error('Web Audio is not available in this browser')
-			if (!this.context || this.context.state === 'closed') this.context = new this.AudioContextClass()
+			const requestedSampleRate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : null
+			const contextSampleRate = this.context && Number.isFinite(this.context.sampleRate) ? this.context.sampleRate : null
+			if (!this.context || this.context.state === 'closed' || (requestedSampleRate && contextSampleRate !== requestedSampleRate)) {
+				if (this.context && this.context.state !== 'closed') await this.context.close()
+				this.context = requestedSampleRate
+					? new this.AudioContextClass({ sampleRate: requestedSampleRate })
+					: new this.AudioContextClass()
+			}
 			if (this.context.state === 'suspended') await this.context.resume()
 			return this.context
 		}
@@ -44,12 +51,14 @@
 
 			this.startedAt = new Date().toISOString(); this.stoppedAt = null; this.sequence += 1; this.stream = new MediaStream([track]); this.captureId = metadata.captureId || technicalId('browser-capture'); this.recordingSessionId = metadata.recordingSessionId || technicalId('browser-session'); this.productionId = metadata.productionId || null; this.productionLabel = metadata.productionLabel || this.productionId; this.participantLabel = metadata.participantLabel || null; this.recordingId = metadata.recordingId || null; this.pendingParts = []; this.pendingBytes = 0; this.persistedChunkIndex = 0; this.persistenceQueue = []; this.persistenceQueueBytes = 0; this.persistenceDrainPromise = null; this._clearPersistenceRetry(); this.persistenceRetryDelayMs = PERSISTENCE_RETRY_INITIAL_MS; this.persistenceState = 'healthy'; this.persistenceFailureStartedAt = null; this.persistenceSafetyStopEmitted = false; this.openingSignet = null; this.openingSignetReadyPromise = null; this.openingSignetReadyResolve = null; this.closingSignet = null; this.closingSignetReadyPromise = null; this.closingSignetReadyResolve = null; this.capturedSamples = 0; this.receivedAudioBuffers = 0; this.workletProcessorError = null; this.openingTestTonePending = false; this.openingTestToneSamplesWritten = 0; this.closingTestTonePending = false; this.closingTestToneSamplesWritten = 0; this.persistenceStore = metadata.persistenceStore || this.persistenceStoreFactory()
 			try {
-				await this.primeAudioContext(); await this.context.audioWorklet.addModule(this.workletUrl); this.sampleRate = this.context.sampleRate
+				const trackSampleRate = track.getSettings?.()?.sampleRate
+				const requestedSampleRate = Number.isFinite(trackSampleRate) && trackSampleRate > 0 ? trackSampleRate : null
+				await this.primeAudioContext(requestedSampleRate); await this.context.audioWorklet.addModule(this.workletUrl); this.sampleRate = this.context.sampleRate
 				await this.persistenceStore.beginCapture({ captureId: this.captureId, recordingSessionId: this.recordingSessionId, productionId: this.productionId, productionLabel: this.productionLabel, participantLabel: this.participantLabel, recordingId: this.recordingId, sequence: this.sequence, startedAt: this.startedAt, sampleRate: this.sampleRate, channels: this.channels, encoding: 'pcm_s24le', format: 'audio/wav' })
 				this.source = typeof this.context.createMediaStreamTrackSource === 'function'
 					? this.context.createMediaStreamTrackSource(track)
 					: this.context.createMediaStreamSource(this.stream)
-				this.worklet = new AudioWorkletNode(this.context, 'pore-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCountMode: 'max', channelInterpretation: 'speakers' })
+				this.worklet = new AudioWorkletNode(this.context, 'pore-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers' })
 				this.worklet.onprocessorerror = event => {
 					this.workletProcessorError = event
 					console.error('[NC-PoRe] PCM AudioWorklet processor error', event)
@@ -97,6 +106,10 @@
 			if (!track || track.kind !== 'audio') throw new Error('PoRE requires an owned audio MediaStreamTrack')
 			if (track.readyState !== 'live') throw new Error('PoRE cannot replace the microphone with an ended audio track')
 			if (!this.context || this.context.state === 'closed' || !this.worklet) throw new Error('PoRE audio capture graph is not available')
+			const trackSampleRate = track.getSettings?.()?.sampleRate
+			if (Number.isFinite(trackSampleRate) && trackSampleRate > 0 && Number.isFinite(this.sampleRate) && trackSampleRate !== this.sampleRate) {
+				throw new Error(`PoRE cannot replace the active capture with a track at ${trackSampleRate} Hz while preserving ${this.sampleRate} Hz`)
+			}
 			const nextStream = new MediaStream([track])
 			const nextSource = this.context.createMediaStreamSource(nextStream)
 			nextSource.connect(this.worklet)
