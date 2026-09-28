@@ -40,6 +40,7 @@ final class RecordingTransportController extends OCSController {
 		string $payload_sha256,
 		string $recording_session_id,
 		string $capture_provenance = '{}',
+		string $payload_format = 'audio/flac',
 	): DataResponse {
 		try {
 			$actorId = $this->talkSessionAccess->resolve($production_id)['actor_id'];
@@ -51,10 +52,11 @@ final class RecordingTransportController extends OCSController {
 		try {
 			$this->authorizeRecordingTransport($actorId, $production_id, $recording_id);
 			$provenance = $this->decodeProvenance($capture_provenance);
+			$this->validatePayloadFormat($payload_format);
 
 			$preferredFileId = null;
 			$existing = $this->artifactManifestStore->get($capture_id);
-			if (($existing['status'] ?? null) === 'verified') {
+			if (($existing['status'] ?? null) === 'verified' && $payload_format === 'audio/wav') {
 				$remote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
 				if (is_int($remote['file_id'] ?? null) && $remote['file_id'] > 0) {
 					$preferredFileId = $remote['file_id'];
@@ -71,6 +73,7 @@ final class RecordingTransportController extends OCSController {
 				$size,
 				$this->required($payload_sha256, 'payload_sha256'),
 				$actorId,
+				$payload_format,
 				$preferredFileId,
 			);
 
@@ -83,6 +86,7 @@ final class RecordingTransportController extends OCSController {
 				$participant_label,
 				$prepared,
 				$provenance,
+				$payload_format,
 			);
 
 			if (($staged['status'] ?? null) === 'verified') {
@@ -147,6 +151,7 @@ final class RecordingTransportController extends OCSController {
 							$size,
 							$this->required($payload_sha256, 'payload_sha256'),
 							$actorId,
+							$payload_format,
 							$replacementFileId,
 						);
 					}
@@ -170,14 +175,16 @@ final class RecordingTransportController extends OCSController {
 						$size,
 						$this->required($payload_sha256, 'payload_sha256'),
 						$actorId,
+						$payload_format,
 						$verifiedFileId,
 					);
 				}
 			}
 
 			return new DataResponse([
-				'protocol_version' => 2,
+				'protocol_version' => 3,
 				'status' => 'prepared',
+				'payload_format' => $payload_format,
 				'transfer_id' => $prepared['transfer_id'],
 				'upload_url' => $prepared['upload_url'],
 				'upload_username' => $prepared['upload_username'],
@@ -268,6 +275,7 @@ final class RecordingTransportController extends OCSController {
 		string $participantLabel,
 		array $prepared,
 		array $provenance,
+		string $payloadFormat,
 	): array {
 		return $this->artifactManifestStore->stagePreparedArtifact([
 			'artifact_id' => $captureId,
@@ -281,6 +289,7 @@ final class RecordingTransportController extends OCSController {
 			'size' => $prepared['size'] ?? null,
 			'payload_sha256' => $prepared['sha256'] ?? null,
 			'capture_provenance' => $provenance,
+			'payload_format' => $payloadFormat,
 		]);
 	}
 
@@ -296,11 +305,33 @@ final class RecordingTransportController extends OCSController {
 		return $decoded;
 	}
 
+	private function preparedResponse(array $prepared): DataResponse {
+		return new DataResponse([
+			'protocol_version' => 3,
+			'status' => 'prepared',
+			'payload_format' => $prepared['payload_format'] ?? 'audio/wav',
+			'transfer_id' => $prepared['transfer_id'],
+			'upload_url' => $prepared['upload_url'],
+			'upload_username' => $prepared['upload_username'],
+			'upload_password' => $prepared['upload_password'],
+			'filename' => $prepared['filename'],
+			'size' => $prepared['size'],
+			'sha256' => $prepared['sha256'],
+			'upload_required' => $prepared['upload_required'],
+			'error_code' => null,
+		]);
+	}
+
+	private function validatePayloadFormat(string $payloadFormat): void {
+		if (!in_array($payloadFormat, ['audio/flac', 'audio/wav'], true)) throw new RuntimeException('artifact_payload_format_invalid');
+	}
+
 	private function mapPrepareError(\Throwable $exception): DataResponse {
 		return match ($exception->getMessage()) {
 			'PoRE transport authorization is not available.' => $this->rejected('runtime_unavailable', 503),
 			'PoRE transport authorization is not permitted for this recording' => $this->rejected('transport_unauthorized', 403),
 			'artifact_provenance_invalid' => $this->rejected('artifact_provenance_invalid', 400),
+			'artifact_payload_format_invalid' => $this->rejected('artifact_payload_format_invalid', 400),
 			'artifact_manifest_invalid' => $this->rejected('artifact_manifest_invalid', 400),
 			'artifact_manifest_conflict' => $this->rejected('artifact_manifest_conflict', 409),
 			'Nextcloud recorded artifact payload has changed.' => $this->rejected('artifact_manifest_conflict', 409),
