@@ -602,19 +602,14 @@ final class NextcloudArtifactConnector {
 			if ($canonicalFile !== null) {
 				try { $canonicalFile->delete(); } catch (\Throwable) {}
 			}
-			// A freshly uploaded FLAC is temporary and can be cleaned up on failure.
-			// A reused transport may belong to an interrupted earlier transfer;
-			// retain it so a later retry can converge on the same bytes.
-			if (($state['upload_required'] ?? true) === true) {
-				try { $flacFile->delete(); } catch (\Throwable) {}
-			}
+			// The FLAC has already passed remote size/hash verification before
+			// this method is entered. Keep that verified transport representation
+			// available when canonical WAV creation fails so a later retry can
+			// reuse the same bytes without another upload.
 			throw new RuntimeException($error->getMessage() === 'artifact_manifest_conflict' ? 'artifact_manifest_conflict' : 'artifact_preservation_invalid', 0, $error);
 		} catch (\Throwable $error) {
 			if ($canonicalFile !== null) {
 				try { $canonicalFile->delete(); } catch (\Throwable) {}
-			}
-			if (($state['upload_required'] ?? true) === true) {
-				try { $flacFile->delete(); } catch (\Throwable) {}
 			}
 			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
 		} finally {
