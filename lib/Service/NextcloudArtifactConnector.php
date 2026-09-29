@@ -201,6 +201,16 @@ final class NextcloudArtifactConnector {
 		$hash = $this->hashFile($file);
 		if (!hash_equals($state['sha256'], $hash)) throw new RuntimeException('Nextcloud transport artifact SHA-256 does not match.');
 
+		if ($state['payload_format'] === self::PAYLOAD_FORMAT_FLAC) {
+			$receipt = $this->convertFlacToCanonicalWav($file, $state);
+			$receipt['transport'] = [
+				'format' => self::PAYLOAD_FORMAT_FLAC,
+				'size' => $size,
+				'sha256' => $hash,
+			];
+			return $receipt;
+		}
+
 		$preservation = $this->inspectWav($file, $size);
 
 		return [
@@ -218,13 +228,19 @@ final class NextcloudArtifactConnector {
 	public function close(string $handle, string $actorUserId): void {
 		$state = $this->decodeHandle($handle);
 		$this->assertHandleActor($state, $actorUserId);
-		if ($state['share_id'] === null) return;
-		try {
-			$share = $this->shareManager->getShareById($state['share_id']);
-			$this->shareManager->deleteShare($share);
-		} catch (\OCP\Share\Exceptions\ShareNotFound) {
-			// Idempotent close: expiration or an earlier cleanup is already success.
+		if ($state['share_id'] !== null) {
+			try {
+				$share = $this->shareManager->getShareById($state['share_id']);
+				$this->shareManager->deleteShare($share);
+			} catch (\OCP\Share\Exceptions\ShareNotFound) {
+				// Idempotent close: expiration or an earlier cleanup is already success.
+			}
 		}
+		if ($state['payload_format'] !== self::PAYLOAD_FORMAT_FLAC || !$state['upload_required']) return;
+		$folder = $this->folderForState($state);
+		$file = $this->findFile($folder, $state['filename']);
+		if ($file === null) return;
+		try { $file->delete(); } catch (NotFoundException) {}
 	}
 
 	/** @param File $file */
