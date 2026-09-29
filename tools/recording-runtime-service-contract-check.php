@@ -34,7 +34,7 @@ namespace {
 		}
 	}
 
-	final class FakeAppManager extends \OCP\IAppManager {}
+	final class FakeAppManager extends \OCP\App\IAppManager {}
 
 	function check(bool $condition, string $message): void {
 		if (!$condition) throw new \RuntimeException($message);
