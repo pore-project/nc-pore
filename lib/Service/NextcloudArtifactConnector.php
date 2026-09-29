@@ -306,14 +306,15 @@ final class NextcloudArtifactConnector {
 		$uploadRequired = $decoded['upload_required'] ?? true;
 
 		$size = $decoded['size'];
-		$fileId = $decoded['file_id'];
 		if ((!is_int($size) && !is_float($size) && !is_string($size)) || (int)$size < 0) {
 			throw new RuntimeException('Invalid transport handle payload.');
 		}
 		if ($fileId !== null && (!is_int($fileId) || $fileId <= 0)) {
 			throw new RuntimeException('Invalid transport handle payload.');
 		}
-		if (!is_bool($decoded['upload_required'])) throw new RuntimeException('Invalid transport handle payload.');
+		if (!is_bool($uploadRequired)) throw new RuntimeException('Invalid transport handle payload.');
+		if (!is_string($canonicalFilename) || trim($canonicalFilename) === '') throw new RuntimeException('Invalid transport handle payload.');
+		if (!is_string($payloadFormat) || !in_array($payloadFormat, [self::PAYLOAD_FORMAT_FLAC, self::PAYLOAD_FORMAT_WAV], true)) throw new RuntimeException('Invalid transport handle payload.');
 
 		return [
 			'transfer_id' => (string)$decoded['transfer_id'],
@@ -328,7 +329,7 @@ final class NextcloudArtifactConnector {
 			'size' => (int)$size,
 			'sha256' => strtolower((string)$decoded['sha256']),
 			'actor_user_id' => (string)$decoded['actor_user_id'],
-			'upload_required' => $decoded['upload_required'],
+			'upload_required' => $uploadRequired,
 		];
 	}
 
