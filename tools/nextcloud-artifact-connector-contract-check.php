@@ -433,6 +433,7 @@ namespace {
 		'actor-1',
 		null,
 		'audio/flac',
+		'Host (2).wav',
 	);
 	check($reused['upload_required'] === false, 'An identical pre-existing FLAC transport must be reusable.');
 	check($reused['filename'] === 'Host (2).flac', 'FLAC recovery must reuse the interrupted transport filename.');

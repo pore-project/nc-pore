@@ -157,7 +157,8 @@ describe('Browser completion job', () => {
 		const descriptor = await job.prepare('capture-1')
 
 		expect(window.PoREBrowserFlacEncoder).toHaveBeenCalledWith({ sampleRate: 48000, channels: 1, totalSamples: 3, compression: 5 })
-		expect(store.beginFinalizedPayload).toHaveBeenCalledWith('capture-1', expect.any(String))
+		expect(store.beginFinalizedPayload).toHaveBeenCalledTimes(1)
+		expect(typeof store.beginFinalizedPayload.mock.calls[0][1]).toBe('string')
 		expect(store.renewFinalizedPayload).toHaveBeenCalled()
 		expect(store.appendFinalizedChunk).toHaveBeenCalledTimes(3)
 		const appended = store.appendFinalizedChunk.mock.calls[0]

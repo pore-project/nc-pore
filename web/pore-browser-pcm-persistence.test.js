@@ -117,7 +117,7 @@ describe('Browser FLAC finalization persistence', () => {
 	})
 
 	it('clears staged FLAC chunks and resets their continuity counter before retry', async () => {
-		const persistence = new Store()
+		const persistence = new Store({ keyRangeFactory: { only: value => value } })
 		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 2, finalization: { ownerId: 'owner-1', leaseUntil: new Date(Date.now() + 300000).toISOString() } }
 		let cursorResult = null
 		let cursorRequest
@@ -154,7 +154,7 @@ describe('Browser FLAC finalization persistence', () => {
 	})
 
 	it('refuses staging cleanup after FLAC has already been committed', async () => {
-		const persistence = new Store()
+		const persistence = new Store({ keyRangeFactory: { only: value => value } })
 		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'flac', finalizedChunkCount: 1 }
 		persistence._database = jest.fn(async () => ({}))
 		persistence._transaction = jest.fn(async (_db, _stores, _mode, configure) => {
