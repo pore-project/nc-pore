@@ -26,6 +26,36 @@ describe('Browser FLAC encoder boundary', () => {
 		} finally { window.Flac = previous }
 	})
 
+
+	it('rejects when libFLAC readiness cannot be observed', async () => {
+		const previous = window.Flac
+		try {
+			window.Flac = { isReady: jest.fn(() => false) }
+			let error = null
+			try { await Encoder.waitUntilReady() } catch (caught) { error = caught }
+			expect(error).toBeTruthy()
+			expect(String(error.message)).toContain('readiness API is not available')
+		} finally { window.Flac = previous }
+	})
+
+	it('times out and removes its ready listener when libFLAC never becomes ready', async () => {
+		const previous = window.Flac
+		let readyListener = null
+		try {
+			window.Flac = {
+				isReady: jest.fn(() => false),
+				on: jest.fn((event, listener) => { if (event === 'ready') readyListener = listener }),
+				off: jest.fn(),
+			}
+			let error = null
+			try { await Encoder.waitUntilReady(window.Flac, 1) } catch (caught) { error = caught }
+			expect(error).toBeTruthy()
+			expect(String(error.message)).toContain('readiness timed out')
+			expect(readyListener).toBeInstanceOf(Function)
+			expect(window.Flac.off).toHaveBeenCalledWith('ready', readyListener)
+		} finally { window.Flac = previous }
+	})
+
 	it('rejects direct encoder construction while libFLAC is not ready', () => {
 		const previous = window.Flac
 		try {
