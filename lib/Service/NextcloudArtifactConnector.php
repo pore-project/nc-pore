@@ -11,6 +11,7 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IConfig;
+use OCP\Lock\ILockingProvider;
 use OCP\Security\ISecureRandom;
 use OCP\Share\IManager;
 use OCP\Share\IShare;
@@ -41,6 +42,7 @@ final class NextcloudArtifactConnector {
 		private readonly IConfig $config,
 		private readonly IManager $shareManager,
 		private readonly ISecureRandom $secureRandom,
+		private readonly ILockingProvider $lockingProvider,
 		private readonly RecordingRuntimeService $runtime,
 	) {
 	}
@@ -496,6 +498,85 @@ final class NextcloudArtifactConnector {
 		}
 	}
 
+	private function publishCanonicalWav(
+		Folder $folder,
+		string $canonicalFilename,
+		string $outputPath,
+		int $localSize,
+		string $localHash,
+	): File {
+		$tempFilename = '.pore-canonical-' . bin2hex(random_bytes(16)) . '.wav.part';
+		$tempFile = null;
+		$movedNode = null;
+		$lockKey = 'pore-canonical:' . hash('sha256', $folder->getPath() . " " . $canonicalFilename);
+		$lockAcquired = false;
+
+		try {
+			$tempFile = $folder->newFile($tempFilename);
+			$source = fopen($outputPath, 'rb');
+			if ($source === false) throw new RuntimeException('Converted FLAC WAV could not be opened.');
+			$target = $tempFile->fopen('wb');
+			if ($target === false) {
+				fclose($source);
+				throw new RuntimeException('Canonical WAV temporary target could not be opened.');
+			}
+			try {
+				$written = stream_copy_to_stream($source, $target);
+			} finally {
+				fclose($target);
+				fclose($source);
+			}
+			if ($written !== $localSize || $tempFile->getSize() !== $localSize) {
+				throw new RuntimeException('Canonical WAV temporary size mismatch.');
+			}
+			if (!hash_equals($localHash, $this->hashFile($tempFile))) {
+				throw new RuntimeException('Canonical WAV temporary hash mismatch.');
+			}
+			$this->inspectWav($tempFile, $localSize);
+
+			$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
+			$lockAcquired = true;
+
+			try {
+				try {
+					$existing = $folder->get($canonicalFilename);
+					if (!$existing instanceof File) throw new RuntimeException('Canonical WAV target is not a file.');
+					if ($existing->getSize() === $localSize && hash_equals($localHash, $this->hashFile($existing))) {
+						return $existing;
+					}
+					throw new RuntimeException('artifact_manifest_conflict');
+				} catch (NotFoundException) {
+					// Target is free; publish the already validated temporary node.
+				}
+
+				$movedNode = $tempFile->move(rtrim($folder->getPath(), '/') . '/' . $canonicalFilename);
+				if (!$movedNode instanceof File) throw new RuntimeException('Canonical WAV publish returned a non-file target.');
+
+				$published = $folder->get($canonicalFilename);
+				if (!$published instanceof File) throw new RuntimeException('Canonical WAV publish resolved a non-file target.');
+				if ($published->getSize() !== $localSize) throw new RuntimeException('Canonical WAV published size mismatch.');
+				if (!hash_equals($localHash, $this->hashFile($published))) throw new RuntimeException('Canonical WAV published hash mismatch.');
+				$this->inspectWav($published, $localSize);
+
+				return $published;
+			} catch (Throwable $error) {
+				if ($movedNode instanceof File) {
+					try { $movedNode->delete(); } catch (Throwable) {}
+				}
+				throw $error;
+			} finally {
+				if ($lockAcquired) {
+					$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
+					$lockAcquired = false;
+				}
+			}
+		} finally {
+			if ($movedNode === null && $tempFile instanceof File) {
+				try { $tempFile->delete(); } catch (Throwable) {}
+			}
+		}
+	}
+
 	private function convertFlacToCanonicalWav(File $flacFile, array $state): array {
 		$inputPath = tempnam(sys_get_temp_dir(), 'pore-flac-input-');
 		$outputPath = tempnam(sys_get_temp_dir(), 'pore-flac-output-');
@@ -568,22 +649,18 @@ final class NextcloudArtifactConnector {
 				throw new RuntimeException('artifact_manifest_conflict');
 			}
 
-			$canonicalFile = $folder->newFile($canonicalFilename);
-			$source = fopen($outputPath, 'rb');
-			$destination = $canonicalFile->fopen('w');
-			if ($source === false || $destination === false) throw new RuntimeException('artifact_preservation_invalid');
-			try {
-				if (stream_copy_to_stream($source, $destination) === false) throw new RuntimeException('artifact_preservation_invalid');
-			} finally {
-				fclose($source);
-				fclose($destination);
-			}
+			$canonicalFile = $this->publishCanonicalWav(
+				$folder,
+				$canonicalFilename,
+				$outputPath,
+				$localSize,
+				$localHash,
+			);
 
 			$canonicalSize = $canonicalFile->getSize();
 			$canonicalHash = $this->hashFile($canonicalFile);
 			$preservation = $this->inspectWav($canonicalFile, $canonicalSize);
 			if ($canonicalSize !== $localSize || !hash_equals($localHash, $canonicalHash)) {
-				try { $canonicalFile->delete(); } catch (\Throwable) {}
 				throw new RuntimeException('artifact_preservation_invalid');
 			}
 

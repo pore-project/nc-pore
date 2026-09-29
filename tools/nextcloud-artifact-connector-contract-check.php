@@ -70,10 +70,16 @@ namespace OCP\Files {
 		public function getPath(): string {
 			return rtrim($this->getParent()->getPath(), '/') . '/' . $this->name;
 		}
+
+		public function move(string $targetPath): File {
+			$this->getParent()->moveFile($this, basename($targetPath));
+			return $this;
+		}
 	}
 
 	class Folder {
 		private array $children = [];
+		public bool $rejectMoves = false;
 		private array $filesById = [];
 		public int $fileIdLookupCalls = 0;
 
@@ -82,6 +88,13 @@ namespace OCP\Files {
 		public function get(string $name) {
 			if (!array_key_exists($name, $this->children)) throw new NotFoundException($name);
 			return $this->children[$name];
+		}
+
+		public function moveFile(File $file, string $name): void {
+			if ($this->rejectMoves) throw new \RuntimeException('fake_move_failed');
+			if (array_key_exists($name, $this->children)) throw new \RuntimeException('fake_target_exists');
+			$this->remove($file->getName());
+			$this->add($name, $file);
 		}
 
 		public function newFolder(string $name): Folder {
@@ -166,6 +179,14 @@ namespace OCP\Share {
 }
 namespace OCP\Share\Exceptions {
 	class ShareNotFound extends \RuntimeException {}
+}
+namespace OCP\Lock {
+	interface ILockingProvider {
+		public const LOCK_SHARED = 1;
+		public const LOCK_EXCLUSIVE = 2;
+		public function acquireLock(string $path, int $type): void;
+		public function releaseLock(string $path, int $type): void;
+	}
 }
 namespace {
 	require_once __DIR__ . '/../lib/Service/NextcloudArtifactPath.php';
@@ -261,8 +282,15 @@ namespace {
 		public function generate(int $length, string $characterSet): string { return 'token-' . (++$this->counter); }
 	}
 
-	function connector(FakeRootFolder $root, FakeShareManager $shares): NextcloudArtifactConnector {
-		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom(), new \OCA\PoRe\Service\RecordingRuntimeService());
+	final class FakeLockingProvider implements \OCP\Lock\ILockingProvider {
+		public int $acquireCalls = 0;
+		public int $releaseCalls = 0;
+		public function acquireLock(string $path, int $type): void { $this->acquireCalls++; }
+		public function releaseLock(string $path, int $type): void { $this->releaseCalls++; }
+	}
+
+	function connector(FakeRootFolder $root, FakeShareManager $shares, FakeLockingProvider $locks): NextcloudArtifactConnector {
+		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom(), $locks, new \OCA\PoRe\Service\RecordingRuntimeService());
 	}
 
 	function wav(string $pcm, int $sampleRate = 48000, int $channels = 1, int $bits = 24): string {
@@ -294,7 +322,8 @@ namespace {
 	$leaf->add('Host.wav', $host);
 
 	$shares = new FakeShareManager();
-	$c = connector($root, $shares);
+	$locks = new FakeLockingProvider();
+	$c = connector($root, $shares, $locks);
 
 	$prepared = $c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1');
 	check($prepared['filename'] === 'Host.wav', 'Identical artifact must retain the original filename.');
@@ -526,6 +555,40 @@ namespace {
 		throw new RuntimeException('Successfully canonicalized FLAC transport must be removed.');
 	} catch (OCP\Files\NotFoundException) {
 	}
+
+	// TEST-FLAC-06: A failed canonical move must leave no final target while
+	// retaining the already verified FLAC transport.
+	$publishPrepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-8',
+		'capture-8',
+		'2026-09-05T15:42:31+00:00',
+		'PublishFailure',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	$publishTransport = new File(35, $flacPayload, $publishPrepared['filename']);
+	$leaf->add($publishPrepared['filename'], $publishTransport);
+	\OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = $canonicalWav;
+	$leaf->rejectMoves = true;
+	try {
+		$c->verify($publishPrepared['transfer_id'], 'actor-1');
+		throw new RuntimeException('Expected canonical publish failure.');
+	} catch (RuntimeException $error) {
+		check($error->getMessage() === 'fake_move_failed', 'Canonical publish failure must propagate.');
+	}
+	try {
+		$leaf->get($publishPrepared['canonical_filename']);
+		throw new RuntimeException('Failed canonical publication must not leave the final target.');
+	} catch (OCP\Files\NotFoundException) {
+	}
+	check($leaf->get($publishPrepared['filename']) instanceof File, 'Verified FLAC must remain after publication failure.');
+	check($locks->acquireCalls === $locks->releaseCalls, 'Canonical publication lock must always be released.');
+	$leaf->rejectMoves = false;
 
 	// TEST-FLAC-05: A canonical collision must reject the transport
 	// the temporary uploaded FLAC rather than leaving an orphaned remote file.
