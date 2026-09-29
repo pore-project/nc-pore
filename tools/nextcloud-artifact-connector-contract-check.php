@@ -580,7 +580,7 @@ namespace {
 		$c->verify($publishPrepared['transfer_id'], 'actor-1');
 		throw new RuntimeException('Expected canonical publish failure.');
 	} catch (RuntimeException $error) {
-		check($error->getMessage() === 'fake_move_failed', 'Canonical publish failure must propagate.');
+		check($error->getMessage() === 'artifact_preservation_invalid', 'Canonical publish failure must use the transport preservation error contract.');
 	}
 	try {
 		$leaf->get($publishPrepared['canonical_filename']);
