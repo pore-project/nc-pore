@@ -9,6 +9,8 @@ use pore_runtime::{
 };
 use std::io::{self, BufReader, BufWriter, Read, Write};
 
+use pore_runtime::flac::{ConvertFlacToWavRequest, ConvertFlacToWavResponse, OPERATION_CONVERT_FLAC_TO_WAV, handle_convert_flac_to_wav};
+
 fn main() {
     let stdin = io::stdin();
     let stdout = io::stdout();

@@ -155,6 +155,7 @@
 			form.set('participant_label', descriptor.participantLabel || '')
 			form.set('recording_session_id', descriptor.recordingSessionId)
 			form.set('capture_provenance', JSON.stringify(descriptor.provenance || {}))
+			form.set('payload_format', descriptor.format || 'audio/flac')
 			form.set('size', String(descriptor.size))
 			form.set('payload_sha256', descriptor.payloadSha256)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare', form)
@@ -166,6 +167,8 @@
 				uploadUsername: body.upload_username,
 				uploadPassword: body.upload_password,
 				filename: body.filename,
+				canonicalFilename: body.canonical_filename || body.filename,
+				payloadFormat: body.payload_format || descriptor.format || 'audio/flac',
 				uploadRequired: body.upload_required !== false,
 				preparedAt: new Date().toISOString(),
 			})

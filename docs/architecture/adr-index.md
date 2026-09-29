@@ -99,6 +99,7 @@ This document provides an overview and navigation entry.
 - ADR-086 Talk Recording Control Surface V1
 - ADR-087 V1 Browser Capture Quality Boundary
 - ADR-088 Versioning and Release Policy
+- ADR-089 V1 FLAC Finalization and Canonical WAV Transport
 
 ---
 

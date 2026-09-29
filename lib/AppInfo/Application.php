@@ -22,6 +22,8 @@ class Application extends App implements IBootstrap {
 
 	public function boot(IBootContext $context): void {
 		Util::addStyle(self::APP_ID, 'pore-talk-recording');
+		Util::addInitScript(self::APP_ID, 'vendor/libflac');
+		Util::addInitScript(self::APP_ID, 'pore-browser-flac-encoder');
 		Util::addInitScript(self::APP_ID, 'pore-talk-settings');
 		Util::addInitScript(self::APP_ID, 'pore-browser-pcm-persistence');
 		Util::addInitScript(self::APP_ID, 'pore-browser-completion-job');

@@ -12,6 +12,8 @@ final class ArtifactManifestStore {
 	private const PENDING_RETENTION_SECONDS = 2 * 60 * 60;
 	private const DIRECTORY_MODE = 0700;
 	private const FILE_MODE = 0600;
+	private const PAYLOAD_FORMAT_WAV = 'audio/wav';
+	private const PAYLOAD_FORMAT_FLAC = 'audio/flac';
 
 	public function __construct(
 		private readonly IConfig $config,
@@ -112,6 +114,7 @@ final class ArtifactManifestStore {
 			$size = $this->requiredNonNegativeInt($receipt['size'] ?? null, 'size');
 			$sha256 = $this->requiredSha256($receipt['sha256'] ?? null);
 
+			$pendingTransport = $this->normalizeTransport($pending['transport'] ?? null, $receipt['transport'] ?? null);
 			$record = [
 				'schema_version' => self::SCHEMA_VERSION,
 				'status' => 'verified',
@@ -121,6 +124,7 @@ final class ArtifactManifestStore {
 				'recording_session_id' => $pending['recording_session_id'] ?? null,
 				'artifact_id' => $artifactId,
 				'participant_label' => $pending['participant_label'] ?? null,
+				'transport' => $pendingTransport,
 				'remote' => [
 					'target_user_id' => $this->nullableString($receipt['target_user_id'] ?? ($pending['remote']['target_user_id'] ?? null)),
 					'filename' => $this->nullableString($receipt['filename'] ?? ($pending['remote']['filename'] ?? null)),
@@ -260,6 +264,8 @@ final class ArtifactManifestStore {
 
 		$provenance = $this->normalizeCaptureProvenance($submission['capture_provenance'] ?? null);
 		$size = $this->requiredNonNegativeInt($submission['size'] ?? null, 'size');
+		$payloadFormat = $this->requiredPayloadFormat($submission['payload_format'] ?? self::PAYLOAD_FORMAT_WAV);
+		$payloadSha256 = $this->requiredSha256($submission['payload_sha256'] ?? null);
 
 		return [
 			'schema_version' => self::SCHEMA_VERSION,
@@ -270,13 +276,18 @@ final class ArtifactManifestStore {
 			'recording_session_id' => $recordingSessionId,
 			'artifact_id' => $artifactId,
 			'participant_label' => $this->nullableString($submission['participant_label'] ?? null),
+			'transport' => [
+				'format' => $payloadFormat,
+				'size' => $size,
+				'sha256' => $payloadSha256,
+			],
 			'remote' => [
 				'target_user_id' => $this->nullableString($submission['target_user_id'] ?? null),
 				'filename' => $this->nullableString($submission['filename'] ?? null),
 				'file_id' => null,
 				'path' => null,
-				'size' => $size,
-				'sha256' => $this->requiredSha256($submission['payload_sha256'] ?? null),
+				'size' => null,
+				'sha256' => null,
 			],
 			'capture' => $provenance['capture'] ?? null,
 			'sourceSegments' => $provenance['sourceSegments'] ?? [],
@@ -287,6 +298,39 @@ final class ArtifactManifestStore {
 	 * @param mixed $value
 	 * @return array<string, mixed>|null
 	 */
+	private function requiredPayloadFormat(mixed $value): string {
+		if (!is_string($value) || !in_array($value, [self::PAYLOAD_FORMAT_WAV, self::PAYLOAD_FORMAT_FLAC], true)) {
+			throw new RuntimeException('artifact_payload_format_invalid');
+		}
+		return $value;
+	}
+
+	/**
+	 * @param mixed $pending
+	 * @param mixed $receipt
+	 * @return array{format:string,size:int,sha256:string}
+	 */
+	private function normalizeTransport(mixed $pending, mixed $receipt): array {
+		$value = is_array($pending) ? $pending : null;
+		if ($value === null && is_array($receipt)) {
+			$value = $receipt;
+		}
+		if ($value === null) {
+			return [
+				'format' => self::PAYLOAD_FORMAT_WAV,
+				'size' => 0,
+				'sha256' => str_repeat('0', 64),
+			];
+		}
+		$remote = is_array($value['remote'] ?? null) ? $value['remote'] : [];
+		$format = $this->requiredPayloadFormat($value['format'] ?? $remote['format'] ?? self::PAYLOAD_FORMAT_WAV);
+		$sizeValue = $value['size'] ?? $remote['size'] ?? null;
+		$hashValue = $value['sha256'] ?? $remote['sha256'] ?? null;
+		$size = $this->requiredNonNegativeInt($sizeValue, 'transport.size');
+		$sha256 = $this->requiredSha256($hashValue);
+		return ['format' => $format, 'size' => $size, 'sha256' => $sha256];
+	}
+
 	private function normalizeCaptureProvenance(mixed $value): ?array {
 		if ($value === null) return null;
 		if (!is_array($value)) throw new RuntimeException('artifact_provenance_invalid');
@@ -383,22 +427,19 @@ final class ArtifactManifestStore {
 	private function assertExpectedPayloadMatches(?array $existing, array $candidate, bool $final = false): void {
 		if ($existing === null) return;
 
-		$existingRemote = is_array($existing['remote'] ?? null) ? $existing['remote'] : [];
-		$candidateRemote = is_array($candidate['remote'] ?? null) ? $candidate['remote'] : [];
+		$existingStatus = $existing['status'] ?? null;
+		$existingTransport = $this->normalizeTransport($existing['transport'] ?? null, null);
+		$candidateTransport = $this->normalizeTransport($candidate['transport'] ?? null, null);
 
-		$existingHash = $existingRemote['sha256'] ?? null;
-		$candidateHash = $candidateRemote['sha256'] ?? null;
-		$existingSize = $existingRemote['size'] ?? null;
-		$candidateSize = $candidateRemote['size'] ?? null;
-
-		if ($existingHash !== null && $candidateHash !== null && strtolower((string)$existingHash) !== strtolower((string)$candidateHash)) {
-			throw new RuntimeException('artifact_manifest_conflict');
-		}
-		if ($existingSize !== null && $candidateSize !== null && (int)$existingSize !== (int)$candidateSize) {
-			throw new RuntimeException('artifact_manifest_conflict');
+		if ($existingStatus !== 'verified') {
+			if (($existingTransport['format'] ?? self::PAYLOAD_FORMAT_WAV) !== ($candidateTransport['format'] ?? self::PAYLOAD_FORMAT_WAV)
+				|| ($existingTransport['size'] ?? null) !== ($candidateTransport['size'] ?? null)
+				|| strtolower((string)($existingTransport['sha256'] ?? '')) !== strtolower((string)($candidateTransport['sha256'] ?? ''))) {
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
 		}
 
-		if ($final && ($existing['status'] ?? null) === 'verified') {
+		if ($existingStatus === 'verified' && $final) {
 			$existingHash = $existing['manifest_hash'] ?? null;
 			$candidateHash = $this->manifestHash($candidate);
 			if ($existingHash !== null && $existingHash !== $candidateHash) {
