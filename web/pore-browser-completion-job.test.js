@@ -64,11 +64,14 @@ describe('Browser completion job', () => {
 	it('prepares a finalized durable capture for transport without uploading it', async () => {
 		const persisted = []
 		const provenance = { schemaVersion: 1, capture: { sampleRate: 48000, sampleSize: 24, channelCount: 1, processing: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }, sourceSegments: [] }
+		let committed = false
+		let committedManifest = null
 		const staged = []
 		const store = {
 			clearFinalizedPayload: jest.fn(async () => { staged.length = 0 }),
 			appendFinalizedChunk: jest.fn(async (_captureId, index, payload) => { staged[index] = payload }),
 			getFinalizedPayload: jest.fn(async () => ({ manifest: {}, chunks: staged.filter(Boolean), chunkHashes: staged.filter(Boolean).map(() => 'b'.repeat(64)), chunkSizes: staged.filter(Boolean).map(chunk => chunk.size) })),
+			commitFinalizedPayload: jest.fn(async (_captureId, details) => { committed = true; committedManifest = details }),
 			finalizeCapture: jest.fn(async (captureId, patch) => {
 				persisted.push({ captureId, patch })
 			}),
