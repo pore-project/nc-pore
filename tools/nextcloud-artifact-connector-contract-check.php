@@ -289,7 +289,8 @@ namespace {
 		public function releaseLock(string $path, int $type): void { $this->releaseCalls++; }
 	}
 
-	function connector(FakeRootFolder $root, FakeShareManager $shares, FakeLockingProvider $locks): NextcloudArtifactConnector {
+	function connector(FakeRootFolder $root, FakeShareManager $shares, ?FakeLockingProvider $locks = null): NextcloudArtifactConnector {
+		$locks ??= new FakeLockingProvider();
 		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom(), $locks, new \OCA\PoRe\Service\RecordingRuntimeService());
 	}
 
