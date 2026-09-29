@@ -167,6 +167,7 @@ globalThis.beforeEach = fn => beforeEachHooks.push(fn)
 globalThis.it = (name, fn) => tests.push({ name, fn })
 
 const files = [
+	'../web/pore-browser-flac-encoder.test.js',
 	'../web/pore-browser-completion-job.test.js',
 	'../web/pore-browser-pcm-recorder.test.js',
 	'../web/pore-browser-recording-lifecycle.test.js',
