@@ -264,6 +264,8 @@ final class ArtifactManifestStore {
 
 		$provenance = $this->normalizeCaptureProvenance($submission['capture_provenance'] ?? null);
 		$size = $this->requiredNonNegativeInt($submission['size'] ?? null, 'size');
+		$payloadFormat = $this->requiredPayloadFormat($submission['payload_format'] ?? self::PAYLOAD_FORMAT_WAV);
+		$payloadSha256 = $this->requiredSha256($submission['payload_sha256'] ?? null);
 
 		return [
 			'schema_version' => self::SCHEMA_VERSION,
