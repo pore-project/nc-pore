@@ -459,7 +459,20 @@ final class NextcloudArtifactConnector {
 				}
 				throw new RuntimeException('artifact_manifest_conflict');
 			}
-			$canonicalFile = $folder->newFile($name);
+			try {
+				$canonicalFile = $folder->newFile($name);
+			} catch (\Throwable $error) {
+				$existing = $this->findFile($folder, $name);
+				if ($existing !== null && $existing->getSize() === $localSize && hash_equals($localHash, $this->hashFile($existing))) {
+					$preservation = $this->inspectWav($existing, $existing->getSize());
+					return [
+						'artifact_id' => $state['capture_id'], 'target_user_id' => $state['target_user_id'],
+						'file_id' => $existing->getId(), 'path' => $this->relativeUserPath($existing, $state['target_user_id']),
+						'size' => $existing->getSize(), 'sha256' => $localHash, 'filename' => $existing->getName(), 'preservation' => $preservation,
+					];
+				}
+				throw $error;
+			}
 			$source = fopen($outputPath, 'rb');
 			$destination = $canonicalFile->fopen('w');
 			if ($source === false || $destination === false) throw new RuntimeException('artifact_preservation_invalid');
