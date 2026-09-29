@@ -475,7 +475,59 @@ namespace {
 
 
 
-	// TEST-FLAC-04: A canonical collision must reject the transport and remove
+	// TEST-FLAC-04: A transport that has already passed remote size/hash
+	// verification remains available when FLAC->WAV canonicalization fails.
+	$failurePrepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-7',
+		'capture-7',
+		'2026-09-05T15:42:31+00:00',
+		'Fallback',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	check($failurePrepared['upload_required'] === true, 'Fresh fallback FLAC transport must require an upload.');
+	$failureTransport = new File(34, $flacPayload, $failurePrepared['filename']);
+	$leaf->add($failurePrepared['filename'], $failureTransport);
+	OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = '';
+	try {
+		$c->verify($failurePrepared['transfer_id'], 'actor-1');
+		throw new RuntimeException('Invalid FLAC conversion result must be rejected.');
+	} catch (RuntimeException $error) {
+		check($error->getMessage() === 'artifact_preservation_invalid', 'Unexpected FLAC conversion failure: ' . $error->getMessage());
+	}
+	check($leaf->get($failurePrepared['filename']) instanceof File, 'Verified FLAC transport must remain after canonicalization failure.');
+
+	OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = $canonicalWav;
+	$failureRetry = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-7',
+		'capture-7',
+		'2026-09-05T15:42:31+00:00',
+		'Fallback',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+		$failurePrepared['canonical_filename'],
+	);
+	check($failureRetry['upload_required'] === false, 'Retry must reuse the verified FLAC transport without another upload.');
+	check($failureRetry['filename'] === $failurePrepared['filename'], 'Retry must reuse the original FLAC transport filename.');
+	$failureReceipt = $c->verify($failureRetry['transfer_id'], 'actor-1');
+	check($failureReceipt['filename'] === $failurePrepared['canonical_filename'], 'Successful retry must produce the canonical WAV.');
+	try {
+		$leaf->get($failurePrepared['filename']);
+		throw new RuntimeException('Successfully canonicalized FLAC transport must be removed.');
+	} catch (OCP\Files\NotFoundException) {
+	}
+
+	// TEST-FLAC-05: A canonical collision must reject the transport
 	// the temporary uploaded FLAC rather than leaving an orphaned remote file.
 	$conflictPrepared = $c->prepare(
 		'prod-1',
@@ -498,11 +550,7 @@ namespace {
 	} catch (\RuntimeException $error) {
 		check($error->getMessage() === 'artifact_manifest_conflict', 'Unexpected canonical collision error: ' . $error->getMessage());
 	}
-	try {
-		$leaf->get($conflictPrepared['filename']);
-		throw new \RuntimeException('Failed FLAC canonicalization must not leave the uploaded transport file behind.');
-	} catch (\OCP\Files\NotFoundException) {
-	}
+	check($leaf->get($conflictPrepared['filename']) instanceof File, 'Verified FLAC transport must remain available after canonicalization collision.');
 
 	$prepared = $c->prepare(
 		'prod-1',
