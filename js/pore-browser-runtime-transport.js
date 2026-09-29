@@ -235,6 +235,7 @@
 		isRecoverableVerificationFailure(error) {
 			return [
 				'artifact_manifest_context_missing',
+				'artifact_manifest_storage_unavailable',
 				'transport_artifact_missing',
 				'transport_handle_invalid',
 			].includes(error?.code || error?.error_code)

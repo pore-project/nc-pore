@@ -418,6 +418,7 @@ final class NextcloudArtifactConnector {
 			'sha256' => strtolower((string)$decoded['sha256']),
 			'remote_size' => $remoteSize === null ? null : (int)$remoteSize,
 			'remote_sha256' => $remoteSha256 === null ? null : strtolower((string)$remoteSha256),
+			'remote_is_transport' => (bool)($decoded['remote_is_transport'] ?? false),
 			'actor_user_id' => (string)$decoded['actor_user_id'],
 			'upload_required' => $decoded['upload_required'],
 		];

@@ -172,7 +172,7 @@
 			return reset
 		}
 
-				async updateTransportState(captureId, patch) {
+		async updateTransportState(captureId, patch) {
 			const store = this._store()
 			const stored = await store.getCapture(captureId)
 			if (!stored) throw new Error(`PoRE transport capture not found: ${captureId}`)
