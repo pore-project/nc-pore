@@ -3,9 +3,17 @@
 	'use strict'
 
 	const DB_NAME = 'nc-pore-recordings'
-	const DB_VERSION = 2
+	const DB_VERSION = 3
 	const MANIFEST_STORE = 'manifests'
 	const CHUNK_STORE = 'chunks'
+	const FINALIZED_CHUNK_STORE = 'finalizedChunks'
+	const FINALIZATION_LEASE_MS = 5 * 60 * 1000
+
+	function finalizationError(code, message) {
+		const error = new Error(message)
+		error.code = code
+		return error
+	}
 
 	class PoREBrowserPcmPersistenceStore {
 		constructor({ indexedDBFactory = window.indexedDB, dbName = DB_NAME, keyRangeFactory = window.IDBKeyRange } = {}) {
@@ -30,10 +38,13 @@
 						chunks = db.createObjectStore(CHUNK_STORE, { keyPath: ['captureId', 'index'] })
 					}
 					if (!chunks.indexNames.contains('captureId')) chunks.createIndex('captureId', 'captureId', { unique: false })
+					if (!db.objectStoreNames.contains(FINALIZED_CHUNK_STORE)) db.createObjectStore(FINALIZED_CHUNK_STORE, { keyPath: ['captureId', 'index'] })
+					const finalizedChunks = request.transaction.objectStore(FINALIZED_CHUNK_STORE)
+					if (!finalizedChunks.indexNames.contains('captureId')) finalizedChunks.createIndex('captureId', 'captureId', { unique: false })
 				}
 				request.onsuccess = () => {
 					const db = request.result
-					if (!db.objectStoreNames.contains(MANIFEST_STORE) || !db.objectStoreNames.contains(CHUNK_STORE)) {
+					if (!db.objectStoreNames.contains(MANIFEST_STORE) || !db.objectStoreNames.contains(CHUNK_STORE) || !db.objectStoreNames.contains(FINALIZED_CHUNK_STORE)) {
 						db.close()
 						reject(new Error('PoRE IndexedDB schema is incomplete'))
 						return
@@ -108,7 +119,8 @@
 			const db = await this._database()
 			const manifest = await this._get(db, MANIFEST_STORE, captureId)
 			if (!manifest) return null
-			const chunks = await this._getChunks(db, captureId)
+			const chunkStore = manifest.storageFormat === 'flac' ? FINALIZED_CHUNK_STORE : CHUNK_STORE
+			const chunks = await this._getChunks(db, chunkStore, captureId)
 			const expectedIndexes = Array.from({ length: Math.max(0, manifest.lastChunkIndex + 1) }, (_, index) => index)
 			const actualIndexes = chunks.map(chunk => chunk.index)
 			if (actualIndexes.length !== expectedIndexes.length || actualIndexes.some((index, position) => index !== expectedIndexes[position])) {
@@ -130,14 +142,262 @@
 
 		async removeCapture(captureId) {
 			const db = await this._database()
-			const chunks = await this._getChunks(db, captureId)
-			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE], 'readwrite', transaction => {
+			const [pcmChunks, finalizedChunks] = await Promise.all([
+				this._getChunks(db, CHUNK_STORE, captureId),
+				this._getChunks(db, FINALIZED_CHUNK_STORE, captureId),
+			])
+			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE, FINALIZED_CHUNK_STORE], 'readwrite', transaction => {
 				transaction.objectStore(MANIFEST_STORE).delete(captureId)
-				for (const chunk of chunks) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])
+				for (const chunk of pcmChunks) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])
+				for (const chunk of finalizedChunks) transaction.objectStore(FINALIZED_CHUNK_STORE).delete([captureId, chunk.index])
 			})
 		}
 
-		async _sha256(blob) {
+		async getFinalizedPayload(captureId) {
+			const db = await this._database()
+			const manifest = await this._get(db, MANIFEST_STORE, captureId)
+			if (!manifest || manifest.status !== 'finalized') return null
+			const chunks = await this._getChunks(db, FINALIZED_CHUNK_STORE, captureId)
+			await this._assertFinalizedChunkIntegrity(manifest, chunks, captureId)
+			return { manifest, chunks: chunks.map(chunk => chunk.payload) }
+		}
+
+		async beginFinalizedPayload(captureId, ownerId, leaseMs = FINALIZATION_LEASE_MS) {
+			if (!captureId || !ownerId) throw finalizationError('finalization_owner_required', 'PoRE FLAC finalization requires a unique owner id')
+			if (!Number.isInteger(leaseMs) || leaseMs <= 0) throw new Error('PoRE FLAC finalization lease must be positive')
+			const db = await this._database()
+			let result = { acquired: false, committed: false, busy: false }
+			await this._transaction(db, [MANIFEST_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const chunkStore = transaction.objectStore(FINALIZED_CHUNK_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest || manifest.status !== 'finalized') {
+						abort(new Error('PoRE finalized payload requires finalized capture: ' + captureId))
+						return
+					}
+					if (manifest.storageFormat === 'flac') {
+						result = { acquired: false, committed: true, busy: false }
+						return
+					}
+					const current = manifest.finalization
+					const leaseUntil = typeof current?.leaseUntil === 'string' ? Date.parse(current.leaseUntil) : NaN
+					if (current?.ownerId && current.ownerId !== ownerId && Number.isFinite(leaseUntil) && leaseUntil > Date.now()) {
+						result = { acquired: false, committed: false, busy: true }
+						return
+					}
+					const cursorRequest = chunkStore.index('captureId').openCursor(this.keyRangeFactory.only(captureId))
+					cursorRequest.onsuccess = () => {
+						const cursor = cursorRequest.result
+						if (cursor) {
+							cursor.delete()
+							cursor.continue()
+							return
+						}
+						manifest.finalizedChunkCount = 0
+						manifest.finalization = { ownerId, leaseUntil: new Date(Date.now() + leaseMs).toISOString() }
+						manifest.updatedAt = new Date().toISOString()
+						manifestStore.put(manifest)
+						result = { acquired: true, committed: false, busy: false }
+					}
+					cursorRequest.onerror = () => abort(cursorRequest.error || new Error('PoRE finalized payload staging cleanup failed: ' + captureId))
+				}
+				manifestRequest.onerror = () => abort(manifestRequest.error || new Error('PoRE finalized payload lookup failed: ' + captureId))
+			})
+			return result
+		}
+
+		async renewFinalizedPayload(captureId, ownerId, leaseMs = FINALIZATION_LEASE_MS) {
+			if (!captureId || !ownerId) throw finalizationError('finalization_owner_required', 'PoRE FLAC finalization requires a unique owner id')
+			if (!Number.isInteger(leaseMs) || leaseMs <= 0) throw new Error('PoRE FLAC finalization lease must be positive')
+			const db = await this._database()
+			await this._transaction(db, MANIFEST_STORE, 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const request = manifestStore.get(captureId)
+				request.onsuccess = () => {
+					const manifest = request.result
+					if (!manifest || manifest.status !== 'finalized') {
+						abort(new Error('PoRE finalized payload requires finalized capture: ' + captureId))
+						return
+					}
+					if (manifest.storageFormat === 'flac') return
+					if (manifest.finalization?.ownerId !== ownerId) {
+						abort(finalizationError('finalization_owner_conflict', 'PoRE FLAC finalization ownership was lost: ' + captureId))
+						return
+					}
+					manifest.finalization.leaseUntil = new Date(Date.now() + leaseMs).toISOString()
+					manifest.updatedAt = new Date().toISOString()
+					manifestStore.put(manifest)
+				}
+				request.onerror = () => abort(request.error || new Error('PoRE finalized payload lookup failed: ' + captureId))
+			})
+		}
+
+		async clearFinalizedPayload(captureId, ownerId = null) {
+			const db = await this._database()
+			await this._transaction(db, [MANIFEST_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const chunkStore = transaction.objectStore(FINALIZED_CHUNK_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest) return
+					if (manifest.storageFormat === 'flac') {
+						abort(finalizationError('finalization_already_committed', 'PoRE finalized payload is already committed: ' + captureId))
+						return
+					}
+					const currentOwner = manifest.finalization?.ownerId ?? null
+					if (currentOwner !== ownerId) {
+						abort(finalizationError('finalization_owner_conflict', 'PoRE FLAC finalization ownership was lost: ' + captureId))
+						return
+					}
+					const cursorRequest = chunkStore.index('captureId').openCursor(this.keyRangeFactory.only(captureId))
+					cursorRequest.onsuccess = () => {
+						const cursor = cursorRequest.result
+						if (cursor) {
+							cursor.delete()
+							cursor.continue()
+							return
+						}
+						manifest.finalizedChunkCount = 0
+						delete manifest.finalization
+						manifest.updatedAt = new Date().toISOString()
+						manifestStore.put(manifest)
+					}
+					cursorRequest.onerror = () => abort(cursorRequest.error || new Error('PoRE finalized payload staging cleanup failed: ' + captureId))
+				}
+				manifestRequest.onerror = () => abort(manifestRequest.error || new Error('PoRE finalized payload lookup failed: ' + captureId))
+			})
+		}
+
+		async replaceFinalizedChunk(captureId, index, payload, ownerId) {
+			if (!captureId) throw new Error('PoRE finalized chunk requires captureId')
+			if (!Number.isInteger(index) || index < 0) throw new Error('PoRE finalized chunk requires a non-negative index')
+			const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'application/octet-stream' })
+			const sha256 = await this._sha256(blob)
+			const db = await this._database()
+			await this._transaction(db, [MANIFEST_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const chunkStore = transaction.objectStore(FINALIZED_CHUNK_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest || manifest.status !== 'finalized') {
+						abort(new Error('PoRE finalized payload requires finalized capture: ' + captureId))
+						return
+					}
+					if (manifest.storageFormat === 'flac') {
+						abort(finalizationError('finalization_already_committed', 'PoRE finalized payload is already committed: ' + captureId))
+						return
+					}
+					if (!this._assertFinalizationOwner(manifest, captureId, ownerId, abort)) return
+					const existingRequest = chunkStore.get([captureId, index])
+					existingRequest.onsuccess = () => {
+						if (!existingRequest.result) {
+							abort(new Error('PoRE finalized chunk to replace was not found: ' + captureId + '/' + index))
+							return
+						}
+						chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
+						manifest.updatedAt = new Date().toISOString()
+						manifestStore.put(manifest)
+					}
+					existingRequest.onerror = () => abort(existingRequest.error || new Error('PoRE finalized chunk lookup failed: ' + captureId + '/' + index))
+				}
+				manifestRequest.onerror = () => abort(manifestRequest.error || new Error('PoRE finalized payload lookup failed: ' + captureId))
+			})
+		}
+
+		async appendFinalizedChunk(captureId, index, payload, ownerId) {
+			if (!captureId) throw new Error('PoRE finalized chunk requires captureId')
+			if (!Number.isInteger(index) || index < 0) throw new Error('PoRE finalized chunk requires a non-negative index')
+			const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'application/octet-stream' })
+			const sha256 = await this._sha256(blob)
+			const db = await this._database()
+			await this._transaction(db, [MANIFEST_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const chunkStore = transaction.objectStore(FINALIZED_CHUNK_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const manifest = manifestRequest.result
+					if (!manifest || manifest.status !== 'finalized') {
+						abort(new Error('PoRE finalized payload requires finalized capture: ' + captureId))
+						return
+					}
+					if (manifest.storageFormat === 'flac') {
+						abort(finalizationError('finalization_already_committed', 'PoRE finalized payload is already committed: ' + captureId))
+						return
+					}
+					if (!this._assertFinalizationOwner(manifest, captureId, ownerId, abort)) return
+					const expectedIndex = Number.isInteger(manifest.finalizedChunkCount) ? manifest.finalizedChunkCount : 0
+					if (index > expectedIndex) {
+						abort(new Error('PoRE finalized chunk gap detected: ' + captureId + '/' + index))
+						return
+					}
+					if (index < expectedIndex) {
+						const existingRequest = chunkStore.get([captureId, index])
+						existingRequest.onsuccess = () => {
+							const existing = existingRequest.result
+							if (!existing || existing.size !== blob.size || existing.sha256 !== sha256) abort(new Error('PoRE finalized chunk conflict detected: ' + captureId + '/' + index))
+						}
+						existingRequest.onerror = () => abort(existingRequest.error || new Error('PoRE finalized chunk lookup failed: ' + captureId + '/' + index))
+						return
+					}
+					manifest.finalizedChunkCount = expectedIndex + 1
+					manifest.updatedAt = new Date().toISOString()
+					chunkStore.put({ captureId, index, payload: blob, size: blob.size, sha256 })
+					manifestStore.put(manifest)
+				}
+				manifestRequest.onerror = () => abort(manifestRequest.error || new Error('PoRE finalized payload lookup failed: ' + captureId))
+			})
+		}
+
+		async commitFinalizedPayload(captureId, patch = {}, ownerId) {
+			const db = await this._database()
+			const [manifest, chunks] = await Promise.all([
+				this._get(db, MANIFEST_STORE, captureId),
+				this._getChunks(db, FINALIZED_CHUNK_STORE, captureId),
+			])
+			if (!manifest) throw new Error('PoRE capture manifest not found: ' + captureId)
+			if (manifest.status !== 'finalized') throw new Error('PoRE finalized payload requires finalized capture: ' + captureId)
+			if (manifest.storageFormat === 'flac') return manifest
+			await this._assertFinalizedChunkIntegrity(manifest, chunks, captureId)
+			const expectedSize = Number(patch.size)
+			const expectedSha256 = patch.payloadSha256
+			if (!Number.isInteger(expectedSize) || expectedSize <= 0 || typeof expectedSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(expectedSha256)) throw new Error('PoRE finalized payload commit requires exact size and SHA-256')
+			const actualSize = chunks.reduce((total, chunk) => total + chunk.size, 0)
+			if (actualSize !== expectedSize) throw new Error('PoRE finalized payload size mismatch: ' + captureId)
+			const actualSha256 = await this._sha256(new Blob(chunks.map(chunk => chunk.payload)))
+			if (actualSha256 !== expectedSha256.toLowerCase()) throw new Error('PoRE finalized payload SHA-256 mismatch: ' + captureId)
+
+			let result = null
+			await this._transaction(db, [MANIFEST_STORE, CHUNK_STORE, FINALIZED_CHUNK_STORE], 'readwrite', (transaction, abort) => {
+				const manifestStore = transaction.objectStore(MANIFEST_STORE)
+				const manifestRequest = manifestStore.get(captureId)
+				manifestRequest.onsuccess = () => {
+					const current = manifestRequest.result
+					if (!current) {
+						abort(new Error('PoRE capture manifest not found: ' + captureId))
+						return
+					}
+					if (current.storageFormat === 'flac') { result = current; return }
+					if (current.status !== 'finalized') {
+						abort(new Error('PoRE finalized payload requires finalized capture: ' + captureId))
+						return
+					}
+					if (!this._assertFinalizationOwner(current, captureId, ownerId, abort)) return
+					const finalized = { ...current, ...patch, storageFormat: 'flac', format: 'audio/flac', encoding: 'flac', chunkCount: chunks.length, lastChunkIndex: chunks.length - 1, finalizedChunkCount: chunks.length, updatedAt: new Date().toISOString() }
+					delete finalized.finalization
+					manifestStore.put(finalized)
+					for (const chunk of chunks) transaction.objectStore(CHUNK_STORE).delete([captureId, chunk.index])
+					result = finalized
+				}
+				manifestRequest.onerror = () => abort(manifestRequest.error || new Error('PoRE finalized payload lookup failed: ' + captureId))
+			})
+			return result
+		}
+
+				async _sha256(blob) {
 			if (!window.crypto?.subtle) throw new Error('PoRE durable browser preservation requires Web Crypto')
 			const digest = await window.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
 			return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')
@@ -147,11 +407,35 @@
 		_get(db, storeName, key) { return this._request(db, storeName, 'readonly', store => store.get(key)) }
 		_getAll(db, storeName) { return this._request(db, storeName, 'readonly', store => store.getAll()) }
 
-		_getChunks(db, captureId) {
-			return this._request(db, CHUNK_STORE, 'readonly', store => {
+		_getChunks(db, storeName, captureId) {
+			return this._request(db, storeName, 'readonly', store => {
 				const index = store.index('captureId')
 				return index.getAll(this.keyRangeFactory.only(captureId))
 			}).then(chunks => chunks.sort((a, b) => a.index - b.index))
+		}
+
+		_assertFinalizationOwner(manifest, captureId, ownerId, abort) {
+			if (!ownerId || manifest.finalization?.ownerId !== ownerId) {
+				abort(finalizationError('finalization_owner_conflict', 'PoRE FLAC finalization ownership was lost: ' + captureId))
+				return false
+			}
+			const leaseUntil = typeof manifest.finalization?.leaseUntil === 'string' ? Date.parse(manifest.finalization.leaseUntil) : NaN
+			if (!Number.isFinite(leaseUntil) || leaseUntil <= Date.now()) {
+				abort(finalizationError('finalization_lease_expired', 'PoRE FLAC finalization lease expired: ' + captureId))
+				return false
+			}
+			return true
+		}
+
+		async _assertFinalizedChunkIntegrity(manifest, chunks, captureId) {
+			const expectedCount = Number.isInteger(manifest.finalizedChunkCount) ? manifest.finalizedChunkCount : chunks.length
+			const expectedIndexes = Array.from({ length: Math.max(0, expectedCount) }, (_, index) => index)
+			const actualIndexes = chunks.map(chunk => chunk.index)
+			if (actualIndexes.length !== expectedIndexes.length || actualIndexes.some((index, position) => index !== expectedIndexes[position])) throw new Error(`PoRE finalized chunk continuity check failed: ${captureId}`)
+			for (const chunk of chunks) {
+				const actual = await this._sha256(chunk.payload)
+				if (actual !== chunk.sha256) throw new Error(`PoRE finalized chunk payload integrity check failed: ${captureId}/${chunk.index}`)
+			}
 		}
 
 		_request(db, storeName, mode, operation) {

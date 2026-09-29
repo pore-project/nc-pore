@@ -126,6 +126,37 @@ describe('Browser runtime transport', () => {
 		expect(fetchMock.mock.calls[4][0]).toContain('/second-token/Host%20(2).wav')
 	})
 
+	it('reuses an identical pre-existing FLAC transport after an upload collision', async () => {
+		const flacDescriptor = { ...descriptor, format: 'audio/flac', encoding: 'flac', blob: new Blob([new Uint8Array(44)], { type: 'audio/flac' }) }
+		const job = completionJob()
+		const fetchMock = jest.fn()
+		fetchMock
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'prepared', transfer_id: 'first-flac-handle', upload_url: '/public.php/dav/files/first-token', upload_username: 'anonymous', upload_password: 'secret-1', filename: 'Host.flac', upload_required: true, payload_format: 'audio/flac', canonical_filename: 'Host.wav',
+			} } }) })
+			.mockResolvedValueOnce({ ok: false, status: 412, json: async () => ({}) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: { status: 'closed' } } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'prepared', transfer_id: 'reused-flac-handle', upload_url: '', upload_username: '', upload_password: '', filename: 'Host.flac', upload_required: false, payload_format: 'audio/flac', canonical_filename: 'Host.wav',
+			} } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: {
+				status: 'verified', artifact_id: 'capture-1', file_id: 44, path: 'audio/Host.wav', size: 44, sha256: 'a'.repeat(64),
+			} } }) })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ocs: { data: { status: 'closed' } } }) })
+		global.fetch = fetchMock
+
+		const transport = new Transport({ completionJob: job })
+		const receipt = await transport.transfer(flacDescriptor)
+
+		expect(receipt.file_id).toBe(44)
+		expect(fetchMock).toHaveBeenCalledTimes(6)
+		expect(fetchMock.mock.calls[1][1].headers['If-None-Match']).toBe('*')
+		expect(fetchMock.mock.calls[3][0]).toContain('/finalized-artifact/prepare')
+		expect(fetchMock.mock.calls[3][1].body).toContain('canonical_filename_hint=Host.wav')
+		expect(fetchMock.mock.calls[4][0]).toContain('/finalized-artifact/verify')
+		expect(fetchMock.mock.calls[5][0]).toContain('/finalized-artifact/close')
+	})
+
 	it('returns the stored receipt without repeating work after completion', async () => {
 		const receipt = { status: 'verified', artifact_id: 'capture-1', file_id: 42, size: 44, sha256: 'a'.repeat(64) }
 		const job = completionJob({ status: 'completed', receipt })

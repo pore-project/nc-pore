@@ -5,6 +5,26 @@ declare(strict_types=1);
 namespace OCA\PoRe\AppInfo {
 	final class Application { public const APP_ID = 'pore'; }
 }
+namespace OCA\PoRe\Service {
+	class RecordingRuntimeService {
+		public static string $convertedPayload = '';
+		public static ?int $lastTimeoutSeconds = null;
+		public function command(array $command, string $operation, int $timeoutSeconds = 10): array {
+			self::$lastTimeoutSeconds = $timeoutSeconds;
+			if ($operation !== 'artifact.convert_flac_to_wav') throw new \RuntimeException('Unexpected runtime operation.');
+			if (!isset($command['output_path'])) throw new \RuntimeException('Missing output path.');
+			if (file_put_contents($command['output_path'], self::$convertedPayload) === false) throw new \RuntimeException('Unable to write fake runtime output.');
+			return [
+				'status' => 'converted',
+				'sample_rate_hz' => 48000,
+				'channels' => 1,
+				'bits_per_sample' => 24,
+				'sample_count' => intdiv(max(0, strlen(self::$convertedPayload) - 44), 3),
+				'payload_length' => strlen(self::$convertedPayload),
+			];
+		}
+	}
+}
 namespace OCA\PoRe\Controller {
 	final class ProductionController {
 		public static function ownerKey(string $productionId): string { return 'production_owner_' . $productionId; }
@@ -26,6 +46,10 @@ namespace OCP\Files {
 		public function getSize(): int { return strlen($this->content); }
 		public function getName(): string { return $this->name; }
 
+		public function delete(): void {
+			$this->getParent()->remove($this->name);
+		}
+
 		public function setParent(?Folder $parent, string $name): void {
 			$this->parent = $parent;
 			$this->name = $name;
@@ -46,10 +70,16 @@ namespace OCP\Files {
 		public function getPath(): string {
 			return rtrim($this->getParent()->getPath(), '/') . '/' . $this->name;
 		}
+
+		public function move(string $targetPath): File {
+			$this->getParent()->moveFile($this, basename($targetPath));
+			return $this;
+		}
 	}
 
 	class Folder {
 		private array $children = [];
+		public bool $rejectMoves = false;
 		private array $filesById = [];
 		public int $fileIdLookupCalls = 0;
 
@@ -60,10 +90,23 @@ namespace OCP\Files {
 			return $this->children[$name];
 		}
 
+		public function moveFile(File $file, string $name): void {
+			if ($this->rejectMoves) throw new \RuntimeException('fake_move_failed');
+			if (array_key_exists($name, $this->children)) throw new \RuntimeException('fake_target_exists');
+			$this->remove($file->getName());
+			$this->add($name, $file);
+		}
+
 		public function newFolder(string $name): Folder {
 			$folder = new Folder(rtrim($this->path, '/') . '/' . $name);
 			$this->children[$name] = $folder;
 			return $folder;
+		}
+
+		public function newFile(string $name): File {
+			$file = new WritableFile(1000 + count($this->children), $name);
+			$this->add($name, $file);
+			return $file;
 		}
 
 		public function add(string $name, object $node): void {
@@ -97,6 +140,32 @@ namespace OCP\Files {
 
 		public function getPath(): string { return $this->path; }
 	}
+
+	class WritableFile extends File {
+		private string $path;
+
+		public function __construct(int $id, string $name) {
+			parent::__construct($id, '', $name);
+			$this->path = tempnam(sys_get_temp_dir(), 'pore-contract-file-');
+		}
+
+		public function getSize(): int {
+			clearstatcache(true, $this->path);
+			return (int)(filesize($this->path) ?: 0);
+		}
+
+		public function fopen(string $mode) {
+			$normalized = str_starts_with($mode, 'w') ? 'w+b' : 'rb';
+			$stream = fopen($this->path, $normalized);
+			if ($stream === false) throw new RuntimeException('Unable to open fake writable file.');
+			return $stream;
+		}
+
+		public function __destruct() {
+			@unlink($this->path);
+		}
+	}
+
 	class IRootFolder {}
 }
 namespace OCP\Security {
@@ -110,6 +179,14 @@ namespace OCP\Share {
 }
 namespace OCP\Share\Exceptions {
 	class ShareNotFound extends \RuntimeException {}
+}
+namespace OCP\Lock {
+	interface ILockingProvider {
+		public const LOCK_SHARED = 1;
+		public const LOCK_EXCLUSIVE = 2;
+		public function acquireLock(string $path, int $type): void;
+		public function releaseLock(string $path, int $type): void;
+	}
 }
 namespace {
 	require_once __DIR__ . '/../lib/Service/NextcloudArtifactPath.php';
@@ -205,8 +282,16 @@ namespace {
 		public function generate(int $length, string $characterSet): string { return 'token-' . (++$this->counter); }
 	}
 
-	function connector(FakeRootFolder $root, FakeShareManager $shares): NextcloudArtifactConnector {
-		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom());
+	final class FakeLockingProvider implements \OCP\Lock\ILockingProvider {
+		public int $acquireCalls = 0;
+		public int $releaseCalls = 0;
+		public function acquireLock(string $path, int $type): void { $this->acquireCalls++; }
+		public function releaseLock(string $path, int $type): void { $this->releaseCalls++; }
+	}
+
+	function connector(FakeRootFolder $root, FakeShareManager $shares, ?FakeLockingProvider $locks = null): NextcloudArtifactConnector {
+		$locks ??= new FakeLockingProvider();
+		return new NextcloudArtifactConnector($root, new FakeConfig(), $shares, new FakeRandom(), $locks, new \OCA\PoRe\Service\RecordingRuntimeService());
 	}
 
 	function wav(string $pcm, int $sampleRate = 48000, int $channels = 1, int $bits = 24): string {
@@ -238,7 +323,8 @@ namespace {
 	$leaf->add('Host.wav', $host);
 
 	$shares = new FakeShareManager();
-	$c = connector($root, $shares);
+	$locks = new FakeLockingProvider();
+	$c = connector($root, $shares, $locks);
 
 	$prepared = $c->prepare('prod-1', 'Interview', 'recording-1', 'capture-1', '2026-09-05T15:42:31+02:00', 'Host', strlen($wav), hash('sha256', $wav), 'actor-1');
 	check($prepared['filename'] === 'Host.wav', 'Identical artifact must retain the original filename.');
@@ -324,12 +410,237 @@ namespace {
 	}
 
 	$leaf->add('Host.wav', new File(21, 'occupied', 'Host.wav'));
+
+	// TEST-04: FLAC is transport-only; the uploaded FLAC is verified by its
+	// transport hash and then converted into the canonical WAV Artifact.
+	$canonicalWav = wav("\x00\x00\x00");
+\OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = $canonicalWav;
+	$flacPayload = base64_decode('ZkxhQwAAACIQABAAAAATAAATC7gBcAAAAAMhBpBwZIs2WggRQqoY7t/kAwAAEgAAAAAAAAAAAAAAAAAAAAAAA4QAACggAAAAcmVmZXJlbmNlIGxpYkZMQUMgMS41LjAgMjAyNTAyMTEAAAAA//hqDAACggIAAAB///+AAAC3fA==', true);
+	check($flacPayload !== false, 'FLAC fixture must decode from base64.');
+	$prepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	check($prepared['payload_format'] === 'audio/flac', 'FLAC prepare must expose the transport payload format.');
+	check($prepared['filename'] === 'Host (2).flac', 'FLAC transport must use a distinct .flac filename.');
+	check($prepared['canonical_filename'] === 'Host (2).wav', 'FLAC transport must retain the canonical .wav filename.');
+	check($prepared['upload_required'] === true, 'Fresh FLAC transport must require an upload.');
+
+	$uploadedFlac = new File(30, $flacPayload, 'Host (2).flac');
+	$leaf->add('Host (2).flac', $uploadedFlac);
+	$receipt = $c->verify($prepared['transfer_id'], 'actor-1');
+	check($receipt['filename'] === 'Host (2).wav', 'FLAC verification must return the canonical WAV artifact.');
+	check($receipt['size'] === strlen($canonicalWav), 'Canonical WAV size must come from the converted artifact.');
+	check($receipt['sha256'] === hash('sha256', $canonicalWav), 'Canonical WAV hash must be distinct from the FLAC transport hash.');
+	check($receipt['preservation']['encoding'] === 'pcm_s24le', 'Converted canonical artifact must satisfy the V1 PCM preservation contract.');
+	check(\OCA\PoRe\Service\RecordingRuntimeService::$lastTimeoutSeconds === 900, 'FLAC conversion must use the long-running runtime timeout.');
+	$canonicalId = $receipt['file_id'];
+
+	$c->close($prepared['transfer_id'], 'actor-1');
+
+	// TEST-FLAC-02: Reusing an identical pre-existing FLAC transport must
+	// converge on the existing canonical WAV without a second upload.
+	$reusedTransport = new File(30, $flacPayload, 'Host (2).flac');
+	$leaf->add('Host (2).flac', $reusedTransport);
+	$reused = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+		'Host (2).wav',
+	);
+	check($reused['upload_required'] === false, 'An identical pre-existing FLAC transport must be reusable.');
+	check($reused['filename'] === 'Host (2).flac', 'FLAC recovery must reuse the interrupted transport filename.');
+	$reusedReceipt = $c->verify($reused['transfer_id'], 'actor-1');
+	check($reusedReceipt['file_id'] === $canonicalId, 'Recovered FLAC transport must converge on the existing canonical WAV.');
+	try {
+		$leaf->get('Host (2).flac');
+		throw new \RuntimeException('Reused FLAC transport must be removed after successful canonicalization.');
+	} catch (\OCP\Files\NotFoundException) {
+	}
+
+	// TEST-FLAC-03: If manifest persistence was lost after canonicalization,
+	// the browser-provided canonical filename hint restores the exact naming
+	// decision without creating another canonical artifact.
+	$hinted = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+		'Host (2).wav',
+	);
+	check($hinted['canonical_filename'] === 'Host (2).wav', 'Canonical filename hint must be honored during FLAC recovery.');
+	check($hinted['filename'] === 'Host (2).flac', 'Canonical filename hint must derive the paired FLAC transport name.');
+	$leaf->add('Host (2).flac', new File(33, $flacPayload, 'Host (2).flac'));
+	$hintReceipt = $c->verify($hinted['transfer_id'], 'actor-1');
+	check($hintReceipt['file_id'] === $canonicalId, 'Canonical filename recovery must reuse the existing WAV after manifest persistence loss.');
+	try {
+		$leaf->get('Host (2).flac');
+		throw new \RuntimeException('Recovered FLAC transport must be removed after canonicalization.');
+	} catch (\OCP\Files\NotFoundException) {
+	}
+
+
+
+	// TEST-FLAC-04: A transport that has already passed remote size/hash
+	// verification remains available when FLAC->WAV canonicalization fails.
+	$failurePrepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-7',
+		'capture-7',
+		'2026-09-05T15:42:31+00:00',
+		'Fallback',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	check($failurePrepared['upload_required'] === true, 'Fresh fallback FLAC transport must require an upload.');
+	$failureTransport = new File(34, $flacPayload, $failurePrepared['filename']);
+	$leaf->add($failurePrepared['filename'], $failureTransport);
+	OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = '';
+	try {
+		$c->verify($failurePrepared['transfer_id'], 'actor-1');
+		throw new RuntimeException('Invalid FLAC conversion result must be rejected.');
+	} catch (RuntimeException $error) {
+		check($error->getMessage() === 'artifact_preservation_invalid', 'Unexpected FLAC conversion failure: ' . $error->getMessage());
+	}
+	check($leaf->get($failurePrepared['filename']) instanceof File, 'Verified FLAC transport must remain after canonicalization failure.');
+
+	OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = $canonicalWav;
+	$failureRetry = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-7',
+		'capture-7',
+		'2026-09-05T15:42:31+00:00',
+		'Fallback',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+		$failurePrepared['canonical_filename'],
+	);
+	check($failureRetry['upload_required'] === false, 'Retry must reuse the verified FLAC transport without another upload.');
+	check($failureRetry['filename'] === $failurePrepared['filename'], 'Retry must reuse the original FLAC transport filename.');
+	$failureReceipt = $c->verify($failureRetry['transfer_id'], 'actor-1');
+	check($failureReceipt['filename'] === $failurePrepared['canonical_filename'], 'Successful retry must produce the canonical WAV.');
+	try {
+		$leaf->get($failurePrepared['filename']);
+		throw new RuntimeException('Successfully canonicalized FLAC transport must be removed.');
+	} catch (OCP\Files\NotFoundException) {
+	}
+
+	// TEST-FLAC-06: A failed canonical move must leave no final target while
+	// retaining the already verified FLAC transport.
+	$publishPrepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-8',
+		'capture-8',
+		'2026-09-05T15:42:31+00:00',
+		'PublishFailure',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	$publishTransport = new File(35, $flacPayload, $publishPrepared['filename']);
+	$leaf->add($publishPrepared['filename'], $publishTransport);
+	\OCA\PoRe\Service\RecordingRuntimeService::$convertedPayload = $canonicalWav;
+	$leaf->rejectMoves = true;
+	try {
+		$c->verify($publishPrepared['transfer_id'], 'actor-1');
+		throw new RuntimeException('Expected canonical publish failure.');
+	} catch (RuntimeException $error) {
+		check($error->getMessage() === 'artifact_preservation_invalid', 'Canonical publish failure must use the transport preservation error contract.');
+	}
+	try {
+		$leaf->get($publishPrepared['canonical_filename']);
+		throw new RuntimeException('Failed canonical publication must not leave the final target.');
+	} catch (OCP\Files\NotFoundException) {
+	}
+	check($leaf->get($publishPrepared['filename']) instanceof File, 'Verified FLAC must remain after publication failure.');
+	check($locks->acquireCalls === $locks->releaseCalls, 'Canonical publication lock must always be released.');
+	$leaf->rejectMoves = false;
+
+	// TEST-FLAC-05: A canonical collision must reject the transport
+	// the temporary uploaded FLAC rather than leaving an orphaned remote file.
+	$conflictPrepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-6',
+		'capture-6',
+		'2026-09-05T15:42:31+00:00',
+		'Guest',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	$leaf->add($conflictPrepared['filename'], new File(31, $flacPayload, $conflictPrepared['filename']));
+	$leaf->add($conflictPrepared['canonical_filename'], new File(32, wav("\x09\x09\x09"), $conflictPrepared['canonical_filename']));
+	try {
+		$c->verify($conflictPrepared['transfer_id'], 'actor-1');
+		throw new \RuntimeException('Canonical collision must be rejected.');
+	} catch (\RuntimeException $error) {
+		check($error->getMessage() === 'artifact_manifest_conflict', 'Unexpected canonical collision error: ' . $error->getMessage());
+	}
+	check($leaf->get($conflictPrepared['filename']) instanceof File, 'Verified FLAC transport must remain available after canonicalization collision.');
+
+	$prepared = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload) + 7,
+		hash('sha256', $flacPayload . 'changed'),
+		'actor-1',
+		$canonicalId,
+		'audio/flac',
+	);
+	check($prepared['upload_required'] === false, 'An existing canonical WAV must be reusable without re-upload for FLAC transport.');
+	check($prepared['filename'] === 'Host (2).wav', 'Canonical File-ID reuse must retain the current WAV filename.');
+	check($prepared['canonical_filename'] === 'Host (2).wav', 'Existing canonical reuse must expose the WAV canonical name.');
+	check($prepared['payload_format'] === 'audio/flac', 'Canonical reuse must retain the requested FLAC transport format.');
+
+	$sharesCreatedBeforeCollision = $shares->created;
 	$leaf->add('Host (2).wav', new File(18, 'occupied', 'Host (2).wav'));
 	$payload = wav("\x01\x02\x03");
 	$prepared = $c->prepare('prod-1', 'Interview', 'recording-2', 'capture-2', '2026-09-05T15:42:31+02:00', 'Host', strlen($payload), hash('sha256', $payload), 'actor-1');
 	check($prepared['filename'] === 'Host (3).wav', 'Differing content must select the first free numeric suffix.');
 	check($prepared['upload_required'] === true, 'Differing content must require an upload.');
-	check($shares->created === 1, 'Differing content must create exactly one upload share.');
+	check($shares->created === $sharesCreatedBeforeCollision + 1, 'Differing content must create exactly one additional upload share.');
 
 	echo "Nextcloud artifact collision contract checks passed.\n";
 }

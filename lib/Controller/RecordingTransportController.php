@@ -40,6 +40,8 @@ final class RecordingTransportController extends OCSController {
 		string $payload_sha256,
 		string $recording_session_id,
 		string $capture_provenance = '{}',
+		string $payload_format = 'audio/wav',
+		?string $canonical_filename_hint = null,
 	): DataResponse {
 		try {
 			$actorId = $this->talkSessionAccess->resolve($production_id)['actor_id'];
@@ -72,6 +74,8 @@ final class RecordingTransportController extends OCSController {
 				$this->required($payload_sha256, 'payload_sha256'),
 				$actorId,
 				$preferredFileId,
+				$payload_format,
+				$canonical_filename_hint,
 			);
 
 			$staged = $this->stageArtifact(
@@ -148,6 +152,7 @@ final class RecordingTransportController extends OCSController {
 							$this->required($payload_sha256, 'payload_sha256'),
 							$actorId,
 							$replacementFileId,
+							$payload_format,
 						);
 					}
 				} else {
@@ -171,6 +176,7 @@ final class RecordingTransportController extends OCSController {
 						$this->required($payload_sha256, 'payload_sha256'),
 						$actorId,
 						$verifiedFileId,
+						$payload_format,
 					);
 				}
 			}
@@ -183,6 +189,8 @@ final class RecordingTransportController extends OCSController {
 				'upload_username' => $prepared['upload_username'],
 				'upload_password' => $prepared['upload_password'],
 				'filename' => $prepared['filename'],
+				'canonical_filename' => $prepared['canonical_filename'] ?? $prepared['filename'],
+				'payload_format' => $prepared['payload_format'] ?? $payload_format,
 				'size' => $prepared['size'],
 				'sha256' => $prepared['sha256'],
 				'upload_required' => $prepared['upload_required'],
@@ -277,9 +285,13 @@ final class RecordingTransportController extends OCSController {
 			'recording_session_id' => $this->required($recordingSessionId, 'recording_session_id'),
 			'participant_label' => $participantLabel,
 			'target_user_id' => $prepared['target_user_id'] ?? null,
-			'filename' => $prepared['filename'] ?? null,
-			'size' => $prepared['size'] ?? null,
-			'payload_sha256' => $prepared['sha256'] ?? null,
+			'filename' => $prepared['canonical_filename'] ?? $prepared['filename'] ?? null,
+			'canonical_filename' => $prepared['canonical_filename'] ?? $prepared['filename'] ?? null,
+			'payload_format' => $prepared['payload_format'] ?? 'audio/wav',
+			'transport_size' => $prepared['size'] ?? null,
+			'transport_sha256' => $prepared['sha256'] ?? null,
+			'size' => $prepared['payload_format'] === 'audio/wav' ? ($prepared['size'] ?? null) : null,
+			'payload_sha256' => $prepared['payload_format'] === 'audio/wav' ? ($prepared['sha256'] ?? null) : null,
 			'capture_provenance' => $provenance,
 		]);
 	}
@@ -302,6 +314,7 @@ final class RecordingTransportController extends OCSController {
 			'PoRE transport authorization is not permitted for this recording' => $this->rejected('transport_unauthorized', 403),
 			'artifact_provenance_invalid' => $this->rejected('artifact_provenance_invalid', 400),
 			'artifact_manifest_invalid' => $this->rejected('artifact_manifest_invalid', 400),
+			'artifact_payload_format_invalid' => $this->rejected('artifact_payload_format_invalid', 400),
 			'artifact_manifest_conflict' => $this->rejected('artifact_manifest_conflict', 409),
 			'Nextcloud recorded artifact payload has changed.' => $this->rejected('artifact_manifest_conflict', 409),
 			default => $this->rejected(),

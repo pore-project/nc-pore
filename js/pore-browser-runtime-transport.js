@@ -79,7 +79,7 @@
 						if ((!this.isUploadCollision(error) && !this.isUploadAuthorizationFailure(error)) || uploadCollisionRetries >= 4) throw error
 						uploadCollisionRetries += 1
 						await this.close(state.transferId, descriptor.productionId).catch(() => {})
-						await this.prepare(descriptor)
+						await this.prepare(descriptor, state.canonicalFilename)
 						continue
 					}
 					await this.completionJob.updateTransportState(descriptor.captureId, {
@@ -99,7 +99,7 @@
 					} catch (error) {
 						if (recoveryAttempt === 0 && this.isRecoverableVerificationFailure(error)) {
 							await this.close(state.transferId, descriptor.productionId).catch(() => {})
-							await this.prepare(descriptor)
+							await this.prepare(descriptor, state.canonicalFilename)
 							return this._transferOnce(descriptor, 1)
 						}
 						throw error
@@ -145,7 +145,7 @@
 			}
 		}
 
-		async prepare(descriptor) {
+		async prepare(descriptor, canonicalFilenameHint = null) {
 			const form = new URLSearchParams()
 			form.set('production_id', descriptor.productionId)
 			form.set('production_label', descriptor.productionLabel || descriptor.productionId)
@@ -157,6 +157,8 @@
 			form.set('capture_provenance', JSON.stringify(descriptor.provenance || {}))
 			form.set('size', String(descriptor.size))
 			form.set('payload_sha256', descriptor.payloadSha256)
+			form.set('payload_format', descriptor.format || 'audio/wav')
+			if (canonicalFilenameHint) form.set('canonical_filename_hint', canonicalFilenameHint)
 			const body = await this.control('/ocs/v2.php/apps/pore/v1/recordings/finalized-artifact/prepare', form)
 			if (body?.status !== 'prepared') throw new Error(body?.error_code || 'PoRE transport preparation failed')
 			await this.completionJob.updateTransportState(descriptor.captureId, {
@@ -166,6 +168,8 @@
 				uploadUsername: body.upload_username,
 				uploadPassword: body.upload_password,
 				filename: body.filename,
+				canonicalFilename: body.canonical_filename || body.filename,
+				payloadFormat: body.payload_format || descriptor.format || 'audio/wav',
 				uploadRequired: body.upload_required !== false,
 				preparedAt: new Date().toISOString(),
 			})
@@ -231,6 +235,7 @@
 		isRecoverableVerificationFailure(error) {
 			return [
 				'artifact_manifest_context_missing',
+				'artifact_manifest_storage_unavailable',
 				'transport_artifact_missing',
 				'transport_handle_invalid',
 			].includes(error?.code || error?.error_code)

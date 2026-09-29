@@ -23,8 +23,9 @@ describe('Browser recording lifecycle', () => {
 				sampleRate: 48000,
 				channels: 1,
 				status: 'finalized',
+				storageFormat: 'flac',
 			},
-			chunks: [new Blob([new Uint8Array([0, 0, 0, 1, 2, 3])])],
+			chunks: [new Blob([new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0, 1, 2, 3])], { type: 'audio/flac' })],
 		}
 		const store = {
 			finalizeCapture: jest.fn(async (captureId, patch) => {
@@ -77,6 +78,8 @@ describe('Browser recording lifecycle', () => {
 			expect(ready[0].recordingId).toBe('recording-1')
 			expect(ready[0].recordingSessionId).toBe('session-1')
 			expect(ready[0].blob).toBeInstanceOf(Blob)
+			expect(ready[0].format).toBe('audio/flac')
+			expect(ready[0].encoding).toBe('flac')
 			expect(ready[0].payloadSha256).toMatch(/^[0-9a-f]{64}$/)
 			expect(transport.transfer).not.toHaveBeenCalled()
 		} finally {
