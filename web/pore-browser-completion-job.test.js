@@ -68,6 +68,7 @@ describe('Browser completion job', () => {
 		const store = {
 			clearFinalizedPayload: jest.fn(async () => { staged.length = 0 }),
 			appendFinalizedChunk: jest.fn(async (_captureId, index, payload) => { staged[index] = payload }),
+			getFinalizedPayload: jest.fn(async () => ({ manifest: {}, chunks: staged.filter(Boolean), chunkHashes: staged.filter(Boolean).map(() => 'b'.repeat(64)), chunkSizes: staged.filter(Boolean).map(chunk => chunk.size) })),
 			finalizeCapture: jest.fn(async (captureId, patch) => {
 				persisted.push({ captureId, patch })
 			}),
