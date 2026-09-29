@@ -41,6 +41,7 @@ final class RecordingTransportController extends OCSController {
 		string $recording_session_id,
 		string $capture_provenance = '{}',
 		string $payload_format = 'audio/wav',
+		?string $canonical_filename_hint = null,
 	): DataResponse {
 		try {
 			$actorId = $this->talkSessionAccess->resolve($production_id)['actor_id'];
@@ -74,6 +75,7 @@ final class RecordingTransportController extends OCSController {
 				$actorId,
 				$preferredFileId,
 				$payload_format,
+				$canonical_filename_hint,
 			);
 
 			$staged = $this->stageArtifact(

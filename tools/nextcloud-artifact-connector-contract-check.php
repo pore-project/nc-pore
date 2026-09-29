@@ -8,7 +8,9 @@ namespace OCA\PoRe\AppInfo {
 namespace OCA\PoRe\Service {
 	class RecordingRuntimeService {
 		public static string $convertedPayload = '';
-		public function command(array $command, string $operation): array {
+		public static ?int $lastTimeoutSeconds = null;
+		public function command(array $command, string $operation, int $timeoutSeconds = 10): array {
+			self::$lastTimeoutSeconds = $timeoutSeconds;
 			if ($operation !== 'artifact.convert_flac_to_wav') throw new \RuntimeException('Unexpected runtime operation.');
 			if (!isset($command['output_path'])) throw new \RuntimeException('Missing output path.');
 			if (file_put_contents($command['output_path'], self::$convertedPayload) === false) throw new \RuntimeException('Unable to write fake runtime output.');
@@ -410,10 +412,69 @@ namespace {
 	check($receipt['size'] === strlen($canonicalWav), 'Canonical WAV size must come from the converted artifact.');
 	check($receipt['sha256'] === hash('sha256', $canonicalWav), 'Canonical WAV hash must be distinct from the FLAC transport hash.');
 	check($receipt['preservation']['encoding'] === 'pcm_s24le', 'Converted canonical artifact must satisfy the V1 PCM preservation contract.');
+	check(\OCA\PoRe\Service\RecordingRuntimeService::$lastTimeoutSeconds === 900, 'FLAC conversion must use the long-running runtime timeout.');
 	$canonicalId = $receipt['file_id'];
+
 	$c->close($prepared['transfer_id'], 'actor-1');
 
-	// TEST-FLAC-02: A canonical collision must reject the transport and remove
+	// TEST-FLAC-02: Reusing an identical pre-existing FLAC transport must
+	// converge on the existing canonical WAV without a second upload.
+	$reusedTransport = new File(30, $flacPayload, 'Host (2).flac');
+	$leaf->add('Host (2).flac', $reusedTransport);
+	$reused = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+	);
+	check($reused['upload_required'] === false, 'An identical pre-existing FLAC transport must be reusable.');
+	check($reused['filename'] === 'Host (2).flac', 'FLAC recovery must reuse the interrupted transport filename.');
+	$reusedReceipt = $c->verify($reused['transfer_id'], 'actor-1');
+	check($reusedReceipt['file_id'] === $canonicalId, 'Recovered FLAC transport must converge on the existing canonical WAV.');
+	try {
+		$leaf->get('Host (2).flac');
+		throw new \RuntimeException('Reused FLAC transport must be removed after successful canonicalization.');
+	} catch (\OCP\Files\NotFoundException) {
+	}
+
+	// TEST-FLAC-03: If manifest persistence was lost after canonicalization,
+	// the browser-provided canonical filename hint restores the exact naming
+	// decision without creating another canonical artifact.
+	$hinted = $c->prepare(
+		'prod-1',
+		'Interview',
+		'recording-5',
+		'capture-5',
+		'2026-09-05T15:42:31+00:00',
+		'Host',
+		strlen($flacPayload),
+		hash('sha256', $flacPayload),
+		'actor-1',
+		null,
+		'audio/flac',
+		'Host (2).wav',
+	);
+	check($hinted['canonical_filename'] === 'Host (2).wav', 'Canonical filename hint must be honored during FLAC recovery.');
+	check($hinted['filename'] === 'Host (2).flac', 'Canonical filename hint must derive the paired FLAC transport name.');
+	$leaf->add('Host (2).flac', new File(33, $flacPayload, 'Host (2).flac'));
+	$hintReceipt = $c->verify($hinted['transfer_id'], 'actor-1');
+	check($hintReceipt['file_id'] === $canonicalId, 'Canonical filename recovery must reuse the existing WAV after manifest persistence loss.');
+	try {
+		$leaf->get('Host (2).flac');
+		throw new \RuntimeException('Recovered FLAC transport must be removed after canonicalization.');
+	} catch (\OCP\Files\NotFoundException) {
+	}
+
+
+
+	// TEST-FLAC-04: A canonical collision must reject the transport and remove
 	// the temporary uploaded FLAC rather than leaving an orphaned remote file.
 	$conflictPrepared = $c->prepare(
 		'prod-1',

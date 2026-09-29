@@ -34,6 +34,7 @@ final class NextcloudArtifactConnector {
 	private const V1_BITS_PER_SAMPLE = 24;
 	private const PAYLOAD_FORMAT_WAV = 'audio/wav';
 	private const PAYLOAD_FORMAT_FLAC = 'audio/flac';
+	private const FLAC_CONVERSION_TIMEOUT_SECONDS = 900;
 
 	public function __construct(
 		private readonly IRootFolder $rootFolder,
@@ -59,6 +60,7 @@ final class NextcloudArtifactConnector {
 		string $actorUserId,
 		?int $preferredFileId = null,
 		string $payloadFormat = self::PAYLOAD_FORMAT_WAV,
+		?string $canonicalFilenameHint = null,
 	): array {
 		$this->validateHash($sha256);
 		if (trim($actorUserId) === '') throw new RuntimeException('Transport actor is required.');
@@ -77,6 +79,10 @@ final class NextcloudArtifactConnector {
 
 		$userFolder = $this->rootFolder->getUserFolder($targetUserId);
 		$allowFilenameReuse = $preferredFileId === null;
+		$canonicalFilenameHint = $canonicalFilenameHint === null ? null : trim($canonicalFilenameHint);
+		if ($canonicalFilenameHint !== null && ($canonicalFilenameHint === '' || str_contains($canonicalFilenameHint, '/') || str_contains($canonicalFilenameHint, '\\') || str_contains($canonicalFilenameHint, "\0") || strtolower(pathinfo($canonicalFilenameHint, PATHINFO_EXTENSION)) !== 'wav')) {
+			throw new RuntimeException('artifact_manifest_invalid');
+		}
 
 		if ($preferredFileId !== null) {
 			$preferred = $this->findFileById($userFolder, $preferredFileId);
@@ -118,13 +124,36 @@ final class NextcloudArtifactConnector {
 		$folder = $this->ensureFolder($folder, $path['month']);
 		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		$canonicalFilename = $path['filename'];
+		$canonicalFilename = $canonicalFilenameHint ?? $path['filename'];
 		$transportFilename = $canonicalFilename;
 		if ($payloadFormat === self::PAYLOAD_FORMAT_FLAC) {
 			$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
-			while ($this->findFile($folder, $canonicalFilename) !== null || $this->findFile($folder, $transportFilename) !== null) {
-				$canonicalFilename = $this->nextFreeFilename($folder, $canonicalFilename);
-				$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
+			$existingTransport = $this->findFile($folder, $transportFilename);
+			if ($existingTransport !== null) {
+				$existingSize = $existingTransport->getSize();
+				$existingSha256 = $this->hashFile($existingTransport);
+				if ($existingSize === $size && hash_equals(strtolower($sha256), $existingSha256)) {
+					return $this->prepareExistingFileHandle(
+						$existingTransport,
+						$targetUserId,
+						$captureId,
+						$size,
+						$sha256,
+						$actorUserId,
+						self::PAYLOAD_FORMAT_FLAC,
+						$canonicalFilename,
+						$existingSize,
+						$existingSha256,
+						true,
+					);
+				}
+				if ($canonicalFilenameHint !== null) throw new RuntimeException('artifact_manifest_conflict');
+			}
+			if ($canonicalFilenameHint === null) {
+				while ($this->findFile($folder, $canonicalFilename) !== null || $this->findFile($folder, $transportFilename) !== null) {
+					$canonicalFilename = $this->nextFreeFilename($folder, $canonicalFilename);
+					$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
+				}
 			}
 		} else {
 			$existing = $this->findFile($folder, $canonicalFilename);
@@ -231,6 +260,9 @@ final class NextcloudArtifactConnector {
 			if ($size !== $expectedSize || !hash_equals($expectedHash, $hash)) {
 				throw new RuntimeException('Nextcloud transport artifact SHA-256 does not match.');
 			}
+			if ($state['payload_format'] === self::PAYLOAD_FORMAT_FLAC && ($state['remote_is_transport'] ?? false)) {
+				return $this->convertFlacToCanonicalWav($file, $state);
+			}
 			$preservation = $this->inspectWav($file, $size);
 			return [
 				'artifact_id' => $state['capture_id'],
@@ -288,6 +320,7 @@ final class NextcloudArtifactConnector {
 		string $canonicalFilename,
 		int $remoteSize,
 		string $remoteSha256,
+		bool $remoteIsTransport = false,
 	): array {
 		$transferId = $this->secureRandom->generate(32, ISecureRandom::CHAR_ALPHANUMERIC);
 		$parent = $file->getParent();
@@ -305,6 +338,7 @@ final class NextcloudArtifactConnector {
 			'sha256' => strtolower($sha256),
 			'remote_size' => $remoteSize,
 			'remote_sha256' => strtolower($remoteSha256),
+			'remote_is_transport' => $remoteIsTransport,
 			'actor_user_id' => $actorUserId,
 			'upload_required' => false,
 		];
@@ -489,7 +523,7 @@ final class NextcloudArtifactConnector {
 				'expected_sample_rate_hz' => 0,
 				'expected_channels' => self::V1_CHANNELS,
 				'expected_bits_per_sample' => self::V1_BITS_PER_SAMPLE,
-			], 'artifact.convert_flac_to_wav');
+			], 'artifact.convert_flac_to_wav', self::FLAC_CONVERSION_TIMEOUT_SECONDS);
 
 			if (($response['status'] ?? null) !== 'converted'
 				|| !is_int($response['sample_rate_hz'] ?? null)
@@ -567,17 +601,20 @@ final class NextcloudArtifactConnector {
 			if ($canonicalFile !== null) {
 				try { $canonicalFile->delete(); } catch (\Throwable) {}
 			}
-			// A FLAC transport file is temporary and must never survive a
-			// failed canonicalization attempt as an orphaned remote artifact.
-			try { $flacFile->delete(); } catch (\Throwable) {}
+			// A freshly uploaded FLAC is temporary and can be cleaned up on failure.
+			// A reused transport may belong to an interrupted earlier transfer;
+			// retain it so a later retry can converge on the same bytes.
+			if (($state['upload_required'] ?? true) === true) {
+				try { $flacFile->delete(); } catch (\Throwable) {}
+			}
 			throw new RuntimeException($error->getMessage() === 'artifact_manifest_conflict' ? 'artifact_manifest_conflict' : 'artifact_preservation_invalid', 0, $error);
 		} catch (\Throwable $error) {
 			if ($canonicalFile !== null) {
 				try { $canonicalFile->delete(); } catch (\Throwable) {}
 			}
-			// The uploaded FLAC is only a temporary transport representation;
-			// remove it when conversion cannot establish the canonical artifact.
-			try { $flacFile->delete(); } catch (\Throwable) {}
+			if (($state['upload_required'] ?? true) === true) {
+				try { $flacFile->delete(); } catch (\Throwable) {}
+			}
 			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
 		} finally {
 			@unlink($inputPath);

@@ -82,7 +82,7 @@ describe('Browser FLAC finalization persistence', () => {
 			{ captureId: 'capture-1', index: 0, payload: first, size: first.size, sha256: 'c'.repeat(64) },
 			{ captureId: 'capture-1', index: 1, payload: second, size: second.size, sha256: 'c'.repeat(64) },
 		]
-		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 2 }
+		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 2, finalization: { ownerId: 'owner-1', leaseUntil: new Date(Date.now() + 300000).toISOString() } }
 		const putCalls = []
 		const deleteCalls = []
 		persistence._database = jest.fn(async () => ({}))
@@ -90,19 +90,22 @@ describe('Browser FLAC finalization persistence', () => {
 		persistence._getChunks = jest.fn(async () => chunks)
 		persistence._sha256 = jest.fn(async blob => blob.size === 5 ? 'a'.repeat(64) : 'c'.repeat(64))
 		persistence._transaction = jest.fn(async (_db, _stores, _mode, configure) => {
+			const manifestRequest = { result: manifest, onsuccess: null, onerror: null }
+			const manifestStore = { get: () => manifestRequest, put: value => putCalls.push(value) }
 			const stores = new Map([
-				['manifests', { put: value => putCalls.push(value) }],
+				['manifests', manifestStore],
 				['chunks', { delete: key => deleteCalls.push(key) }],
 				['finalizedChunks', { delete: () => {} }],
 			])
 			configure({ objectStore: name => stores.get(name) })
+			manifestRequest.onsuccess?.()
 		})
 
 		const result = await persistence.commitFinalizedPayload('capture-1', {
 			size: 5,
 			payloadSha256: 'a'.repeat(64),
 			sampleCount: 3,
-		})
+		}, 'owner-1')
 
 		expect(result.storageFormat).toBe('flac')
 		expect(result.format).toBe('audio/flac')
@@ -115,39 +118,60 @@ describe('Browser FLAC finalization persistence', () => {
 
 	it('clears staged FLAC chunks and resets their continuity counter before retry', async () => {
 		const persistence = new Store()
-		const chunks = [
-			{ captureId: 'capture-1', index: 0, payload: new Blob([new Uint8Array([1])]), size: 1, sha256: 'a'.repeat(64) },
-			{ captureId: 'capture-1', index: 1, payload: new Blob([new Uint8Array([2])]), size: 1, sha256: 'a'.repeat(64) },
-		]
-		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 2 }
-		const deletes = []
+		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 2, finalization: { ownerId: 'owner-1', leaseUntil: new Date(Date.now() + 300000).toISOString() } }
+		let cursorResult = null
+		let cursorRequest
 		let manifestPut = null
 		persistence._database = jest.fn(async () => ({}))
-		persistence._getChunks = jest.fn(async () => chunks)
 		persistence._transaction = jest.fn(async (_db, _stores, _mode, configure) => {
-			const request = { result: manifest, onsuccess: null }
+			const manifestRequest = { result: manifest, onsuccess: null, onerror: null }
+			cursorRequest = { result: null, onsuccess: null, onerror: null }
+			let cursorIndex = 0
+			const cursor = {
+				delete: jest.fn(),
+				continue: jest.fn(() => {
+					cursorIndex += 1
+					cursorRequest.result = cursorIndex < 2 ? cursor : null
+					cursorRequest.onsuccess?.()
+				}),
+			}
+			cursorRequest.result = cursor
 			const manifestStore = {
-				get: () => request,
+				get: () => manifestRequest,
 				put: value => { manifestPut = value },
 			}
-			configure({
-				objectStore: name => name === 'manifests'
-					? manifestStore
-					: { delete: key => deletes.push(key) },
-			})
+			const finalizedStore = {
+				index: () => ({ openCursor: () => cursorRequest }),
+			}
+			configure({ objectStore: name => name === 'manifests' ? manifestStore : finalizedStore })
+			manifestRequest.onsuccess?.()
+			cursorRequest.onsuccess?.()
+		})
+		await persistence.clearFinalizedPayload('capture-1', 'owner-1')
+		expect(manifestPut.finalizedChunkCount).toBe(0)
+		expect(manifestPut.finalization).toBeUndefined()
+		expect(cursorRequest.result).toBeNull()
+	})
+
+	it('refuses staging cleanup after FLAC has already been committed', async () => {
+		const persistence = new Store()
+		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'flac', finalizedChunkCount: 1 }
+		persistence._database = jest.fn(async () => ({}))
+		persistence._transaction = jest.fn(async (_db, _stores, _mode, configure) => {
+			const request = { result: manifest, onsuccess: null, onerror: null }
+			const manifestStore = { get: () => request, put: jest.fn() }
+			const finalizedStore = { index: () => ({ openCursor: jest.fn() }) }
+			configure({ objectStore: name => name === 'manifests' ? manifestStore : finalizedStore }, error => { throw error })
 			request.onsuccess?.()
 		})
-
-		await persistence.clearFinalizedPayload('capture-1')
-
-		expect(manifestPut.finalizedChunkCount).toBe(0)
-		expect(deletes).toEqual([['capture-1', 0], ['capture-1', 1]])
+		await expect(persistence.clearFinalizedPayload('capture-1', 'owner-1')).rejects.toThrow('already committed')
 	})
+
 	it('replaces an existing staged FLAC chunk without changing its index', async () => {
 		const persistence = new Store()
 		const original = new Blob([new Uint8Array([0x66,0x4c,0x61,0x43])])
 		const replacement = new Blob([new Uint8Array([0x66,0x4c,0x61,0x43,0x00])])
-		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 1 }
+		const manifest = { captureId: 'capture-1', status: 'finalized', storageFormat: 'pcm', finalizedChunkCount: 1, finalization: { ownerId: 'owner-1', leaseUntil: new Date(Date.now() + 300000).toISOString() } }
 		const putCalls = []
 		persistence._database = jest.fn(async () => ({}))
 		persistence._sha256 = jest.fn(async blob => blob === replacement ? 'b'.repeat(64) : 'a'.repeat(64))
@@ -162,7 +186,7 @@ describe('Browser FLAC finalization persistence', () => {
 			request.onsuccess?.()
 			existingRequest.onsuccess?.()
 		})
-		await persistence.replaceFinalizedChunk('capture-1', 0, replacement)
+		await persistence.replaceFinalizedChunk('capture-1', 0, replacement, 'owner-1')
 		expect(putCalls.some(value => value.index === 0 && value.payload === replacement)).toBe(true)
 		expect(putCalls.some(value => value.captureId === 'capture-1' && value.updatedAt)).toBe(true)
 	})

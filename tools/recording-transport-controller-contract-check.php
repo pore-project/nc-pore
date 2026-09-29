@@ -113,7 +113,7 @@ namespace {
 		);
 	}
 
-	function runPrepare(RecordingTransportController $controller, string $payloadFormat = 'audio/wav'): \OCP\AppFramework\Http\DataResponse {
+	function runPrepare(RecordingTransportController $controller, string $payloadFormat = 'audio/wav', ?string $canonicalFilenameHint = null): \OCP\AppFramework\Http\DataResponse {
 		return $controller->prepareFinalizedArtifact(
 			'production-1',
 			'Interview',
@@ -126,6 +126,7 @@ namespace {
 			'session-1',
 			'{"schemaVersion":1,"capture":null,"sourceSegments":[]}',
 			$payloadFormat,
+			$canonicalFilenameHint,
 		);
 	}
 
@@ -241,6 +242,13 @@ namespace {
 	check($response->data['payload_format'] === 'audio/flac', 'Controller response must expose the requested FLAC transport format.');
 	check($response->data['canonical_filename'] === 'Host.wav', 'Controller response must expose the canonical WAV filename.');
 	check(($connector->prepareCalls[0][10] ?? null) === 'audio/flac', 'Controller must pass the explicit FLAC payload format to the connector.');
+	$store = new FakeStore();
+	$store->stageQueue = [['status' => 'pending_verification']];
+	$connector = new FakeConnector();
+	$connector->preparedQueue[] = ['transfer_id' => 'flac-hint-handle', 'upload_url' => '/public.php/dav/files/flac-hint-share', 'upload_username' => 'anonymous', 'upload_password' => 'secret', 'filename' => 'Host (2).flac', 'canonical_filename' => 'Host (2).wav', 'payload_format' => 'audio/flac', 'size' => 51, 'sha256' => str_repeat('b', 64), 'upload_required' => true, 'target_user_id' => 'owner'];
+	$response = runPrepare(controller($store, $connector), 'audio/flac', 'Host (2).wav');
+	$lastPrepare = $connector->prepareCalls[count($connector->prepareCalls) - 1] ?? [];
+	check(($lastPrepare[11] ?? null) === 'Host (2).wav', 'Controller must pass a canonical filename recovery hint to the connector.');
 
 	// TEST-FLAC-02: Unsupported transport formats are client errors, not generic server failures.
 	$store = new FakeStore();

@@ -10,6 +10,7 @@ use RuntimeException;
 
 final class RecordingRuntimeService {
 	private const MAX_FRAME_LENGTH = 1024 * 1024;
+	private const DEFAULT_COMMAND_TIMEOUT_SECONDS = 10;
 
 	public function __construct(
 		private readonly IConfig $config,
@@ -26,7 +27,8 @@ final class RecordingRuntimeService {
 	 * @param array<string, mixed> $request
 	 * @return array<string, mixed>
 	 */
-	public function command(array $request, string $operation = 'recording.command'): array {
+	public function command(array $request, string $operation = 'recording.command', int $timeoutSeconds = self::DEFAULT_COMMAND_TIMEOUT_SECONDS): array {
+		if ($timeoutSeconds <= 0) throw new RuntimeException('PoRE runtime command timeout must be positive.');
 		$binary = trim((string)$this->config->getSystemValue('pore_runtime_binary', ''));
 		if ($binary === '') {
 			$binary = rtrim($this->appManager->getAppPath('pore'), '/') . '/runtime/bin/pore-runtime';
@@ -93,7 +95,7 @@ final class RecordingRuntimeService {
 			}
 			fclose($pipes[0]);
 
-			stream_set_timeout($pipes[1], 10);
+			stream_set_timeout($pipes[1], $timeoutSeconds);
 			$lengthBytes = $this->readExact($pipes[1], 4);
 			if (strlen($lengthBytes) !== 4) {
 				throw new RuntimeException('PoRE runtime returned an incomplete response.');

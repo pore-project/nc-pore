@@ -31,7 +31,7 @@
 			let stored = await store.getCapture(captureId)
 			if (!stored) throw new Error(`PoRE completion job capture not found: ${captureId}`)
 			if (stored.manifest.status !== 'finalized') throw new Error(`PoRE completion job requires finalized capture: ${captureId}`)
-			const job = stored.manifest.completionJob || {}
+			let job = stored.manifest.completionJob || {}
 			if (job.status === 'completed') return null
 
 			try {
@@ -40,6 +40,15 @@
 					stored = await store.getCapture(captureId)
 				}
 				if (!stored || stored.manifest.storageFormat !== 'flac') throw new Error('PoRE completion job did not produce finalized FLAC persistence')
+
+				job = stored.manifest.completionJob || {}
+				const legacyInFlight = ['pending', 'prepared', 'authorized'].includes(job.status)
+					|| job.transferId != null
+					|| job.uploadUrl != null
+					|| job.filename != null
+				if (job.payloadFormat !== 'audio/flac' && legacyInFlight) {
+					job = await this._resetLegacyTransportState(captureId, job)
+				}
 
 				const sampleRate = stored.manifest.sampleRate
 				const channels = stored.manifest.channels
@@ -84,6 +93,7 @@
 				window.dispatchEvent(new CustomEvent('pore:recording-transport-ready', { detail: descriptor }))
 				return descriptor
 			} catch (error) {
+				if (['finalization_in_progress', 'finalization_owner_conflict', 'finalization_lease_expired', 'finalization_already_committed'].includes(error?.code)) throw error
 				await store.finalizeCapture(captureId, {
 					completionJob: {
 						...job,
@@ -106,41 +116,63 @@
 			if (stored.manifest.encoding && stored.manifest.encoding !== 'pcm_s24le' && stored.manifest.storageFormat !== 'flac') throw new Error('PoRE FLAC conversion requires packed PCM24 input')
 			const pcmSize = stored.chunks.reduce((total, chunk) => total + chunk.size, 0)
 			if (pcmSize === 0 || pcmSize % 3 !== 0) throw new Error('PoRE FLAC conversion requires sample-aligned PCM24 data')
-			await store.clearFinalizedPayload(captureId)
-			const encoder = new window.PoREBrowserFlacEncoder({
-				sampleRate,
-				channels,
-				totalSamples: pcmSize / 3,
-				compression: 5,
-			})
-			let index = 0
+
+			const ownerId = createFinalizationOwnerId()
+			const claim = await store.beginFinalizedPayload(captureId, ownerId)
+			if (claim.committed) return
+			if (!claim.acquired) {
+				const error = new Error('PoRE FLAC finalization is already in progress: ' + captureId)
+				error.code = 'finalization_in_progress'
+				throw error
+			}
+
+			let encoder = null
 			try {
+				encoder = new window.PoREBrowserFlacEncoder({ sampleRate, channels, totalSamples: pcmSize / 3, compression: 5 })
+				let index = 0
 				for (const chunk of stored.chunks) {
 					const bytes = new Uint8Array(await chunk.arrayBuffer())
 					for (const output of encoder.encodePcm24Bytes(bytes)) {
-						if (output.length) await store.appendFinalizedChunk(captureId, index++, output)
+						if (output.length) await store.appendFinalizedChunk(captureId, index++, output, ownerId)
 					}
+					await store.renewFinalizedPayload(captureId, ownerId)
 				}
 				for (const output of encoder.finish()) {
-					if (output.length) await store.appendFinalizedChunk(captureId, index++, output)
+					if (output.length) await store.appendFinalizedChunk(captureId, index++, output, ownerId)
 				}
-				await store.replaceFinalizedChunk(captureId, 0, encoder.getFinalizedHeader())
-			} finally {
-				encoder.free?.()
-			}
+				await store.renewFinalizedPayload(captureId, ownerId)
+				await store.replaceFinalizedChunk(captureId, 0, encoder.getFinalizedHeader(), ownerId)
 
-			const finalized = await store.getFinalizedPayload(captureId)
-			if (!finalized || !Array.isArray(finalized.chunks) || finalized.chunks.length === 0) throw new Error('PoRE FLAC conversion produced no payload')
-			const blob = new Blob(finalized.chunks, { type: 'audio/flac' })
-			const payloadSha256 = await sha256(blob)
-			await store.commitFinalizedPayload(captureId, {
-				size: blob.size,
-				payloadSha256,
-				sampleCount: pcmSize / 3,
-			})
+				const finalized = await store.getFinalizedPayload(captureId)
+				if (!finalized || !Array.isArray(finalized.chunks) || finalized.chunks.length === 0) throw new Error('PoRE FLAC conversion produced no payload')
+				const blob = new Blob(finalized.chunks, { type: 'audio/flac' })
+				const payloadSha256 = await sha256(blob)
+				await store.renewFinalizedPayload(captureId, ownerId)
+				await store.commitFinalizedPayload(captureId, { size: blob.size, payloadSha256, sampleCount: pcmSize / 3 }, ownerId)
+			} catch (error) {
+				await store.clearFinalizedPayload(captureId, ownerId).catch(() => {})
+				throw error
+			} finally {
+				encoder?.free?.()
+			}
 		}
 
-		async updateTransportState(captureId, patch) {
+		async _resetLegacyTransportState(captureId, job) {
+			const reset = {
+				...job,
+				status: 'pending',
+				payloadFormat: 'audio/flac',
+				transferId: null, uploadUrl: null, uploadUsername: null, uploadPassword: null,
+				filename: null, canonicalFilename: null, uploadRequired: null,
+				preparedAt: null, authorizedAt: null, remotePresentAt: null, verifiedAt: null, transportClosedAt: null,
+				receipt: null, artifactId: null, fileId: null, path: null, size: null, sha256: null,
+				migrationResetAt: new Date().toISOString(),
+			}
+			await this._store().finalizeCapture(captureId, { completionJob: reset })
+			return reset
+		}
+
+				async updateTransportState(captureId, patch) {
 			const store = this._store()
 			const stored = await store.getCapture(captureId)
 			if (!stored) throw new Error(`PoRE transport capture not found: ${captureId}`)
@@ -210,6 +242,16 @@
 				throw new Error('PoRE completion job requires distinct technical identities')
 			}
 		}
+	}
+
+	function createFinalizationOwnerId() {
+		if (window.crypto?.randomUUID) return window.crypto.randomUUID()
+		if (window.crypto?.getRandomValues) {
+			const bytes = new Uint8Array(16)
+			window.crypto.getRandomValues(bytes)
+			return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('')
+		}
+		return `pore-flac-${Date.now()}-${Math.random().toString(36).slice(2)}`
 	}
 
 	async function sha256(blob) {
