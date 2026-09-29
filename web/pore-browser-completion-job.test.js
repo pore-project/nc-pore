@@ -95,6 +95,14 @@ describe('Browser completion job', () => {
 				chunks: committed ? staged.filter(Boolean) : [new Blob([new Uint8Array([0, 0, 0])])],
 			})),
 		}
+		const previousEncoder = window.PoREBrowserFlacEncoder
+		window.PoREBrowserFlacEncoder = {
+			create: jest.fn(async () => ({
+				encodePcm24Bytes: jest.fn(() => [new Uint8Array([0x66, 0x4c, 0x61, 0x43])]),
+				finish: jest.fn(() => [new Uint8Array([1, 2, 3])]),
+				free: jest.fn(),
+			})),
+		}
 		const job = new Job({ persistenceStoreFactory: () => store })
 		const handler = jest.fn()
 		window.addEventListener('pore:recording-transport-ready', handler)
@@ -112,13 +120,14 @@ describe('Browser completion job', () => {
 		expect(descriptor.productionId).toBe('production-1')
 		expect(descriptor.recordingId).toBe('recording-1')
 		expect(descriptor.recordingSessionId).toBe('session-1')
-		expect(descriptor.format).toBe('audio/wav')
-		expect(descriptor.encoding).toBe('pcm_s24le')
+		expect(descriptor.format).toBe('audio/flac')
+		expect(descriptor.encoding).toBe('flac')
 		expect(descriptor.provenance).toEqual(provenance)
 		expect(descriptor.blob).toBeInstanceOf(Blob)
 		expect(handler).toHaveBeenCalledTimes(1)
 
 		window.removeEventListener('pore:recording-transport-ready', handler)
+		window.PoREBrowserFlacEncoder = previousEncoder
 	})
 
 	it('persists transport state without losing existing completion-job fields', async () => {
