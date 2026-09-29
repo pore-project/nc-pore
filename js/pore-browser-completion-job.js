@@ -128,6 +128,7 @@
 
 			let encoder = null
 			try {
+				await window.PoREBrowserFlacEncoder.waitUntilReady()
 				encoder = new window.PoREBrowserFlacEncoder({ sampleRate, channels, totalSamples: pcmSize / 3, compression: 5 })
 				let index = 0
 				for (const chunk of stored.chunks) {

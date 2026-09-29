@@ -98,7 +98,7 @@ if(global && global.FLAC_SCRIPT_LOCATION){
 }
 
 //fallback for fetch && support file://-protocol: try read as binary if fetch fails
-if(global && typeof global.fetch === 'function'){
+if(global && global.FLAC_SCRIPT_LOCATION && typeof global.fetch === 'function'){
 	var _fetch = global.fetch;
 	global.fetch = function(url){
 		return _fetch.apply(null, arguments).catch(function(err){

@@ -3,6 +3,38 @@ import '../js/pore-browser-flac-encoder.js'
 describe('Browser FLAC encoder boundary', () => {
 	const Encoder = window.PoREBrowserFlacEncoder
 
+	it('waits for libFLAC readiness and removes its ready listener after activation', async () => {
+		const previous = window.Flac
+		let readyListener = null
+		try {
+			window.Flac = {
+				isReady: jest.fn(() => false),
+				on: jest.fn((event, listener) => { if (event === 'ready') readyListener = listener }),
+				off: jest.fn(),
+			}
+			const pending = Encoder.waitUntilReady()
+			await Promise.resolve()
+			expect(readyListener).toBeInstanceOf(Function)
+			let resolved = false
+			pending.then(() => { resolved = true })
+			await Promise.resolve()
+			expect(resolved).toBe(false)
+			readyListener({ type: 'ready' })
+			await pending
+			expect(window.Flac.off).toHaveBeenCalledWith('ready', readyListener)
+			expect(resolved).toBe(true)
+		} finally { window.Flac = previous }
+	})
+
+	it('rejects direct encoder construction while libFLAC is not ready', () => {
+		const previous = window.Flac
+		try {
+			window.Flac = { isReady: jest.fn(() => false), create_libflac_encoder: jest.fn() }
+			expect(() => new Encoder({ sampleRate: 48000, channels: 1, totalSamples: 1 })).toThrow('not ready')
+			expect(window.Flac.create_libflac_encoder).not.toHaveBeenCalled()
+		} finally { window.Flac = previous }
+	})
+
 	it('decodes packed PCM24 samples exactly before encoding', () => {
 		const previous = window.Flac
 		const calls = []

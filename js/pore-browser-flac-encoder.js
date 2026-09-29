@@ -7,10 +7,24 @@
 	const HEADER_BYTES = 42
 
 	class PoREBrowserFlacEncoder {
+		static waitUntilReady(Flac = window.Flac) {
+			if (!Flac) return Promise.reject(new Error('PoRE FLAC encoder library is not available'))
+			if (typeof Flac.isReady !== 'function' || Flac.isReady()) return Promise.resolve()
+			if (typeof Flac.on !== 'function') return Promise.reject(new Error('PoRE FLAC encoder readiness events are not available'))
+			return new Promise(resolve => {
+				const listener = () => {
+					if (typeof Flac.off === 'function') Flac.off('ready', listener)
+					resolve()
+				}
+				Flac.on('ready', listener)
+			})
+		}
+
 		constructor({ sampleRate, channels = 1, totalSamples = 0, compression = 5 } = {}) {
 			if (![48000, 44100].includes(sampleRate)) throw new Error('PoRE FLAC encoder requires a valid sample rate')
 			if (channels !== 1) throw new Error('PoRE V1 FLAC encoder supports mono only')
 			if (!window.Flac) throw new Error('PoRE FLAC encoder library is not available')
+			if (typeof window.Flac.isReady === 'function' && !window.Flac.isReady()) throw new Error('PoRE FLAC encoder library is not ready')
 			this.Flac = window.Flac
 			this.sampleRate = sampleRate
 			this.channels = channels
