@@ -46,20 +46,22 @@ namespace {
 		return $path;
 	}
 
-	$responseScript = writeExecutable(
-		"#!/usr/bin/env php\n"
-		. "<?php\n"
-		. "$header = fread(STDIN, 4);\n"
-		. "$length = unpack('Nlength', $header)['length'] ?? 0;\n"
-		. "if ($length > 0) fread(STDIN, $length);\n"
-		. "$payload = json_encode(['status' => 'ok']);\n"
-		. "echo pack('N', strlen($payload)), $payload;\n"
+	$responseScript = writeExecutable(<<<'RUNTIME'
+#!/usr/bin/env php
+<?php
+$header = fread(STDIN, 4);
+$length = unpack('Nlength', $header)['length'] ?? 0;
+if ($length > 0) fread(STDIN, $length);
+$payload = json_encode(['status' => 'ok']);
+echo pack('N', strlen($payload)), $payload;
+RUNTIME
 	);
 
-	$sleepScript = writeExecutable(
-		"#!/usr/bin/env php\n"
-		. "<?php\n"
-		. "sleep(5);\n"
+	$sleepScript = writeExecutable(<<<'RUNTIME'
+#!/usr/bin/env php
+<?php
+sleep(5);
+RUNTIME
 	);
 
 	$sessionStore = sys_get_temp_dir() . '/pore-runtime-store-' . bin2hex(random_bytes(8));
