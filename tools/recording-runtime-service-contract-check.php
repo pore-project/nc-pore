@@ -50,7 +50,7 @@ namespace {
 	}
 
 	$responseScript = writeExecutable(<<<'RUNTIME'
-#!/usr/bin/env php
+#!/usr/bin/php
 <?php
 $header = fread(STDIN, 4);
 $length = unpack('Nlength', $header)['length'] ?? 0;
@@ -61,7 +61,7 @@ RUNTIME
 	);
 
 	$sleepScript = writeExecutable(<<<'RUNTIME'
-#!/usr/bin/env php
+#!/usr/bin/php
 <?php
 sleep(5);
 RUNTIME
