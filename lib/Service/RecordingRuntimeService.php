@@ -135,7 +135,22 @@ final class RecordingRuntimeService {
 			if (isset($pipes[0]) && is_resource($pipes[0])) fclose($pipes[0]);
 			if (isset($pipes[1]) && is_resource($pipes[1])) fclose($pipes[1]);
 			if (isset($pipes[2]) && is_resource($pipes[2])) fclose($pipes[2]);
-			if (is_resource($process)) proc_close($process);
+			if (is_resource($process)) {
+				$status = proc_get_status($process);
+				if (($status['running'] ?? false) === true) {
+					@proc_terminate($process);
+					$graceDeadline = microtime(true) + (self::PROCESS_TERMINATION_GRACE_MICROSECONDS / 1_000_000);
+					while (microtime(true) < $graceDeadline) {
+						$status = proc_get_status($process);
+						if (($status['running'] ?? false) !== true) break;
+						usleep(10_000);
+					}
+					if (($status['running'] ?? false) === true && PHP_OS_FAMILY !== 'Windows') {
+						@proc_terminate($process, 9);
+					}
+				}
+				proc_close($process);
+			}
 			if (is_resource($lock)) {
 				flock($lock, LOCK_UN);
 				fclose($lock);
