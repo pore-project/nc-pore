@@ -236,10 +236,16 @@
 
 		async _validatedPayload(db, manifest, storeName) {
 			const records = await this._getChunks(db, manifest.captureId, storeName)
-			const expectedIndexes = Array.from({ length: Math.max(0, Number.isInteger(manifest.lastChunkIndex) ? manifest.lastChunkIndex + 1 : 0) }, (_, index) => index)
+			const lastChunkIndex = storeName === FINALIZED_CHUNK_STORE && manifest.storageFormat !== 'flac'
+				? (Number.isInteger(manifest.flacStagedLastChunkIndex) ? manifest.flacStagedLastChunkIndex : -1)
+				: (Number.isInteger(manifest.lastChunkIndex) ? manifest.lastChunkIndex : -1)
+			const chunkCount = storeName === FINALIZED_CHUNK_STORE && manifest.storageFormat !== 'flac'
+				? (Number.isInteger(manifest.flacStagedChunkCount) ? manifest.flacStagedChunkCount : 0)
+				: manifest.chunkCount
+			const expectedIndexes = Array.from({ length: Math.max(0, lastChunkIndex + 1) }, (_, index) => index)
 			const actualIndexes = records.map(chunk => chunk.index)
 			if (actualIndexes.length !== expectedIndexes.length || actualIndexes.some((index, position) => index !== expectedIndexes[position])) throw new Error('PoRE capture chunk continuity check failed: ' + manifest.captureId)
-			if (manifest.chunkCount !== records.length) throw new Error('PoRE capture chunk count check failed: ' + manifest.captureId)
+			if (chunkCount !== records.length) throw new Error('PoRE capture chunk count check failed: ' + manifest.captureId)
 			for (const chunk of records) {
 				const actual = await this._sha256(chunk.payload)
 				if (actual !== String(chunk.sha256).toLowerCase()) throw new Error('PoRE capture chunk payload integrity check failed: ' + manifest.captureId + '/' + chunk.index)
