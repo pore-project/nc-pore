@@ -250,12 +250,14 @@ describe('Browser completion job', () => {
 			appendFinalizedChunk: jest.fn(async (_captureId, index, payload) => finalized[index] = payload),
 			replaceFinalizedChunk: jest.fn(async (_captureId, index, payload) => finalized[index] = payload),
 			getFinalizedPayload: jest.fn(async () => ({ manifest: { status: 'finalized', storageFormat: 'pcm' }, chunks: finalized.filter(Boolean) })),
+			clearFinalizedPayload: jest.fn(async () => {}),
 			commitFinalizedPayload: jest.fn(async () => { isFlac = true }),
 			finalizeCapture: jest.fn(async (_captureId, patch) => { persistedPatches.push(patch) }),
 		}
 		const previousEncoder = window.PoREBrowserFlacEncoder
 		function MockEncoder() {
-			this.encodePcm24Bytes = jest.fn(() => [new Uint8Array([1])])
+			MockEncoder.waitUntilReady = jest.fn(async () => {})
+		this.encodePcm24Bytes = jest.fn(() => [new Uint8Array([1])])
 			this.finish = jest.fn(() => [new Uint8Array([2])])
 			this.getFinalizedHeader = jest.fn(() => new Uint8Array([0x66, 0x4c, 0x61, 0x43]))
 			this.free = jest.fn()

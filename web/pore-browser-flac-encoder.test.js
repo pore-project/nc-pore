@@ -30,7 +30,10 @@ describe('Browser FLAC encoder boundary', () => {
 		const previous = window.Flac
 		try {
 			window.Flac = { isReady: jest.fn(() => false), create_libflac_encoder: jest.fn() }
-			expect(() => new Encoder({ sampleRate: 48000, channels: 1, totalSamples: 1 })).toThrow('not ready')
+			let error = null
+			try { new Encoder({ sampleRate: 48000, channels: 1, totalSamples: 1 }) } catch (caught) { error = caught }
+			expect(error).toBeTruthy()
+			expect(String(error.message)).toContain('not ready')
 			expect(window.Flac.create_libflac_encoder).not.toHaveBeenCalled()
 		} finally { window.Flac = previous }
 	})
