@@ -81,7 +81,7 @@ final class NextcloudArtifactConnector {
 			if ($preferred !== null) {
 				if ($payloadFormat === self::PAYLOAD_FORMAT_FLAC) {
 					$this->inspectWav($preferred, $preferred->getSize());
-					return $this->prepareExistingCanonicalFileHandle($preferred, $targetUserId, $captureId, $actorUserId);
+					return $this->prepareExistingFileHandle($preferred, $targetUserId, $captureId, $preferred->getSize(), $this->hashFile($preferred), $actorUserId);
 				}
 				if ($preferred->getSize() !== $size || !hash_equals(strtolower($sha256), $this->hashFile($preferred))) {
 					throw new RuntimeException('Nextcloud recorded artifact payload has changed.');
