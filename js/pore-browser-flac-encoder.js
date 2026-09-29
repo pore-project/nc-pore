@@ -5,18 +5,49 @@
 	const MAX_24 = 8388607
 	const MIN_24 = -8388608
 	const HEADER_BYTES = 42
+	const READINESS_TIMEOUT_MS = 30000
 
 	class PoREBrowserFlacEncoder {
-		static waitUntilReady(Flac = window.Flac) {
+		static waitUntilReady(Flac = window.Flac, timeoutMs = READINESS_TIMEOUT_MS) {
 			if (!Flac) return Promise.reject(new Error('PoRE FLAC encoder library is not available'))
-			if (typeof Flac.isReady !== 'function' || Flac.isReady()) return Promise.resolve()
-			if (typeof Flac.on !== 'function') return Promise.reject(new Error('PoRE FLAC encoder readiness events are not available'))
-			return new Promise(resolve => {
-				const listener = () => {
-					if (typeof Flac.off === 'function') Flac.off('ready', listener)
+			if (typeof Flac.isReady !== 'function' || typeof Flac.on !== 'function' || typeof Flac.off !== 'function') {
+				return Promise.reject(new Error('PoRE FLAC encoder readiness API is not available'))
+			}
+			if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+				return Promise.reject(new Error('PoRE FLAC encoder readiness timeout must be positive'))
+			}
+			if (Flac.isReady()) return Promise.resolve()
+
+			return new Promise((resolve, reject) => {
+				let settled = false
+				let timer = null
+				const cleanup = () => {
+					if (timer !== null) clearTimeout(timer)
+					Flac.off('ready', listener)
+				}
+				const succeed = () => {
+					if (settled) return
+					settled = true
+					cleanup()
 					resolve()
 				}
-				Flac.on('ready', listener)
+				const fail = error => {
+					if (settled) return
+					settled = true
+					cleanup()
+					reject(error)
+				}
+				const listener = () => succeed()
+
+				timer = setTimeout(() => {
+					fail(new Error('PoRE FLAC encoder library readiness timed out after ' + timeoutMs + ' ms'))
+				}, timeoutMs)
+
+				try {
+					Flac.on('ready', listener)
+				} catch (error) {
+					fail(new Error('PoRE FLAC encoder readiness registration failed: ' + String(error?.message || error)))
+				}
 			})
 		}
 
