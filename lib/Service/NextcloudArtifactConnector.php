@@ -79,18 +79,14 @@ final class NextcloudArtifactConnector {
 		if ($preferredFileId !== null) {
 			$preferred = $this->findFileById($userFolder, $preferredFileId);
 			if ($preferred !== null) {
+				if ($payloadFormat === self::PAYLOAD_FORMAT_FLAC) {
+					$this->inspectWav($preferred, $preferred->getSize());
+					return $this->prepareExistingCanonicalFileHandle($preferred, $targetUserId, $captureId, $actorUserId);
+				}
 				if ($preferred->getSize() !== $size || !hash_equals(strtolower($sha256), $this->hashFile($preferred))) {
 					throw new RuntimeException('Nextcloud recorded artifact payload has changed.');
 				}
-
-				return $this->prepareExistingFileHandle(
-					$preferred,
-					$targetUserId,
-					$captureId,
-					$size,
-					$sha256,
-					$actorUserId,
-				);
+				return $this->prepareExistingFileHandle($preferred, $targetUserId, $captureId, $size, $sha256, $actorUserId);
 			}
 		}
 
@@ -108,21 +104,23 @@ final class NextcloudArtifactConnector {
 		$folder = $this->ensureFolder($folder, $path['month']);
 		$folder = $this->ensureFolder($folder, $path['leaf']);
 
-		$existing = $this->findFile($folder, $path['filename']);
-		if ($existing !== null) {
-			if ($allowFilenameReuse
-				&& $existing->getSize() === $size
-				&& hash_equals(strtolower($sha256), $this->hashFile($existing))) {
-				return $this->prepareExistingFileHandle(
-					$existing,
-					$targetUserId,
-					$captureId,
-					$size,
-					$sha256,
-					$actorUserId,
-				);
+		$canonicalFilename = $path['filename'];
+		$transportFilename = $canonicalFilename;
+		if ($payloadFormat === self::PAYLOAD_FORMAT_FLAC) {
+			$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
+			while ($this->findFile($folder, $canonicalFilename) !== null || $this->findFile($folder, $transportFilename) !== null) {
+				$canonicalFilename = $this->nextFreeFilename($folder, $canonicalFilename);
+				$transportFilename = pathinfo($canonicalFilename, PATHINFO_FILENAME) . '.flac';
 			}
-			$path['filename'] = $this->nextFreeFilename($folder, $path['filename']);
+		} else {
+			$existing = $this->findFile($folder, $transportFilename);
+			if ($existing !== null) {
+				if ($allowFilenameReuse && $existing->getSize() === $size && hash_equals(strtolower($sha256), $this->hashFile($existing))) {
+					return $this->prepareExistingFileHandle($existing, $targetUserId, $captureId, $size, $sha256, $actorUserId);
+				}
+				$canonicalFilename = $this->nextFreeFilename($folder, $canonicalFilename);
+				$transportFilename = $canonicalFilename;
+			}
 		}
 
 		if (!$this->shareManager->shareApiAllowLinks() || !$this->shareManager->shareApiLinkAllowPublicUpload()) {
@@ -150,7 +148,9 @@ final class NextcloudArtifactConnector {
 			'share_id' => $share->getId(),
 			'target_user_id' => $targetUserId,
 			'folder_path' => $this->relativeUserPath($folder, $targetUserId),
-			'filename' => $path['filename'],
+			'filename' => $transportFilename,
+			'canonical_filename' => $canonicalFilename,
+			'payload_format' => $payloadFormat,
 			'capture_id' => $captureId,
 			'file_id' => null,
 			'size' => $size,
@@ -165,7 +165,9 @@ final class NextcloudArtifactConnector {
 			'upload_url' => '/public.php/dav/files/' . rawurlencode($share->getToken()),
 			'upload_username' => 'anonymous',
 			'upload_password' => $password,
-			'filename' => $path['filename'],
+			'filename' => $transportFilename,
+			'canonical_filename' => $canonicalFilename,
+			'payload_format' => $payloadFormat,
 			'size' => $size,
 			'sha256' => strtolower($sha256),
 			'upload_required' => true,
