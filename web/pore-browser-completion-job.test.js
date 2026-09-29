@@ -256,12 +256,12 @@ describe('Browser completion job', () => {
 		}
 		const previousEncoder = window.PoREBrowserFlacEncoder
 		function MockEncoder() {
-			MockEncoder.waitUntilReady = jest.fn(async () => {})
-		this.encodePcm24Bytes = jest.fn(() => [new Uint8Array([1])])
+			this.encodePcm24Bytes = jest.fn(() => [new Uint8Array([1])])
 			this.finish = jest.fn(() => [new Uint8Array([2])])
 			this.getFinalizedHeader = jest.fn(() => new Uint8Array([0x66, 0x4c, 0x61, 0x43]))
 			this.free = jest.fn()
 		}
+		MockEncoder.waitUntilReady = jest.fn(async () => {})
 		window.PoREBrowserFlacEncoder = MockEncoder
 		const job = new Job({ persistenceStoreFactory: () => store })
 		await job.prepare('capture-1')
