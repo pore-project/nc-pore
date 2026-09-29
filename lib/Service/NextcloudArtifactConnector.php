@@ -32,12 +32,15 @@ final class NextcloudArtifactConnector {
 	private const V1_FALLBACK_SAMPLE_RATE = 44100;
 	private const V1_CHANNELS = 1;
 	private const V1_BITS_PER_SAMPLE = 24;
+	private const PAYLOAD_FORMAT_WAV = 'audio/wav';
+	private const PAYLOAD_FORMAT_FLAC = 'audio/flac';
 
 	public function __construct(
 		private readonly IRootFolder $rootFolder,
 		private readonly IConfig $config,
 		private readonly IManager $shareManager,
 		private readonly ISecureRandom $secureRandom,
+		private readonly RecordingRuntimeService $runtime,
 	) {
 	}
 
