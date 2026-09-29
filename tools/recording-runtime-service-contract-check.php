@@ -61,9 +61,8 @@ RUNTIME
 	);
 
 	$sleepScript = writeExecutable(<<<'RUNTIME'
-#!/usr/bin/php
-<?php
-sleep(5);
+#!/bin/sh
+exec sleep 5
 RUNTIME
 	);
 
