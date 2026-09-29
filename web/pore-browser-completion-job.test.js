@@ -64,7 +64,9 @@ describe('Browser completion job', () => {
 	it('prepares a finalized durable capture for transport without uploading it', async () => {
 		const persisted = []
 		const provenance = { schemaVersion: 1, capture: { sampleRate: 48000, sampleSize: 24, channelCount: 1, processing: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }, sourceSegments: [] }
+		const staged = []
 		const store = {
+			clearFinalizedPayload: jest.fn(async () => { staged.length = 0 }),
 			finalizeCapture: jest.fn(async (captureId, patch) => {
 				persisted.push({ captureId, patch })
 			}),
