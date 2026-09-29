@@ -287,7 +287,7 @@ final class NextcloudArtifactConnector {
 		return $payload . '.' . $signature;
 	}
 
-	/** @return array{transfer_id:string,share_id:string|null,target_user_id:string,folder_path:string,filename:string,capture_id:string,file_id:int|null,size:int,sha256:string,actor_user_id:string,upload_required:bool} */
+	/** @return array{transfer_id:string,share_id:string|null,target_user_id:string,folder_path:string,filename:string,canonical_filename:string,payload_format:string,capture_id:string,file_id:int|null,size:int,sha256:string,actor_user_id:string,upload_required:bool} */
 	private function decodeHandle(string $handle): array {
 		$parts = explode('.', $handle, 2);
 		if (count($parts) !== 2) throw new RuntimeException('Invalid transport handle.');
@@ -297,9 +297,13 @@ final class NextcloudArtifactConnector {
 
 		$decoded = json_decode($this->base64UrlDecode($payload), true, 512, JSON_THROW_ON_ERROR);
 		if (!is_array($decoded)) throw new RuntimeException('Invalid transport handle payload.');
-		foreach (['transfer_id', 'share_id', 'target_user_id', 'folder_path', 'filename', 'capture_id', 'file_id', 'size', 'sha256', 'actor_user_id', 'upload_required'] as $key) {
+		foreach (['transfer_id', 'share_id', 'target_user_id', 'folder_path', 'filename', 'capture_id', 'size', 'sha256', 'actor_user_id'] as $key) {
 			if (!array_key_exists($key, $decoded)) throw new RuntimeException('Incomplete transport handle.');
 		}
+		$fileId = $decoded['file_id'] ?? null;
+		$canonicalFilename = $decoded['canonical_filename'] ?? $decoded['filename'];
+		$payloadFormat = $decoded['payload_format'] ?? self::PAYLOAD_FORMAT_WAV;
+		$uploadRequired = $decoded['upload_required'] ?? true;
 
 		$size = $decoded['size'];
 		$fileId = $decoded['file_id'];
@@ -317,6 +321,8 @@ final class NextcloudArtifactConnector {
 			'target_user_id' => (string)$decoded['target_user_id'],
 			'folder_path' => (string)$decoded['folder_path'],
 			'filename' => (string)$decoded['filename'],
+			'canonical_filename' => (string)$canonicalFilename,
+			'payload_format' => (string)$payloadFormat,
 			'capture_id' => (string)$decoded['capture_id'],
 			'file_id' => $fileId,
 			'size' => (int)$size,
