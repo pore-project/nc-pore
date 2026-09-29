@@ -404,6 +404,88 @@ final class NextcloudArtifactConnector {
 		}
 	}
 
+	private function convertFlacToCanonicalWav(File $flacFile, array $state): array {
+		$inputPath = tempnam(sys_get_temp_dir(), 'pore-flac-in-');
+		$outputPath = tempnam(sys_get_temp_dir(), 'pore-flac-out-');
+		if ($inputPath === false || $outputPath === false) {
+			if ($inputPath !== false) @unlink($inputPath);
+			if ($outputPath !== false) @unlink($outputPath);
+			throw new RuntimeException('artifact_preservation_invalid');
+		}
+		$canonicalFile = null;
+		try {
+			$input = $flacFile->fopen('r');
+			$local = fopen($inputPath, 'wb');
+			if ($input === false || $local === false) throw new RuntimeException('artifact_preservation_invalid');
+			stream_copy_to_stream($input, $local);
+			fclose($input); fclose($local);
+
+			$response = $this->runtime->command([
+				'input_path' => $inputPath,
+				'output_path' => $outputPath,
+				'expected_sample_rate_hz' => 0,
+				'expected_channels' => self::V1_CHANNELS,
+				'expected_bits_per_sample' => self::V1_BITS_PER_SAMPLE,
+			], 'artifact.convert_flac_to_wav');
+
+			$rate = $response['sample_rate_hz'] ?? null;
+			$channels = $response['channels'] ?? null;
+			$bits = $response['bits_per_sample'] ?? null;
+			$count = $response['sample_count'] ?? null;
+			$length = $response['payload_length'] ?? null;
+			if (($response['status'] ?? null) !== 'converted'
+				|| !is_int($rate) || !in_array($rate, [self::V1_SAMPLE_RATE, self::V1_FALLBACK_SAMPLE_RATE], true)
+				|| $channels !== self::V1_CHANNELS || $bits !== self::V1_BITS_PER_SAMPLE
+				|| !is_int($count) || $count <= 0 || !is_int($length) || $length !== 44 + ($count * 3)) {
+				throw new RuntimeException('artifact_preservation_invalid');
+			}
+			$localSize = filesize($outputPath);
+			$localHash = hash_file('sha256', $outputPath);
+			if ($localSize === false || $localSize !== $length || $localHash === false) throw new RuntimeException('artifact_preservation_invalid');
+
+			$folder = $this->folderForState($state);
+			$name = $state['canonical_filename'];
+			$existing = $this->findFile($folder, $name);
+			if ($existing !== null) {
+				if ($existing->getSize() === $localSize && hash_equals($localHash, $this->hashFile($existing))) {
+					$preservation = $this->inspectWav($existing, $existing->getSize());
+					return [
+						'artifact_id' => $state['capture_id'], 'target_user_id' => $state['target_user_id'],
+						'file_id' => $existing->getId(), 'path' => $this->relativeUserPath($existing, $state['target_user_id']),
+						'size' => $existing->getSize(), 'sha256' => $localHash, 'filename' => $existing->getName(),
+						'preservation' => $preservation,
+					];
+				}
+				throw new RuntimeException('artifact_manifest_conflict');
+			}
+			$canonicalFile = $folder->newFile($name);
+			$source = fopen($outputPath, 'rb');
+			$destination = $canonicalFile->fopen('w');
+			if ($source === false || $destination === false) throw new RuntimeException('artifact_preservation_invalid');
+			if (stream_copy_to_stream($source, $destination) === false) throw new RuntimeException('artifact_preservation_invalid');
+			fclose($source); fclose($destination);
+
+			$size = $canonicalFile->getSize();
+			$hash = $this->hashFile($canonicalFile);
+			$preservation = $this->inspectWav($canonicalFile, $size);
+			if ($size !== $localSize || !hash_equals($localHash, $hash)) throw new RuntimeException('artifact_preservation_invalid');
+
+			return [
+				'artifact_id' => $state['capture_id'], 'target_user_id' => $state['target_user_id'],
+				'file_id' => $canonicalFile->getId(), 'path' => $this->relativeUserPath($canonicalFile, $state['target_user_id']),
+				'size' => $size, 'sha256' => $hash, 'filename' => $canonicalFile->getName(), 'preservation' => $preservation,
+			];
+		} catch (RuntimeException $error) {
+			if ($canonicalFile !== null) { try { $canonicalFile->delete(); } catch (\Throwable) {} }
+			throw $error;
+		} catch (\Throwable $error) {
+			if ($canonicalFile !== null) { try { $canonicalFile->delete(); } catch (\Throwable) {} }
+			throw new RuntimeException('artifact_preservation_invalid', 0, $error);
+		} finally {
+			@unlink($inputPath); @unlink($outputPath);
+		}
+	}
+
 	private function hashFile(File $file): string {
 		$input = $file->fopen('r');
 		if ($input === false) throw new RuntimeException('Unable to read stored Nextcloud artifact.');
