@@ -309,7 +309,10 @@ final class ArtifactManifestStore {
 	 * @return array{format:string,size:int,sha256:string}
 	 */
 	private function normalizeTransport(mixed $pending, mixed $receipt): array {
-		$value = is_array($pending) ? $pending : (is_array($receipt) ? $receipt : null);
+		$value = is_array($pending) ? $pending : null;
+		if ($value === null && is_array($receipt)) {
+			$value = $receipt;
+		}
 		if ($value === null) {
 			return [
 				'format' => self::PAYLOAD_FORMAT_WAV,
@@ -317,9 +320,12 @@ final class ArtifactManifestStore {
 				'sha256' => str_repeat('0', 64),
 			];
 		}
-		$format = $this->requiredPayloadFormat($value['format'] ?? self::PAYLOAD_FORMAT_WAV);
-		$size = $this->requiredNonNegativeInt($value['size'] ?? null, 'transport.size');
-		$sha256 = $this->requiredSha256($value['sha256'] ?? null);
+		$remote = is_array($value['remote'] ?? null) ? $value['remote'] : [];
+		$format = $this->requiredPayloadFormat($value['format'] ?? $remote['format'] ?? self::PAYLOAD_FORMAT_WAV);
+		$sizeValue = $value['size'] ?? $remote['size'] ?? null;
+		$hashValue = $value['sha256'] ?? $remote['sha256'] ?? null;
+		$size = $this->requiredNonNegativeInt($sizeValue, 'transport.size');
+		$sha256 = $this->requiredSha256($hashValue);
 		return ['format' => $format, 'size' => $size, 'sha256' => $sha256];
 	}
 
