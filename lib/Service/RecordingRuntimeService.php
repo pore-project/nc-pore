@@ -163,21 +163,39 @@ final class RecordingRuntimeService {
 
 	private function readExact($stream, int $length, float $deadline, $process, $stderr): string {
 		$result = '';
-		stream_set_timeout($stream, 0, 100_000);
+		stream_set_blocking($stream, false);
 
 		while (strlen($result) < $length && !feof($stream)) {
 			$this->terminateOnDeadline($process, $deadline);
-			$chunk = fread($stream, $length - strlen($result));
-			$this->drainStream($stderr);
-			if ($chunk === false) {
-				throw new RuntimeException('Unable to read the PoRE runtime response.');
-			}
-			if ($chunk !== '') {
-				$result .= $chunk;
+
+			$remaining = $deadline - microtime(true);
+			if ($remaining <= 0) {
 				continue;
 			}
-			if ((stream_get_meta_data($stream)['timed_out'] ?? false) === true) {
+
+			$read = [$stream, $stderr];
+			$seconds = (int)floor(min(0.1, $remaining));
+			$microseconds = (int)round((min(0.1, $remaining) - $seconds) * 1_000_000);
+			$write = null;
+			$except = null;
+			$ready = stream_select($read, $write, $except, $seconds, $microseconds);
+			if ($ready === false || $ready === 0) {
 				continue;
+			}
+
+			foreach ($read as $readable) {
+				if ($readable === $stderr) {
+					$this->drainStream($stderr);
+					continue;
+				}
+
+				$chunk = fread($stream, $length - strlen($result));
+				if ($chunk === false) {
+					throw new RuntimeException('Unable to read the PoRE runtime response.');
+				}
+				if ($chunk !== '') {
+					$result .= $chunk;
+				}
 			}
 		}
 
