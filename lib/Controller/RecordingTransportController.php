@@ -286,6 +286,7 @@ final class RecordingTransportController extends OCSController {
 			'filename' => $prepared['filename'] ?? null,
 			'size' => $prepared['size'] ?? null,
 			'payload_sha256' => $prepared['sha256'] ?? null,
+			'payload_format' => $prepared['payload_format'] ?? 'audio/wav',
 			'capture_provenance' => $provenance,
 		]);
 	}
