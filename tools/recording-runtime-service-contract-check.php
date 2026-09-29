@@ -6,6 +6,9 @@ namespace OCP {
 	class IConfig {
 		public function getSystemValue(string $key, mixed $default = null): mixed { return $default; }
 	}
+}
+
+namespace OCP\App {
 	class IAppManager {
 		public function getAppPath(string $appId): ?string { return null; }
 	}
