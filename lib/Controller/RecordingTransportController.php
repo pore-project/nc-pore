@@ -40,6 +40,7 @@ final class RecordingTransportController extends OCSController {
 		string $payload_sha256,
 		string $recording_session_id,
 		string $capture_provenance = '{}',
+		string $payload_format = 'audio/flac',
 	): DataResponse {
 		try {
 			$actorId = $this->talkSessionAccess->resolve($production_id)['actor_id'];
@@ -71,6 +72,7 @@ final class RecordingTransportController extends OCSController {
 				$size,
 				$this->required($payload_sha256, 'payload_sha256'),
 				$actorId,
+				$this->required($payload_format, 'payload_format'),
 				$preferredFileId,
 			);
 
@@ -185,6 +187,8 @@ final class RecordingTransportController extends OCSController {
 				'filename' => $prepared['filename'],
 				'size' => $prepared['size'],
 				'sha256' => $prepared['sha256'],
+				'payload_format' => $prepared['payload_format'] ?? $payload_format,
+				'canonical_filename' => $prepared['canonical_filename'] ?? $prepared['filename'],
 				'upload_required' => $prepared['upload_required'],
 				'error_code' => null,
 			]);
@@ -301,6 +305,7 @@ final class RecordingTransportController extends OCSController {
 			'PoRE transport authorization is not available.' => $this->rejected('runtime_unavailable', 503),
 			'PoRE transport authorization is not permitted for this recording' => $this->rejected('transport_unauthorized', 403),
 			'artifact_provenance_invalid' => $this->rejected('artifact_provenance_invalid', 400),
+			'artifact_payload_format_invalid' => $this->rejected('artifact_payload_format_invalid', 400),
 			'artifact_manifest_invalid' => $this->rejected('artifact_manifest_invalid', 400),
 			'artifact_manifest_conflict' => $this->rejected('artifact_manifest_conflict', 409),
 			'Nextcloud recorded artifact payload has changed.' => $this->rejected('artifact_manifest_conflict', 409),
