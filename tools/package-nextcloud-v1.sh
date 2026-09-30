@@ -20,7 +20,9 @@ trap 'rm -rf "${STAGE_DIR}"' EXIT
 APP_DIR="${STAGE_DIR}/${APP_NAME}"
 mkdir -p "${APP_DIR}"
 
-git -C "${ROOT_DIR}" archive HEAD appinfo css js lib web | tar -x -C "${APP_DIR}"
+git -C "${ROOT_DIR}" archive HEAD appinfo css js lib web |
+  tar --exclude='*.test.js' -x -C "${APP_DIR}"
+
 mkdir -p "${APP_DIR}/runtime/bin"
 install -m 0755 "${RUNTIME_BINARY}" "${APP_DIR}/runtime/bin/pore-runtime"
 

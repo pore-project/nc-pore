@@ -50,6 +50,9 @@ jobs:
       - name: Build V1 runtime
         run: cargo build --release -p pore-runtime
 
+      - name: V1 package contract checks
+        run: bash tools/package-nextcloud-v1-contract-check.sh
+
       - name: Nextcloud storage contract checks
         run: php tools/nextcloud-v1-contract-check.php
 
