@@ -300,7 +300,7 @@
 				return
 			}
 			root.hidden = false
-			root.removeAttribute('aria-hidden')
+			root.setAttribute('aria-hidden', 'false')
 			settings.hidden = guestMode
 			const status = resolveStatus({ state, listener, ready, confirmed, productionStatus })
 			root.dataset.status = status.tone
