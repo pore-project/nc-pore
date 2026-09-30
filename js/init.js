@@ -441,7 +441,7 @@
 	})
 
 	window.addEventListener('pore:recording-error', event => publish({ localCaptureError: event.detail?.error, errorMessage: toUserFacingError(event.detail?.error) }))
-	window.addEventListener('pore:recording-local-error', event => publish({ errorMessage: Ui.toUserFacingError(event.detail?.error) }))
+	window.addEventListener('pore:recording-local-error', event => publish({ errorMessage: toUserFacingError(event.detail?.error) }))
 	window.addEventListener('pore:recording-state', event => updateAuthoritativeState(event.detail))
 
 	window.addEventListener('pore:recording-transport-completed', async event => {
