@@ -29,7 +29,7 @@ required_entries=(
 )
 
 for entry in "${required_entries[@]}"; do
-  if ! tar -tzf "${ARCHIVE}" | grep -Fxq "${entry}"; then
+  if ! tar -tzf "${ARCHIVE}" | grep -Fx "${entry}" >/dev/null; then
     echo "Required V1 package entry is missing: ${entry}" >&2
     exit 1
   fi
@@ -41,7 +41,7 @@ if tar -tzf "${ARCHIVE}" | grep -E "\.test\.js$" >/dev/null; then
   exit 1
 fi
 
-if ! git -C "${ROOT_DIR}" ls-files "web/*.test.js" | grep -q .; then
+if ! git -C "${ROOT_DIR}" ls-files "web/*.test.js" | grep "." >/dev/null; then
   echo "Repository test files disappeared from source control." >&2
   exit 1
 fi
