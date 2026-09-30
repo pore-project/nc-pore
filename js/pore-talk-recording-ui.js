@@ -83,7 +83,12 @@
 			.pore-talk-recording-ui-mount .pore-talk-recording__menu-toggle:focus-visible {
 				outline: 2px solid var(--color-primary-element, #0082c9); outline-offset: -2px;
 			}
-			.pore-talk-recording-ui-mount .pore-talk-recording__main { padding: 5px; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__main { gap: 6px; padding: 0 7px; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__main-label { white-space: nowrap; font-size: .85em; font-weight: 600; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__main .pore-talk-recording__indicator { width: 18px; height: 18px; flex-basis: 18px; font-size: .75em; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__status-detail { margin: -6px 0 12px; color: var(--color-text-maxcontrast, #666); }
+			.pore-talk-recording-ui-mount .pore-talk-recording__error { margin: 0 0 12px; padding: 8px 10px; border-radius: var(--border-radius-large, 8px); background: var(--color-error-hover, rgba(200,0,0,.08)); color: var(--color-error, #b40000); }
+			.pore-talk-recording-ui-mount .pore-talk-recording__error[hidden] { display: none; }
 			.pore-talk-recording-ui-mount .pore-talk-recording__menu-toggle { padding: 0; }
 			.pore-talk-recording-ui-mount .pore-talk-recording__logo { width: 24px; height: 24px; display: block; }
 			.pore-talk-recording-ui-mount .pore-talk-recording__chevron { width: 16px; height: 16px; }
