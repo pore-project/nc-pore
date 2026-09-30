@@ -19,6 +19,12 @@ describe('Talk recording UI', () => {
 		expect(Ui.resolveStatus({ state: 'error' })).toEqual(Ui.STATUS.error)
 	})
 
+	it('maps technical errors to non-technical user feedback', () => {
+		expect(Ui.toUserFacingError({ name: 'NotAllowedError' })).toBe('Der Zugriff auf das Mikrofon wurde nicht freigegeben.')
+		expect(Ui.toUserFacingError({ code: 'device_not_found' })).toBe('Es wurde kein verwendbares Mikrofon gefunden.')
+		expect(Ui.toUserFacingError({ code: 'runtime_unavailable' })).toBe('Bei der Aufnahme ist ein Problem aufgetreten. Bitte den Vorgang erneut versuchen.')
+	})
+
 	it('formats elapsed recording time without inventing precision', () => {
 		expect(Ui.formatElapsed(0)).toBe('00:00')
 		expect(Ui.formatElapsed(65)).toBe('01:05')
@@ -41,9 +47,10 @@ describe('Talk recording UI', () => {
 			onStop: jest.fn(),
 		})
 
-		expect(participant.querySelector('[aria-label="NC-PoRE"]')).not.toBeNull()
+		expect(participant.querySelector('[aria-label="NC-PoRE: Aufnahme läuft"]')).not.toBeNull()
+		expect(participant.textContent).toContain('Aufnahme')
 		expect(participant.textContent).not.toContain('Aufnahme beenden')
-		expect(host.querySelector('[aria-label="NC-PoRE"]')).not.toBeNull()
+		expect(host.querySelector('[aria-label="NC-PoRE: Aufnahme läuft"]')).not.toBeNull()
 		expect(host.querySelector('[aria-label="NC-PoRE öffnen"]')).not.toBeNull()
 		expect(host.textContent).toContain('Aufnahme beenden')
 	})
@@ -51,6 +58,26 @@ describe('Talk recording UI', () => {
 	it('shows the host start action only while preparing', () => {
 		const host = Ui.create({ role: 'host', state: 'preparing', participantCount: 1, readyCount: 0, onStart: jest.fn() })
 		expect(host.textContent).toContain('Aufnahme starten')
+	})
+
+	it('does not expose recording information to a non-participant', () => {
+		const listener = Ui.create({ role: 'listener', state: 'recording', ready: false })
+		expect(listener.hidden).toBe(true)
+		expect(listener.getAttribute('aria-hidden')).toBe('true')
+		expect(listener.textContent).not.toContain('Aufnahme läuft')
+	})
+
+	it('shows processing feedback after recording stop without inventing a stopping state', () => {
+		const stopped = Ui.create({ role: 'participant', state: 'stopped', productionStatus: 'active' })
+		expect(stopped.textContent).toContain('Aufnahme beendet')
+		expect(stopped.textContent).toContain('Verarbeitung läuft')
+	})
+
+	it('shows user-facing error feedback without requiring a technical state transition', () => {
+		const root = Ui.create({ role: 'participant', state: 'recording', errorMessage: 'Bei der Aufnahme ist ein Problem aufgetreten. Bitte den Vorgang erneut versuchen.' })
+		const error = root.querySelector('.pore-talk-recording__error')
+		expect(error).not.toBeNull()
+		expect(error.textContent).toContain('Bei der Aufnahme ist ein Problem aufgetreten')
 	})
 
 	it('does not expose a recording action to a non-host member', () => {

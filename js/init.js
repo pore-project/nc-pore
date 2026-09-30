@@ -17,6 +17,15 @@
 	const RuntimeTransport = window.PoREBrowserRuntimeTransport
 	const HostAdapter = window.PoRETalkRecordingHostAdapter
 
+	const toUserFacingError = error => {
+		if (typeof Ui?.toUserFacingError === 'function') return Ui.toUserFacingError(error)
+		const code = String(error?.code || error?.name || '').trim()
+		if (code === 'NotAllowedError' || code === 'permission_denied') return 'Der Zugriff auf das Mikrofon wurde nicht freigegeben.'
+		if (code === 'NotFoundError' || code === 'device_not_found') return 'Es wurde kein verwendbares Mikrofon gefunden.'
+		if (code === 'talk_context_unauthorized') return 'Die Aufnahmefunktion ist in diesem Gespräch nicht verfügbar.'
+		return 'Bei der Aufnahme ist ein Problem aufgetreten. Bitte den Vorgang erneut versuchen.'
+	}
+
 	if (!Connector || !LocalCapture || !Recorder || !Ui || !StateBridge || !CompletionJob || !RuntimeTransport || !HostAdapter || !window.__poreRecordingCoordinationChannel) return
 
 	const connector = new Connector()
@@ -67,6 +76,7 @@
 		publish({
 			productionId: mergedSnapshot.productionId || productionId,
 			productionStatus: mergedSnapshot.productionStatus || null,
+			errorMessage: mergedSnapshot.error ? toUserFacingError(mergedSnapshot.error) : null,
 			recordingId: mergedSnapshot.recordingId,
 			role: mergedSnapshot.role,
 			state: mergedSnapshot.state,
@@ -380,7 +390,7 @@
 	const publish = patch => {
 		if (!context) return
 		const nextContext = { ...context, ...patch, ...(talkUiMountElement ? { mountElement: talkUiMountElement } : {}) }
-		const uiStateFields = ['productionId', 'productionStatus', 'recordingId', 'role', 'state', 'listener', 'confirmed', 'ready', 'openingConfirmed', 'readyCount', 'openingConfirmedCount', 'participantCount', 'elapsedSeconds', 'startedAt']
+		const uiStateFields = ['productionId', 'productionStatus', 'recordingId', 'role', 'state', 'listener', 'confirmed', 'ready', 'openingConfirmed', 'readyCount', 'openingConfirmedCount', 'participantCount', 'elapsedSeconds', 'startedAt', 'errorMessage']
 		const currentKey = JSON.stringify(uiStateFields.map(field => context[field] ?? null))
 		const nextKey = JSON.stringify(uiStateFields.map(field => nextContext[field] ?? null))
 		context = nextContext
@@ -430,7 +440,8 @@
 		} catch (error) { window.dispatchEvent(new CustomEvent('pore:recording-local-error', { detail: { error } })) }
 	})
 
-	window.addEventListener('pore:recording-error', event => publish({ localCaptureError: event.detail?.error }))
+	window.addEventListener('pore:recording-error', event => publish({ localCaptureError: event.detail?.error, errorMessage: toUserFacingError(event.detail?.error) }))
+	window.addEventListener('pore:recording-local-error', event => publish({ errorMessage: toUserFacingError(event.detail?.error) }))
 	window.addEventListener('pore:recording-state', event => updateAuthoritativeState(event.detail))
 
 	window.addEventListener('pore:recording-transport-completed', async event => {

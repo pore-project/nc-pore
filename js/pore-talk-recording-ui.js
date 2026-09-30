@@ -10,16 +10,16 @@
 	'use strict'
 
 	const STATUS = Object.freeze({
-		preparing: { label: 'Vorbereitung', tone: 'preparing', symbol: '○' },
-		listener: { label: 'Listener', tone: 'listener', symbol: '•' },
-		error: { label: 'Nicht bereit', tone: 'error', symbol: '!' },
-		ready: { label: 'Aufnahme bereit', tone: 'ready', symbol: '●' },
-		recording: { label: 'Aufnahme läuft', tone: 'recording', symbol: '●' },
-		opening: { label: 'Aufnahme wird geöffnet', tone: 'opening', symbol: '●' },
-		stopping: { label: 'Aufnahme wird übertragen', tone: 'transfer', symbol: '↗' },
-		stopped: { label: 'Aufnahme beendet', tone: 'stopped', symbol: '■' },
-		confirmed: { label: 'Aufnahme bestätigt', tone: 'confirmed', symbol: '✓' },
-		productionClosed: { label: 'Produktion geschlossen', tone: 'production-closed', symbol: '■' },
+		preparing: { label: 'Vorbereitung', compact: 'PoRE', tone: 'preparing', symbol: '○' },
+		listener: { label: 'Nicht beteiligt', compact: '', tone: 'listener', symbol: '•' },
+		error: { label: 'Problem bei der Aufnahme', compact: 'Problem', tone: 'error', symbol: '!' },
+		ready: { label: 'Aufnahme bereit', compact: 'Bereit', tone: 'ready', symbol: '●' },
+		recording: { label: 'Aufnahme läuft', compact: 'Aufnahme', tone: 'recording', symbol: '●' },
+		opening: { label: 'Aufnahme wird geöffnet', compact: 'Start …', tone: 'opening', symbol: '●' },
+		stopping: { label: 'Aufnahme wird übertragen', compact: 'Transfer', tone: 'transfer', symbol: '↗' },
+		stopped: { label: 'Aufnahme beendet', compact: 'Beendet', tone: 'stopped', symbol: '■' },
+		confirmed: { label: 'Aufnahme bestätigt', compact: 'Bestätigt', tone: 'confirmed', symbol: '✓' },
+		productionClosed: { label: 'Produktion geschlossen', compact: 'Geschlossen', tone: 'production-closed', symbol: '■' },
 	})
 
 	const SETTINGS_URL = '/ocs/v2.php/apps/pore/v1/settings'
@@ -37,6 +37,16 @@
 		if (!Number.isFinite(timestamp)) return Math.max(0, Number(fallback) || 0)
 		return Math.max(0, (now - timestamp) / 1000)
 	}
+
+	const toUserFacingError = error => {
+		const code = String(error?.code || error?.name || '').trim()
+		if (code === 'NotAllowedError' || code === 'permission_denied') return 'Der Zugriff auf das Mikrofon wurde nicht freigegeben.'
+		if (code === 'NotFoundError' || code === 'device_not_found') return 'Es wurde kein verwendbares Mikrofon gefunden.'
+		if (code === 'talk_context_unauthorized') return 'Die Aufnahmefunktion ist in diesem Gespräch nicht verfügbar.'
+		return 'Bei der Aufnahme ist ein Problem aufgetreten. Bitte den Vorgang erneut versuchen.'
+	}
+
+	const compactStatus = status => status?.compact || 'PoRE'
 
 	const resolveStatus = ({ state = 'preparing', listener = false, ready = false, confirmed = false, productionStatus = null }) => {
 		if (listener) return STATUS.listener
@@ -73,7 +83,12 @@
 			.pore-talk-recording-ui-mount .pore-talk-recording__menu-toggle:focus-visible {
 				outline: 2px solid var(--color-primary-element, #0082c9); outline-offset: -2px;
 			}
-			.pore-talk-recording-ui-mount .pore-talk-recording__main { padding: 5px; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__main { gap: 6px; padding: 0 7px; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__main-label { white-space: nowrap; font-size: .85em; font-weight: 600; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__main .pore-talk-recording__indicator { width: 18px; height: 18px; flex-basis: 18px; font-size: .75em; }
+			.pore-talk-recording-ui-mount .pore-talk-recording__status-detail { margin: -6px 0 12px; color: var(--color-text-maxcontrast, #666); }
+			.pore-talk-recording-ui-mount .pore-talk-recording__error { margin: 0 0 12px; padding: 8px 10px; border-radius: var(--border-radius-large, 8px); background: var(--color-error-hover, rgba(200,0,0,.08)); color: var(--color-error, #b40000); }
+			.pore-talk-recording-ui-mount .pore-talk-recording__error[hidden] { display: none; }
 			.pore-talk-recording-ui-mount .pore-talk-recording__menu-toggle { padding: 0; }
 			.pore-talk-recording-ui-mount .pore-talk-recording__logo { width: 24px; height: 24px; display: block; }
 			.pore-talk-recording-ui-mount .pore-talk-recording__chevron { width: 16px; height: 16px; }
@@ -99,18 +114,6 @@
 			.pore-talk-recording-ui-mount .pore-talk-recording__settings-status { min-height: 1.2em; margin: 4px 0 0; font-size: .8em; opacity: .75; }
 		`
 		document.head.appendChild(style)
-	}
-
-	const createLogo = () => {
-		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-		svg.setAttribute('viewBox', '0 0 24 24')
-		svg.setAttribute('aria-hidden', 'true')
-		svg.setAttribute('class', 'pore-talk-recording__logo')
-		const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-		path.setAttribute('fill', 'currentColor')
-		path.setAttribute('d', 'M12 .7a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.05c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.75.08-.74.08-.74 1.2.08 1.84 1.23 1.84 1.23 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6-.01c2.29-1.55 3.29-1.23 3.29-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .7Z')
-		svg.appendChild(path)
-		return svg
 	}
 
 	const createChevron = () => {
@@ -150,9 +153,12 @@
 		const main = document.createElement('button')
 		main.type = 'button'
 		main.className = 'pore-talk-recording__main button-vue button-vue--size-normal button-vue--tertiary'
-		main.title = 'NC-PoRE'
-		main.setAttribute('aria-label', 'NC-PoRE')
-		main.appendChild(createLogo())
+		const mainIndicator = document.createElement('span')
+		mainIndicator.className = 'pore-talk-recording__indicator'
+		mainIndicator.setAttribute('aria-hidden', 'true')
+		const mainLabel = document.createElement('span')
+		mainLabel.className = 'pore-talk-recording__main-label'
+		main.append(mainIndicator, mainLabel)
 
 		const toggle = document.createElement('button')
 		toggle.type = 'button'
@@ -168,12 +174,26 @@
 
 		const title = document.createElement('h3')
 		title.className = 'pore-talk-recording__panel-title'
+		title.id = 'pore-talk-recording-panel-title'
 		title.textContent = 'NC-PoRE'
+		panel.setAttribute('role', 'dialog')
+		panel.setAttribute('aria-labelledby', title.id)
 		panel.appendChild(title)
 
 		const statusText = document.createElement('p')
 		statusText.className = 'pore-talk-recording__status'
+		statusText.setAttribute('role', 'status')
+		statusText.setAttribute('aria-live', 'polite')
 		panel.appendChild(statusText)
+
+		const statusDetail = document.createElement('p')
+		statusDetail.className = 'pore-talk-recording__status-detail'
+		panel.appendChild(statusDetail)
+
+		const errorText = document.createElement('p')
+		errorText.className = 'pore-talk-recording__error'
+		errorText.setAttribute('role', 'alert')
+		panel.appendChild(errorText)
 
 		const readiness = document.createElement('span')
 		readiness.className = 'pore-talk-recording__readiness'
@@ -264,18 +284,36 @@
 
 		const renderPanel = context => {
 			const {
-				role = 'none', state = 'preparing', listener = false, guest = false, ready = false, openingConfirmed = false, confirmed = false,
+				role = 'none', state = 'preparing', listener = false, guest = false, ready = false, confirmed = false,
 				readyCount = 0, openingConfirmedCount = 0, participantCount = 0, elapsedSeconds = 0,
-				productionStatus = null, onStart = null, onStop = null, onForceClose = null,
+				productionStatus = null, errorMessage = '', onStart = null, onStop = null, onForceClose = null,
 			} = context || {}
 			guestMode = guest === true
+			const wasOpen = !panel.hidden
+
+			if (role === 'listener' || listener) {
+				root.hidden = true
+				root.setAttribute('aria-hidden', 'true')
+				panel.hidden = true
+				toggle.setAttribute('aria-expanded', 'false')
+				stopElapsedTimer()
+				return
+			}
+			root.hidden = false
+			root.setAttribute('aria-hidden', 'false')
 			settings.hidden = guestMode
 			const status = resolveStatus({ state, listener, ready, confirmed, productionStatus })
 			root.dataset.status = status.tone
 			root.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
-
-			const wasOpen = !panel.hidden
+			mainIndicator.className = `pore-talk-recording__indicator pore-talk-recording__indicator--${status.tone}`
+			mainIndicator.textContent = status.symbol
+			mainLabel.textContent = compactStatus(status)
+			main.setAttribute('aria-label', `NC-PoRE: ${status.label}`)
+			main.title = status.label
 			statusText.textContent = status.label
+			statusDetail.textContent = ''
+			errorText.hidden = !errorMessage
+			errorText.textContent = errorMessage || ''
 
 			const showReadiness = role === 'host' && participantCount > 0 && !listener && !confirmed
 			readiness.hidden = !showReadiness
@@ -289,6 +327,16 @@
 			if (showElapsed) updateElapsed({ startedAt: context?.startedAt, elapsedSeconds })
 			syncElapsedTimer({ state, listener, startedAt: context?.startedAt, elapsedSeconds })
 
+			if (state === 'stopped' && productionStatus === 'active' && !confirmed) {
+				statusDetail.textContent = 'Aufnahme beendet – Verarbeitung läuft.'
+			} else if (state === 'completed' && !confirmed) {
+				statusDetail.textContent = 'Aufnahme ist technisch abgeschlossen, die Bestätigung steht noch aus.'
+			} else if (state === 'opening') {
+				statusDetail.textContent = participantCount > 1
+					? `${openingConfirmedCount} / ${participantCount} bereit für die Aufnahme.`
+					: 'Die Aufnahme wird gerade gestartet.'
+			}
+
 			const canStart = role === 'host' && !listener && state === 'preparing' && !ready && typeof onStart === 'function'
 			const canStop = role === 'host' && !listener && state === 'recording' && typeof onStop === 'function'
 			const canForceClose = role === 'host' && !listener && state === 'stopped' && productionStatus === 'active' && !confirmed && typeof onForceClose === 'function'
@@ -296,7 +344,7 @@
 			action.hidden = !actionHandler
 			if (canStart) action.textContent = 'Aufnahme starten'
 			if (canStop) action.textContent = 'Aufnahme beenden'
-			if (canForceClose) action.textContent = 'Production endgültig schließen'
+			if (canForceClose) action.textContent = 'Produktion endgültig schließen'
 
 			if (wasOpen) setOpen(true)
 		}
@@ -339,5 +387,5 @@
 		window.__poreTalkRecordingUiGlobalListeners = true
 	}
 
-	window.PoRETalkRecordingUi = Object.freeze({ STATUS, formatElapsed, elapsedSecondsFromStartedAt, resolveStatus, create, mount })
+	window.PoRETalkRecordingUi = Object.freeze({ STATUS, formatElapsed, elapsedSecondsFromStartedAt, resolveStatus, toUserFacingError, compactStatus, create, mount })
 })()
