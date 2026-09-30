@@ -75,7 +75,7 @@ describe('Talk recording UI', () => {
 
 	it('shows user-facing error feedback without requiring a technical state transition', () => {
 		const root = Ui.create({ role: 'participant', state: 'recording', errorMessage: 'Bei der Aufnahme ist ein Problem aufgetreten. Bitte den Vorgang erneut versuchen.' })
-		const error = root.querySelector('[role="alert"]')
+		const error = root.querySelector('.pore-talk-recording__error')
 		expect(error).not.toBeNull()
 		expect(error.textContent).toContain('Bei der Aufnahme ist ein Problem aufgetreten')
 	})
