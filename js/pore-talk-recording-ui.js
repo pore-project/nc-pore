@@ -289,6 +289,7 @@
 				productionStatus = null, errorMessage = '', onStart = null, onStop = null, onForceClose = null,
 			} = context || {}
 			guestMode = guest === true
+			const wasOpen = !panel.hidden
 
 			if (role === 'listener' || listener) {
 				root.hidden = true
