@@ -53,11 +53,19 @@
 }
 
 .pore-talk-recording__indicator--opening {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
 	animation: pore-talk-recording-pulse 1s ease-in-out infinite;
 }
 
 .pore-talk-recording__indicator--transfer {
 	background: var(--color-primary-element);
+	color: var(--color-main-background);
+}
+
+.pore-talk-recording__indicator--stopped,
+.pore-talk-recording__indicator--production-closed {
+	background: var(--color-background-dark);
 	color: var(--color-main-background);
 }
 
@@ -78,6 +86,28 @@
 
 .pore-talk-recording__label {
 	white-space: nowrap;
+}
+
+.pore-talk-recording__main-label {
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.pore-talk-recording__status-detail {
+	margin-top: calc(-1 * var(--default-grid-baseline));
+	color: var(--color-text-maxcontrast);
+}
+
+.pore-talk-recording__error {
+	margin-top: var(--default-grid-baseline);
+	padding: calc(1.5 * var(--default-grid-baseline));
+	border-radius: var(--border-radius-large);
+	background: var(--color-error-hover);
+	color: var(--color-error);
+}
+
+.pore-talk-recording__error[hidden] {
+	display: none;
 }
 
 .pore-talk-recording__readiness,
