@@ -97,6 +97,8 @@
 				talkParticipantsToken = token
 				talkParticipantsFetchedAt = Date.now()
 			} catch (error) {
+				talkParticipantsToken = token
+				talkParticipantsFetchedAt = Date.now()
 				console.debug('[NC-PoRe] Talk participant status mapping unavailable', error)
 			} finally {
 				talkParticipantsFetch = null
@@ -194,7 +196,14 @@
 	function start() {
 		if (observer) return
 		mount()
-		participantStatusObserver = new MutationObserver(() => renderParticipantStatuses())
+		participantStatusObserver = new MutationObserver(mutations => {
+			const poreSelector = '[data-pore-talk-participant-status], #' + 'pore-talk-participant-status-popover'
+			const relevantMutation = mutations.some(mutation => {
+				const nodes = [...mutation.addedNodes, ...mutation.removedNodes]
+				return nodes.some(node => node.nodeType !== Node.ELEMENT_NODE || !node.matches(poreSelector))
+			})
+			if (relevantMutation) renderParticipantStatuses()
+		})
 		participantStatusObserver.observe(document.body, { childList: true, subtree: true })
 		observer = new MutationObserver(mount)
 		observer.observe(document.body, { childList: true, subtree: true })
