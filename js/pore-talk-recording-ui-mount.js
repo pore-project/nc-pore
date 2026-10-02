@@ -200,7 +200,7 @@
 			const poreSelector = '[data-pore-talk-participant-status], #' + 'pore-talk-participant-status-popover'
 			const relevantMutation = mutations.some(mutation => {
 				const nodes = [...mutation.addedNodes, ...mutation.removedNodes]
-				return nodes.some(node => node.nodeType !== Node.ELEMENT_NODE || !node.matches(poreSelector))
+				return nodes.some(node => node.nodeType === Node.ELEMENT_NODE && !node.matches(poreSelector))
 			})
 			if (relevantMutation) renderParticipantStatuses()
 		})
