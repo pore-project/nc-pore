@@ -291,7 +291,7 @@
 			guestMode = guest === true
 			const wasOpen = !panel.hidden
 
-			if (role === 'listener' || listener) {
+			if (role === 'listener' || role === 'participant' || listener) {
 				root.hidden = true
 				root.setAttribute('aria-hidden', 'true')
 				panel.hidden = true
