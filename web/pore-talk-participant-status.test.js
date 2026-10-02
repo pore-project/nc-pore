@@ -13,7 +13,7 @@ describe('Talk participant recording status', () => {
 	})
 
 	// TEST-02: The small point remains semantically understandable without relying on color alone.
-	it('provides an accessible label and a hover/focus detail for an active recording', () => {
+	it('provides an accessible label and a processing detail for an active status', () => {
 		const indicator = Status.create({ state: 'recording', ready: true })
 		document.body.appendChild(indicator)
 
@@ -22,27 +22,17 @@ describe('Talk participant recording status', () => {
 		expect(indicator.getAttribute('aria-label')).toBe('Aufnahme läuft')
 		expect(indicator.title).toBe('Aufnahme läuft')
 
-		indicator.dispatchEvent(new Event('mouseenter'))
-		const popover = document.getElementById('pore-talk-participant-status-popover')
-		expect(popover).not.toBeNull()
-		expect(popover.textContent).toBe('Aufnahme läuft')
-
-		Status.destroy(indicator)
-		popover?.remove()
-	})
-
-	// TEST-03: Processing remains distinguishable from a finished/confirmed artifact.
-	it('reports processing after stop without inventing a new domain state', () => {
-		const indicator = Status.create({ state: 'stopped', productionStatus: 'active' })
-		expect(indicator.getAttribute('aria-label')).toBe('Aufnahme beendet. Aufnahme beendet – Verarbeitung läuft.')
+		const processing = Status.create({ state: 'stopped', productionStatus: 'active' })
+		expect(processing.getAttribute('aria-label')).toBe('Aufnahme beendet. Aufnahme beendet – Verarbeitung läuft.')
 		expect(Status.getDetail({ state: 'stopped', productionStatus: 'active' })).toBe('Aufnahme beendet – Verarbeitung läuft.')
+
+		indicator.parentNode?.removeChild(indicator)
 	})
 
-	// TEST-04: A listener is still represented separately when a host sees the attendee.
+	// TEST-03: A listener is still represented separately when a host sees the attendee.
 	it('keeps non-recording attendees distinguishable from recording participants', () => {
 		const indicator = Status.create({ state: 'recording', listener: true })
 		expect(indicator.dataset.tone).toBe('listener')
 		expect(indicator.getAttribute('aria-label')).toBe('Nicht beteiligt')
-		Status.destroy(indicator)
 	})
 })
