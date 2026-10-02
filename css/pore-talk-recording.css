@@ -173,3 +173,102 @@
 		flex: 1 1 100%;
 	}
 }
+
+/*
+ * Participant recording status overlay.
+ * Kept outside Talk styles because it is mounted by the PoRE Talk adapter.
+ */
+.pore-talk-participant-status {
+	--pore-talk-participant-status-size: 12px;
+	position: absolute;
+	top: 8px;
+	inset-inline-end: 8px;
+	z-index: 8;
+	display: inline-flex;
+	width: var(--pore-talk-participant-status-size);
+	height: var(--pore-talk-participant-status-size);
+	margin: 0;
+	padding: 3px;
+	box-sizing: content-box;
+	align-items: center;
+	justify-content: center;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	cursor: default;
+	outline: none;
+}
+
+.pore-talk-participant-status__dot {
+	display: block;
+	width: var(--pore-talk-participant-status-size);
+	height: var(--pore-talk-participant-status-size);
+	border: 1px solid rgba(255, 255, 255, .9);
+	border-radius: 50%;
+	box-sizing: border-box;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+	background: var(--color-text-maxcontrast, #666);
+}
+
+.pore-talk-participant-status[data-tone="preparing"] .pore-talk-participant-status__dot {
+	background: var(--color-text-maxcontrast, #666);
+}
+
+.pore-talk-participant-status[data-tone="listener"] .pore-talk-participant-status__dot {
+	background: var(--color-main-text, #222);
+}
+
+.pore-talk-participant-status[data-tone="error"] .pore-talk-participant-status__dot {
+	background: var(--color-error, #b00020);
+}
+
+.pore-talk-participant-status[data-tone="ready"] .pore-talk-participant-status__dot {
+	background: #ffd400;
+}
+
+.pore-talk-participant-status[data-tone="recording"] .pore-talk-participant-status__dot,
+.pore-talk-participant-status[data-tone="opening"] .pore-talk-participant-status__dot {
+	background: var(--color-success, #1e7e34);
+}
+
+.pore-talk-participant-status[data-tone="opening"] .pore-talk-participant-status__dot {
+	animation: pore-talk-recording-pulse 1s ease-in-out infinite;
+}
+
+.pore-talk-participant-status[data-tone="transfer"] .pore-talk-participant-status__dot {
+	background: var(--color-primary-element, #0082c9);
+}
+
+.pore-talk-participant-status[data-tone="stopped"] .pore-talk-participant-status__dot,
+.pore-talk-participant-status[data-tone="production-closed"] .pore-talk-participant-status__dot {
+	background: var(--color-background-dark, #444);
+}
+
+.pore-talk-participant-status[data-tone="confirmed"] .pore-talk-participant-status__dot {
+	background: var(--color-main-background, #fff);
+	border: 2px solid var(--color-success, #1e7e34);
+}
+
+.pore-talk-participant-status:focus-visible {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: 2px;
+}
+
+.pore-talk-participant-status__popover {
+	position: fixed;
+	z-index: 10000;
+	max-width: min(320px, calc(100vw - 16px));
+	padding: 6px 9px;
+	border: 1px solid var(--color-border, #bbb);
+	border-radius: var(--border-radius-large, 8px);
+	background: var(--color-main-background, #fff);
+	color: var(--color-main-text, #222);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+	font-size: 13px;
+	line-height: 1.35;
+	pointer-events: none;
+}
+
+.pore-talk-participant-status__popover[hidden] {
+	display: none;
+}
