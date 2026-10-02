@@ -36,7 +36,7 @@ describe('Talk recording UI', () => {
 		expect(Ui.elapsedSecondsFromStartedAt(null, Date.now(), 12)).toBe(12)
 	})
 
-	it('exposes the compact Talk-like control and host recording action', () => {
+	it('exposes the host control while keeping recording participants outside that control surface', () => {
 		const participant = Ui.create({ role: 'participant', state: 'recording', ready: true, elapsedSeconds: 12 })
 		const host = Ui.create({
 			role: 'host',
@@ -47,8 +47,8 @@ describe('Talk recording UI', () => {
 			onStop: jest.fn(),
 		})
 
-		expect(participant.querySelector('[aria-label="NC-PoRE: Aufnahme läuft"]')).not.toBeNull()
-		expect(participant.textContent).toContain('Aufnahme')
+		expect(participant.hidden).toBe(true)
+		expect(participant.getAttribute('aria-hidden')).toBe('true')
 		expect(participant.textContent).not.toContain('Aufnahme beenden')
 		expect(host.querySelector('[aria-label="NC-PoRE: Aufnahme läuft"]')).not.toBeNull()
 		expect(host.querySelector('[aria-label="NC-PoRE öffnen"]')).not.toBeNull()
