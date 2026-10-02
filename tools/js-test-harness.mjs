@@ -179,6 +179,7 @@ const files = [
 	'../web/pore-recording-controller.test.js',
 	'../web/pore-talk-recording-state-bridge.test.js',
 	'../web/pore-talk-recording-ui.test.js',
+	'../web/pore-talk-participant-status.test.js',
 	'../web/pore-talk-capture-init.test.js',
 	'../web/pore-talk-audio-adapter.test.js',
 	'../web/pore-talk-recording-init.test.js',
