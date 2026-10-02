@@ -12,6 +12,7 @@
 	let popover = null
 	let popoverAnchor = null
 	let repositionHandler = null
+	const details = new WeakMap()
 
 	const fallbackStatuses = {
 		preparing: { label: 'Vorbereitung', tone: 'preparing', symbol: '○' },
@@ -80,6 +81,7 @@
 
 	const showPopover = (anchor, text) => {
 		if (!text) return
+		hidePopover()
 		if (!popover) {
 			popover = document.createElement('div')
 			popover.id = POPOVER_ID
@@ -108,7 +110,7 @@
 		element.setAttribute('aria-label', accessibleLabel)
 		element.title = accessibleLabel
 		element.firstElementChild?.setAttribute('data-symbol', status.symbol)
-		element._poreStatusDetail = detail
+		details.set(element, detail)
 
 		return status
 	}
@@ -125,7 +127,7 @@
 		dot.setAttribute('aria-hidden', 'true')
 		element.appendChild(dot)
 
-		const show = () => showPopover(element, element._poreStatusDetail || element.getAttribute('aria-label') || '')
+		const show = () => showPopover(element, details.get(element) || element.getAttribute('aria-label') || '')
 		const hide = () => hidePopover()
 		element.addEventListener('mouseenter', show)
 		element.addEventListener('mouseleave', hide)
@@ -137,7 +139,7 @@
 
 	const updateExisting = (element, context) => {
 		update(element, context)
-		if (document.activeElement === element) showPopover(element, element._poreStatusDetail || element.getAttribute('aria-label') || '')
+		if (document.activeElement === element) showPopover(element, details.get(element) || element.getAttribute('aria-label') || '')
 	}
 
 	const destroy = element => {
