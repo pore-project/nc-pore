@@ -148,7 +148,7 @@
 		}
 
 		const getRecordingParticipant = id => recordingParticipants.find(participant => participant?.id === id) || null
-		const renderOne = (talkParticipant, recordingParticipant) => {
+		const renderOne = (talkParticipant, recordingParticipant, renderRemoteTiles = true) => {
 			if (!talkParticipant?.actorId) return
 			const sessionIds = Array.isArray(talkParticipant.sessionIds) ? talkParticipant.sessionIds.filter(Boolean) : []
 			const statusContext = {
@@ -167,11 +167,13 @@
 				}
 			}
 
-			for (const sessionId of sessionIds) {
-				const tile = getTileForSession(sessionId)
-				if (!tile) continue
-				const indicator = mountStatusOnTile(tile, statusContext)
-				if (indicator) desired.add(indicator)
+			if (renderRemoteTiles) {
+				for (const sessionId of sessionIds) {
+					const tile = getTileForSession(sessionId)
+					if (!tile) continue
+					const indicator = mountStatusOnTile(tile, statusContext)
+					if (indicator) desired.add(indicator)
+				}
 			}
 		}
 
@@ -182,7 +184,7 @@
 		} else if (role === 'participant' && actorId) {
 			const talkParticipant = talkParticipants.find(participant => participant.actorId === actorId)
 			const recordingParticipant = getRecordingParticipant(actorId)
-			if (talkParticipant && recordingParticipant) renderOne(talkParticipant, recordingParticipant)
+			if (talkParticipant && recordingParticipant) renderOne(talkParticipant, recordingParticipant, false)
 		}
 
 		document.querySelectorAll('[data-pore-talk-participant-status]').forEach(indicator => {
