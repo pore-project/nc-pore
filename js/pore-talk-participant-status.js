@@ -14,32 +14,10 @@
 	let repositionHandler = null
 	const details = new WeakMap()
 
-	const fallbackStatuses = {
-		preparing: { label: 'Vorbereitung', tone: 'preparing', symbol: '○' },
-		listener: { label: 'Nicht beteiligt', tone: 'listener', symbol: '•' },
-		error: { label: 'Problem bei der Aufnahme', tone: 'error', symbol: '!' },
-		ready: { label: 'Aufnahme bereit', tone: 'ready', symbol: '●' },
-		recording: { label: 'Aufnahme läuft', tone: 'recording', symbol: '●' },
-		opening: { label: 'Aufnahme wird geöffnet', tone: 'opening', symbol: '●' },
-		stopping: { label: 'Aufnahme wird übertragen', tone: 'transfer', symbol: '↗' },
-		stopped: { label: 'Aufnahme beendet', tone: 'stopped', symbol: '■' },
-		confirmed: { label: 'Aufnahme bestätigt', tone: 'confirmed', symbol: '✓' },
-		productionClosed: { label: 'Produktion geschlossen', tone: 'production-closed', symbol: '■' },
-	}
-
 	const resolveStatus = ({ state = 'preparing', ready = false, listener = false, confirmed = false, productionStatus = null } = {}) => {
 		const Ui = window.PoRETalkRecordingUi
-		if (Ui?.resolveStatus) return Ui.resolveStatus({ state, ready, listener, confirmed, productionStatus })
-		if (listener) return fallbackStatuses.listener
-		if (confirmed && state === 'completed') return fallbackStatuses.confirmed
-		if (state === 'error') return fallbackStatuses.error
-		if (state === 'stopping') return fallbackStatuses.stopping
-		if (state === 'stopped') return fallbackStatuses.stopped
-		if (state === 'completed') return fallbackStatuses.confirmed
-		if (state === 'opening') return fallbackStatuses.opening
-		if (state === 'recording') return fallbackStatuses.recording
-		if (ready) return fallbackStatuses.ready
-		return fallbackStatuses.preparing
+		if (!Ui?.resolveStatus) throw new Error('NC-PoRe recording UI status resolver is not loaded')
+		return Ui.resolveStatus({ state, ready, listener, confirmed, productionStatus })
 	}
 
 	const getDetail = ({ state, productionStatus, errorMessage } = {}) => {
