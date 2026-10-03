@@ -68,13 +68,15 @@ describe('Talk recording UI', () => {
 	})
 
 	it('shows processing feedback after recording stop without inventing a stopping state', () => {
-		const stopped = Ui.create({ role: 'participant', state: 'stopped', productionStatus: 'active' })
+		// Recording participants no longer receive the host control surface; their
+		// compact status detail is covered by pore-talk-participant-status.test.js.
+		const stopped = Ui.create({ role: 'host', state: 'stopped', productionStatus: 'active' })
 		expect(stopped.textContent).toContain('Aufnahme beendet')
 		expect(stopped.textContent).toContain('Verarbeitung läuft')
 	})
 
 	it('shows user-facing error feedback without requiring a technical state transition', () => {
-		const root = Ui.create({ role: 'participant', state: 'recording', errorMessage: 'Bei der Aufnahme ist ein Problem aufgetreten. Bitte den Vorgang erneut versuchen.' })
+		const root = Ui.create({ role: 'host', state: 'recording', errorMessage: 'Bei der Aufnahme ist ein Problem aufgetreten. Bitte den Vorgang erneut versuchen.' })
 		const error = root.querySelector('.pore-talk-recording__error')
 		expect(error).not.toBeNull()
 		expect(error.textContent).toContain('Bei der Aufnahme ist ein Problem aufgetreten')
