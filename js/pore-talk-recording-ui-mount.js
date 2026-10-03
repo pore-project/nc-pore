@@ -19,10 +19,10 @@
 	let mountedRoot = null
 	let participantStatusObserver = null
 	let latestContext = null
-	let talkParticipants = []
-	let talkParticipantsToken = null
-	let talkParticipantsFetchedAt = 0
-	let talkParticipantsFetch = null
+	let talkCallPeers = []
+	let talkCallPeersToken = null
+	let talkCallPeersFetchedAt = 0
+	let talkCallPeersFetch = null
 
 	function getMountHost() {
 		return document.querySelector(MOUNT_SELECTOR)
@@ -74,38 +74,38 @@
 			|| null
 	}
 
-	async function refreshTalkParticipants(force = false) {
+	async function refreshTalkCallPeers(force = false) {
 		const token = currentConversationToken()
 		if (!token) return
 		const now = Date.now()
-		if (!force && talkParticipantsToken === token && now - talkParticipantsFetchedAt < 5000) return
-		if (talkParticipantsFetch) return talkParticipantsFetch
+		if (!force && talkCallPeersToken === token && now - talkCallPeersFetchedAt < 5000) return
+		if (talkCallPeersFetch) return talkCallPeersFetch
 
-		talkParticipantsFetch = (async () => {
+		talkCallPeersFetch = (async () => {
 			try {
-				const response = await fetch('/ocs/v2.php/apps/spreed/api/v4/room/' + encodeURIComponent(token) + '/participants', {
+				const response = await fetch('/ocs/v2.php/apps/spreed/api/v4/call/' + encodeURIComponent(token), {
 					headers: {
-						'OCS-APIRequest': 'true',
-						'Accept': 'application/json',
-					},
+					'OCS-APIRequest': 'true',
+					'Accept': 'application/json',
+				},
 				})
-				if (!response.ok) throw new Error('Talk participant list request failed: ' + response.status)
+				if (!response.ok) throw new Error('Talk call participant request failed: ' + response.status)
 				const payload = await response.json()
-				const participants = payload?.ocs?.data
-				if (!Array.isArray(participants)) throw new Error('Talk participant list response is invalid')
-				talkParticipants = participants
-				talkParticipantsToken = token
-				talkParticipantsFetchedAt = Date.now()
+				const peers = payload?.ocs?.data
+				if (!Array.isArray(peers)) throw new Error('Talk call participant response is invalid')
+				talkCallPeers = peers
+				talkCallPeersToken = token
+				talkCallPeersFetchedAt = Date.now()
 			} catch (error) {
-				talkParticipantsToken = token
-				talkParticipantsFetchedAt = Date.now()
-				console.debug('[NC-PoRe] Talk participant status mapping unavailable', error)
+				talkCallPeersToken = token
+				talkCallPeersFetchedAt = Date.now()
+				console.debug('[NC-PoRe] Talk call participant mapping unavailable', error)
 			} finally {
-				talkParticipantsFetch = null
+				talkCallPeersFetch = null
 				renderParticipantStatuses()
 			}
 		})()
-		return talkParticipantsFetch
+		return talkCallPeersFetch
 	}
 
 	function ensureRelativePosition(element) {
@@ -148,11 +148,11 @@
 		}
 
 		const getRecordingParticipant = id => recordingParticipants.find(participant => participant?.id === id) || null
-		const renderOne = (talkParticipant, recordingParticipant, renderRemoteTiles = true) => {
+		const renderOne = (talkParticipant, recordingParticipant, renderRemoteTile = true) => {
 			if (!talkParticipant?.actorId) return
-			const sessionIds = Array.isArray(talkParticipant.sessionIds) ? talkParticipant.sessionIds.filter(Boolean) : []
 			const statusContext = {
 				state: recordingState.state || 'preparing',
+				listener: recordingParticipant === null,
 				ready: recordingParticipant?.ready === true,
 				confirmed: recordingState.confirmed === true && recordingParticipant !== null,
 				productionStatus: recordingState.productionStatus || null,
@@ -167,10 +167,9 @@
 				}
 			}
 
-			if (renderRemoteTiles) {
-				for (const sessionId of sessionIds) {
-					const tile = getTileForSession(sessionId)
-					if (!tile) continue
+			if (renderRemoteTile && talkParticipant.sessionId) {
+				const tile = getTileForSession(talkParticipant.sessionId)
+				if (tile) {
 					const indicator = mountStatusOnTile(tile, statusContext)
 					if (indicator) desired.add(indicator)
 				}
@@ -178,11 +177,11 @@
 		}
 
 		if (role === 'host') {
-			for (const talkParticipant of talkParticipants) {
+			for (const talkParticipant of talkCallPeers) {
 				renderOne(talkParticipant, getRecordingParticipant(talkParticipant.actorId))
 			}
 		} else if (role === 'participant' && actorId) {
-			const talkParticipant = talkParticipants.find(participant => participant.actorId === actorId)
+			const talkParticipant = talkCallPeers.find(participant => participant.actorId === actorId)
 			const recordingParticipant = getRecordingParticipant(actorId)
 			if (talkParticipant && recordingParticipant) renderOne(talkParticipant, recordingParticipant, false)
 		}
@@ -191,7 +190,7 @@
 			if (!desired.has(indicator)) Status.destroy(indicator)
 		})
 
-		void refreshTalkParticipants()
+		if (role === 'host') void refreshTalkCallPeers()
 	}
 
 
@@ -223,10 +222,10 @@
 		window.PoRETalkParticipantStatus?.hidePopover()
 		document.querySelectorAll('[data-pore-talk-participant-status]').forEach(element => element.remove())
 		latestContext = null
-		talkParticipants = []
-		talkParticipantsToken = null
-		talkParticipantsFetchedAt = 0
-		talkParticipantsFetch = null
+		talkCallPeers = []
+		talkCallPeersToken = null
+		talkCallPeersFetchedAt = 0
+		talkCallPeersFetch = null
 		unmount()
 	}
 
