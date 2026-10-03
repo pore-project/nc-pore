@@ -148,16 +148,17 @@
 		}
 
 		const getRecordingParticipant = id => recordingParticipants.find(participant => participant?.id === id) || null
+		const buildStatusContext = recordingParticipant => ({
+			state: recordingState.state || 'preparing',
+			listener: recordingParticipant === null,
+			ready: recordingParticipant?.ready === true,
+			confirmed: recordingState.confirmed === true && recordingParticipant !== null,
+			productionStatus: recordingState.productionStatus || null,
+			errorMessage: recordingState.errorMessage || '',
+		})
 		const renderOne = (talkParticipant, recordingParticipant, renderRemoteTile = true) => {
 			if (!talkParticipant?.actorId) return
-			const statusContext = {
-				state: recordingState.state || 'preparing',
-				listener: recordingParticipant === null,
-				ready: recordingParticipant?.ready === true,
-				confirmed: recordingState.confirmed === true && recordingParticipant !== null,
-				productionStatus: recordingState.productionStatus || null,
-				errorMessage: recordingState.errorMessage || '',
-			}
+			const statusContext = buildStatusContext(recordingParticipant)
 
 			if (talkParticipant.actorId === actorId) {
 				const localTile = document.querySelector('.localVideoContainer')
@@ -181,9 +182,14 @@
 				renderOne(talkParticipant, getRecordingParticipant(talkParticipant.actorId))
 			}
 		} else if (role === 'participant' && actorId) {
-			const talkParticipant = talkCallPeers.find(participant => participant.actorId === actorId)
 			const recordingParticipant = getRecordingParticipant(actorId)
-			if (talkParticipant && recordingParticipant) renderOne(talkParticipant, recordingParticipant, false)
+			if (recordingParticipant) {
+				const localTile = document.querySelector('.localVideoContainer')
+				if (localTile) {
+					const indicator = mountStatusOnTile(localTile, buildStatusContext(recordingParticipant))
+					if (indicator) desired.add(indicator)
+				}
+			}
 		}
 
 		document.querySelectorAll('[data-pore-talk-participant-status]').forEach(indicator => {
