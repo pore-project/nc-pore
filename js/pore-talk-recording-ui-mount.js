@@ -206,12 +206,18 @@
 		participantStatusObserver = new MutationObserver(mutations => {
 			const poreSelector = '[data-pore-talk-participant-status], #' + 'pore-talk-participant-status-popover'
 			const relevantMutation = mutations.some(mutation => {
+				if (mutation.type === 'attributes' && mutation.attributeName === 'data-tile-session-id') return true
 				const nodes = [...mutation.addedNodes, ...mutation.removedNodes]
 				return nodes.some(node => node.nodeType === Node.ELEMENT_NODE && !node.matches(poreSelector))
 			})
 			if (relevantMutation) renderParticipantStatuses()
 		})
-		participantStatusObserver.observe(document.body, { childList: true, subtree: true })
+		participantStatusObserver.observe(document.body, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			attributeFilter: ['data-tile-session-id'],
+		})
 		observer = new MutationObserver(mount)
 		observer.observe(document.body, { childList: true, subtree: true })
 	}
